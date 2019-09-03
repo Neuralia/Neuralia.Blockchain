@@ -1,0 +1,12 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations;
+
+namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AccountSnapshots {
+	public interface IAccreditationCertificateSnapshotSqliteEntry<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT> : IAccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT>
+		where ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT : IAccreditationCertificateSnapshotAccountSqliteEntry {
+	}
+
+	public class AccreditationCertificateSnapshotSqliteEntry<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT> : AccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT>, IAccreditationCertificateSnapshotSqliteEntry<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT>
+		where ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT : AccreditationCertificateSnapshotAccountSqliteEntry {
+	}
+}

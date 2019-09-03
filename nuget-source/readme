@@ -1,0 +1,6 @@
+add libraries:
+
+ - Neuralia.Blockchains.Tools
+ - Neuralia.System.Data.HashFunction.xxHash
+ - Neuralia.STUN
+ - Neuralia.BouncyCastle
