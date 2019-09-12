@@ -40,5 +40,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 		protected override short SetWorkflowType() {
 			return WorkflowIDs.MESSAGE_GROUP_MANIFEST;
 		}
+
+		protected override void DisposeAll() {
+			base.DisposeAll();
+
+			foreach(var entry in gossipMessageSets) {
+				entry.Dispose();
+			}
+		}
 	}
 }

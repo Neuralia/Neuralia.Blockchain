@@ -285,6 +285,11 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 							if(!this.SendMessage(setMessageSet.Connection, messageSetGroup)) {
 								Log.Verbose($"Connection with peer  {setMessageSet.Connection.ScoppedAdjustedIp} was terminated");
 							}
+							
+							setMessageSet.trigger.Message?.Dispose();
+							foreach(var message in setMessageSet.messages) {
+								message.BaseMessage?.Dispose();
+							}
 						}
 					}
 				}

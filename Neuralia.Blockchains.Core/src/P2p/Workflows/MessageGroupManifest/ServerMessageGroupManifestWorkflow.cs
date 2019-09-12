@@ -64,6 +64,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				return;
 			}
 
+			reply.BaseMessage.Dispose();
 			if(!reply.Message.messageApprovals.Any(a => a)) {
 				return;
 			}

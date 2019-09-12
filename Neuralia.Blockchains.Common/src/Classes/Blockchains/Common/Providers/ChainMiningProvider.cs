@@ -327,7 +327,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		protected void StartMiningStatusUpdateCheck() {
-			if(this.updateMiningStatusTimer == null) {
+			if(this.updateMiningStatusTimer == null && this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnableMiningStatusChecks) {
 
 				this.updateMiningStatusTimer = new Timer(state => {
 

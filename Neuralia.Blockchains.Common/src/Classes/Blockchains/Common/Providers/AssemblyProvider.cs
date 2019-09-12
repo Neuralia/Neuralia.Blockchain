@@ -43,7 +43,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void DebugSerializeBlock(string filepath, ITransaction transaction);
 		ITransactionEnvelope GenerateDebugTransaction();
 
-		IStandardPresentationTransaction GeneratePresentationTransaction(SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet, CorrelationContext correlationContext, long? correlationId = null);
+		IStandardPresentationTransaction GeneratePresentationTransaction(SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet, CorrelationContext correlationContext, Guid? accountUuId, long? correlationId = null);
 		ITransactionEnvelope GeneratePresentationEnvelope(IStandardPresentationTransaction presentationTransaction, SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet, CorrelationContext correlationContext, long? correlationId = null);
 
 		ITransactionEnvelope GenerateKeyChangeTransaction(byte newKeyOrdinal, string keyChangeName, CorrelationContext correlationContext);
@@ -75,7 +75,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.CentralCoordinator = centralCoordinator;
 		}
 
-		public virtual IStandardPresentationTransaction GeneratePresentationTransaction(SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet, CorrelationContext correlationContext, long? correlationId = null) {
+		public virtual IStandardPresentationTransaction GeneratePresentationTransaction(SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet, CorrelationContext correlationContext, Guid? accountUuId, long? correlationId = null) {
 			try {
 				IStandardPresentationTransaction standardPresentation = this.CreateNewPresentationTransaction();
 
@@ -94,9 +94,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					standardPresentation.TransactionId.Account = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountUuidHash();
 					standardPresentation.CorrelationId = correlationId;
 
+					IWalletAccount account = null;
 					// now we publish our keys
-					IWalletAccount account = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();
-
+					if(accountUuId.HasValue) {
+						account = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(accountUuId.Value);
+					} else {
+						account = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();
+					}
+					
 					using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.TRANSACTION_KEY_NAME)) {
 
 						if(key == null) {

@@ -18,11 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 		public static IByteArray GenerateBlockHash(IBlock block, IByteArray previousBlockHash) {
 
-			IByteArray hash = HashingUtils.Hasher3.Hash(block.GetStructuresArray(previousBlockHash));
-			ByteArray result = hash.ToExactByteArrayCopy();
-			hash.Return();
-
-			return result;
+			return HashingUtils.Hasher3.Hash(block.GetStructuresArray(previousBlockHash));
 		}
 	}
 }

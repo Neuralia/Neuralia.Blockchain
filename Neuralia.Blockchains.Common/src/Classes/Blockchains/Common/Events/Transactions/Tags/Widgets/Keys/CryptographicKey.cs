@@ -33,7 +33,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public IByteArray Key {
 			get => this.key;
-			set => this.key = value.Clone();
+			set => this.key = value?.Clone();
 		}
 
 		public Enums.KeyTypes Type { get; protected set; } = Enums.KeyTypes.Unknown;

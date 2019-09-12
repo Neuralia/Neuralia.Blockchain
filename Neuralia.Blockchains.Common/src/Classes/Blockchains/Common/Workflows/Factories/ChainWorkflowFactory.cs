@@ -1,3 +1,4 @@
+using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
@@ -16,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 	public interface IChainWorkflowFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IWorkflowFactory
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
-		ICreatePresentationTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreatePresentationTransactionChainWorkflow(CorrelationContext correlationContext);
+		ICreatePresentationTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreatePresentationTransactionChainWorkflow(CorrelationContext correlationContext, Guid? accountUuId);
 		ICreateChangeKeyTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateChangeKeyTransactionWorkflow(byte changingKeyOrdinal, string note, CorrelationContext correlationContext);
 
 		ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateSendElectionsCandidateRegistrationMessageWorkflow(AccountId candidateAccountId, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, ChainConfigurations.RegistrationMethods registrationMethod, CorrelationContext correlationContext);
@@ -33,7 +34,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 			this.centralCoordinator = centralCoordinator;
 		}
 
-		public abstract ICreatePresentationTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreatePresentationTransactionChainWorkflow(CorrelationContext correlationContext);
+		public abstract ICreatePresentationTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreatePresentationTransactionChainWorkflow(CorrelationContext correlationContext, Guid? accountUuId);
 
 		public abstract ICreateChangeKeyTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateChangeKeyTransactionWorkflow(byte changingKeyOrdinal, string note, CorrelationContext correlationContext);
 

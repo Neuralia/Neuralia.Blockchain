@@ -351,6 +351,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public bool EncryptWalletKeysSeparate { get; set; } = false;
 
 		/// <summary>
+		/// if enabled, the noe will use the mining pool facilities to check if correctly registered for mining
+		/// </summary>
+		public bool EnableMiningStatusChecks { get; set; } = true;
+
+		/// <summary>
 		///     The minimum amount of peers required to sync. 1 peer is VERY risky. 2 is a bit better but not by much. A proper
 		///     minimum is 3 peers.
 		/// </summary>

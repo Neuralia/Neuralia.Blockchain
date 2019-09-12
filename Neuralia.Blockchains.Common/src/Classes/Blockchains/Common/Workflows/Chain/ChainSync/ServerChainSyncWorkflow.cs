@@ -170,6 +170,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return;
 				}
 
+				serverHandshake.Message.Dispose();
+				
 				// now we start waiting for block requests... one at a time.
 				while(true) {
 
@@ -220,6 +222,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							return;
 						}
+						
+						sendBlockInfoMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_BLOCK blockRequestMessage) {
@@ -286,6 +290,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							return;
 						}
+						
+						sendBlockMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_BLOCK_SLICE_HASHES requestBlockSliceHashes) {
@@ -335,6 +341,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							return;
 						}
+						
+						sendBlockMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST_INFO requestDigestInfo) {
@@ -360,6 +368,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							return;
 						}
+						
+						sendDigestInfoMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST requestDigest) {
@@ -386,6 +396,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							return;
 						}
+						
+						sendDigestMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST_FILE requestDigestFile) {
@@ -412,13 +424,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							return;
 						}
+						
+						sendDigestFileMessage.BaseMessage.Dispose();
 					}
+					
+					requestSet?.BaseMessage.Dispose();
 
 					// ok, this should be the end for this block. we loop and the client will tell us if they want more blocks, or if they are nice, to stop. worst case, we will timeout.
 				}
 			} finally {
 				// thats it, we are done :)
 				Log.Information($"Finished handling synchronization for peer {this.PeerConnection.ScoppedAdjustedIp}.");
+				
 			}
 		}
 

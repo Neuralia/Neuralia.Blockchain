@@ -168,6 +168,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 			GzipCompression compressor = null;
 
+			List<IByteArray> toReturn = new List<IByteArray>();
 			var channelRehydrators = dehydratedBlock.GetEssentialDataChannels().ConvertAll((band, data) => {
 
 				// make sure we dotn return the data here, its used by dehydratedBlock. it would cause a serious issue.
@@ -182,16 +183,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 					}
 
 					bytes = compressor.Decompress(data);
+					toReturn.Add(bytes);
 					compressed = true;
 				}
 
 				IDataRehydrator results = DataSerializationFactory.CreateRehydrator(bytes);
-
-				if(compressed) {
-					// careful not to return data parameter above, it is being used. return only the decompressed bytes.
-					bytes.Return();
-				}
-
+				
 				return results;
 			});
 
@@ -242,6 +239,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			this.Rehydrate(channelRehydrators, timestampBaseline, rehydrationFactory);
 
 			this.PrepareRehydrated(rehydrationFactory);
+
+			foreach(var entry in toReturn) {
+				entry.Return();
+			}
 		}
 
 		protected virtual void PrepareRehydrated(IBlockchainEventsRehydrationFactory rehydrationFactory) {

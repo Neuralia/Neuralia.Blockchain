@@ -459,7 +459,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		private void LaunchMainBlockSync(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connections) {
 
 			bool running = true;
-
+			this.nextGCCollect = DateTime.Now.AddMinutes(1);
+			
 			// launch the various tasks
 			var downloadTask = new Task<bool>(() => {
 
@@ -589,8 +590,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return;
 				}
 
+				if(this.ShouldAct(ref this.nextGCCollect)) {
+					GC.Collect();
+
+					// lets act again in X seconds
+					this.nextGCCollect = DateTime.Now.AddMinutes(1);
+				}
 				Thread.Sleep(1000);
 			}
+		}
+		
+		private DateTime? nextGCCollect;
+		
+		/// <summary>
+		///     this method allows to check if its time to act, or if we should sleep more
+		/// </summary>
+		/// <returns></returns>
+		protected bool ShouldAct(ref DateTime? action) {
+			if(!action.HasValue) {
+				return true;
+			}
+
+			if(action.Value < DateTime.Now) {
+				action = null;
+
+				return true;
+			}
+
+			return false;
 		}
 
 		/// <summary>

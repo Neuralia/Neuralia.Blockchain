@@ -1279,6 +1279,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								// lets return it to the "to be downloaded" pool
 								sliceEntry.ResetSlice();
 							}
+							
+							response.message?.Dispose();
 						}
 
 						if(anyValidReplies) {

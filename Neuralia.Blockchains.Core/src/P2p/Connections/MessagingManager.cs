@@ -289,118 +289,137 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="task"></param>
 		protected virtual void HandleMessageReceived(MessageReceivedTask task) {
 
-			// lets see what we just received
-			IRoutingHeader header = this.RehydrateHeader(task);
+			try {
+				// lets see what we just received
+				IRoutingHeader header = this.RehydrateHeader(task);
 
-			// set the client Scope of the client who sent us this message
-			header.ClientId = task.Connection.ClientUuid;
+				// set the client Scope of the client who sent us this message
+				header.ClientId = task.Connection.ClientUuid;
 
-			IGossipMessageSet gossipMessageSet = null;
+				// first, for gossip messages, we must forward them to other peers, so lets do that
+				if(header is GossipHeader gossipHeader) {
 
-			// first, for gossip messages, we must forward them to other peers, so lets do that
-			if(header is GossipHeader gossipHeader) {
-
-				if(!task.Connection.IsConfirmed) {
-					throw new ApplicationException("An unconfirmed connection cannot send us a gossip message");
-				}
-
-				if(header.ChainId == BlockchainTypes.Instance.None) {
-					// we do not allow null chain gossip messages, so lets end here
-					throw new ApplicationException("A null chain gossip message is not allowed");
-				}
-
-				if(!header.IsWorkflowTrigger) {
-					// we do not allow null chain gossip messages, so lets end here
-					throw new ApplicationException("A gossip message is not marked as a workflow trigger, which is not allowed");
-				}
-
-				bool messageInCache = false;
-				bool messageValid = false;
-				(messageInCache, messageValid, gossipMessageSet) = this.ProcessReceivedGossipMessage(gossipHeader, task);
-
-				if(messageInCache) {
-					return; // we do not process any further
-				}
-
-				// now the message will be sent to the chains for validation, and if valid, will come back for a forward
-				((NetworkingService<R>) this.networkingService).RouteNetworkGossipMessage(gossipMessageSet, task.Connection);
-
-				return;
-			}
-
-			// if we get any further, then they are targeted messages
-			if(header.ChainId == BlockchainTypes.Instance.None) {
-				// this is a null chain, this is our message
-
-				if(header is TargettedHeader targettedHeader) {
-					// this is a targeted header, its meant only for us
-
-					var messageSet = this.networkingService.MessageFactory.RehydrateMessage(task.data, targettedHeader, this.chainlessBlockchainEventsRehydrationFactory);
-
-					var workflowTracker = new WorkflowTracker<IWorkflow<R>, R>(task.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.originatorId, this.networkingService.ConnectionStore.MyClientUuid, this.networkingService.WorkflowCoordinator);
-
-					if(messageSet.Header.IsWorkflowTrigger && messageSet is ITriggerMessageSet<R> triggeMessageSet) {
-						// route the message
-						Type messageType = triggeMessageSet.BaseMessage.GetType();
-
-						if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage) != t.IsAssignableFrom(messageType))) {
-							throw new ApplicationException("Jetbrains refactoring error, the suggested fix is not equal to the previous");
+					try{
+						if(!task.Connection.IsConfirmed) {
+							throw new ApplicationException("An unconfirmed connection cannot send us a gossip message");
 						}
 
-						if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage))) {
-
-							// let's check if a workflow already exists for this trigger
-							if(!workflowTracker.WorkflowExists()) {
-								// create a new workflow
-								var workflow = (ITargettedNetworkingWorkflow<R>) this.serverWorkflowFactory.CreateResponseWorkflow(triggeMessageSet, task.Connection);
-
-								if(!task.Connection.IsConfirmed && !(workflow is IServerHandshakeWorkflow)) {
-									throw new ApplicationException("An unconfirmed connection must initiate a handshake");
-								}
-
-								this.networkingService.WorkflowCoordinator.AddWorkflow(workflow);
-							}
-						} else {
-							if(triggeMessageSet.BaseMessage is WorkflowTriggerMessage<R>) {
-								// this means we did not pass the trigger filter above, it could be an evil trigger and we default
-								throw new ApplicationException("An invalid trigger was sent");
-							}
-						}
-					} else {
-
-						if(messageSet.BaseMessage is WorkflowTriggerMessage<R>) {
-							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is not set, but the message type is a workflow trigger");
+						if(header.ChainId == BlockchainTypes.Instance.None) {
+							// we do not allow null chain gossip messages, so lets end here
+							throw new ApplicationException("A null chain gossip message is not allowed");
 						}
 
-						if(messageSet.Header.IsWorkflowTrigger) {
-							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
+						if(!header.IsWorkflowTrigger) {
+							// we do not allow null chain gossip messages, so lets end here
+							throw new ApplicationException("A gossip message is not marked as a workflow trigger, which is not allowed");
 						}
 
-						// forward the message to the right correlated workflow
-						// this method will ensure we get the right workflow id for our connection
+						bool messageInCache = false;
+						IGossipMessageSet gossipMessageSet = null;
+						(messageInCache, _, gossipMessageSet) = this.ProcessReceivedGossipMessage(gossipHeader, task);
 
-						//----------------------------------------------------
-
-						if(workflowTracker.GetActiveWorkflow() is ITargettedNetworkingWorkflow<R> workflow) {
-
-							if(!task.Connection.IsConfirmed && !(workflow is IHandshakeWorkflow)) {
-								throw new ApplicationException("An unconfirmed connection must initiate a handshake");
-							}
-
-							workflow.ReceiveNetworkMessage(messageSet);
-						} else {
-							Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' which does not exist");
+						if(messageInCache) {
+							return; // we do not process any further
 						}
+
+						// now the message will be sent to the chains for validation, and if valid, will come back for a forward
+						((NetworkingService<R>) this.networkingService).RouteNetworkGossipMessage(gossipMessageSet, task.Connection);
+
+						return;
+					} finally {
+						task.data?.Return();
 					}
 				}
-			} else {
-				if(!task.Connection.IsConfirmed) {
-					throw new ApplicationException("An unconfirmed connection cannot send us a chain scopped targeted message");
-				}
 
-				// this message is targeted at a specific chain, so we route it over there
-				// first confirm that we support this chain
-				((NetworkingService<R>) this.networkingService).RouteNetworkMessage(header, task.data, task.Connection);
+				// if we get any further, then they are targeted messages
+				if(header.ChainId == BlockchainTypes.Instance.None) {
+					// this is a null chain, this is our message
+
+					if(header is TargettedHeader targettedHeader) {
+						try {
+							// this is a targeted header, its meant only for us
+
+							var messageSet = this.networkingService.MessageFactory.RehydrateMessage(task.data, targettedHeader, this.chainlessBlockchainEventsRehydrationFactory);
+
+							var workflowTracker = new WorkflowTracker<IWorkflow<R>, R>(task.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.originatorId, this.networkingService.ConnectionStore.MyClientUuid, this.networkingService.WorkflowCoordinator);
+
+							if(messageSet.Header.IsWorkflowTrigger && messageSet is ITriggerMessageSet<R> triggeMessageSet) {
+								// route the message
+								Type messageType = triggeMessageSet.BaseMessage.GetType();
+
+								if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage) != t.IsAssignableFrom(messageType))) {
+									throw new ApplicationException("Jetbrains refactoring error, the suggested fix is not equal to the previous");
+								}
+
+								if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage))) {
+
+									// let's check if a workflow already exists for this trigger
+									if(!workflowTracker.WorkflowExists()) {
+										// create a new workflow
+										var workflow = (ITargettedNetworkingWorkflow<R>) this.serverWorkflowFactory.CreateResponseWorkflow(triggeMessageSet, task.Connection);
+
+										if(!task.Connection.IsConfirmed && !(workflow is IServerHandshakeWorkflow)) {
+											throw new ApplicationException("An unconfirmed connection must initiate a handshake");
+										}
+
+										this.networkingService.WorkflowCoordinator.AddWorkflow(workflow);
+									}
+								} else {
+									if(triggeMessageSet.BaseMessage is WorkflowTriggerMessage<R>) {
+										// this means we did not pass the trigger filter above, it could be an evil trigger and we default
+										throw new ApplicationException("An invalid trigger was sent");
+									}
+
+									triggeMessageSet.BaseMessage?.Dispose();
+								}
+							} else {
+
+								if(messageSet.BaseMessage is WorkflowTriggerMessage<R>) {
+									messageSet.BaseMessage?.Dispose();
+
+									throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is not set, but the message type is a workflow trigger");
+								}
+
+								if(messageSet.Header.IsWorkflowTrigger) {
+									messageSet.BaseMessage?.Dispose();
+
+									throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
+								}
+
+								// forward the message to the right correlated workflow
+								// this method will ensure we get the right workflow id for our connection
+
+								//----------------------------------------------------
+
+								if(workflowTracker.GetActiveWorkflow() is ITargettedNetworkingWorkflow<R> workflow) {
+
+									if(!task.Connection.IsConfirmed && !(workflow is IHandshakeWorkflow)) {
+										throw new ApplicationException("An unconfirmed connection must initiate a handshake");
+									}
+
+									workflow.ReceiveNetworkMessage(messageSet);
+								} else {
+									messageSet.BaseMessage?.Dispose();
+									Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' which does not exist");
+								}
+							}
+						} finally {
+							task.data?.Return();
+						}
+						
+					}
+				} else {
+					if(!task.Connection.IsConfirmed) {
+
+						throw new ApplicationException("An unconfirmed connection cannot send us a chain scopped targeted message");
+					}
+
+					// this message is targeted at a specific chain, so we route it over there
+					// first confirm that we support this chain
+					((NetworkingService<R>) this.networkingService).RouteNetworkMessage(header, task.data, task.Connection);
+				}
+			} finally {
+		
 			}
 		}
 

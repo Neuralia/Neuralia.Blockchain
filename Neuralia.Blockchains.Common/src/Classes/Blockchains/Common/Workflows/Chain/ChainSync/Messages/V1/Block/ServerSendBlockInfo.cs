@@ -83,5 +83,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected override short SetWorkflowType() {
 			return WorkflowIDs.CHAIN_SYNC;
 		}
+		
+		protected override void DisposeAll() {
+			base.DisposeAll();
+			
+		}
 	}
 }

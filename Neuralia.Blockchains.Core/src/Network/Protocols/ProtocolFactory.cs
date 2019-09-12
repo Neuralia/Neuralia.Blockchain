@@ -276,7 +276,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 		}
 
-		public void HandleCompetedMessage(IMessageEntry entry, TcpConnection.MessageBytesReceived callback, IProtocolTcpConnection connection) {
+		public void DeflateCompressionsage(IMessageEntry entry, TcpConnection.MessageBytesReceived callback, IProtocolTcpConnection connection) {
 
 			IMessageRouter router = null;
 
@@ -291,7 +291,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 					throw new NotSupportedException("Unsupported protocol version");
 			}
 
-			router.HandleCompetedMessage(entry, (compressedMessageBytes, splitMessageEntry) => {
+			router.HandleCompletedMessage(entry, (compressedMessageBytes, splitMessageEntry) => {
 				IByteArray originalMessage = this.DecompressMessage(compressedMessageBytes);
 
 				if(splitMessageEntry != null) {

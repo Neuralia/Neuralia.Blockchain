@@ -5,7 +5,7 @@ using Neuralia.Blockchains.Tools.Data;
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 	public class MessageRouter : IMessageRouter {
 
-		public void HandleCompetedMessage(IMessageEntry messageEntry, ProtocolFactory.CompressedMessageBytesReceived callback, IProtocolTcpConnection connection) {
+		public void HandleCompletedMessage(IMessageEntry messageEntry, ProtocolFactory.CompressedMessageBytesReceived callback, IProtocolTcpConnection connection) {
 
 			if(messageEntry.Version != MessageBuilder.ProtocolVersion.Version) {
 				throw new NotSupportedException("Unsupported protocol version");

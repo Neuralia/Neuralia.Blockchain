@@ -99,7 +99,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<bool> ChangeKey(byte changingKeyOrdinal, string note, CorrelationContext correlationContext);
 		TaskResult<IBlock> LoadBlock(long blockId);
 
-		TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext);
+		TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, Guid? accountUuId);
 
 		TaskResult<List<ElectedCandidateResultDistillate>> PerformOnDemandElection(BlockElectionDistillate blockElectionDistillate);
 		TaskResult<bool> PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults);
@@ -623,13 +623,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		}
 
-		public TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext) {
+		public TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, Guid? accountUuId) {
 
 			return this.RunTaskMethod(() => {
 
 				AutoResetEvent resetEvent = new AutoResetEvent(false);
 
-				var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreatePresentationTransactionChainWorkflow(correlationContext);
+				var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreatePresentationTransactionChainWorkflow(correlationContext, accountUuId);
 
 				workflow.Success += w => {
 					resetEvent.Set();

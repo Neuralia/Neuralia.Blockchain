@@ -1303,6 +1303,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						provider.Initialize();
 
 						bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
+						
+						signature1.Return();
 
 						if(result == false) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
@@ -1315,6 +1317,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						provider.Initialize();
 
 						bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
+						
+						signature2.Return();
 
 						if(result == false) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
@@ -1327,6 +1331,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						provider.Initialize();
 
 						bool result = provider.Verify(hash, signature3, moderatorKey.ThirdKey.Key);
+						
+						signature3.Return();
 
 						if(result == false) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
@@ -1339,6 +1345,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						provider.Initialize();
 
 						bool result = provider.Verify(hash, signature4, moderatorKey.FourthKey.Key);
+						
+						signature4.Return();
 
 						if(result == false) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
@@ -1351,6 +1359,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						provider.Initialize();
 
 						bool result = provider.Verify(hash, signature5, key.Key);
+						
+						signature5.Return();
 
 						if(result == false) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
@@ -1394,6 +1404,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						provider.Initialize();
 
 						bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
+						
+						signature1.Return();
 
 						if(result == false) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
@@ -1406,6 +1418,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						provider.Initialize();
 
 						bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
+						
+						signature2.Return();
 
 						if(result == false) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);

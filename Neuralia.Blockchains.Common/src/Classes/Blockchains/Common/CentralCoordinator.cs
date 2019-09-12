@@ -369,56 +369,61 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <param name="messageTask"></param>
 		/// <exception cref="ApplicationException"></exception>
 		protected virtual void HandleMesageReceived(MessageReceivedTask messageTask) {
-			if(messageTask.header.ChainId != this.ChainId) {
-				throw new ApplicationException("a message was forwarded for a chain ID we do not support.");
-			}
 
-			if(messageTask.header is GossipHeader) {
-				throw new ApplicationException("Gossip messages can not be received through this facility.");
-			}
+			try {
+				if(messageTask.header.ChainId != this.ChainId) {
+					throw new ApplicationException("a message was forwarded for a chain ID we do not support.");
+				}
 
-			if(messageTask.header is TargettedHeader targettedHeader) {
-				// this is a targeted header, its meant only for us
+				if(messageTask.header is GossipHeader) {
+					throw new ApplicationException("Gossip messages can not be received through this facility.");
+				}
 
-				IBlockchainTargettedMessageSet messageSet = (IBlockchainTargettedMessageSet) this.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.RehydrateMessage(messageTask.data, targettedHeader, this.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
+				if(messageTask.header is TargettedHeader targettedHeader) {
+					// this is a targeted header, its meant only for us
 
-				var workflowTracker = new WorkflowTracker<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>(messageTask.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.originatorId, this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, this.workflowCoordinator);
+					IBlockchainTargettedMessageSet messageSet = (IBlockchainTargettedMessageSet) this.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.RehydrateMessage(messageTask.data, targettedHeader, this.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
-				if(messageSet.Header.IsWorkflowTrigger && messageSet is IBlockchainTriggerMessageSet triggerMessageSet) {
-					// route the message
-					if(triggerMessageSet.BaseMessage is IWorkflowTriggerMessage workflowTriggerMessage) {
+					var workflowTracker = new WorkflowTracker<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>(messageTask.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.originatorId, this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, this.workflowCoordinator);
 
-						if(!workflowTracker.WorkflowExists()) {
-							// create a new workflow
-							var workflow = (ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory>) this.ChainComponentProvider.ChainFactoryProviderBase.ServerWorkflowFactoryBase.CreateResponseWorkflow(triggerMessageSet, messageTask.Connection);
+					if(messageSet.Header.IsWorkflowTrigger && messageSet is IBlockchainTriggerMessageSet triggerMessageSet) {
+						// route the message
+						if(triggerMessageSet.BaseMessage is IWorkflowTriggerMessage workflowTriggerMessage) {
 
-							this.workflowCoordinator.AddWorkflow(workflow);
+							if(!workflowTracker.WorkflowExists()) {
+								// create a new workflow
+								var workflow = (ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory>) this.ChainComponentProvider.ChainFactoryProviderBase.ServerWorkflowFactoryBase.CreateResponseWorkflow(triggerMessageSet, messageTask.Connection);
+
+								this.workflowCoordinator.AddWorkflow(workflow);
+							}
+						} else {
+							// this means we did not pass the trigger filter above, it could be an evil trigger and we default
+							throw new ApplicationException("An invalid trigger was sent");
 						}
 					} else {
-						// this means we did not pass the trigger filter above, it could be an evil trigger and we default
-						throw new ApplicationException("An invalid trigger was sent");
-					}
-				} else {
-					if(messageSet.BaseMessage is IWorkflowTriggerMessage<IBlockchainEventsRehydrationFactory>) {
-						throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is not set, but the message type is a workflow trigger");
-					}
+						if(messageSet.BaseMessage is IWorkflowTriggerMessage<IBlockchainEventsRehydrationFactory>) {
+							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is not set, but the message type is a workflow trigger");
+						}
 
-					if(messageSet.Header.IsWorkflowTrigger) {
-						throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
-					}
+						if(messageSet.Header.IsWorkflowTrigger) {
+							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
+						}
 
-					// forward the message to the right correlated workflow
-					// this method wlil ensure we get the right workflow id for our connection
+						// forward the message to the right correlated workflow
+						// this method wlil ensure we get the right workflow id for our connection
 
-					// now we verify if this message originator was us
+						// now we verify if this message originator was us
 
-					if(workflowTracker.GetActiveWorkflow() is ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory> workflow) {
+						if(workflowTracker.GetActiveWorkflow() is ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory> workflow) {
 
-						workflow.ReceiveNetworkMessage(messageSet);
-					} else {
-						Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' which does not exist");
+							workflow.ReceiveNetworkMessage(messageSet);
+						} else {
+							Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' which does not exist");
+						}
 					}
 				}
+			} finally {
+				messageTask.data?.Return();
 			}
 		}
 

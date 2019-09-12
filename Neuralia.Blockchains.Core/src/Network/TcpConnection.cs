@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		void Close();
 		void Connect(IByteArray bytes, int timeout = 5000);
 		bool SendMessage(long hash);
-		MessageInstance SendBytes(IByteArray bytes);
+		void SendBytes(IByteArray bytes);
 		void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback);
 		bool CheckConnected();
 
@@ -448,7 +448,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			return true;
 		}
 
-		public MessageInstance SendBytes(IByteArray bytes) {
+		public void SendBytes(IByteArray bytes) {
 
 			if((bytes == null) || bytes.IsEmpty) {
 				throw new TcpApplicationException("The message bytes can not be null");
@@ -460,9 +460,9 @@ namespace Neuralia.Blockchains.Core.Network {
 				messageInstance = this.protocolFactory.WrapMessage(bytes, this.protocolMessageFilters);
 			}
 
-			this.SendMessage(messageInstance);
-
-			return messageInstance;
+			using(messageInstance) {
+				this.SendMessage(messageInstance);
+			}
 		}
 
 		public void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback) {
@@ -795,7 +795,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 									entry.SetMessageContent(bufferRehydrator);
 
-									this.protocolFactory.HandleCompetedMessage(entry, callback, this);
+									this.protocolFactory.DeflateCompressionsage(entry, callback, this);
 									
 									entry.Message?.Return();
 

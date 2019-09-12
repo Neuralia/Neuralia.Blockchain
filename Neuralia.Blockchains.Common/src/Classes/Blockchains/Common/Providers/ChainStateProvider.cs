@@ -553,9 +553,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateEntry.LastDigestTimestamp = DateTime.MinValue;
 			chainStateEntry.MaxBlockInterval = 0;
 
-			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 1).ToString();
-			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 1).ToString();
-			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 1).ToString();
+			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 2).ToString();
+			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 2).ToString();
+			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 2).ToString();
 
 			return chainStateEntry;
 		}

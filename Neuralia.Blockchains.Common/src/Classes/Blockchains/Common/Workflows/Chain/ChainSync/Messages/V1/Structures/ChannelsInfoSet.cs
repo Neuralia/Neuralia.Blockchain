@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures {
@@ -41,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 	}
 
-	public class ChannelsInfoSet<KEY, T> : IBinarySerializable, ITreeHashable
+	public class ChannelsInfoSet<KEY, T> : IBinarySerializable, ITreeHashable, IDisposable2
 		where T : DataSliceSize, new() {
 
 		private readonly Action<KEY, IDataDehydrator> dehydrateKey;
@@ -98,6 +99,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			return nodesList;
 		}
+		
+	#region disposable
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+
+			if(disposing && !this.IsDisposed) {
+				this.DisposeAll();
+			}
+
+			this.IsDisposed = true;
+		}
+
+		~ChannelsInfoSet() {
+			this.Dispose(false);
+		}
+
+		protected virtual void DisposeAll() {
+
+			foreach(var entry in SlicesInfo.Values) {
+				if(entry is IDisposable disposable) {
+					disposable.Dispose();
+				}
+			}
+		}
+
+	#endregion
 	}
 
 	public static class ChannelsInfoSet {

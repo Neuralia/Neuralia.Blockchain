@@ -24,6 +24,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 		/// </summary>
 		protected readonly BlockchainTriggerMessageSet<T> triggerMessage;
 
+		protected override void DisposeAll(bool disposing) {
+			base.DisposeAll(disposing);
+			
+			this.triggerMessage?.Message?.Dispose();
+		}
+
 		public ServerChainWorkflow(CENTRAL_COORDINATOR centralCoordinator, BlockchainTriggerMessageSet<T> triggerMessage, PeerConnection peerConnectionn) : base(centralCoordinator) {
 			if(GlobalSettings.ApplicationSettings.P2pEnabled) {
 

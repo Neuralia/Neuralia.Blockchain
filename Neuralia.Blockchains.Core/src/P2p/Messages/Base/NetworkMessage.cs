@@ -3,11 +3,12 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
-	public interface INetworkMessage : ITreeHashable {
+	public interface INetworkMessage : ITreeHashable, IDisposable2 {
 
 		ComponentVersion<SimpleUShort> Version { get; }
 
@@ -71,5 +72,33 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 		protected abstract ComponentVersion<SimpleUShort> SetIdentity();
 
 		protected abstract short SetWorkflowType();
+		
+	#region disposable
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+
+			if(disposing && !this.IsDisposed) {
+				this.DisposeAll();
+			}
+
+			this.IsDisposed = true;
+		}
+
+		~NetworkMessage() {
+			this.Dispose(false);
+		}
+
+		protected virtual void DisposeAll() {
+
+		}
+
+	#endregion
 	}
 }
