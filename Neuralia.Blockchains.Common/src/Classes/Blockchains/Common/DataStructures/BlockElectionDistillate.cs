@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
@@ -33,7 +34,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public AccountId MiningAccountId;
 
-		public List<PassiveElectionContextDistillate> PassiveElectionResults = new List<PassiveElectionContextDistillate>();
+		public List<IntermediaryElectionContextDistillate> IntermediaryElectionResults = new List<IntermediaryElectionContextDistillate>();
 
 		public bool IsElectionContextLoaded => this.electionContext != null;
 
@@ -42,7 +43,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 				IByteArray compressed = (ByteArray) Convert.FromBase64String(this.DehydratedElectionContext);
 
-				BrotliCompression compressor = new BrotliCompression();
+				GzipCompression compressor = new GzipCompression();
 				IByteArray bytes = compressor.Decompress(compressed);
 
 				IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
@@ -61,10 +62,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 			// }
 		}
 
+		public abstract IntermediaryElectionContextDistillate CreateIntermediateElectionContext();
 		public abstract PassiveElectionContextDistillate CreatePassiveElectionContext();
 		public abstract FinalElectionResultDistillate CreateFinalElectionResult();
 	}
 
+	public abstract class IntermediaryElectionContextDistillate {
+
+		public ElectionQuestionDistillate SimpleQuestion;
+		public ElectionQuestionDistillate HardQuestion;
+		
+		public PassiveElectionContextDistillate PassiveElectionContextDistillate;
+	}
+	
 	public abstract class PassiveElectionContextDistillate {
 
 		public long electionBlockId;
@@ -83,11 +93,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public ElectionModes ElectionMode;
 
+		public long? simpleAnswer;
+		public long? hardAnswer;
+
 		public ComponentVersion<BlockType> MatureBlockType;
 		public ComponentVersion MatureElectionContextVersion;
 		public int MaturityBlockHash;
 		public long MaturityBlockId;
 
 		public List<string> SelectedTransactionIds;
+	}
+
+	public abstract class ElectionQuestionDistillate {
+		
+	}
+	
+	public class QuestionTransactionSectionDistillate : ElectionQuestionDistillate{
+		public BlockId BlockId { get; set; } 
+		public int? TransactionIndex { get; set; }
+
+		public byte SelectedTransactionSection{ get; set; }
+		public byte SelectedComponent{ get; set; }
 	}
 }

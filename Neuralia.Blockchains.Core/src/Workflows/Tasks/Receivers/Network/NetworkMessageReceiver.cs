@@ -26,6 +26,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 
 		}
 
+		public bool HasMessage => this.messageQueue.Any();
+	
 		/// <summary>
 		///     Check for messsages received in our queue. First, we take them out of the thread safe queue, then we run
 		///     validation callbacks to see if we take them

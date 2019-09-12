@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			}
 
 			if(this.enabledKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
-				this.ACCOUNT_ENTRY_SIZE += MESSAGE_KEY_SIZE;
+				this.ACCOUNT_ENTRY_SIZE += MESSAGE_ENTRY_SIZE;
 			}
 		}
 
@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			int pageOffset = this.GetPageOffset(adjustedAccountId, page);
 			long byteOffsets = this.GetPageByteOffset(pageOffset);
 
-			(int offset, int size) keyOffsets = this.GetKeyByteOffset(ordinal);
+			(int offset, int size) = this.GetKeyByteOffset(ordinal);
 
 			string fileName = this.GetKeyFileName(page);
 
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				return default;
 			}
 
-			IByteArray results = FileExtensions.ReadBytes(fileName, byteOffsets + keyOffsets.offset, keyOffsets.size, this.fileSystem);
+			IByteArray results = FileExtensions.ReadBytes(fileName, byteOffsets + offset, size, this.fileSystem);
 
 			ByteArray keyBytes = new ByteArray(this.GetKeySize(ordinal));
 			results.Slice(2).CopyTo(keyBytes.Span);
@@ -106,7 +106,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			int pageOffset = this.GetPageOffset(adjustedAccountId, page);
 			long byteOffsets = this.GetPageByteOffset(pageOffset);
 
-			(int offset, int size) keyOffsets = this.GetKeyByteOffset(ordinal);
+			(int offset, int size) = this.GetKeyByteOffset(ordinal);
 
 			string fileName = this.GetKeyFileName(page);
 
@@ -134,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			using(Stream fs = this.fileSystem.File.OpenWrite(fileName)) {
 
-				fs.Seek((int) (byteOffsets + keyOffsets.offset), SeekOrigin.Begin);
+				fs.Seek((int) (byteOffsets + offset), SeekOrigin.Begin);
 				fs.Write(dataEntry.ToArray(), 0, dataEntry.Length);
 			}
 		}

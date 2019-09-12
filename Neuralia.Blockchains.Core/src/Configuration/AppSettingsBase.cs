@@ -124,6 +124,21 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public SerializationTypes SerializationType { get; set; } = SerializationTypes.Master;
 
 		/// <summary>
+		///     The http url of the mining registration API
+		/// </summary>
+#if TESTNET
+		public string WebElectionsRegistrationUrl { get; set; } = "http://test-election-registration.neuralium.com";
+		public string WebRegistrationUrl { get; set; } = "http://test-registration.neuralium.com";
+#elif DEVNET
+		public string WebElectionsRegistrationUrl { get; set; } = "http://dev-election-registration.neuralium.com";
+		public string WebRegistrationUrl { get; set; } = "http://dev-registration.neuralium.com";
+#else
+	    public string WebElectionsRegistrationUrl { get; set; } = "http://election-registration.neuralium.com"; 
+		public string WebRegistrationUrl { get; set; } = "http://registration.neuralium.com";
+#endif
+
+		
+		/// <summary>
 		///     the maximum amount of IPs to keep in our cache
 		/// </summary>
 		public int MaximumIpCacheCount { get; set; } = 1000;
@@ -263,6 +278,13 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			All = Transactions | Messages
 		}
 
+		[Flags]
+		public enum RegistrationMethods : byte {
+			Web = 1 << 0,
+			Gossip = 1 << 1,
+			WebOrGossip = Web | Gossip
+		}
+		
 		public enum HashTypes {
 			Sha2,
 			Sha3
@@ -276,6 +298,20 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Master;
 
+		/// <summary>
+		///     The http url of the mining registration API
+		/// </summary>
+#if TESTNET
+		public string WebElectionsRegistrationUrl { get; set; } = "http://test-election-registration.neuralium.com";
+		public string WebRegistrationUrl { get; set; } = "http://test-registration.neuralium.com";
+#elif DEVNET
+		public string WebElectionsRegistrationUrl { get; set; } = "http://dev-election-registration.neuralium.com";
+		public string WebRegistrationUrl { get; set; } = "http://dev-registration.neuralium.com";
+#else
+	    public string WebElectionsRegistrationUrl { get; set; } = "http://election-registration.neuralium.com"; 
+		public string WebRegistrationUrl { get; set; } = "http://registration.neuralium.com";
+#endif
+		
 		/// <summary>
 		///     If true, during the wallet sync, the public block height will be updated, causing a creaping sync target. at false,
 		///     it will sync with the height it had when it started,
@@ -411,6 +447,17 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		public bool SkipPeriodicBlockHashVerification { get; set; } = true;
 
+		/// <summary>
+		///     Use the rest webapi to register for mining. its simpler and faster, so its preferable to use. it is also required
+		///     if the peer can not open it's default port through the firewall
+		/// </summary>
+		public RegistrationMethods ElectionsRegistrationMethod { get; set; } = RegistrationMethods.Gossip;
+		
+		/// <summary>
+		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so its preferable to use. 
+		/// </summary>
+		public RegistrationMethods RegistrationMethod { get; set; } = RegistrationMethods.Gossip;
+		
 		/// <summary>
 		///     Time in minutes to store a wallet passphrase in memory before wiping it out
 		/// </summary>

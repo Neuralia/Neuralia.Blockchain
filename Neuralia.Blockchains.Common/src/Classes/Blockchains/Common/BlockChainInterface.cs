@@ -19,6 +19,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.System;
@@ -323,12 +324,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public TaskResult<string> Test(string data) {
 			return this.RunSerializationTaskMethod((service, taskRoutingContext) => {
 
-				KeyAddress key = new KeyAddress();
-
-				key.AnnouncementBlockId = 1;
-				key.KeyedTransactionIndex = 0;
-
-				IKeyedTransaction res = service.LoadKeyedTransaction(key);
+				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnecableChanged(true));
 
 				return "";
 
@@ -426,7 +422,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		public ImmutableList<string> QueryPeersList() {
-			return this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.AllConnectionsList.Select(c => c.ScopedIp).ToImmutableList();
+			return this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.AllConnectionsList.Select(c => c.ScoppedIp).ToImmutableList();
 		}
 
 		/// <summary>
@@ -573,7 +569,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				string json = service.LoadBlockJson(new BlockId(blockId));
 
-				BrotliCompression compressor = new BrotliCompression();
+				GzipCompression compressor = new GzipCompression();
 				ByteArray bytes = Encoding.UTF8.GetBytes(json);
 				IByteArray compressed = compressor.Compress(bytes);
 				var result = compressed.ToExactByteArrayCopy();
@@ -595,7 +591,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				IBlock block = service.LoadBlock(new BlockId(blockId));
 
 				if(block != null) {
-					BrotliCompression compressor = new BrotliCompression();
+					GzipCompression compressor = new GzipCompression();
 
 					return block.GetAllConfirmedTransactions().Select(t => {
 
@@ -716,7 +712,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				if(block is IElectionBlock electionBlock) {
 
-					BrotliCompression compressor = new BrotliCompression();
+					GzipCompression compressor = new GzipCompression();
 					IByteArray compressed = compressor.Compress(electionBlock.DehydratedElectionContext);
 
 					object result = new {

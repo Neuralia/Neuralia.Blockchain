@@ -34,7 +34,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 	}
 
 	public static class NetworkingWorkflow {
-		public static string FormatScopedId(Guid clientUuid, uint workflowId) {
+		public static string FormatScoppedId(Guid clientUuid, uint workflowId) {
 			return $"{clientUuid}-{workflowId}";
 		}
 	}
@@ -66,7 +66,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// </summary>
 		public uint CorrelationId { get; protected set; }
 
-		public override string Id => NetworkingWorkflow.FormatScopedId(this.ClientId, this.CorrelationId);
+		public override string Id => NetworkingWorkflow.FormatScoppedId(this.ClientId, this.CorrelationId);
 
 		/// <summary>
 		///     The client Scope that is attached to this workflow.abstract If its our own, the ID is 0
@@ -261,6 +261,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			return messages.Single();
 		}
 
+		protected bool HasMessages => this.networkMessageReceiver.HasMessage;
+		
 		/// <summary>
 		///     Get a list of messages of a specific type. wait untl we receive them
 		/// </summary>

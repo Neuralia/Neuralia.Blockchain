@@ -9,6 +9,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 
 		byte Version { get; }
 		IValidatorRequest Rehydrate(IDataRehydrator rehydrator);
-		IByteArray Dehydrate(IDataDehydrator dehydrator);
 	}
 }

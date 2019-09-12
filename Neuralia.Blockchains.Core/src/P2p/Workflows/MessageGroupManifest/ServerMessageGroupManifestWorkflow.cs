@@ -42,52 +42,38 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			this.CheckShouldCancel();
 
 			// ok, we just received a trigger, lets examine it
-
-			// ok, if there are messages in the trigger, we end there
-			if((this.triggerMessage.Message.targettedMessageSets.Count != 0) || (this.triggerMessage.Message.messageInfos.Count == 0)) {
-				//send the targeted messages
-				foreach(IByteArray message in this.triggerMessage.Message.targettedMessageSets) // thats it, we formally receive the messages and send them to our message manager.
-				{
-					this.networkingService.PostNetworkMessage(message, this.ClientConnection);
-				}
-
-				return;
-			}
-
+			
 			var reply = this.MessageFactory.CreateServerMessageGroupManifestSet(this.triggerMessage.Header);
-
-			Log.Verbose($"Received {this.triggerMessage.Message.messageInfos.Count} gossip message hashes from peer {this.ClientConnection.ScopedAdjustedIp}");
+			
+			reply.Message.sessionId = this.triggerMessage.Message.sessionId;
+			
+			Log.Verbose($"Received {this.triggerMessage.Message.messageInfos.Count} gossip message hashes from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// here we check which messages in the group we have already received, and which ones are new
 			(var messageReceived, int alreadyReceivedCount) = this.PerpareGossipMessageAcceptations();
 
 			int refusingCount = messageReceived.Count(m => !m);
 
-			Log.Verbose($"We already previously received {alreadyReceivedCount} out of {this.triggerMessage.Message.messageInfos.Count} messages just received. {refusingCount} messages will be ignored from peer {this.ClientConnection.ScopedAdjustedIp}.");
+			Log.Verbose($"We already previously received {alreadyReceivedCount} out of {this.triggerMessage.Message.messageInfos.Count} messages just received. {refusingCount} messages will be ignored from peer {this.ClientConnection.ScoppedAdjustedIp}.");
 
 			reply.Message.messageApprovals.AddRange(messageReceived);
 
 			if(!this.Send(reply)) {
-				Log.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
+				Log.Verbose($"Connection with peer  {this.ClientConnection.ScoppedAdjustedIp} was terminated");
 
 				return;
 			}
 
-			if(!reply.Message.messageApprovals.Any(a => a) && (this.triggerMessage.Message.targettedMessageCount == 0)) {
+			if(!reply.Message.messageApprovals.Any(a => a)) {
 				return;
 			}
 
 			var serverMessageGroupManifest = this.WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>();
 
-			Log.Verbose($"We received {serverMessageGroupManifest.Message.gossipMessageSets.Count} gossip messages and {serverMessageGroupManifest.Message.targettedMessageSets.Count} targeted messages from peer {this.ClientConnection.ScopedAdjustedIp}");
+			Log.Verbose($"We received {serverMessageGroupManifest.Message.gossipMessageSets.Count} gossip messages from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// ok, these are really messages, lets handle them as such
 			foreach(IByteArray message in serverMessageGroupManifest.Message.gossipMessageSets) // thats it, we formally receive the messages and send them to our message manager.
-			{
-				this.networkingService.PostNetworkMessage(message, this.ClientConnection);
-			}
-
-			foreach(IByteArray message in serverMessageGroupManifest.Message.targettedMessageSets) // thats it, we formally receive the messages and send them to our message manager.
 			{
 				this.networkingService.PostNetworkMessage(message, this.ClientConnection);
 			}

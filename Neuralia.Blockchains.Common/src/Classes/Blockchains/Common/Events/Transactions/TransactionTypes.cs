@@ -46,6 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public readonly TransactionType NONE;
 		public readonly TransactionType SET_ACCOUNT_RECOVERY;
+		public readonly TransactionType SET_ACCOUNT_CORRELATION_ID;
 		public readonly TransactionType SIMPLE_PRESENTATION;
 
 		static TransactionTypes() {
@@ -59,6 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.KEY_CHANGE = this.CreateBaseConstant();
 			this.ACCREDITATION_CERTIFICATE = this.CreateBaseConstant();
 			this.SET_ACCOUNT_RECOVERY = this.CreateBaseConstant();
+			this.SET_ACCOUNT_CORRELATION_ID = this.CreateBaseConstant();
 
 			this.SetOffset(1_000);
 

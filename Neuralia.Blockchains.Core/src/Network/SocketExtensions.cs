@@ -189,12 +189,15 @@ namespace Neuralia.Blockchains.Core.Network {
 				return false;
 			}
 
-			// finally, poll the sock to see if we are still connected
-			try {
-				return !((socket.Poll(1000, SelectMode.SelectRead) && (socket.Available == 0)) || !socket.Connected);
-			} catch {
-				return false;
-			}
+			// note: the bellow technique does not work for us. the connection might have no data and be perfectly valid
+			// // finally, poll the sock to see if we are still connected
+			// try {
+			// 	return !((socket.Poll(1000, SelectMode.SelectRead) && (socket.Available == 0)) || !socket.Connected);
+			// } catch {
+			// 	return false;
+			// }
+
+			return true;
 		}
 	}
 }

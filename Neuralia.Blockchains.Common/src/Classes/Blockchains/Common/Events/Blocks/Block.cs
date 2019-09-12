@@ -166,7 +166,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 		public override void Rehydrate(IDehydratedBlock dehydratedBlock, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 
-			BrotliCompression compressor = null;
+			GzipCompression compressor = null;
 
 			var channelRehydrators = dehydratedBlock.GetEssentialDataChannels().ConvertAll((band, data) => {
 
@@ -178,7 +178,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 				// decompress if we should
 				if(rehydrationFactory.CompressedBlockchainChannels.HasFlag(band)) {
 					if(compressor == null) {
-						compressor = new BrotliCompression();
+						compressor = new GzipCompression();
 					}
 
 					bytes = compressor.Decompress(data);

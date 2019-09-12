@@ -27,10 +27,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 
 			var peerListRequestTrigger = this.MessageFactory.CreatePeerListRequestWorkflowTriggerSet(this.CorrelationId);
 
-			Log.Verbose($"Sending peer list request to peer {this.peerConnection.ScopedAdjustedIp}");
+			Log.Verbose($"Sending peer list request to peer {this.peerConnection.ScoppedAdjustedIp}");
 
 			if(!this.SendMessage(this.peerConnection, peerListRequestTrigger)) {
-				Log.Verbose($"Connection with peer  {this.peerConnection.ScopedAdjustedIp} was terminated");
+				Log.Verbose($"Connection with peer  {this.peerConnection.ScoppedAdjustedIp} was terminated");
 
 				return;
 			}
@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			// take the peer nodes and update our system
 			this.networkingService.ConnectionStore.UpdatePeerNodes(this.peerConnection, serverPeerListRequest.Message.nodes);
 
-			Log.Verbose($"Received {serverPeerListRequest.Message.nodes.Select(n => n.Value.Nodes.Count).Sum()} peers from peer {this.peerConnection.ScopedAdjustedIp}");
+			Log.Verbose($"Received {serverPeerListRequest.Message.nodes.Select(n => n.Value.Nodes.Count).Sum()} peers from peer {this.peerConnection.ScoppedAdjustedIp}");
 		}
 
 		protected override PeerListRequestMessageFactory<R> CreateMessageFactory() {

@@ -92,7 +92,7 @@ namespace Neuralia.Blockchains.Core.Services {
 					break;
 				} catch(Exception e) {
 					// failed to reach the NTP server
-					Log.Error(e, $"Failed to query ntp server '{ntpServer}'.");
+					Log.Verbose(e, $"Failed to query ntp server '{ntpServer}'.");
 				}
 			}
 

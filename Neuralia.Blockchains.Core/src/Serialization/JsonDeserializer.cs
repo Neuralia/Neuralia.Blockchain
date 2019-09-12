@@ -43,7 +43,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void SetValue(IJsonSerializable value) {
 
-			this.RootBase = this.DehydrateSerializable(value);
+			this.RootBase =  value != null ? this.DehydrateSerializable(value) : null;
 		}
 
 		public void SetValue(object value) {
@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void SetProperty(string name, IJsonSerializable value) {
 
-			this.Root.Add(new JProperty(name, this.DehydrateSerializable(value)));
+			this.Root.Add(new JProperty(name, value != null ? this.DehydrateSerializable(value) : null));
 		}
 
 		public void SetProperty(string name, object value) {
@@ -76,19 +76,19 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void SetArray(string name, IJsonSerializable[] values) {
 
-			this.SetProperty(name, new JArray(values.Select(this.DehydrateSerializable)));
+			this.SetProperty(name, values != null ?new JArray(values.Select(this.DehydrateSerializable)): null);
 		}
 
 		public void SetArray(string name, IEnumerable<object> values) {
 
-			this.SetProperty(name, new JArray(values.Select(o => {
+			this.SetProperty(name, values != null ? new JArray(values.Select(o => {
 
 				if(o is IJsonSerializable serializable) {
 					return this.DehydrateSerializable(serializable);
 				}
 
 				return this.BuildToken(o);
-			})));
+			})) : null);
 		}
 
 		public void SetArray(string name, IEnumerable values) {

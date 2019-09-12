@@ -133,7 +133,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public void SaveDigestChannelDescription(int digestId, BlockchainDigestDescriptor blockchainDigestDescriptor) {
-			this.BlockchainEventSerializationFal.SaveDigestChannelDescription(this.GetDigestsScopedFolderPath(digestId), blockchainDigestDescriptor);
+			this.BlockchainEventSerializationFal.SaveDigestChannelDescription(this.GetDigestsScoppedFolderPath(digestId), blockchainDigestDescriptor);
 		}
 
 		public void UpdateCurrentDigest(int digestId, long blockHeight) {
@@ -144,11 +144,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				blockGroupIndex = this.FindBlockIndex(blockHeight);
 			}
 
-			this.BlockchainEventSerializationFal.UpdateCurrentDigest(this.GetDigestsScopedFolderPath(digestId), deletePreviousBlocks, blockGroupIndex);
+			this.BlockchainEventSerializationFal.UpdateCurrentDigest(this.GetDigestsScoppedFolderPath(digestId), deletePreviousBlocks, blockGroupIndex);
 		}
 
 		public void SaveDigestHeader(int digestId, IByteArray digestHeader) {
-			this.BlockchainEventSerializationFal.SaveDigestHeader(this.GetDigestsScopedFolderPath(digestId), digestHeader);
+			this.BlockchainEventSerializationFal.SaveDigestHeader(this.GetDigestsScoppedFolderPath(digestId), digestHeader);
 		}
 
 		public void SaveAccountKeyIndex(AccountId accountId, IByteArray key, byte treeHeight, byte hashBits, byte ordinal) {

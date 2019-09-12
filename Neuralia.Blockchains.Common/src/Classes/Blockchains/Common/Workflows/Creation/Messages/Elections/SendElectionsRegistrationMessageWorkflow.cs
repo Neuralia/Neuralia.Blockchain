@@ -1,8 +1,10 @@
+using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Transactions;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Messages.Elections {
@@ -24,15 +26,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected readonly AccountId candidateAccountID;
 
 		protected readonly ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo;
+		protected readonly ChainConfigurations.RegistrationMethods registrationMethod;
 
-		public SendElectionsRegistrationMessageWorkflow(AccountId candidateAccountID, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
+		public SendElectionsRegistrationMessageWorkflow(AccountId candidateAccountID, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, ChainConfigurations.RegistrationMethods registrationMethod, CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
 			this.electionsCandidateRegistrationInfo = electionsCandidateRegistrationInfo;
+			this.registrationMethod = registrationMethod;
 			this.candidateAccountID = candidateAccountID;
 		}
 
 		protected override IMessageEnvelope AssembleEvent() {
+			if(this.registrationMethod == ChainConfigurations.RegistrationMethods.Gossip) {
 
-			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateOnChainElectionsRegistrationMessage(this.candidateAccountID, this.electionsCandidateRegistrationInfo);
+				return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateOnChainElectionsRegistrationMessage(this.candidateAccountID, this.electionsCandidateRegistrationInfo);
+			} else {
+				throw new ApplicationException("Invalid message type");
+			}
 		}
 	}
 }

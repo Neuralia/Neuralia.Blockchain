@@ -105,7 +105,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			IWalletAccount account = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();
 
 			account.Status = Enums.PublicationStatus.Dispatched;
-			account.PresentationTransactionId = envelope.Contents.Uuid;
+			account.PresentationTransactionId = envelope.Contents.Uuid.SimpleTransactionId;
 
 			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet();
 

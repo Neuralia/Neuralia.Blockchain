@@ -172,8 +172,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				//TODO: add some higher level analytics
 			}
 
-			Log.Information("Genesis block has been synced successfully");
-
 			return ResultsState.OK;
 		}
 
@@ -465,6 +463,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			// launch the various tasks
 			var downloadTask = new Task<bool>(() => {
 
+				Thread.CurrentThread.Name = "Chain Sync Download Thread";
+				
 				this.CheckShouldCancel();
 
 				int blockGossipCacheProximityLevel = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
@@ -485,6 +485,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			var verifyTask = new Task<bool>(() => {
 
+				Thread.CurrentThread.Name = "Chain Sync Verification Thread";
+				
 				this.CheckShouldCancel();
 
 				while(running) {
@@ -503,6 +505,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			var interpretationTask = new Task<bool>(() => {
 
+				
+				Thread.CurrentThread.Name = "Chain Sync Interpretation Thread";
 				this.CheckShouldCancel();
 
 				while(running) {
@@ -757,7 +761,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					var validationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateValidationTask<bool>();
 
-					validationTask.SetAction((validationService, taskRoutingContext) => {
+					validationTask.SetAction((validationService, taskRoutingContext) => { 
 
 						if(loadSource == LoadSources.Gossip) {
 

@@ -42,6 +42,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 
 		public string PerceivedIP;
 
+		public bool? Connectible;
+
 		public HandshakeStatuses Status;
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -52,7 +54,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			dehydrator.Write(this.nonce);
 			dehydrator.Write((byte) this.peerType);
 			dehydrator.Write(this.PerceivedIP);
-
+			dehydrator.Write(this.Connectible);
+			
 			this.clientSoftwareVersion.Dehydrate(dehydrator);
 
 			// now the chain optionsBase
@@ -75,6 +78,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			this.nonce = rehydrator.ReadLong();
 			this.peerType = (Enums.PeerTypes) rehydrator.ReadByte();
 			this.PerceivedIP = rehydrator.ReadString();
+			this.Connectible = rehydrator.ReadNullableBool();
 
 			this.clientSoftwareVersion.SetVersion(rehydrator.Rehydrate<SoftwareVersion>());
 
@@ -100,7 +104,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			nodesList.Add(this.PerceivedIP);
 			nodesList.Add(this.nonce);
 			nodesList.Add((byte) this.peerType);
-
+			nodesList.Add(this.Connectible);
+			
 			foreach(var chainsetting in this.chainSettings.OrderBy(e => e.Key)) {
 				nodesList.Add(chainsetting.Key.Value);
 

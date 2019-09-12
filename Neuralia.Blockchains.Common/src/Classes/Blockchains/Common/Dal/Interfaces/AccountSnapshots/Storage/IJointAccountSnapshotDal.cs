@@ -7,7 +7,7 @@ using Neuralia.Blockchains.Core.General.Types;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage {
 
 	public interface IJointAccountSnapshotDal : IAccountSnapshotDal {
-		void InsertNewJointAccount(AccountId accountId, long inceptionBlockId);
+		void InsertNewJointAccount(AccountId accountId, long inceptionBlockId, long? correlationId);
 	}
 
 	public interface IJointAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT, ACCOUNT_SNAPSHOT, ACCOUNT_FEATURE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT> : IAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT>, IJointAccountSnapshotDal

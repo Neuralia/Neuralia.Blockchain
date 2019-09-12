@@ -150,12 +150,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 				//
 
 				// first we add the peer in case it was not already
-				PeerSqlite peerSqlite = db.Peers.Include(me => me.Messages).SingleOrDefault(p => p.PeerKey == task.Connection.ScopedIp);
+				PeerSqlite peerSqlite = db.Peers.Include(me => me.Messages).SingleOrDefault(p => p.PeerKey == task.Connection.ScoppedIp);
 
 				if(peerSqlite == null) {
 					// add the peer
 					peerSqlite = new PeerSqlite();
-					peerSqlite.PeerKey = task.Connection.ScopedIp;
+					peerSqlite.PeerKey = task.Connection.ScoppedIp;
 
 					db.Peers.Add(peerSqlite);
 				}
@@ -239,12 +239,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 						// we record that this peer tried to send us a copy
 						messageEntrySqlite.Echos++;
 
-						PeerSqlite peerSqlite = db.Peers.Include(me => me.Messages).SingleOrDefault(p => p.PeerKey == peerConnectionn.ScopedIp);
+						PeerSqlite peerSqlite = db.Peers.Include(me => me.Messages).SingleOrDefault(p => p.PeerKey == peerConnectionn.ScoppedIp);
 
 						if(peerSqlite == null) {
 							// add the peer
 							peerSqlite = new PeerSqlite();
-							peerSqlite.PeerKey = peerConnectionn.ScopedIp;
+							peerSqlite.PeerKey = peerConnectionn.ScoppedIp;
 
 							db.Peers.Add(peerSqlite);
 						}

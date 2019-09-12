@@ -3,26 +3,15 @@ using System.IO.Compression;
 using Microsoft.IO;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Allocation;
-#if (NETSTANDARD2_0)
-using BrotliSharpLib;
-
-#endif
 
 namespace Neuralia.Blockchains.Core.Compression {
-	public class BrotliCompression : Compression<BrotliCompression> {
+	public class GzipCompression : Compression<GzipCompression> {
 
 		protected override IByteArray CompressData(IByteArray data, CompressionLevelByte level) {
 
 			using(RecyclableMemoryStream output = (RecyclableMemoryStream) MemoryAllocators.Instance.recyclableMemoryStreamManager.GetStream("compress")) {
-#if (NETSTANDARD2_0)
-				using(BrotliStream compressor = new BrotliStream(output, CompressionMode.Compress, true)) {
-					compressor.SetQuality((int) this.ConvertCompression(level));
-#elif (NETCOREAPP2_2)
-				using(BrotliStream compressor = new BrotliStream(output, this.ConvertCompression(level), true)) {
-#else
-	throw new NotImplementedException();
-#endif
 
+				using(GZipStream compressor = new GZipStream(output, this.ConvertCompression(level), true)) {
 					compressor.Write(data.Bytes, data.Offset, data.Length);
 
 					compressor.Flush();
@@ -33,7 +22,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		protected override IByteArray CompressData(IByteArray data) {
-			return this.CompressData(data, CompressionLevelByte.Nine);
+			return this.CompressData(data, CompressionLevelByte.Fastest);
 		}
 
 		protected override IByteArray DecompressData(IByteArray data) {
@@ -54,14 +43,8 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		protected override void DecompressData(Stream input, Stream output) {
-#if (NETSTANDARD2_0)
-			using(BrotliStream decompressor = new BrotliStream(input, CompressionMode.Decompress)) {
 
-#elif (NETCOREAPP2_2)
-			using(BrotliStream decompressor = new BrotliStream(input, CompressionMode.Decompress)) {
-#else
-				throw new NotImplementedException();
-#endif
+			using(GZipStream decompressor = new GZipStream(input, CompressionMode.Decompress)) {
 
 				decompressor.CopyTo(output);
 

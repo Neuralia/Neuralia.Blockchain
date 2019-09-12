@@ -169,7 +169,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				Log.Error(ex, "failed to add transaction to local event pool");
 			}
 
-			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionCreated(transactionEnvelope.Contents.Uuid));
+			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionCreated(transactionEnvelope.Contents.Uuid.SimpleTransactionId));
 
 			// ok, we are ready. lets send it out to the world!!  :)
 			this.DispatchLocalTransactionAsync(transactionEnvelope, correlationContext);
@@ -201,7 +201,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="transactionEnvelope"></param>
 		public void DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext) {
 
-			IWalletTransactionCache entry = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid);
+			IWalletTransactionCache entry = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid.SimpleTransactionId);
 
 			if(entry.Status != (byte) WalletTransactionCache.TransactionStatuses.New) {
 				throw new ApplicationException("Impossible to dispatch a transaction that has already been sent");
@@ -747,11 +747,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		protected void ConfirmTransactionSent(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, long messageHash) {
-			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionSent(transactionEnvelope.Contents.Uuid), correlationContext);
+			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionSent(transactionEnvelope.Contents.Uuid.SimpleTransactionId), correlationContext);
 
 			IndependentActionRunner.Run(() => {
 				Repeater.Repeat(() => {
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid, WalletTransactionCache.TransactionStatuses.Dispatched, messageHash);
+					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid.SimpleTransactionId, WalletTransactionCache.TransactionStatuses.Dispatched, messageHash);
 				});
 
 			}, () => {
@@ -760,7 +760,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				Repeater.Repeat(() => {
 
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionEnvelope.Contents.Uuid, WalletTransactionHistory.TransactionStatuses.Dispatched);
+					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionEnvelope.Contents.Uuid.SimpleTransactionId, WalletTransactionHistory.TransactionStatuses.Dispatched);
 				});
 			});
 		}
@@ -1043,7 +1043,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				} catch(WalletNotLoadedException ex) {
 					Log.Warning("Failed to load wallet. Not loaded.");
 				} catch(Exception ex) {
-					Log.Error("Failed to load wallet. Not loaded.", ex);
+					Log.Warning("Failed to load wallet. Not loaded.", ex);
 				}
 
 				return false;

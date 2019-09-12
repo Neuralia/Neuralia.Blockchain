@@ -316,11 +316,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				// if we track the transaction source account, then we add it
 				if(this.IsAnyAccountTracked(search)) {
 					// this is one of ours
-					if(!impactingLocals.ContainsKey(transaction.TransactionId)) {
-						impactingLocals.Add(transaction.TransactionId, transaction);
+					if(!impactingLocals.ContainsKey(transaction.TransactionId.SimpleTransactionId)) {
+						impactingLocals.Add(transaction.TransactionId.SimpleTransactionId, transaction);
 					}
 
-					AddTranaction(transaction.TransactionId.Account, transaction.TransactionId);
+					AddTranaction(transaction.TransactionId.Account, transaction.TransactionId.SimpleTransactionId);
 				}
 
 				// we still need to check the target, since we may send transactions between accounts that we own
@@ -333,18 +333,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					// ok, this transaction impacts us. lets see if its send by us, or not
 
 					if(account == transaction.TransactionId.Account) {
-						if(!impactingLocals.ContainsKey(transaction.TransactionId)) {
-							impactingLocals.Add(transaction.TransactionId, transaction);
+						if(!impactingLocals.ContainsKey(transaction.TransactionId.SimpleTransactionId)) {
+							impactingLocals.Add(transaction.TransactionId.SimpleTransactionId, transaction);
 						}
 					} else {
-						if(!impactingExternals.ContainsKey(transaction.TransactionId)) {
-							impactingExternals.Add(transaction.TransactionId, (transaction, account));
+						if(!impactingExternals.ContainsKey(transaction.TransactionId.SimpleTransactionId)) {
+							impactingExternals.Add(transaction.TransactionId.SimpleTransactionId, (transaction, account));
 						}
 					}
 
 					// now all the accounts targetted by this transaction
 					foreach(AccountId subaccount in trackedAccounts) {
-						AddTranaction(subaccount, transaction.TransactionId);
+						AddTranaction(subaccount, transaction.TransactionId.SimpleTransactionId);
 					}
 				}
 			}

@@ -1,6 +1,8 @@
 using System;
+
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.System.Data.HashFunction.xxHash;
+using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.Data.HashFunction.xxHash;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	/// <summary>
@@ -22,13 +24,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		public ulong HashULong(IHashNodeList nodeList) {
 			IByteArray hash = this.HashBytes(nodeList);
 
-			return BitConverter.ToUInt64(hash.Bytes, hash.Offset);
+			TypeSerializer.Deserialize(hash.Span, out ulong result);
+			hash.Return();
+
+			return result;
 		}
 
 		public long HashLong(IHashNodeList nodeList) {
 			IByteArray hash = this.HashBytes(nodeList);
 
-			long result = BitConverter.ToInt64(hash.Bytes, hash.Offset);
+			TypeSerializer.Deserialize(hash.Span, out long result);
 
 			hash.Return();
 

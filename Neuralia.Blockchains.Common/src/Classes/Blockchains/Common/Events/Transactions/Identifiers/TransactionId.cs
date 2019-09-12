@@ -21,8 +21,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	[JsonConverter(typeof(TransactionIdJsonConverter))]
 	public class TransactionId : ISerializableCombo, IComparable<TransactionId> {
 
-		protected const char SEPARATOR = ':';
-		protected const char COMPACT_SEPARATOR = ' ';
+		public const char SEPARATOR = ':';
+		public const char COMPACT_SEPARATOR = ' ';
 
 		static TransactionId() {
 			LiteDBMappers.RegisterTransactionId();
@@ -95,19 +95,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			return this.Scope.CompareTo(other.Scope);
 		}
-
-		public void Dehydrate(IDataDehydrator dehydrator) {
+		
+		public void Dehydrateheader(IDataDehydrator dehydrator) {
 
 			this.Account.Dehydrate(dehydrator);
 			this.Timestamp.Dehydrate(dehydrator);
 
+		}
+
+		public void RehydrateHeader(IDataRehydrator rehydrator) {
+			this.Account.Rehydrate(rehydrator);
+			this.Timestamp.Rehydrate(rehydrator);
+
+		}
+
+		public void Dehydrate(IDataDehydrator dehydrator) {
+
+			this.Dehydrateheader(dehydrator);
 			this.DehydrateTail(dehydrator);
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
-			this.Account.Rehydrate(rehydrator);
-			this.Timestamp.Rehydrate(rehydrator);
-
+			this.RehydrateHeader(rehydrator);
 			this.RehydrateTail(rehydrator);
 		}
 
@@ -130,7 +139,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			return transactionId.Split(new[] {SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
 		}
 
-		protected void Parse(string transactionId) {
+		public void Parse(string transactionId) {
 
 			var items = this.GetTransactionIdComponents(transactionId);
 

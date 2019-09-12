@@ -119,7 +119,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					int currentDigestHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestHeight;
 
-					this.blockchainEventSerializationFal = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainDalCreationFactoryBase.CreateSerializedArchiveFal(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration(), this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.ActiveBlockchainChannels, this.GetBlocksFolderPath(), this.GetDigestsScopedFolderPath(currentDigestHeight), this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.CreateDigestChannelfactory(), this.fileSystem);
+					this.blockchainEventSerializationFal = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainDalCreationFactoryBase.CreateSerializedArchiveFal(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration(), this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.ActiveBlockchainChannels, this.GetBlocksFolderPath(), this.GetDigestsScoppedFolderPath(currentDigestHeight), this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.CreateDigestChannelfactory(), this.fileSystem);
 				}
 
 				return this.blockchainEventSerializationFal;
@@ -258,14 +258,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return Path.Combine(this.GetEventsFolderPath(), DIGEST_HASH_FOLDER_PATH);
 		}
 
-		public string GetDigestsScopedFolderPath(int digestId) {
+		public string GetDigestsScoppedFolderPath(int digestId) {
 
 			return Path.Combine(this.GetDigestsFolderPath(), string.Format(DIGESTS_SCOPED_FOLDER_NAME, digestId));
 		}
 
 		public string GetDigestsPackedFolderPath(int digestId) {
 
-			return Path.Combine(this.GetDigestsScopedFolderPath(digestId), DigestChannelBandFileNamingProvider.ARCHIVE_DIRECTORY_NAME);
+			return Path.Combine(this.GetDigestsScoppedFolderPath(digestId), DigestChannelBandFileNamingProvider.ARCHIVE_DIRECTORY_NAME);
 		}
 
 		public string GetDigestsHeaderFilePath(int digestId) {
@@ -275,7 +275,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public string GetDigestsExpandedFolderPath(int digestId) {
 
-			return Path.Combine(this.GetDigestsScopedFolderPath(digestId), DigestChannelBandFileNamingProvider.EXPANDED_DIRECTORY_NAME);
+			return Path.Combine(this.GetDigestsScoppedFolderPath(digestId), DigestChannelBandFileNamingProvider.EXPANDED_DIRECTORY_NAME);
 		}
 
 		public string GetDigestSyncManifestFileName() {

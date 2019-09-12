@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 	}
 
 	/// <summary>
-	///     A simple class to hold all the services we may need scoped to the chain
+	///     A simple class to hold all the services we may need scopped to the chain
 	/// </summary>
 	public class ServiceSet<R> : ServiceSet
 		where R : IRehydrationFactory {

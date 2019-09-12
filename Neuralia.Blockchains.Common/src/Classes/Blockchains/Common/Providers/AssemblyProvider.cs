@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	///     this is where we do the transaction creation heavy lifting. Strong
 	///     transaction Engineers required ;)
 	/// </summary>
-	public abstract class AssemblyManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public abstract class AssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected readonly IBlockchainGuidService guidService;
 		protected readonly IBlockchainTimeService timeService;
 
-		public AssemblyManager(CENTRAL_COORDINATOR centralCoordinator) {
+		public AssemblyProvider(CENTRAL_COORDINATOR centralCoordinator) {
 			this.timeService = centralCoordinator.BlockchainServiceSet.BlockchainTimeService;
 			this.guidService = centralCoordinator.BlockchainServiceSet.BlockchainGuidService;
 			this.CentralCoordinator = centralCoordinator;
@@ -104,13 +104,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						// we are declaring this key in this block, so lets update our key
-						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
+						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId.SimpleTransactionId;
 						this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
 
 						standardPresentation.TransactionCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.TransactionCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.TransactionCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.TransactionCryptographicKey.Key = (ByteArray) key.PublicKey;
+						standardPresentation.TransactionCryptographicKey.Key = ByteArray.CreateFrom(key.PublicKey);
 					}
 
 					using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.MESSAGE_KEY_NAME)) {
@@ -120,13 +120,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						// we are declaring this key in this block, so lets update our key
-						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
+						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId.SimpleTransactionId;
 						this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
 
 						standardPresentation.MessageCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.MessageCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.MessageCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.MessageCryptographicKey.Key = (ByteArray) key.PublicKey;
+						standardPresentation.MessageCryptographicKey.Key = ByteArray.CreateFrom(key.PublicKey);
 					}
 
 					using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.CHANGE_KEY_NAME)) {
@@ -136,13 +136,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						// we are declaring this key in this block, so lets update our key
-						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
+						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId.SimpleTransactionId;
 						this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
 
 						standardPresentation.ChangeCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.ChangeCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.ChangeCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.ChangeCryptographicKey.Key = (ByteArray) key.PublicKey;
+						standardPresentation.ChangeCryptographicKey.Key = ByteArray.CreateFrom(key.PublicKey);
 					}
 
 					using(ISecretWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretWalletKey>(account.AccountUuid, GlobalsService.SUPER_KEY_NAME)) {
@@ -152,7 +152,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						// we are declaring this key in this block, so lets update our key
-						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
+						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId.SimpleTransactionId;
 						this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
 
 						standardPresentation.SuperCryptographicKey.Id = key.KeyAddress.OrdinalId;
@@ -171,17 +171,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 						this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOW, correlationContext);
 
-						(var solutions, int nonce) = pow.PerformPow(hash, GlobalsService.POW_DIFFICULTY, (currentNonce, difficulty) => {
+						try {
+							this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
 
-							this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOWIteration(currentNonce, difficulty), correlationContext);
-							Thread.Sleep(500);
-						});
+							(var solutions, int nonce) = pow.PerformPow(hash, GlobalsService.POW_DIFFICULTY, (currentNonce, difficulty) => {
 
-						standardPresentation.PowSolutions = solutions.Take(GlobalsService.POW_MAX_SOLUTIONS).ToList(); // take the top ones
-						standardPresentation.PowNonce = nonce;
-						standardPresentation.PowDifficulty = GlobalsService.POW_DIFFICULTY;
+								this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOWIteration(currentNonce, difficulty), correlationContext);
+								Thread.Sleep(500);
+							});
+							
+							standardPresentation.PowSolutions = solutions.Take(GlobalsService.POW_MAX_SOLUTIONS).ToList(); // take the top ones
+							standardPresentation.PowNonce = nonce;
+							standardPresentation.PowDifficulty = GlobalsService.POW_DIFFICULTY;
 
-						this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.FoundPOWSolution(nonce, standardPresentation.PowDifficulty, standardPresentation.PowSolutions), correlationContext);
+							this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.FoundPOWSolution(nonce, standardPresentation.PowDifficulty, standardPresentation.PowSolutions), correlationContext);
+						} finally {
+							this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RestoreNetwork();
+						}
 					}
 				} catch(Exception ex) {
 					throw new ApplicationException("Failed to generate presentation transaction proof of work", ex);
@@ -235,7 +241,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							}
 
 							// we are declaring this key in this transaction, so lets update our key
-							nextKey.KeyAddress.DeclarationTransactionId = standardAccountKeyChange.TransactionId;
+							nextKey.KeyAddress.DeclarationTransactionId = standardAccountKeyChange.TransactionId.SimpleTransactionId;
 							nextKey.KeyAddress.OrdinalId = newKeyOrdinal;
 
 							// lets set it as our next one
@@ -274,7 +280,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							}
 
 							// we are declaring this key in this transaction, so lets update our key
-							nextKey.KeyAddress.DeclarationTransactionId = standardAccountKeyChange.TransactionId;
+							nextKey.KeyAddress.DeclarationTransactionId = standardAccountKeyChange.TransactionId.SimpleTransactionId;
 							nextKey.KeyAddress.OrdinalId = GlobalsService.SUPER_KEY_ORDINAL_ID;
 
 							// lets set it as our next one

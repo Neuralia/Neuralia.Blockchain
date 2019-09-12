@@ -18,59 +18,66 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     the IP, always in IPv6 format
 		/// </summary>
 		private IPAddress cacheAdjustedV6Address;
-
-		public NodeAddressInfo(string ip, int port, Enums.PeerTypes peerType, Dictionary<BlockchainType, ChainSettings> chainSettings) : this(ip, (int?) port, peerType, chainSettings) {
+		public bool Locked { get; set; }
+		
+		public NodeAddressInfo(string ip, int port, Enums.PeerTypes peerType, Dictionary<BlockchainType, ChainSettings> chainSettings, bool locked = false) : this(ip, (int?) port, peerType, chainSettings, locked) {
 
 		}
 
-		public NodeAddressInfo(string ip, int? port, Enums.PeerTypes peerType, Dictionary<BlockchainType, ChainSettings> chainSettings) : this(ip, port, peerType) {
+		public NodeAddressInfo(string ip, int? port, Enums.PeerTypes peerType, Dictionary<BlockchainType, ChainSettings> chainSettings, bool locked = false) : this(ip, port, peerType, locked) {
 			this.ChainSettings = chainSettings;
 		}
 
-		public NodeAddressInfo(string ip, int port, Enums.PeerTypes peerType) {
+		public NodeAddressInfo(string ip, int port, Enums.PeerTypes peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = port == 0 ? null : (int?) port;
 			this.PeerType = this.PeerType;
+			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(string ip, int? port, Enums.PeerTypes peerType) {
+		public NodeAddressInfo(string ip, int? port, Enums.PeerTypes peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = port;
 			this.PeerType = this.PeerType;
+			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(string ip, Enums.PeerTypes peerType) {
+		public NodeAddressInfo(string ip, Enums.PeerTypes peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = null;
 			this.PeerType = this.PeerType;
+			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(IPAddress ip, int port, Enums.PeerTypes peerType) {
+		public NodeAddressInfo(IPAddress ip, int port, Enums.PeerTypes peerType, bool locked = false) {
 			this.Address = ip;
 			this.Port = port == 0 ? null : (int?) port;
 			this.PeerType = this.PeerType;
+			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(IPAddress ip, int? port, Enums.PeerTypes peerType) {
+		public NodeAddressInfo(IPAddress ip, int? port, Enums.PeerTypes peerType, bool locked = false) {
 			this.Address = ip;
 			this.Port = port;
 			this.PeerType = this.PeerType;
+			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(IPAddress ip, Enums.PeerTypes peerType) {
+		public NodeAddressInfo(IPAddress ip, Enums.PeerTypes peerType, bool locked = false) {
 			this.Address = ip;
 			this.Port = null;
 			this.PeerType = this.PeerType;
+			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
@@ -158,12 +165,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <summary>
 		///     always V6 format
 		/// </summary>
-		public string ScopedIp => $"[{this.Ip}]:{this.RealPort}";
+		public string ScoppedIp => $"[{this.Ip}]:{this.RealPort}";
 
 		/// <summary>
 		///     Ipv4 or V6 format
 		/// </summary>
-		public string ScopedAdjustedIp => $"[{this.AdjustedIp}]:{this.RealPort}";
+		public string ScoppedAdjustedIp => $"[{this.AdjustedIp}]:{this.RealPort}";
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
 			dehydrator.Write(this.Ip);
@@ -269,7 +276,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		public override string ToString() {
-			return $"{this.ScopedAdjustedIp}";
+			return $"{this.ScoppedAdjustedIp}";
 		}
 
 		public static NodeAddressInfo CreateEmpty() {

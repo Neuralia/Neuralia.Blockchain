@@ -83,7 +83,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				}
 
 				electedCandidateResult.Transactions = assignedTransactions.OrderBy(t => t).ToList();
-				electedCandidateResult.PeerType = (Enums.PeerTypes) electorTypesArray[index];
+				electedCandidateResult.PeerShareType = (Enums.ElectedPeerShareTypes) electorTypesArray[index];
 				electedCandidateResult.DelegateAccountId = delegateAccount;
 
 				this.ElectedCandidates.Add(accountId, electedCandidateResult);

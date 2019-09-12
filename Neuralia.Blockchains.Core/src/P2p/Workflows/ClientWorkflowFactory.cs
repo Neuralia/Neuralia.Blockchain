@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows {
 
 		ClientHandshakeWorkflow<R> CreateRequestHandshakeWorkflow(NetworkEndPoint endpoint);
 		ClientPeerListRequestWorkflow<R> CreatePeerListRequest(PeerConnection peerConnection);
-		ClientMessageGroupManifestWorkflow<R> CreateMessageGroupManifest(List<INetworkMessageSet> messages, PeerConnection peerConnection);
+		ClientMessageGroupManifestWorkflow<R> CreateMessageGroupManifest();
 	}
 
 	public class ClientWorkflowFactory<R> : WorkflowFactory<R>, IClientWorkflowFactory<R>
@@ -31,8 +31,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows {
 			return new ClientPeerListRequestWorkflow<R>(peerConnection, this.serviceSet);
 		}
 
-		public virtual ClientMessageGroupManifestWorkflow<R> CreateMessageGroupManifest(List<INetworkMessageSet> messages, PeerConnection peerConnection) {
-			return new ClientMessageGroupManifestWorkflow<R>(messages, peerConnection, this.serviceSet);
+		public virtual ClientMessageGroupManifestWorkflow<R> CreateMessageGroupManifest() {
+			return new ClientMessageGroupManifestWorkflow<R>(this.serviceSet);
 		}
 	}
 }

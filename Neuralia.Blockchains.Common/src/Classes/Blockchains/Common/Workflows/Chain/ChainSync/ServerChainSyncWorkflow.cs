@@ -86,7 +86,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				if(this.ClientIdWorkflowExistsAdd()) {
 					// this client already has a workflow, this is bad
 					//TODO: log peer for having attempted another workflow, could be a DDOS attempt
-					Log.Warning($"A synchronization workflow already exists for peer {this.PeerConnection.ScopedAdjustedIp}");
+					Log.Warning($"A synchronization workflow already exists for peer {this.PeerConnection.ScoppedAdjustedIp}");
 
 					return;
 				}
@@ -165,7 +165,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				Log.Information("Sending handshake response");
 
 				if(!this.Send(serverHandshake)) {
-					Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
+					Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 					return;
 				}
@@ -188,7 +188,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_BLOCK_INFO blockInfoRequestMessage) {
-						Log.Verbose($"Sending block id {blockInfoRequestMessage.Id} info to peer {this.PeerConnection.ScopedAdjustedIp}.");
+						Log.Verbose($"Sending block id {blockInfoRequestMessage.Id} info to peer {this.PeerConnection.ScoppedAdjustedIp}.");
 
 						// ok, now lets compare with ours, and find the ones that are different	
 
@@ -216,7 +216,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 
 						if(!this.Send(sendBlockInfoMessage)) {
-							Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
+							Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 							return;
 						}
@@ -231,13 +231,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							// send a default empty message
 							if(!this.Send(sendBlockMessage)) {
-								Log.Verbose($"Syncing with peer  {this.PeerConnection.ScopedAdjustedIp} is over. we dont have enough blocks.");
+								Log.Verbose($"Syncing with peer  {this.PeerConnection.ScoppedAdjustedIp} is over. we dont have enough blocks.");
 
 								return;
 							}
 						}
 
-						Log.Verbose($"Sending block id {blockRequestMessage.Id} to peer {this.PeerConnection.ScopedAdjustedIp}.");
+						Log.Verbose($"Sending block id {blockRequestMessage.Id} to peer {this.PeerConnection.ScoppedAdjustedIp}.");
 
 						// ok, now lets compare with ours, and find the ones that are different	
 
@@ -282,7 +282,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 
 						if(!this.Send(sendBlockMessage)) {
-							Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
+							Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 							return;
 						}
@@ -298,13 +298,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							// send a default empty message
 							if(!this.Send(sendBlockMessage)) {
-								Log.Verbose($"Syncing with peer  {this.PeerConnection.ScopedAdjustedIp} is over. we dont have enough blocks.");
+								Log.Verbose($"Syncing with peer  {this.PeerConnection.ScoppedAdjustedIp} is over. we dont have enough blocks.");
 
 								return;
 							}
 						}
 
-						Log.Verbose($"Sending block id {requestBlockSliceHashes.Id} slice hashes to peer {this.PeerConnection.ScopedAdjustedIp}.");
+						Log.Verbose($"Sending block id {requestBlockSliceHashes.Id} slice hashes to peer {this.PeerConnection.ScoppedAdjustedIp}.");
 
 						// ok, now lets compare with ours, and find the ones that are different	
 
@@ -331,7 +331,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 
 						if(!this.Send(sendBlockMessage)) {
-							Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
+							Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 							return;
 						}
@@ -339,7 +339,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST_INFO requestDigestInfo) {
 
-						Log.Information($"Sending digest id {requestDigestInfo.Id} connection to peer {this.PeerConnection.ScopedAdjustedIp}.");
+						Log.Information($"Sending digest id {requestDigestInfo.Id} connection to peer {this.PeerConnection.ScoppedAdjustedIp}.");
 
 						// ok, now lets compare with ours, and find the ones that are different	
 
@@ -356,7 +356,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 
 						if(!this.Send(sendDigestInfoMessage)) {
-							Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
+							Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 							return;
 						}
@@ -364,7 +364,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST requestDigest) {
 
-						Log.Information($"Sending digest for id {requestDigest.Id} to peer {this.PeerConnection.ScopedAdjustedIp}.");
+						Log.Information($"Sending digest for id {requestDigest.Id} to peer {this.PeerConnection.ScoppedAdjustedIp}.");
 
 						// ok, now lets compare with ours, and find the ones that are different	
 
@@ -382,7 +382,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 
 						if(!this.Send(sendDigestMessage)) {
-							Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
+							Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 							return;
 						}
@@ -390,7 +390,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST_FILE requestDigestFile) {
 
-						Log.Information($"Sending digest id {requestDigestFile.Id} to peer {this.PeerConnection.ScopedAdjustedIp}.");
+						Log.Information($"Sending digest id {requestDigestFile.Id} to peer {this.PeerConnection.ScoppedAdjustedIp}.");
 
 						// ok, now lets compare with ours, and find the ones that are different	
 
@@ -408,7 +408,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 
 						if(!this.Send(sendDigestFileMessage)) {
-							Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
+							Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 							return;
 						}
@@ -418,7 +418,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 			} finally {
 				// thats it, we are done :)
-				Log.Information($"Finished handling synchronization for peer {this.PeerConnection.ScopedAdjustedIp}.");
+				Log.Information($"Finished handling synchronization for peer {this.PeerConnection.ScoppedAdjustedIp}.");
 			}
 		}
 

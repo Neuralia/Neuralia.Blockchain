@@ -24,17 +24,10 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
-		public RoutedTaskRoutingThread(CENTRAL_COORDINATOR centralCoordinator, int maxParallelTasks) {
+		public RoutedTaskRoutingThread(CENTRAL_COORDINATOR centralCoordinator, int maxParallelTasks, int sleepTime = 100) : base(sleepTime) {
 			this.RoutedTaskRoutingReceiver = new SpecializedRoutedTaskRoutingReceiver<T>(centralCoordinator, this as T, true, maxParallelTasks);
 			this.CentralCoordinator = centralCoordinator;
-
-			//TODO: for production, give it 30 seconds
-			this.hibernateTimeoutSpan = TimeSpan.FromSeconds(30 * 60);
-		}
-
-		public RoutedTaskRoutingThread(CENTRAL_COORDINATOR router, int maxParallelTasks, int sleepTime) : base(sleepTime) {
-			this.RoutedTaskRoutingReceiver = new SpecializedRoutedTaskRoutingReceiver<T>(router, this as T, true, maxParallelTasks);
-
+			
 			//TODO: for production, give it 30 seconds
 			this.hibernateTimeoutSpan = TimeSpan.FromSeconds(30 * 60);
 		}

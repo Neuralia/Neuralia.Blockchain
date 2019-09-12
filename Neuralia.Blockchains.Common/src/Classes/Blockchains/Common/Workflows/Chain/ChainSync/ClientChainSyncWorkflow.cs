@@ -232,6 +232,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return;
 			}
 
+			if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused) {
+				// network is paused, obvous we wont sync much
+				return;
+			}
+			
 			// very first thing, lets spend some time computing the hourly hashes for our dates, if we can
 
 			if(this.centralCoordinator.IsChainSynchronized) {
@@ -256,8 +261,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				int attempts = 0;
 
+				
 				bool syncGenesis = this.ChainStateProvider.DownloadBlockHeight == 0;
-
+				
 				if(!syncGenesis && (this.ChainStateProvider.DiskBlockHeight == 0)) {
 					// let's confirm 
 					ChainDataProvider.BlockFilesetSyncManifestStatuses status = this.GetBlockSyncManifestStatus(1);
@@ -277,6 +283,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				bool syncDigest = this.UseDigest;
 
+				bool synched = false;
 				if(syncGenesis) {
 
 					ResultsState result = this.RunBlockSyncingAction(connectionsSet => {
@@ -286,41 +293,64 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						this.UpdateDownloadBlockHeight(1);
 						syncGenesis = false;
+						synched = true;
 
 						return ResultsState.OK;
 					}, 3, connections);
 
-					if(result != ResultsState.OK) {
-						throw new WorkflowException();
+					if(result != ResultsState.OK || this.ChainStateProvider.DiskBlockHeight != 1) {
+
+						if(!connections.HasSyncingConnections) {
+							Log.Verbose("Failed to sync genesis block, we had no syncing connections");
+						} else {
+							Log.Warning("Failed to sync genesis block");
+						}
+
+						return;
 					}
+					
+					Log.Information("Genesis block has been synced successfully");
 				}
 
 				// then its always the digest if applicable
 				if(syncDigest) {
 
+					
 					ResultsState result = this.RunBlockSyncingAction(connectionsSet => {
 						//if we need to get a digest, we do now
 						this.SynchronizeDigest(connectionsSet);
 
 						syncDigest = false;
+						synched = true;
 
 						return ResultsState.OK;
 					}, 2, connections);
 
 					if(result != ResultsState.OK) {
-						throw new WorkflowException();
-					}
+						if(!connections.HasSyncingConnections) {
+							Log.Verbose("Failed to sync digest, we had no syncing connections");
+						} else {
+							Log.Warning("Failed to sync digest");
+						}
 
+						return;
+					}
+					
 					syncDigest = false;
 				}
 
 				if(!syncGenesis && !syncDigest) {
 					// ok, we are good to go with the rest of the syncing
 					this.LaunchMainBlockSync(connections);
+					synched = true;
 				}
 
 				// a good time to also request a wallet sync if none was requested
-				this.RequestWalletSync();
+				if(synched) {
+					this.RequestWalletSync();
+				}
+				
+				this.CheckShouldCancel();
 
 				if(this.newPeerTask != null) {
 					this.canFetchNewPeers = true;
@@ -329,9 +359,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						this.newPeerTask?.Dispose();
 					}
 				}
-
+				
 				this.CheckShouldCancel();
-
+				
 				// ok, we just synced so we can update our marker
 				this.ChainStateProvider.LastSync = DateTime.Now;
 
@@ -724,7 +754,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					requestInfo.requestMessage.Message.RequestAttempt += 1;
 
 					dispatchedInfos.Add(requestInfo);
-					Log.Verbose($"Peer IP {requestInfo.connection.PeerConnection.ScopedAdjustedIp} is getting a connection request.");
+					Log.Verbose($"Peer IP {requestInfo.connection.PeerConnection.ScoppedAdjustedIp} is getting a connection request.");
 				}
 
 				// and now we send it to each peer
@@ -894,7 +924,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					requestInfo.requestMessage.Message.RequestAttempt += 1;
 
 					dispatchedInfos.Add(requestInfo);
-					Log.Verbose($"Peer IP {requestInfo.connection.PeerConnection.ScopedAdjustedIp} is getting a connection request.");
+					Log.Verbose($"Peer IP {requestInfo.connection.PeerConnection.ScoppedAdjustedIp} is getting a connection request.");
 				}
 
 				// and now we send it to each peer
@@ -1284,7 +1314,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				try {
 					if(!this.SendBytes(slice.connection.PeerConnection, triggerData)) {
-						Log.Verbose($"Connection with peer  {slice.connection.PeerConnection.ScopedAdjustedIp} was terminated");
+						Log.Verbose($"Connection with peer  {slice.connection.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 						throw new SendMessageException();
 					}
@@ -1437,7 +1467,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				try {
 					if(!this.SendBytes(connection.PeerConnection, triggerData)) {
-						Log.Verbose($"Connection with peer  {connection.PeerConnection.ScopedAdjustedIp} was terminated");
+						Log.Verbose($"Connection with peer  {connection.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 						throw new WorkflowException();
 					}

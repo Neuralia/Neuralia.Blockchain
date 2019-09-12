@@ -85,6 +85,12 @@ namespace Neuralia.Blockchains.Core {
 			PowerSdk = 5,
 			Hub = 6
 		}
+		
+		public enum ElectedPeerShareTypes : byte {
+			None = 0,
+			DigestThenBlocks = 1,
+			DigestAndBlocks = 2
+		}
 
 		[Flags]
 		public enum PeerTypeSupport : short {
@@ -127,7 +133,8 @@ namespace Neuralia.Blockchains.Core {
 		public const string SERIALIZATION_SERVICE = "serialization";
 		public const string VALIDATION_SERVICE = "validation";
 		public const string BLOCKCHAIN_SERVICE = "blockchain";
-
+		public const string GOSSIP_SERVICE = "gossip";
+		
 		public static ImmutableList<(PeerTypeSupport supportType, PeerTypes peerType)> PeerTypeMappings => new[] {(SimpleMobileSupport, PeerTypes.Unknown), (FullnodeSupport, PeerTypes.FullNode), (SimpleMobileSupport, PeerTypes.SimpleMobile), (HubSupport, PeerTypes.Hub), (GossipMobileSupport, PeerTypes.PowerMobile), (SimpleSdkSupport, PeerTypes.SimpleSdk), (PowerSdkSupport, PeerTypes.PowerSdk)}.ToImmutableList();
 		public static ImmutableList<PeerTypeSupport> PeerTypeSupports => PeerTypeMappings.Select(t => t.supportType).ToImmutableList();
 

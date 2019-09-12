@@ -119,7 +119,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		}
 
 		protected virtual void PrepareTransactionEntry(CHAIN_POOL_PUBLIC_TRANSACTIONS entry, ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
-			entry.TransactionId = transactionEnvelope.Contents.Uuid.ToCompactString();
+			entry.TransactionId = transactionEnvelope.Contents.Uuid.SimpleTransactionId.ToCompactString();
 			entry.Timestamp = DateTime.Now;
 			entry.Expiration = transactionEnvelope.GetExpirationTime(this.timeService, chainInception);
 		}

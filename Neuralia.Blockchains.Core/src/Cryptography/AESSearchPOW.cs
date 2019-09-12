@@ -228,7 +228,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			// hash the transaction header
 			IByteArray dataHash = this.GetHash(hash, nonce);
-			Log.Verbose("current hash {0}", dataHash.ToBase64());
+			Log.Verbose("current hash {0}", dataHash.ToBase58());
 
 			var searchResults = this.pattern_search(nonce, dataHash, scratchpad, nThreads);
 

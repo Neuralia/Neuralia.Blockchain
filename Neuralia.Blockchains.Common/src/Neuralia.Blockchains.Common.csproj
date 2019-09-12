@@ -39,19 +39,16 @@
     <!--<Delete Files="$(ProjectDir)bin/Debug/netcoreapp2.1/app_offline.htm" />-->
   <!--</Target>-->
   <ItemGroup>
-    <!-- <PackageReference Include="Microsoft.AspNet.WebApi.Core" Version="5.2.6" /> -->
-    
+
+    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.0" />
+    <PackageReference Include="Neuralia.BouncyCastle" Version="1.0.0" />
+    <PackageReference Include="Neuralia.STUN" Version="1.0.0" />
+    <PackageReference Include="Neuralia.Data.HashFunction.xxHash" Version="1.0.0" />
+
+
     <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.2.2" />
 
     <PackageReference Include="morelinq" Version="3.2.0" />
-
-    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.0" />
-
-    <PackageReference Include="Neuralia.BouncyCastle" Version="1.0.0" />
-
-    <PackageReference Include="Neuralia.STUN" Version="1.0.0" />
-
-    <PackageReference Include="Neuralia.System.Data.HashFunction.xxHash" Version="1.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <!--<PackageReference Include="sharpcompress" Version="0.20.0" />-->
     <PackageReference Include="CommandLineParser" Version="2.6.0" />
@@ -69,9 +66,8 @@
     <PackageReference Include="Serilog.Sinks.Async" Version="1.4.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="4.0.0" />
-    <PackageReference Include="System.Diagnostics.Tools" Version="4.3.0" />
-    <PackageReference Include="System.IO.Abstractions" Version="6.0.23" />
-    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="6.0.23" />
+    <PackageReference Include="System.IO.Abstractions" Version="6.0.27" />
+    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="6.0.27" />
     <PackageReference Include="System.Linq.Expressions" Version="4.3.0" />
   </ItemGroup> 
   <ItemGroup>

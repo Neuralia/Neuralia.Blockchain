@@ -198,7 +198,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					TypeSerializer.Serialize(value, bytes);
 
-					FileExtensions.WriteAllBytes(this.GetBlocksIdFilePath(), bytes, this.centralCoordinator.FileSystem);
+					string path = this.GetBlocksIdFilePath();
+					FileExtensions.EnsureFileExists(path, this.centralCoordinator.FileSystem);
+					FileExtensions.WriteAllBytes(path, bytes, this.centralCoordinator.FileSystem);
 				}
 			}
 		}
@@ -551,9 +553,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateEntry.LastDigestTimestamp = DateTime.MinValue;
 			chainStateEntry.MaxBlockInterval = 0;
 
-			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 0).ToString();
-			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 0).ToString();
-			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 0).ToString();
+			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 1).ToString();
+			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 1).ToString();
+			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 1).ToString();
 
 			return chainStateEntry;
 		}

@@ -97,7 +97,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				this.serverConnection = this.GetNewConnection(this.Endpoint);
 
 				if(!this.SendMessage(this.serverConnection, handshakeTrigger)) {
-					Log.Verbose($"Connection with peer  {this.serverConnection.ScopedAdjustedIp} was terminated");
+					Log.Verbose($"Connection with peer  {this.serverConnection.ScoppedAdjustedIp} was terminated");
 
 					return false;
 				}
@@ -162,7 +162,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				}
 
 				if(!this.SendMessage(this.serverConnection, clientConfirm)) {
-					Log.Verbose($"Connection with peer  {this.serverConnection.ScopedAdjustedIp} was terminated");
+					Log.Verbose($"Connection with peer  {this.serverConnection.ScoppedAdjustedIp} was terminated");
 
 					return false;
 				}
@@ -193,7 +193,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			var clientReady = this.MessageFactory.CreateClientReadySet(handshakeTrigger.Header);
 
 			if(!this.SendMessage(serverConnection, clientReady)) {
-				Log.Verbose($"Connection with peer  {serverConnection.ScopedAdjustedIp} was terminated");
+				Log.Verbose($"Connection with peer  {serverConnection.ScoppedAdjustedIp} was terminated");
 
 			}
 		}
@@ -214,7 +214,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.networkingService.ConnectionStore.ConfirmConnection(peerConnectionn);
 			this.networkingService.ConnectionStore.FullyConfirmConnection(peerConnectionn);
 
-			Log.Verbose($"handshake with {peerConnectionn.ScopedAdjustedIp} is now confirmed");
+			Log.Verbose($"handshake with {peerConnectionn.ScoppedAdjustedIp} is now confirmed");
 		}
 
 		protected virtual TargettedMessageSet<ClientHandshakeConfirm<R>, R> ProcessServerHandshake(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, ServerHandshake<R> serverHandshake, PeerConnection peerConnectionn) {
@@ -275,6 +275,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					Log.Verbose("The non hub reported peer is listed as a hub!");
 
 					return null;
+				}
+
+				if(serverHandshake.Connectible.HasValue) {
+					this.networkingService.ConnectionStore.AddPeerReportedConnectible(serverHandshake.Connectible.Value, source);
 				}
 
 				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(serverHandshake.PerceivedIP, source);

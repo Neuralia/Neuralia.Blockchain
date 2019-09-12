@@ -4,6 +4,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.General.Json.Converters;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
@@ -11,38 +12,52 @@ using Neuralia.Blockchains.Tools.Serialization;
 using Newtonsoft.Json;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers {
+	
+	/// <summary>
+	/// 
+	/// </summary>
+	/// <remarks>we do not inherit from transactionId to prevent accidental equality. better make them explicit</remarks>
 	[JsonConverter(typeof(TransactionIdExtendedJsonConverter))]
-	public class TransactionIdExtended : TransactionId, IComparable<TransactionIdExtended> {
+	public class TransactionIdExtended : ISerializableCombo, IComparable<TransactionIdExtended> {
 
 		private const char EXTENDED_SEPARATOR = '/';
 
 		static TransactionIdExtended() {
 			LiteDBMappers.RegisterTransactionIdExtended();
 		}
+		
+		private readonly TransactionId simpleTransactionId = new TransactionId();
 
 		// the extended fields
 		public TransactionIdExtended() {
 		}
 
-		public TransactionIdExtended(long accountSequenceId, Enums.AccountTypes accountType, long timestamp, byte scope) : base(accountSequenceId, accountType, timestamp, scope) {
 
+		public TransactionIdExtended(long accountSequenceId, Enums.AccountTypes accountType, long timestamp, byte scope) {
+			this.simpleTransactionId.Account = new AccountId(accountSequenceId, accountType);
+			this.simpleTransactionId.Timestamp = new TransactionTimestamp(timestamp);
+			this.simpleTransactionId.Scope = scope;
 		}
 
-		public TransactionIdExtended(AccountId accountId, long timestamp, byte scope) : base(accountId, timestamp, scope) {
+		public TransactionIdExtended(AccountId accountId, long timestamp, byte scope) {
+			this.simpleTransactionId.Account = accountId;
+			this.simpleTransactionId.Timestamp = timestamp;
+			this.simpleTransactionId.Scope = scope;
 		}
 
 		public TransactionIdExtended(TransactionId other) : this(other.Account, other.Timestamp.Value, other.Scope) {
 		}
 
-		public TransactionIdExtended(AccountId accountId, long timestamp, byte scope, long? keySequenceId, long? keyUseIndex, byte ordinal) : base(accountId, timestamp, scope) {
+		public TransactionIdExtended(AccountId accountId, long timestamp, byte scope, long? keySequenceId, long? keyUseIndex, byte ordinal) : this(accountId, timestamp, scope) {
 
 			if(keySequenceId.HasValue && keyUseIndex.HasValue) {
 				this.KeyUseIndex = new KeyUseIndexSet(keySequenceId.Value, keyUseIndex.Value, ordinal);
 			}
 		}
+		
+		public TransactionIdExtended(string transactionId) {
 
-		public TransactionIdExtended(string transactionId) : base(transactionId) {
-
+			this.simpleTransactionId.Parse(transactionId);
 			string extended = this.GetExtendedComponents(transactionId);
 
 			if(!string.IsNullOrWhiteSpace(extended)) {
@@ -69,6 +84,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// </summary>
 		public bool ContainsExtended => this.KeyUseIndex != null;
 
+		public AccountId Account {
+			get => this.simpleTransactionId.Account;
+			set => this.simpleTransactionId.Account = value;
+		}
+		
+		public TransactionTimestamp Timestamp {
+			get => this.simpleTransactionId.Timestamp;
+			set => this.simpleTransactionId.Timestamp = value;
+		}
+		
+		public TransactionId SimpleTransactionId => this.simpleTransactionId;
+
+		public byte Scope {
+			get => this.simpleTransactionId.Scope;
+			set => this.simpleTransactionId.Scope = value;
+		}
+		
 		public int CompareTo(TransactionIdExtended other) {
 			if(ReferenceEquals(this, other)) {
 				return 0;
@@ -78,7 +110,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				return 1;
 			}
 
-			int transactionIdComparison = base.CompareTo(other);
+			int transactionIdComparison = this.simpleTransactionId.CompareTo(other.simpleTransactionId);
 
 			if(transactionIdComparison != 0) {
 				return transactionIdComparison;
@@ -88,19 +120,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public TransactionId ToTransactionId() {
-			return new TransactionId(this);
+			return new TransactionId(this.simpleTransactionId);
+		}
+		
+		public void Dehydrate(IDataDehydrator dehydrator) {
+
+			this.SimpleTransactionId.Dehydrate(dehydrator);
+
+			this.DehydrateTail(dehydrator);
 		}
 
-		protected override void DehydrateTail(IDataDehydrator dehydrator) {
-			base.DehydrateTail(dehydrator);
+		public void Rehydrate(IDataRehydrator rehydrator) {
+			this.SimpleTransactionId.Rehydrate(rehydrator);
+
+			this.RehydrateTail(rehydrator);
+		}
+
+		protected void DehydrateTail(IDataDehydrator dehydrator) {
 
 			dehydrator.Write(this.KeyUseIndex == null);
 
 			this.KeyUseIndex?.Dehydrate(dehydrator);
 		}
 
-		protected override void RehydrateTail(IDataRehydrator rehydrator) {
-			base.RehydrateTail(rehydrator);
+		protected void RehydrateTail(IDataRehydrator rehydrator) {
 
 			bool isNull = rehydrator.ReadBool();
 
@@ -109,32 +152,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				this.KeyUseIndex.Rehydrate(rehydrator);
 			}
 		}
+		
+		public void DehydrateRelative(IDataDehydrator dehydrator) {
 
-		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			this.SimpleTransactionId.DehydrateRelative(dehydrator);
+			this.DehydrateTail(dehydrator);
+		}
 
+		public void RehydrateRelative(IDataRehydrator rehydrator) {
+			
+			this.SimpleTransactionId.RehydrateRelative(rehydrator);
+			this.RehydrateTail(rehydrator);
+		}
+
+		public void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+
+			this.simpleTransactionId.JsonDehydrate(jsonDeserializer);
 			jsonDeserializer.SetValue(this.ToExtendedString());
 		}
 
-		public override HashNodeList GetStructuresArray() {
-			HashNodeList nodeList = base.GetStructuresArray();
+		public HashNodeList GetStructuresArray() {
+			HashNodeList nodeList = new HashNodeList();
 
+			nodeList.Add(this.simpleTransactionId);
 			nodeList.Add(this.KeyUseIndex);
 
 			return nodeList;
 		}
 
 		public override int GetHashCode() {
-			return base.GetHashCode();
+			return this.SimpleTransactionId.GetHashCode();
 		}
 
-		protected override string[] GetTransactionIdComponents(string transactionId) {
+		protected string[] GetTransactionIdComponents(string transactionId) {
 
 			var essentials = transactionId.Split(new[] {EXTENDED_SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
 
 			string basic = essentials[0];
 			string extended = essentials.Length == 2 ? essentials[1] : null;
 
-			return transactionId.Split(new[] {SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
+			return transactionId.Split(new[] {TransactionId.SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
 		}
 
 		protected string GetExtendedComponents(string transactionId) {
@@ -150,7 +207,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public string ToEssentialString() {
-			return base.ToString();
+			return this.SimpleTransactionId.ToString();
 		}
 
 		public virtual string ToExtendedString() {
@@ -177,18 +234,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			}
 
 			if(obj is TransactionIdExtended other) {
-				return this.Equals((TransactionId) obj);
+				return this.Equals(other);
 			}
 
+			if(obj is TransactionId other2) {
+				return this.Equals(other2);
+			}
+			
 			return base.Equals(obj);
 		}
 
 		public bool Equals(TransactionIdExtended other) {
+			return this.Equals(other.SimpleTransactionId);
+		}
+		
+		public bool Equals(TransactionId other) {
 			if(ReferenceEquals(other, null)) {
 				return false;
 			}
 
-			return base.Equals(other);
+			// we always compare on the inner transaction id
+			return this.SimpleTransactionId.Equals(other);
 		}
 
 		public static bool operator ==(TransactionIdExtended a, TransactionIdExtended b) {

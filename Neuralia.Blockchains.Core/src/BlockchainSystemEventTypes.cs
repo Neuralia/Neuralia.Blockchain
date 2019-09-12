@@ -62,6 +62,8 @@ namespace Neuralia.Blockchains.Core {
 		public readonly BlockchainSystemEventType KeyGenerationMessage;
 
 		public readonly BlockchainSystemEventType KeyGenerationStarted;
+		public readonly BlockchainSystemEventType ConnectableStatusChanged;
+		
 
 		/// <summary>
 		///     used for log window messages
@@ -176,6 +178,7 @@ namespace Neuralia.Blockchains.Core {
 			this.RequestCopyKeyFile = this.CreateBaseConstant();
 
 			this.Alert = this.CreateBaseConstant();
+			this.ConnectableStatusChanged = this.CreateBaseConstant();
 		}
 
 		public static BlockchainSystemEventTypes Instance { get; } = new BlockchainSystemEventTypes();

@@ -33,6 +33,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		TransactionId PresentationTransactionId { get; set; }
 
+		/// <summary>
+		/// If we have any correlation Id required, here it is set
+		/// </summary>
+		long? CorrelationId  { get; set; }
+		
 		string FriendlyName { get; set; }
 
 		/// <summary>
@@ -127,6 +132,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		///     The presentation transaction that presented this account
 		/// </summary>
 		public TransactionId PresentationTransactionId { get; set; }
+
+		/// <summary>
+		/// If we have any correlation Id required, here it is set
+		/// </summary>
+		public long? CorrelationId { get; set; }
 
 		public Enums.AccountTypes WalletAccountType { get; set; } = Enums.AccountTypes.Standard;
 

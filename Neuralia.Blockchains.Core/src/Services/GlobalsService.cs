@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public const byte MODERATOR_SUPER_CHANGE_KEY_ID = 8;
 		public const byte MODERATOR_PTAH_KEY_ID = 9;
 
-		public const string TOKEN_CHAIN_NAME = "neuraliums";
+		public const string TOKEN_CHAIN_NAME = "neuralium";
 
 		/// <summary>
 		///     The maximum amount of solutions allowed to be sent in POW transactions
@@ -72,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		//http://www.philosophicalgeek.com/2015/02/06/announcing-microsoft-io-recycablememorystream/
 		public static readonly RecyclableMemoryStreamManager RecyclableMemoryStreamManager;
 
-		private string systemFilesPath;
+		private static string systemFilesPath;
 
 		static GlobalsService() {
 			RecyclableMemoryStreamManager = new RecyclableMemoryStreamManager();
@@ -98,18 +98,22 @@ namespace Neuralia.Blockchains.Core.Services {
 		public List<string> HardcodedNodes { get; } = new List<string>();
 
 		public string GetSystemFilesDirectoryPath() {
-			if(string.IsNullOrWhiteSpace(this.systemFilesPath)) {
-				this.systemFilesPath = GlobalSettings.ApplicationSettings.SystemFilesPath;
+			return GetGeneralSystemFilesDirectoryPath();
+		}
+
+		public static string GetGeneralSystemFilesDirectoryPath() {
+			if(string.IsNullOrWhiteSpace(systemFilesPath)) {
+				systemFilesPath = GlobalSettings.ApplicationSettings.SystemFilesPath;
 
 				// use the standard home path
-				if(string.IsNullOrWhiteSpace(this.systemFilesPath)) {
-					this.systemFilesPath = FileUtilities.GetSystemFilesPath();
+				if(string.IsNullOrWhiteSpace(systemFilesPath)) {
+					systemFilesPath = FileUtilities.GetSystemFilesPath();
 				}
 			}
 
-			return this.systemFilesPath;
+			return systemFilesPath;
 		}
-
+		
 		public string GetSystemStorageDirectoryPath() {
 			return Path.Combine(this.GetSystemFilesDirectoryPath(), COMMON_DIRECTORY_NAME);
 		}

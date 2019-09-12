@@ -15,7 +15,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		private readonly List<IByteArray> nodes = new List<IByteArray>();
 
 #if LOG_SOURCE
-		private readonly List<string> sources = new List<string>();
+		public List<IByteArray> Nodes => this.nodes;
+		public readonly List<string> Sources = new List<string>();
+		
 #endif
 		public IByteArray this[int i] => this.nodes[i];
 
@@ -211,7 +213,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				this.nodes.Add(array);
 
 #if LOG_SOURCE
-				this.sources.Add(System.Environment.StackTrace.ToString());
+				this.Sources.Add(System.Environment.StackTrace.ToString());
 #endif
 			}
 
@@ -349,7 +351,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				var indices = nodeList.nodes.Where(n => (n != null) && !n.IsEmpty).Select((e, i) => i).ToList();
 
 				foreach(var index in indices) {
-					this.sources.Add(nodeList.sources[index]);
+					this.Sources.Add(nodeList.Sources[index]);
 				}
 #endif
 			} else {
@@ -358,5 +360,35 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 			return this;
 		}
+		
+	#region Dispose
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+			
+
+			if(disposing && !this.IsDisposed) {
+
+				try {
+					// do nothing, we do not clear buffers in this class
+				}  finally {
+					
+				}
+			}
+			
+			this.IsDisposed = true;
+		}
+
+		~HashNodeList() {
+			this.Dispose(false);
+		}
+
+	#endregion
 	}
 }

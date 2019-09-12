@@ -50,6 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
 
 					newSnapshot.InceptionBlockId = blockId;
+					newSnapshot.CorrelationId = t.CorrelationId;
 
 					foreach(ITransactionAccountFeature entry in t.Features) {
 
@@ -112,6 +113,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 					newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
 					newSnapshot.InceptionBlockId = blockId;
+					newSnapshot.CorrelationId = t.CorrelationId;
 
 					foreach(ITransactionAccountFeature entry in t.Features) {
 
@@ -171,6 +173,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					} 
 
 					return keys;
+				}
+			});
+			
+			this.RegisterTransactionImpactSet(new TransactionImpactSet<ISetAccountCorrelationIdTransaction> {
+				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+
+					affectedSnapshots.AddAccountId(t.TransactionId.Account);
+				},
+				InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
+
+					ACCOUNT_SNAPSHOT accountSnapshot = snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
+
+					accountSnapshot.CorrelationId = t.CorrelationId;
 				}
 			});
 

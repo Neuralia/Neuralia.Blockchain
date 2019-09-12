@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		protected override IByteArray CompressData(IByteArray data) {
-			return this.CompressData(data, CompressionLevelByte.Optimal);
+			return this.CompressData(data, CompressionLevelByte.Fastest);
 		}
 
 		protected override IByteArray DecompressData(IByteArray data) {

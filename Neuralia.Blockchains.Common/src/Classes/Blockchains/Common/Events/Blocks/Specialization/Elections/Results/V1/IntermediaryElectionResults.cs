@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.CandidatureMethods;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.Questions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -8,41 +10,43 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1 {
 	public interface IIntermediaryElectionResults : IElectionResult {
-		List<AccountId> ElectedCandidates { get; }
+		
 		IElectedResults CreateElectedResult();
+		IElectionQuestion SimpleQuestion { get; set; }
+		IElectionQuestion HardQuestion { get; set; }
 	}
 
 	public abstract class IntermediaryElectionResults : ElectionResult, IIntermediaryElectionResults {
 
-		// results of elected of a passive election. 
-		public List<AccountId> ElectedCandidates { get; } = new List<AccountId>();
+		public IElectionQuestion SimpleQuestion { get; set; }
+		public IElectionQuestion HardQuestion { get; set; }
 
 		public override void Rehydrate(IDataRehydrator rehydrator, Dictionary<int, TransactionId> transactionIndexesTree) {
 			base.Rehydrate(rehydrator, transactionIndexesTree);
 
-			this.ElectedCandidates.Clear();
-			var parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
+			bool simpleQuestionSet = rehydrator.ReadBool();
 
-			parameters.RehydrateExtraData = (accountId, offset, index, dh) => {
+			if(simpleQuestionSet) {
+				this.SimpleQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator);
+			}
+			
+			bool hardQuestionSet = rehydrator.ReadBool();
 
-				this.ElectedCandidates.Add(accountId);
-			};
-
-			AccountIdGroupSerializer.Rehydrate(rehydrator, true, parameters);
+			if(hardQuestionSet) {
+				this.HardQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator);
+			}
 		}
 
 		public abstract IElectedResults CreateElectedResult();
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
-
-			jsonDeserializer.SetArray("ElectedCandidates", this.ElectedCandidates);
+			
 		}
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
-
-			nodeList.Add(this.ElectedCandidates);
+			
 
 			return nodeList;
 		}

@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public long BlockId { get; set; }
 		public AccountIdTypes AccountType { get; set; }
 
-		public Dictionary<AccountId, SynthesizedBlockAccountSet> AccountScoped { get; set; } = new Dictionary<AccountId, SynthesizedBlockAccountSet>();
+		public Dictionary<AccountId, SynthesizedBlockAccountSet> AccountScopped { get; set; } = new Dictionary<AccountId, SynthesizedBlockAccountSet>();
 
 		public Dictionary<TransactionId, ITransaction> ConfirmedGeneralTransactions { get; set; } = new Dictionary<TransactionId, ITransaction>();
 
@@ -48,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 			public DateTime Timestamp { get; set; }
 
 			public List<AccountId> DelegateAccounts { get; set; } = new List<AccountId>();
-			public Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.PeerTypes peerType, string selectedTransactions)> ElectedAccounts { get; set; } = new Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.PeerTypes peerType, string selectedTransactions)>();
+			public Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.ElectedPeerShareTypes peerShareType, string selectedTransactions)> ElectedAccounts { get; set; } = new Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.ElectedPeerShareTypes peerType, string selectedTransactions)>();
 		}
 	}
 }

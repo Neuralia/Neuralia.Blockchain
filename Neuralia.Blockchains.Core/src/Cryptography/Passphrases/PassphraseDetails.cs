@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			GC.SuppressFinalize(this);
 		}
 
-		private string GenerateKeyScopedName(Guid identityUuid, string keyname) {
+		private string GenerateKeyScoppedName(Guid identityUuid, string keyname) {
 			return $"{identityUuid.ToString()}-{keyname}";
 		}
 

@@ -148,7 +148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 						snapshotCache.RollbackTransaction();
 					}
 				} else {
-					TransactionRejected?.Invoke(transaction.TransactionId, code);
+					TransactionRejected?.Invoke(transaction.TransactionId.SimpleTransactionId, code);
 				}
 			});
 		}

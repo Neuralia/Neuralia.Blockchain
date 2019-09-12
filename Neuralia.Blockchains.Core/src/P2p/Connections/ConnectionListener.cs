@@ -15,8 +15,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 	public class ConnectionListener : IConnectionListener {
 
-		protected readonly int port;
-		protected ITcpServer tcpServer;
+		private readonly int port;
+		private ITcpServer tcpServer;
 
 		public ConnectionListener(int port, ServiceSet serviceSet) {
 			this.port = port;

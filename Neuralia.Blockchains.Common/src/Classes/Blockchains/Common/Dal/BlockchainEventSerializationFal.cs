@@ -357,7 +357,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			FileExtensions.WriteAllBytes(this.GetGenesisBlockFilename(), fullBytes, this.fileSystem);
 
 			// and now the compressed
-			BrotliCompression compressor = new BrotliCompression();
+			GzipCompression compressor = new GzipCompression();
 			FileExtensions.WriteAllBytes(this.GetGenesisBlockCompressedFilename(), compressor.Compress(fullBytes), this.fileSystem);
 			fullBytes.Return();
 		}

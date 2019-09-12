@@ -64,7 +64,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			Log.Verbose("Sending handshake response");
 
 			if(!this.Send(serverHandshake)) {
-				Log.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
+				Log.Verbose($"Connection with peer  {this.ClientConnection.ScoppedAdjustedIp} was terminated");
 
 				return false;
 			}
@@ -93,7 +93,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			if(serverConfirm.Message.Status == ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Ok) {
 				if(!this.Send(serverConfirm)) {
-					Log.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
+					Log.Verbose($"Connection with peer  {this.ClientConnection.ScoppedAdjustedIp} was terminated");
 
 					return false;
 				}
@@ -259,7 +259,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.ClientConnection.NodeAddressInfoInfo.RealPort = this.triggerMessage.Message.listeningPort;
 
 			// and check if their connection port is true and available
-			this.PerformCounterConnection();
+			serverHandshake.Message.Connectible = this.PerformCounterConnection();
 
 			this.networkingService.ConnectionStore.AddPeerReportedPublicIp(this.triggerMessage.Message.PerceivedIP, ConnectionStore.PublicIpSource.Peer);
 
@@ -284,15 +284,15 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return serverHandshake;
 		}
 
-		protected virtual void PerformCounterConnection() {
+		protected virtual bool? PerformCounterConnection() {
 			// now we counterconnect to determine if they are truly listening on their port
-			new TaskFactory().StartNew(() => {
-				try {
-					this.ClientConnection.NodeActivityInfo.Node.IsConnectable = this.ClientConnection.connection.PerformCounterConnection(this.ClientConnection.NodeAddressInfoInfo.RealPort);
-				} catch {
-					// nothing to do here, its just a fail and thus unconnectable
-				}
-			});
+			try {
+				return this.ClientConnection.connection.PerformCounterConnection(this.ClientConnection.NodeAddressInfoInfo.RealPort);
+			} catch {
+				// nothing to do here, its just a fail and thus unconnectable
+			}
+
+			return false;
 		}
 
 		protected virtual bool CheckPeerValid() {
@@ -388,7 +388,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 		protected virtual void AddValidConnection() {
 			this.networkingService.ConnectionStore.ConfirmConnection(this.ClientConnection);
-			Log.Verbose($"handshake with {this.ClientConnection.ScopedAdjustedIp} is now confirmed");
+			Log.Verbose($"handshake with {this.ClientConnection.ScoppedAdjustedIp} is now confirmed");
 
 		}
 

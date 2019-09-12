@@ -42,7 +42,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 		}
 
-		private string GenerateKeyScopedName(Guid identityUuid, string keyname) {
+		private string GenerateKeyScoppedName(Guid identityUuid, string keyname) {
 			return $"{identityUuid.ToString()}-{keyname}";
 		}
 
@@ -74,30 +74,30 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 			passphrase.MakeReadOnly();
 
-			string scopedName = DEFAULT_NAME;
+			string scoppedName = DEFAULT_NAME;
 
 			if(this.EncryptWalletKeysIndividually) {
 				if(string.IsNullOrWhiteSpace(keyname)) {
 					throw new ApplicationException("Key name is required when encrypting keys individually");
 				}
 
-				scopedName = this.GenerateKeyScopedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
 			}
 
-			this.SetKeyEntry(scopedName, passphrase, timeout);
+			this.SetKeyEntry(scoppedName, passphrase, timeout);
 
-			if((scopedName == DEFAULT_NAME) && !string.IsNullOrWhiteSpace(keyname)) {
+			if((scoppedName == DEFAULT_NAME) && !string.IsNullOrWhiteSpace(keyname)) {
 				// let's set that one too
-				scopedName = this.GenerateKeyScopedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
 
 				SecureString clone = passphrase.ConvertToUnsecureString().ConvertToSecureString();
 
 				clone.MakeReadOnly();
-				this.SetKeyEntry(scopedName, clone, timeout);
+				this.SetKeyEntry(scoppedName, clone, timeout);
 			}
 		}
 
-		private void SetKeyEntry(string scopedName, SecureString passphrase, int? timeout = null) {
+		private void SetKeyEntry(string scoppedName, SecureString passphrase, int? timeout = null) {
 			var passphraseTimeout = this.keyPassphraseTimeout;
 
 			if(timeout.HasValue) {
@@ -105,9 +105,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 
 			// clear previous entry
-			if(this.keys.ContainsKey(scopedName)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scopedName];
-				this.keys.Remove(scopedName);
+			if(this.keys.ContainsKey(scoppedName)) {
+				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
+				this.keys.Remove(scoppedName);
 
 				entry.keysPassphraseTimer?.Dispose();
 				entry.keysPassphrase?.Dispose();
@@ -121,8 +121,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 					PassphraseDetails details = (PassphraseDetails) state;
 
-					if(this.keys.ContainsKey(scopedName)) {
-						(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scopedName];
+					if(this.keys.ContainsKey(scoppedName)) {
+						(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
 
 						// lets clear everything
 						entry.keysPassphrase.Clear();
@@ -132,13 +132,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 						entry.keysPassphraseTimer.Dispose();
 						entry.keysPassphraseTimer = null;
 
-						this.keys.Remove(scopedName);
+						this.keys.Remove(scoppedName);
 					}
 
 				}, this, TimeSpan.FromMinutes(passphraseTimeout.Value), new TimeSpan(-1));
 			}
 
-			this.keys.Add(scopedName, (passphrase, keysPassphraseTimer));
+			this.keys.Add(scoppedName, (passphrase, keysPassphraseTimer));
 		}
 
 		public bool KeyPassphraseValid(Guid identityUuid, string keyname) {
@@ -146,14 +146,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 				return true; // no encryption, so we dont care, always valid
 			}
 
-			string scopedName = DEFAULT_NAME;
+			string scoppedName = DEFAULT_NAME;
 
 			if(this.EncryptWalletKeysIndividually) {
-				scopedName = this.GenerateKeyScopedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
 			}
 
-			if(this.keys.ContainsKey(scopedName)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scopedName];
+			if(this.keys.ContainsKey(scoppedName)) {
+				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
 
 				return !((entry.keysPassphrase == null) || (entry.keysPassphrase.Length == 0));
 			}
@@ -180,18 +180,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 		}
 
 		public SecureString KeyPassphrase(Guid identityUuid, string keyname) {
-			string scopedName = DEFAULT_NAME;
+			string scoppedName = DEFAULT_NAME;
 
 			if(this.EncryptWalletKeysIndividually) {
 				if(string.IsNullOrWhiteSpace(keyname)) {
 					throw new ApplicationException("Key name is required when encrypting keys individually");
 				}
 
-				scopedName = this.GenerateKeyScopedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
 			}
 
-			if(this.keys.ContainsKey(scopedName)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scopedName];
+			if(this.keys.ContainsKey(scoppedName)) {
+				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
 
 				return entry.keysPassphrase;
 			}

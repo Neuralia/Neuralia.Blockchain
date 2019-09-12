@@ -30,6 +30,8 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		event TcpConnection.MessageBytesReceived DataReceived;
 		event EventHandler<DisconnectedEventArgs> Disconnected;
+		event Action Connected;
+		
 		event Action<Guid> ConnectedUuidProvided;
 
 		void Close();
@@ -190,7 +192,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.socket.InitializeSocketParameters();
 		}
 
-		public bool IsDisposing { get; set; }
+		private bool IsDisposing { get; set; }
 
 		// A UUiD we set and use itnernally
 		public Guid InternalUuid { get; } = Guid.NewGuid();
@@ -242,9 +244,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		public bool CheckConnected() {
 			if(!this.socket.IsReallyConnected(this.connectionInfo)) {
 				// yes, we try twice, just in case...
+				Thread.Sleep(300);
 				if(!this.socket.IsReallyConnected(this.connectionInfo)) {
 					// ok, we give up, connection is disconnected
-					this.state = ConnectionState.NotConnected;
+					this.State = ConnectionState.NotConnected;
 
 					// seems we are not connected after all
 					Log.Verbose("Socket was disconnected ungracefully from the other side. Disconnecting.");
@@ -277,7 +280,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				}
 			}
 
-			protected set {
+			private set {
 
 				lock(this.locker) {
 					if(this.IsDisposed || this.IsDisposing) {
@@ -298,8 +301,8 @@ namespace Neuralia.Blockchains.Core.Network {
 		public bool IsDisposed { get; set; }
 
 		public event TcpConnection.MessageBytesReceived DataReceived;
-
 		public event EventHandler<DisconnectedEventArgs> Disconnected;
+		public event Action Connected;
 		public event Action<Guid> ConnectedUuidProvided;
 
 		public bool IsConnectedUuidProvidedSet => this.ConnectedUuidProvided != null;
@@ -344,6 +347,8 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				if(this.socket.IsReallyConnected(this.connectionInfo)) {
 
+					this.Connected?.Invoke();
+					
 					this.SocketNewlyConnected();
 				} else {
 					this.Dispose();
@@ -408,7 +413,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				IAsyncResult result = counterSocket.BeginConnect(endpoint, null, null);
 
-				if(result.AsyncWaitHandle.WaitOne(1000 * 10, true)) {
+				if(result.AsyncWaitHandle.WaitOne(1000 * 5, true)) {
 
 					if(counterSocket.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length) {
 						return true;
@@ -466,7 +471,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected virtual void SocketNewlyConnected() {
-
+			
 		}
 
 		protected virtual void SocketClosed() {
@@ -725,7 +730,6 @@ namespace Neuralia.Blockchains.Core.Network {
 
 						} catch(Exception) {
 							sizeByteSize = 0;
-							messageSize = 0;
 						}
 					} else if(mainBuffer != null) {
 
@@ -792,6 +796,8 @@ namespace Neuralia.Blockchains.Core.Network {
 									entry.SetMessageContent(bufferRehydrator);
 
 									this.protocolFactory.HandleCompetedMessage(entry, callback, this);
+									
+									entry.Message?.Return();
 
 									return true;
 								}, TaskCreationOptions.AttachedToParent).WithAllExceptions().ContinueWith(task => {
@@ -935,7 +941,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				}
 
-				this.state = ConnectionState.NotConnected;
+				this.State = ConnectionState.NotConnected;
 
 				try {
 					this.DisposeSocket();

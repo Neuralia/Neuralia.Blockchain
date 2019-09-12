@@ -27,6 +27,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		protected AccountSnapshotSqliteDal(long groupSize, string folderPath, ServiceSet serviceSet, Func<AppSettingsBase.SerializationTypes, ACCOUNT_SNAPSHOT_CONTEXT> contextInstantiator, AppSettingsBase.SerializationTypes serializationType) : base(groupSize, folderPath, serviceSet, contextInstantiator, serializationType) {
 		}
 
-		public abstract void InsertNewAccount(AccountId accountId, List<(byte ordinal, IByteArray key, TransactionId declarationTransactionId)> keys, long inceptionBlockId);
+		public abstract void InsertNewAccount(AccountId accountId, List<(byte ordinal, IByteArray key, TransactionId declarationTransactionId)> keys, long inceptionBlockId, long? correlationId);
 	}
 }

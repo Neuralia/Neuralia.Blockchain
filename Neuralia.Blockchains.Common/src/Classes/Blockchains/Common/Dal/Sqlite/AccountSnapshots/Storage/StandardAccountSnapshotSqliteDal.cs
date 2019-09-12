@@ -69,13 +69,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			return base.BeginHoldingTransaction();
 		}
 
-		public void InsertNewStandardAccount(AccountId accountId, List<(byte ordinal, IByteArray key, TransactionId declarationTransactionId)> keys, long inceptionBlockId) {
+		public void InsertNewStandardAccount(AccountId accountId, List<(byte ordinal, IByteArray key, TransactionId declarationTransactionId)> keys, long inceptionBlockId, long? correlationId) {
 
 			this.PerformOperation(db => {
 				STANDARD_ACCOUNT_SNAPSHOT accountEntry = new STANDARD_ACCOUNT_SNAPSHOT();
 
 				accountEntry.AccountId = accountId.ToLongRepresentation();
 				accountEntry.InceptionBlockId = inceptionBlockId;
+				accountEntry.CorrelationId = correlationId;
 
 				db.StandardAccountSnapshots.Add(accountEntry);
 

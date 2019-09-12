@@ -128,8 +128,8 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 						break;
 
-					case ProtocolCompression.CompressionAlgorithm.Brotli:
-						this.NetworkMessageCompressor = new BrotliCompression();
+					case ProtocolCompression.CompressionAlgorithm.Gzip:
+						this.NetworkMessageCompressor = new GzipCompression();
 
 						break;
 
@@ -203,7 +203,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		private IByteArray DecompressMessage(IByteArray compressedMessage) {
 
 			if(this.sharedProtocolCompression.Level == CompressionLevelByte.NoCompression) {
-				return compressedMessage; // its not compressed!
+				return compressedMessage.Clone(); // its not compressed! clone it because the original will get returned
 			}
 
 			lock(this.locker) {

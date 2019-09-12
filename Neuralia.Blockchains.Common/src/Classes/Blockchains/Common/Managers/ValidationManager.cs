@@ -120,7 +120,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				long previousId = block.BlockId.Value - 1;
 
 				void PerformBlockValidation(IByteArray previousBlockHash) {
-					result = this.ValidateBlock(simpleBlock, block.Hash, previousBlockHash);
+
+					// we try 3 times until it validates. some times it fails for some reason
+					//TODO: sometimes the validatino fails, even if it succeeds a bit later. why?  possible issue to fix
+					int attempt = 0;
+					do {
+						attempt++;
+						result = this.ValidateBlock(simpleBlock, block.Hash, previousBlockHash);
+					} while(result.Invalid && attempt <= 3);
 
 					completedResultCallback(result);
 				}
@@ -158,7 +165,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			}
 
 			// if the key is ahead of where we are and we are still syncing, we can use the embeded key to make a summary validation, enough to forward a gossip message
-			if(GlobalSettings.ApplicationSettings.MobileMode || ((messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) && (messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced)) {
+			if(GlobalSettings.ApplicationSettings.MobileMode || ((messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced)) {
 
 				MessageValidationResult result = new MessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.KEY_NOT_YET_SYNCED);
 
@@ -187,7 +194,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return null;
 			}
 
-			if((messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) && (messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
+			if((messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
 
 				// this doesnt work for us, we can't validate this
 				completedResultCallback(this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.IMPOSSIBLE_BLOCK_DECLARATION_ID));
@@ -195,7 +202,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return null;
 			}
 
-			if(messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) {
+			if(messageEnvelope.Signature.AccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) {
 				completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.KEY_NOT_YET_SYNCED));
 
 				return null;
@@ -305,7 +312,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(transactionEnvelope.AccreditationCertificates.Any()) {
 
-				accreditationCertificateValid = this.CentralCoordinator.ChainComponentProvider.AccreditationCertificateProviderBase.IsAnyTransactionCertificateValid(transactionEnvelope.AccreditationCertificates, transaction.TransactionId, Enums.CertificateApplicationTypes.Envelope);
+				accreditationCertificateValid = this.CentralCoordinator.ChainComponentProvider.AccreditationCertificateProviderBase.IsAnyTransactionCertificateValid(transactionEnvelope.AccreditationCertificates, transaction.TransactionId.SimpleTransactionId, Enums.CertificateApplicationTypes.Envelope);
 			}
 
 			// perform basic validations
@@ -351,7 +358,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// if there is an embedded public key, wew can try using it
 				if(publishedAccountSignature != null) {
 					// if the key is ahead of where we are and we are still syncing, we can use the embeded key to make a summary validation, enough to forward a gossip message
-					if(GlobalSettings.ApplicationSettings.MobileMode || ((publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) && (publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced)) {
+					if(GlobalSettings.ApplicationSettings.MobileMode || ((publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced)) {
 
 						TransactionValidationResult embdedKeyResult = new TransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.KEY_NOT_YET_SYNCED);
 
@@ -374,7 +381,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						return null;
 					}
 
-					if((publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) && (publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
+					if((publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
 
 						// this doesnt work for us, we can't validate this
 						completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.IMPOSSIBLE_BLOCK_DECLARATION_ID));
@@ -390,7 +397,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					return null;
 				}
 
-				if(publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) {
+				if(publishedAccountSignature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) {
 					completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.KEY_NOT_YET_SYNCED));
 
 					return null;
@@ -491,7 +498,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 							if(keyBytes.HasValue && (keyBytes.Value.keyBytes != null) && keyBytes.Value.keyBytes.HasData) {
 
-								if((signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) && (signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
+								if((signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
 
 									// this doesnt work for us, we can't validate this
 									completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.IMPOSSIBLE_BLOCK_DECLARATION_ID));
@@ -501,7 +508,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 								// if there is an embedded public key, wew can try using it
 								// if the key is ahead of where we are and we are still syncing, we can use the embeded key to make a summary validation, enough to forward a gossip message
-								if((signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) && (signature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced) {
+								if((signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (signature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced) {
 
 									// ok, if we get here, the message uses a key we most probably dont have yet. this is a tricky case.
 									if(signature.PublicKey?.Key != null) {
@@ -772,7 +779,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return this.ValidateGenesisBlock(genesisBlock, hash, previousBlockHash);
 			}
 
-			if(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight != (block.BlockId.Value - 1)) {
+			if(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight != (block.BlockId.Value - 1)) {
 				// thats too bad, we are not ready to validate this block. we must let it go
 				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.CantValidate, BlockValidationErrorCodes.Instance.LAST_BLOCK_HEIGHT_INVALID);
 			}

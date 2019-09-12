@@ -63,9 +63,9 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 			// now we verify if this message originator was us. if it was, we override the client ID
 			if(this.originatorId == this.myClientId) {
-				workflowId = NetworkingWorkflow.FormatScopedId(this.myClientId, this.correlationId);
+				workflowId = NetworkingWorkflow.FormatScoppedId(this.myClientId, this.correlationId);
 			} else {
-				workflowId = NetworkingWorkflow.FormatScopedId(this.peerConnection.ClientUuid, this.correlationId);
+				workflowId = NetworkingWorkflow.FormatScoppedId(this.peerConnection.ClientUuid, this.correlationId);
 			}
 
 			return workflowId;

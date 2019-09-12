@@ -27,6 +27,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public NodeAddressInfo Node { get; }
 		public bool Shareable { get; }
 		public DateTime Timestamp { get; } = DateTime.Now;
+		
 
 		private Queue<NodeActivityEvent> Events { get; } = new Queue<NodeActivityEvent>();
 

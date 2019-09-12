@@ -11,9 +11,12 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 		where R : IRehydrationFactory {
 		public readonly List<bool> messageApprovals = new List<bool>();
 
+		public int sessionId;
+		
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
+			dehydrator.Write(this.sessionId);
 			dehydrator.Write(this.messageApprovals.Count);
 
 			foreach(bool acceptation in this.messageApprovals) {
@@ -24,6 +27,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 		public override void Rehydrate(IDataRehydrator rehydrator, R rehydrationFactory) {
 			base.Rehydrate(rehydrator, rehydrationFactory);
 
+			this.sessionId = rehydrator.ReadInt();
 			int count = rehydrator.ReadInt();
 
 			for(int i = 0; i < count; i++) {

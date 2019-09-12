@@ -38,6 +38,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private const int MAX_SECONDS_BEFORE_NEXT_PEER_LIST_REQUEST = 3 * 60;
 		private const int MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT = 3 * 60;
 		private const int MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT = 3 * 60;
+		
+		// these are limited wait times, when we are in times of need
+		private const int MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT_LIMITED = 10;
+		private const int MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT_LIMITED = 10;
+		
 
 		private const int PEER_CONNECTION_ATTEMPT_COUNT = 3;
 		private const int PEER_CONNECTION_SET_ATTEMPT_COUNT = 2;
@@ -119,7 +124,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <returns></returns>
 		private IEnumerable<PeerJoinedInfo> GetJoinedPeerInfos() {
-			return this.connectionStore.AllConnectionsList.Join(this.peerActivityInfo.Values, pi => pi.ScopedIp, pai => pai.ScopedIp, (pi, pai) => new PeerJoinedInfo {PeerConnection = pi, ConnectionManagerActivityInfo = pai});
+			return this.connectionStore.AllConnectionsList.Join(this.peerActivityInfo.Values, pi => pi.ScoppedIp, pai => pai.ScoppedIp, (pi, pai) => new PeerJoinedInfo {PeerConnection = pi, ConnectionManagerActivityInfo = pai});
 		}
 
 		/// <summary>
@@ -147,7 +152,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				ClientPeerListRequestWorkflow<R> peerListRequest = null;
 
 				try {
-					Log.Verbose($"attempting to query peer list from peer {peer.PeerConnection.ScopedAdjustedIp}");
+					Log.Verbose($"attempting to query peer list from peer {peer.PeerConnection.ScoppedAdjustedIp}");
 
 					peerListRequest = this.clientWorkflowFactory.CreatePeerListRequest(peer.PeerConnection);
 
@@ -170,6 +175,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected void CreateConnectionAttempt(NodeAddressInfo node) {
+			
+			if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
+				// its paused, we dont do anything, just return
+				return;
+			}
+			
 			ConnectionManagerActivityInfo connectionManagerActivityInfo = null;
 
 			NodeActivityInfo nodeActivityInfo = this.connectionStore.GetNodeActivityInfo(node);
@@ -178,15 +189,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				nodeActivityInfo = new NodeActivityInfo(node, true);
 			}
 
-			if(this.peerActivityInfo.ContainsKey(node.ScopedIp)) {
-				connectionManagerActivityInfo = this.peerActivityInfo[node.ScopedIp];
+			if(this.peerActivityInfo.ContainsKey(node.ScoppedIp)) {
+				connectionManagerActivityInfo = this.peerActivityInfo[node.ScoppedIp];
 			} else {
 				connectionManagerActivityInfo = new ConnectionManagerActivityInfo(nodeActivityInfo);
 
 				connectionManagerActivityInfo.lastConnectionAttempt = DateTime.MinValue;
 				connectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.Now; // since we get the list during the handshake
 
-				this.peerActivityInfo.Add(connectionManagerActivityInfo.ScopedIp, connectionManagerActivityInfo);
+				this.peerActivityInfo.Add(connectionManagerActivityInfo.ScoppedIp, connectionManagerActivityInfo);
 			}
 
 			if(connectionManagerActivityInfo.inProcess) {
@@ -207,7 +218,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			// thats it, lets launch a connection
 
 			try {
-				Log.Verbose($"attempting connection attempt {connectionManagerActivityInfo.connectionAttemptCounter} to peer {node.ScopedAdjustedIp}");
+				Log.Verbose($"attempting connection attempt {connectionManagerActivityInfo.connectionAttemptCounter} to peer {node.ScoppedAdjustedIp}");
 				var handshake = this.clientWorkflowFactory.CreateRequestHandshakeWorkflow(ConnectionStore<R>.CreateEndpoint(node));
 
 				handshake.Error2 += (workflow, ex) => {
@@ -239,21 +250,21 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 								if(connectionManagerActivityInfo.connectionSetAttemptCounter >= PEER_CONNECTION_SET_ATTEMPT_COUNT) {
 
-									Log.Verbose($"Reached max connection attempt for peer {node.ScopedAdjustedIp}. this peer will now be ignored form now on.");
+									Log.Verbose($"Reached max connection attempt for peer {node.ScoppedAdjustedIp}. this peer will now be ignored form now on.");
 
 									this.connectionStore.AddIgnorePeerNode(nodeActivityInfo);
 
 									// remove it all, its over
-									if(this.peerActivityInfo.ContainsKey(node.ScopedIp)) {
-										this.peerActivityInfo.Remove(node.ScopedIp);
+									if(this.peerActivityInfo.ContainsKey(node.ScoppedIp)) {
+										this.peerActivityInfo.Remove(node.ScoppedIp);
 									}
 								} else {
 
-									Log.Verbose($"Reached max connection attempt for peer {node.ScopedAdjustedIp}. will retry later");
+									Log.Verbose($"Reached max connection attempt for peer {node.ScoppedAdjustedIp}. will retry later");
 								}
 
 							} else {
-								Log.Verbose($"Failed to connect to peer {node.ScopedAdjustedIp}. Attempt {connectionManagerActivityInfo.connectionAttemptCounter} of {PEER_CONNECTION_ATTEMPT_COUNT}");
+								Log.Verbose($"Failed to connect to peer {node.ScoppedAdjustedIp}. Attempt {connectionManagerActivityInfo.connectionAttemptCounter} of {PEER_CONNECTION_ATTEMPT_COUNT}");
 							}
 
 						}
@@ -282,6 +293,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// ok, its time to act
 					int secondsToWait = 3; // default next action time in seconds. we can play on this
 
+					if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
+						// its paused, we dont do anything, just return
+						this.nextAction = DateTime.Now.AddSeconds(secondsToWait);
+
+						return;
+					}
 					//-------------------------------------------------------------------------------
 					// phase 1: Ensure we maintain our connection information up to date
 
@@ -296,7 +313,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						connectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.Now;
 
 						// and add them to our list
-						this.peerActivityInfo.Add(connectionManagerActivityInfo.ScopedIp, connectionManagerActivityInfo);
+						this.peerActivityInfo.Add(connectionManagerActivityInfo.ScoppedIp, connectionManagerActivityInfo);
 					}
 
 					this.CheckShouldCancel();
@@ -323,10 +340,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						this.CheckShouldCancel();
 
 						// get the list of IPs that we can connect to
-						var availableNodes = this.GetAvailableNodesList(activeConnections);
+						var availableNodes = this.GetAvailableNodesList(activeConnections, true);
+
+						if(!availableNodes.Any()) {
+							// lets go a bit deeper
+							availableNodes = this.GetAvailableNodesList(activeConnections, false);
+						}
 
 						// pick nodes not already connecting
-						availableNodes = availableNodes.Where(n => !this.peerActivityInfo.ContainsKey(n.ScopedIp) || !this.peerActivityInfo[n.ScopedIp].inProcess).ToList();
+						availableNodes = availableNodes.Where(n => !this.peerActivityInfo.ContainsKey(n.ScoppedIp) || !this.peerActivityInfo[n.ScoppedIp].inProcess).ToList();
 
 						if(this.explicitConnectionRequests.Any() && (activeConnectionsCount >= Math.Max(GlobalSettings.ApplicationSettings.maxPeerCount - 2, 0))) {
 							// ok, no choice, we will have to cut loose some connections to make room for now ones
@@ -487,10 +509,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			var availableNodes = this.connectionStore.GetAvailablePeerNodes(null, false, true, onlyConnectables);
 
 			// lets get a list of connected IPs
-			var connectedIps = activeConnections.Select(c => c.ScopedIp).ToList();
+			var connectedIps = activeConnections.Select(c => c.ScoppedIp).ToList();
 
 			// lets make sure we remove the ones we are already connected to.
-			availableNodes = availableNodes.Where(an => !connectedIps.Contains(an.ScopedIp)).ToList();
+			availableNodes = availableNodes.Where(an => !connectedIps.Contains(an.ScoppedIp)).ToList();
 
 			if((availableNodes.Count == 0) && this.ShouldAct(ref this.nextUpdateNodeCountAction)) {
 				// thats bad, we have no more available nodes to connect to. might have emptied our list. 
@@ -536,23 +558,33 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 			// get the list of connection attemps that are really too fresh to contact again. also, 
-			var tooFreshConnections = this.peerActivityInfo.Values.Where(a => ((a.lastConnectionSetAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT)) > DateTime.Now) || ((a.lastConnectionAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT)) > DateTime.Now)).Select(a => a.ScopedIp).ToList();
+			var tooFreshConnections = this.peerActivityInfo.Values.Where(a => ((a.lastConnectionSetAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT)) > DateTime.Now) || ((a.lastConnectionAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT)) > DateTime.Now)).Select(a => a.ScoppedIp).ToList();
 
 			this.CheckShouldCancel();
 
 			// now filter to keep only the ones that are contactable
-			availableNodes = availableNodes.Where(n => !tooFreshConnections.Contains(n.ScopedIp)).ToList();
+			var reducedAvailableNodes = availableNodes.Where(n => !tooFreshConnections.Contains(n.ScoppedIp)).ToList();
 
-			if(!availableNodes.Any() && onlyConnectables) {
-				// we got nothing, lets try all connections
-				availableNodes = this.GetAvailableNodesList(activeConnections, false);
-			} else {
-				// mix up the list to ensure a certain randomness from times to times
+			if(!reducedAvailableNodes.Any()) {
+				if(onlyConnectables) {
+					// we got nothing, lets try all connections
+					reducedAvailableNodes = this.GetAvailableNodesList(activeConnections, false);
+				} else {
+					// ok, this is bad, we tried them all and got nothing, we need to lower the limit
+					tooFreshConnections = this.peerActivityInfo.Values.Where(a => ((a.lastConnectionSetAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT_LIMITED)) > DateTime.Now) || ((a.lastConnectionAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT_LIMITED)) > DateTime.Now)).Select(a => a.ScoppedIp).ToList();
 
-				availableNodes.Shuffle();
-			}
+					this.CheckShouldCancel();
 
-			return availableNodes;
+					// now filter to keep only the ones that are contactable
+					reducedAvailableNodes = availableNodes.Where(n => !tooFreshConnections.Contains(n.ScoppedIp)).ToList();
+				}
+			} 
+			
+			
+			// mix up the list to ensure a certain randomness from times to times
+			reducedAvailableNodes.Shuffle();
+			
+			return reducedAvailableNodes;
 		}
 
 		/// <summary>
@@ -565,7 +597,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.CheckShouldCancel();
 
 				// thats it, we say bye bye to this connection
-				Log.Verbose($"Removing null chain peer {ConnectionStore<R>.GetEndpointInfoNode(info).ScopedAdjustedIp} because we have too many.");
+				Log.Verbose($"Removing null chain peer {ConnectionStore<R>.GetEndpointInfoNode(info).ScoppedAdjustedIp} because we have too many.");
 
 				// lets remove it from the list
 				this.connectionStore.RemoveConnection(info);
@@ -657,7 +689,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.NodeActivityInfo = nodeActivityInfo;
 			}
 
-			public string ScopedIp => this.NodeActivityInfo?.Node?.ScopedIp;
+			public string ScoppedIp => this.NodeActivityInfo?.Node?.ScoppedIp;
 
 			public NodeActivityInfo NodeActivityInfo { get; }
 		}

@@ -5,16 +5,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public override string GeneratedExpandedFileName(string bandName, string scopeFolder, object[] parameters) {
 
-			string scopedName = string.Format(GROUP_FILE_MASK, bandName, bandName, parameters[0]);
+			string scoppedName = string.Format(GROUP_FILE_MASK, bandName, bandName, parameters[0]);
 
-			return this.GenerateExpandedName(scopedName, scopeFolder);
+			return this.GenerateExpandedName(scoppedName, scopeFolder);
 		}
 
 		public override string GeneratedArchivedFileName(string bandName, string scopeFolder, object[] parameters) {
 
-			string scopedName = string.Format(GROUP_FILE_MASK, bandName, bandName, parameters[0]);
+			string scoppedName = string.Format(GROUP_FILE_MASK, bandName, bandName, parameters[0]);
 
-			return this.GenerateArchivedName(scopedName, scopeFolder);
+			return this.GenerateArchivedName(scoppedName, scopeFolder);
 		}
 	}
 }

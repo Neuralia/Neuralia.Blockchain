@@ -344,7 +344,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public ValidatingDigestChannelSet CreateValidationDigestChannelSet(int digestId, BlockchainDigestDescriptor blockchainDigestDescriptor) {
-			return DigestChannelSetFactory.CreateValidatingDigestChannelSet(this.GetDigestsScopedFolderPath(digestId), blockchainDigestDescriptor, this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.CreateDigestChannelfactory());
+			return DigestChannelSetFactory.CreateValidatingDigestChannelSet(this.GetDigestsScoppedFolderPath(digestId), blockchainDigestDescriptor, this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.CreateDigestChannelfactory());
 		}
 
 		public IEnumerable<IBlock> LoadBlocks(IEnumerable<long> blockIds) {

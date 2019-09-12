@@ -59,6 +59,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		int ActiveConnectionsCount { get; }
 		bool ConnectionsSaturated { get; }
 
+		event Action<bool> IsConnectibleChange;
+
 		bool IsConnecting { get; }
 
 		ImmutableList<IPAddress> OurAddresses { get; }
@@ -128,6 +130,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		bool IsOurAddressAndPort(NodeAddressInfo nodeAddressInfo);
 		void AddPeerReportedPublicIp(IPAddress publicIp, ConnectionStore.PublicIpSource source);
 		void AddPeerReportedPublicIp(string publicIp, ConnectionStore.PublicIpSource source);
+		void AddPeerReportedConnectible(bool connectible, ConnectionStore.PublicIpSource source);
+		
 
 		bool IsNeuraliumHub(PeerConnection peerConnection);
 		bool IsNeuraliumHub(NodeAddressInfo nodes);
@@ -203,13 +207,17 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private readonly HashSet<Guid> removingConnections = new HashSet<Guid>();
 
 		private readonly Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>> reportedPublicIps = new Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>>();
+		private readonly Dictionary<ConnectionStore.PublicIpSource, bool> reportedConnectible = new Dictionary<ConnectionStore.PublicIpSource, bool>();
 
 		protected readonly ITimeService timeService;
 
 		private List<NodeAddressInfo> hardcodedNodes;
 
+		public bool IsConnectible { get; private set; }
 		private bool isChainSettingConsensusDirty;
 
+		public event Action<bool> IsConnectibleChange;
+		
 		private ImmutableList<IPAddress> localIps;
 
 		private NodeAddressInfoList neuraliumHubAddresses;
@@ -359,25 +367,25 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// exception occured
 				lock(this.locker) {
 
-					// the ReportedUuid is still empty here. so we must use the scoped ip and an identifier
+					// the ReportedUuid is still empty here. so we must use the scopped ip and an identifier
 					NodeAddressInfo node = new NodeAddressInfo(GetEndpointIp(cn.EndPoint), Enums.PeerTypes.Unknown);
 
-					if(!this.errorCounts.ContainsKey(node.ScopedIp)) {
-						this.errorCounts.Add(node.ScopedIp, 0);
+					if(!this.errorCounts.ContainsKey(node.ScoppedIp)) {
+						this.errorCounts.Add(node.ScoppedIp, 0);
 					}
 
-					this.errorCounts[node.ScopedIp] += 1;
+					this.errorCounts[node.ScoppedIp] += 1;
 
-					if(this.errorCounts[node.ScopedIp] >= 3) {
+					if(this.errorCounts[node.ScoppedIp] >= 3) {
 						// that's it, its too often we boycott the peer
 
-						int errorCount = this.errorCounts[node.ScopedIp];
+						int errorCount = this.errorCounts[node.ScoppedIp];
 						this.AddIgnorePeerNode(node);
-						this.errorCounts.Remove(node.ScopedIp);
+						this.errorCounts.Remove(node.ScoppedIp);
 
-						Log.Error(e, $"An exception occured on the network connection for peer {node.ScopedAdjustedIp}. Strike {errorCount} of {3}. we are now ignoring them");
+						Log.Error(e, $"An exception occured on the network connection for peer {node.ScoppedAdjustedIp}. Strike {errorCount} of {3}. we are now ignoring them");
 					} else {
-						Log.Error(e, $"An exception occured on the network connection for peer {node.ScopedAdjustedIp}. Strike {this.errorCounts[node.ScopedIp]} of {3}");
+						Log.Error(e, $"An exception occured on the network connection for peer {node.ScoppedAdjustedIp}. Strike {this.errorCounts[node.ScoppedIp]} of {3}");
 					}
 				}
 
@@ -388,10 +396,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			NodeActivityInfo nai = null;
 
 			lock(this.locker) {
-				if(this.availablePeerNodes.ContainsKey(node.ScopedIp)) {
-					nai = this.availablePeerNodes.RemoveSafe(node.ScopedIp);
+				if(this.availablePeerNodes.ContainsKey(node.ScoppedIp)) {
+					// remove only nodes that are not locked
+					if(!this.availablePeerNodes[node.ScoppedIp].Node.Locked) {
+						nai = this.availablePeerNodes.RemoveSafe(node.ScoppedIp);
 
-					Log.Verbose($"removing peer ip from available list: {node.ScopedAdjustedIp}.");
+						Log.Verbose($"removing peer ip from available list: {node.ScoppedAdjustedIp}.");
+					}
 				}
 			}
 
@@ -402,10 +413,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			lock(this.locker) {
 				var isLocal = this.IsIPLocalNode(node);
 
-				if(!this.availablePeerNodes.ContainsKey(node.ScopedIp) && !this.ignorePeerNodes.ContainsKey(node.ScopedIp) && (force || !(isLocal.HasValue && isLocal.Value))) {
-					this.availablePeerNodes.AddSafe(node.ScopedIp, new NodeActivityInfo(node, true));
+				if(!this.availablePeerNodes.ContainsKey(node.ScoppedIp) && !this.ignorePeerNodes.ContainsKey(node.ScoppedIp) && (force || !(isLocal.HasValue && isLocal.Value))) {
+					this.availablePeerNodes.AddSafe(node.ScoppedIp, new NodeActivityInfo(node, true));
 
-					Log.Verbose($"accepting potential future peer ip: {node.ScopedAdjustedIp}.");
+					Log.Verbose($"accepting potential future peer ip: {node.ScoppedAdjustedIp}.");
 
 					this.CleanAvailablePeerNodes();
 				}
@@ -446,7 +457,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			// make sure none of the IPS are ours
 			// remove it from our available list
 
-			string nodeKey = nodeAddressInfo.ScopedIp;
+			string nodeKey = nodeAddressInfo.ScoppedIp;
 
 			NodeActivityInfo nai = this.RemoveAvailablePeerNode(nodeAddressInfo);
 
@@ -457,7 +468,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			lock(this.locker) {
 				if(!this.ignorePeerNodes.ContainsKey(nodeKey) && !this.promotedIgnoredNodes.Contains(nodeKey)) {
 					this.ignorePeerNodes.AddSafe(nodeKey, new IgnoreNodeActivityInfo(nai));
-					Log.Verbose($"setting peer {nodeAddressInfo.ScopedAdjustedIp} to be ignored from now on.");
+					Log.Verbose($"setting peer {nodeAddressInfo.ScoppedAdjustedIp} to be ignored from now on.");
 				} else {
 
 					// thats it, we remove this IP completely, we let it go!
@@ -668,12 +679,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public NodeActivityInfo GetNodeActivityInfo(NodeAddressInfo nodeAddressInfo) {
 
 			lock(this.locker) {
-				if(this.availablePeerNodes.ContainsKey(nodeAddressInfo.ScopedIp)) {
-					return this.availablePeerNodes[nodeAddressInfo.ScopedIp];
+				if(this.availablePeerNodes.ContainsKey(nodeAddressInfo.ScoppedIp)) {
+					return this.availablePeerNodes[nodeAddressInfo.ScoppedIp];
 				}
 
-				if(this.ignorePeerNodes.ContainsKey(nodeAddressInfo.ScopedIp)) {
-					return this.ignorePeerNodes[nodeAddressInfo.ScopedIp];
+				if(this.ignorePeerNodes.ContainsKey(nodeAddressInfo.ScoppedIp)) {
+					return this.ignorePeerNodes[nodeAddressInfo.ScoppedIp];
 				}
 			}
 
@@ -725,7 +736,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// time we accepted this connection
 				connection.ConnectionTime = this.timeService.CurrentRealTime;
 
-				Log.Information($"accepting connection from peer {connection.ClientUuid} with scopped ip {connection.NodeAddressInfoInfo.ScopedAdjustedIp}");
+				Log.Information($"accepting connection from peer {connection.ClientUuid} with scopped ip {connection.NodeAddressInfoInfo.ScoppedAdjustedIp}");
 
 				NodeAddressInfo nodeInfo = GetEndpointInfoNode(connection);
 
@@ -833,6 +844,33 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					if(!this.ourAddresses.Contains(nodeAddressInfo.Address)) {
 						this.ourAddresses.Add(nodeAddressInfo.Address);
 					}
+				}
+			}
+		}
+
+		public void AddPeerReportedConnectible(bool connectible, ConnectionStore.PublicIpSource source) {
+			// first, ensure its not a local IP, otherwise we wont use it
+
+			lock(this.locker) {
+
+				if(!this.reportedConnectible.ContainsKey(source)) {
+					this.reportedConnectible.Add(source, connectible);
+				}
+
+				this.reportedConnectible[source] = connectible;
+				
+				(bool result, ConsensusUtilities.ConsensusType concensusType) results = ConsensusUtilities.GetConsensus(this.reportedConnectible.Select(s => s.Value));
+
+				if((results.concensusType == ConsensusUtilities.ConsensusType.Undefined) || (results.concensusType == ConsensusUtilities.ConsensusType.Split)) {
+
+					results.result = false;
+				} 
+
+				if(this.IsConnectible != results.result) {
+					this.IsConnectible = results.result;
+					
+					// alert that our connectible status has changed
+					this.IsConnectibleChange?.Invoke(this.IsConnectible);
 				}
 			}
 		}
@@ -1041,7 +1079,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			if(this.availablePeerNodes.Count > GlobalSettings.ApplicationSettings.MaximumIpCacheCount) {
 				// TODO: use the reliability index to weed out bad ips
 				try {
-					foreach(var removing in this.availablePeerNodes.OrderByDescending(n => n.Value.Timestamp).Skip(GlobalSettings.ApplicationSettings.MaximumIpCacheCount)) {
+					foreach(var removing in this.availablePeerNodes.Where(n => !n.Value.Node.Locked).OrderByDescending(n => n.Value.Timestamp).Skip(GlobalSettings.ApplicationSettings.MaximumIpCacheCount)) {
 						this.availablePeerNodes.RemoveSafe(removing.Key);
 					}
 				} catch {
@@ -1055,10 +1093,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <param name="nodeAddressInfo"></param>
 		public void PromoteIgnoredPeerNode(NodeAddressInfo nodeAddressInfo) {
-			if(this.ignorePeerNodes.ContainsKey(nodeAddressInfo.ScopedIp)) {
-				IgnoreNodeActivityInfo inai = this.ignorePeerNodes.RemoveSafe(nodeAddressInfo.ScopedIp);
+			if(this.ignorePeerNodes.ContainsKey(nodeAddressInfo.ScoppedIp)) {
+				IgnoreNodeActivityInfo inai = this.ignorePeerNodes.RemoveSafe(nodeAddressInfo.ScoppedIp);
 				this.AddAvailablePeerNode(new NodeActivityInfo(inai), false);
-				this.promotedIgnoredNodes.Add(nodeAddressInfo.ScopedIp);
+				this.promotedIgnoredNodes.Add(nodeAddressInfo.ScoppedIp);
 			}
 		}
 
@@ -1092,7 +1130,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							var ips = hosts.AddressList.Select(a => new NodeAddressInfo(a, Enums.PeerTypes.Hub)).ToList();
 
 							foreach(NodeAddressInfo entry in ips) {
-								Log.Verbose($"Adding hub IP address: {entry.ScopedAdjustedIp}");
+								Log.Verbose($"Adding hub IP address: {entry.ScoppedAdjustedIp}");
 							}
 
 							this.neuraliumHubAddresses.AddNodes(ips);
@@ -1119,7 +1157,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public void QueryLocalIPAddress() {
 			lock(this.locker) {
 				var ipList = new List<IPAddress>();
-				ipList.AddRange(new[] {IPAddress.Parse("0.0.0.0"), IPAddress.Parse("127.0.0.1"), IPAddress.Parse("::1")});
+				ipList.AddRange(new[] {IPAddress.Parse("0.0.0.0"), IPAddress.Parse("127.0.0.1"), IPAddress.Parse("::1"), IPAddress.Parse("::")});
 
 				if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.localhostOnly && NetworkInterface.GetIsNetworkAvailable()) {
 					if(GlobalSettings.ApplicationSettings.UseSTUNServer) {
@@ -1153,7 +1191,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 									if(!this.localCIDRV4ranges.Contains(range)) {
 										this.localCIDRV4ranges.Add(range);
 									}
-
 								}
 							}
 
@@ -1165,7 +1202,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
 						ipList.AddRange(host.AddressList);
 					} catch(Exception ex) {
-
+						Log.Verbose(ex, "Failed to query network interfaces ");
 					}
 
 					if(!ipList.Any()) {
@@ -1275,6 +1312,14 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				var acceptedTriggerList = new[] {typeof(WorkflowTriggerMessage<R>)}.ToList();
 
+				connection.connection.Connected += () => {
+					if(direction == PeerConnection.Directions.Outgoing) {
+						// we know it can connect
+						node.IsConnectable = true;
+						connection.NodeAddressInfoInfo.IsConnectable = true;
+					}
+				};
+				
 				connection.connection.DataReceived += buffer => {
 					this.DataReceived?.Invoke(buffer, connection, acceptedTriggerList);
 				};
@@ -1426,10 +1471,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			lock(this.chainSettingsLocker) {
 				nodeAddressInfo.SetChainSettings(chainSettings);
 
-				if(this.chainSettings.ContainsKey(nodeAddressInfo.ScopedIp)) {
-					this.chainSettings[nodeAddressInfo.ScopedIp] = chainSettings;
+				if(this.chainSettings.ContainsKey(nodeAddressInfo.ScoppedIp)) {
+					this.chainSettings[nodeAddressInfo.ScoppedIp] = chainSettings;
 				} else {
-					this.chainSettings.Add(nodeAddressInfo.ScopedIp, chainSettings);
+					this.chainSettings.Add(nodeAddressInfo.ScoppedIp, chainSettings);
 				}
 
 				this.isChainSettingConsensusDirty = true;

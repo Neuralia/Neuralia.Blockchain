@@ -28,7 +28,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			// let's select our up to X prime elected
 			foreach(var elect in elected.Where(r => primeRepresentatives.Contains(r.Key))) {
-				representatives.Add(elect.Key, new PassiveElectedChoice {TransactionIds = elect.Value.TransactionIds, PeerType = elect.Value.PeerType, ElectionHash = elect.Value.ElectionHash, DelegateAccountId = elect.Value.DelegateAccountId});
+				representatives.Add(elect.Key, new PassiveElectedChoice {TransactionIds = elect.Value.TransactionIds, PeerShareType = elect.Value.PeerShareType, ElectionHash = elect.Value.ElectionHash, DelegateAccountId = elect.Value.DelegateAccountId});
 			}
 
 			return representatives;

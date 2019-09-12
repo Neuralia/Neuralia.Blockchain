@@ -129,7 +129,9 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 			IDataDehydrator subDehydrator = DataSerializationFactory.CreateDehydrator();
 			this.Message.Dehydrate(subDehydrator);
 
-			dehydrator.WriteNonNullable(subDehydrator.ToArray());
+			var bytes = subDehydrator.ToArray();
+			dehydrator.WriteNonNullable(bytes);
+			bytes.Return();
 		}
 
 		/// <summary>
@@ -146,9 +148,12 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		/// <param name="dr"></param>
 		protected void RehydrateMessage(IDataRehydrator dr, R rehydrationFactory) {
 
-			IDataRehydrator subRehydrator = DataSerializationFactory.CreateRehydrator(dr.ReadNonNullableArray());
+			var bytes = dr.ReadNonNullableArray();
+			IDataRehydrator subRehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 
 			this.BaseMessage.Rehydrate(subRehydrator, rehydrationFactory);
+			
+			bytes.Return();
 		}
 	}
 }

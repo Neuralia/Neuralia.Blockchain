@@ -16,6 +16,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Processors.V1 {
@@ -77,6 +78,88 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 		}
 
+		public Dictionary<string, object> PrepareActiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
+			if(blockElectionDistillate.electionContext is IActiveElectionContext activeElectionContext) {
+				
+				Dictionary<string, object> parameters = new Dictionary<string, object>();
+				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
+
+				parameters.Add("matureBlockId", electedCandidateResultDistillate.BlockId);
+				parameters.Add("miningAccountId", blockElectionDistillate.MiningAccountId);
+				parameters.Add("maturityBlockHash", electedCandidateResultDistillate.MaturityBlockHash);
+				
+				parameters.Add("simpleAnswer", electedCandidateResultDistillate.simpleAnswer);
+				parameters.Add("hardAnswer", electedCandidateResultDistillate.hardAnswer);
+
+				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
+					
+					var dehydrator = DataSerializationFactory.CreateDehydrator();
+
+					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
+
+					dehydrator.Write(transactionsIds);
+					IByteArray data = dehydrator.ToArray();
+					
+					parameters.Add("selectedTransactions", data.ToExactByteArrayCopy());
+					data.Return();
+				}
+
+				// now make sure that we apply correctly to any representative selection process.
+				var ballotingApplications = this.PrepareRepresentativesApplication(activeElectionContext.RepresentativeBallotingRules);
+
+				if(ballotingApplications.Any()) {
+					
+					var dehydrator = DataSerializationFactory.CreateDehydrator();
+					
+					dehydrator.Write(ballotingApplications);
+					IByteArray data = dehydrator.ToArray();
+					
+					parameters.Add("representativeBallotingApplications", data.ToExactByteArrayCopy());
+					data.Return();
+				}
+				
+				return parameters;
+			}
+
+			throw new ApplicationException("Must be an active election!");
+		}
+
+		public Dictionary<string, object> PreparePassiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
+			if(blockElectionDistillate.electionContext is IPassiveElectionContext passiveElectionContext) {
+				Log.Information("We are elected in a passive election!...");
+
+				Dictionary<string, object> parameters = new Dictionary<string, object>();
+				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
+
+
+				parameters.Add("matureBlockId", electedCandidateResultDistillate.BlockId);
+				parameters.Add("miningAccountId", blockElectionDistillate.MiningAccountId);
+				parameters.Add("maturityBlockHash", electedCandidateResultDistillate.MaturityBlockHash);
+
+				parameters.Add("simpleAnswer", electedCandidateResultDistillate.simpleAnswer);
+				parameters.Add("hardAnswer", electedCandidateResultDistillate.hardAnswer);
+				
+				// note:  we send a message even if we have no transactions. we may not get transaction fees, but the bounty is still applicable for being present and elected.
+				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
+					
+					var dehydrator = DataSerializationFactory.CreateDehydrator();
+
+					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
+
+					dehydrator.Write(transactionsIds);
+					IByteArray data = dehydrator.ToArray();
+					
+					parameters.Add("selectedTransactions", data.ToExactByteArrayCopy());
+					data.Return();
+				}
+
+				return parameters;
+			}
+
+			throw new ApplicationException("Must be a passive election!");
+		}
+
+		
 		public virtual IElectionCandidacyMessage PrepareActiveElectionConfirmationMessage(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
 
 			if(blockElectionDistillate.electionContext is IActiveElectionContext activeElectionContext) {
@@ -87,6 +170,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				message.AccountId = blockElectionDistillate.MiningAccountId;
 				message.MaturityBlockHash = electedCandidateResultDistillate.MaturityBlockHash;
 
+				message.SimpleAnswer = electedCandidateResultDistillate.simpleAnswer;
+				message.HardAnswer = electedCandidateResultDistillate.hardAnswer;
+				
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
 					message.SelectedTransactions.AddRange(electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)));
 				}
@@ -118,6 +204,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				message.BlockId = electedCandidateResultDistillate.BlockId;
 				message.AccountId = blockElectionDistillate.MiningAccountId;
 				message.MaturityBlockHash = electedCandidateResultDistillate.MaturityBlockHash;
+				
+				message.SimpleAnswer = electedCandidateResultDistillate.simpleAnswer;
+				message.HardAnswer = electedCandidateResultDistillate.hardAnswer;
 
 				// note:  we send a message even if we have no transactions. we may not get transaction fees, but the bounty is still applicable for being present and elected.
 				message.SelectedTransactions.AddRange(electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)));

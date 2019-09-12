@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossip.Metadata;
@@ -339,15 +340,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		/// <summary>
-		///     a special method to receive and handle gossip messages
+		///     a receive gossip messages and redirect to proper facilities
 		/// </summary>
 		/// <param name="gossipMessageSet"></param>
 		/// <param name="connection"></param>
 		/// <exception cref="ApplicationException"></exception>
 		public void RouteNetworkGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
-			GossipMessageReceivedTask gossipMessageTask = new GossipMessageReceivedTask(gossipMessageSet, connection);
-			this.ColoredRoutedTaskReceiver.ReceiveTask(gossipMessageTask);
-
+			
+			((IGossipManager)this.services[Enums.GOSSIP_SERVICE].service).receiveGossipMessage(gossipMessageSet, connection);
 		}
 
 		public BlockchainServiceSet BlockchainServiceSet { get; }
@@ -359,9 +359,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		protected virtual void HandleMessages(IColoredTask task) {
 			if(task is MessageReceivedTask messageTask) {
 				this.HandleMesageReceived(messageTask);
-			} else if(task is GossipMessageReceivedTask gossipMessageTask) {
-				this.HandleGossipMessageReceived(gossipMessageTask);
-			}
+			} 
 		}
 
 		/// <summary>
@@ -425,30 +423,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		protected ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory> GetActiveWorkflow(PeerConnection peerConnection, uint correlationId, Guid originatorId) {
-			string workflowId = NetworkingWorkflow.FormatScopedId(peerConnection.ClientUuid, correlationId);
+			string workflowId = NetworkingWorkflow.FormatScoppedId(peerConnection.ClientUuid, correlationId);
 
 			// now we verify if this message originator was us. if it was, we override the client ID
 			if(originatorId == this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid) {
-				workflowId = NetworkingWorkflow.FormatScopedId(this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, correlationId);
+				workflowId = NetworkingWorkflow.FormatScoppedId(this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, correlationId);
 			}
 
 			return this.workflowCoordinator.GetWorkflow(workflowId) as ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory>;
 
 		}
-
-		/// <summary>
-		///     an external sourced gossip message was reiceved, lets handle it
-		/// </summary>
-		/// <param name="gossipMessageTask"></param>
-		/// <exception cref="ApplicationException"></exception>
-		protected virtual void HandleGossipMessageReceived(GossipMessageReceivedTask gossipMessageTask) {
-
-			// we create a workflow that will validate, incorporate and possibly forward the message
-			var receiveGossipMessageWorkflow = this.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateReceiveGossipMessageWorkflow((IBlockchainGossipMessageSet) gossipMessageTask.gossipMessageSet, gossipMessageTask.Connection);
-
-			this.workflowCoordinator.AddWorkflow(receiveGossipMessageWorkflow);
-		}
-
+		
 		/// <summary>
 		///     jai pese le bouteon ""
 		///     Ensure that the children provide the proper service implementations
@@ -486,6 +471,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.AddService(Enums.SERIALIZATION_SERVICE, chainComponentsInjection.serializationManager);
 			this.AddService(Enums.VALIDATION_SERVICE, chainComponentsInjection.validationManager);
 			this.AddService(Enums.BLOCKCHAIN_SERVICE, chainComponentsInjection.blockchainManager);
+			this.AddService(Enums.GOSSIP_SERVICE, chainComponentsInjection.gossipManager);
 		}
 
 		protected virtual void StartWorkers(bool killExistingTasks = true) {
@@ -576,17 +562,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				this.header = header;
 			}
 		}
-
-		public class GossipMessageReceivedTask : ColoredTask {
-			public readonly PeerConnection Connection;
-			public readonly IGossipMessageSet gossipMessageSet;
-
-			public GossipMessageReceivedTask(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
-				this.gossipMessageSet = gossipMessageSet;
-				this.Connection = connection;
-			}
-		}
-
+		
 	#region System events
 
 		public void PostSystemEvent(SystemMessageTask messageTask, CorrelationContext correlationContext = default) {

@@ -92,7 +92,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public override int GetHashCode() {
-			return this.TransactionId != null ? this.TransactionId.GetHashCode() : 0;
+			return this.TransactionId != (TransactionIdExtended)null ? this.TransactionId.GetHashCode() : 0;
 		}
 
 		public static bool operator ==(Transaction a, ITransaction b) {
@@ -119,7 +119,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.RehydrateFullTransaction(dehydratedTransaction, rehydrationFactory, null, null);
 		}
 
-		public static ComponentVersion<TransactionType> RehydrateTopHeader(IDataRehydrator rehydrator, TransactionId transactionId, AccountId accountId, TransactionTimestamp timestamp) {
+		public static ComponentVersion<TransactionType> RehydrateTopHeader(IDataRehydrator rehydrator, TransactionIdExtended transactionId, AccountId accountId, TransactionTimestamp timestamp) {
 			var rehydratedVersion = rehydrator.Rehydrate<ComponentVersion<TransactionType>>();
 
 			if((accountId == null) && (timestamp == null)) {

@@ -22,6 +22,7 @@ using Serilog;
 namespace Neuralia.Blockchains.Core.Services {
 	public interface INetworkingService : IDisposable2 {
 
+		NetworkingService.NetworkingStatuses NetworkingStatus { get; set; }
 		bool IsStarted { get; }
 		IConnectionStore ConnectionStore { get; }
 
@@ -73,9 +74,16 @@ namespace Neuralia.Blockchains.Core.Services {
 		void RegisterChain(BlockchainType chainType, ChainSettings chainSettings, INetworkRouter transactionchainNetworkRouting, R rehydrationFactory, IGossipMessageFactory<R> mainChainMessageFactory, Func<SoftwareVersion, bool> versionValidationCallback);
 	}
 
+
+	public static class NetworkingService {
+		public enum NetworkingStatuses {
+			Stoped, Active, Paused
+		}
+	}
 	public class NetworkingService<R> : INetworkingService<R>
 		where R : IRehydrationFactory {
-
+		
+		
 		protected readonly IDataAccessService dataAccessService;
 		protected readonly IFileFetchService fileFetchService;
 		protected readonly IGlobalsService globalsService;
@@ -89,6 +97,8 @@ namespace Neuralia.Blockchains.Core.Services {
 		protected readonly Dictionary<BlockchainType, ChainInfo<R>> supportedChains = new Dictionary<BlockchainType, ChainInfo<R>>();
 
 		protected readonly ITimeService timeService;
+
+		public NetworkingService.NetworkingStatuses NetworkingStatus { get; set; } = NetworkingService.NetworkingStatuses.Stoped;
 
 		public NetworkingService(IGuidService guidService, IHttpService httpService, IFileFetchService fileFetchService, IDataAccessService dataAccessService, IInstantiationService<R> instantiationService, IGlobalsService globalsService, ITimeService timeService) {
 			this.instantiationService = instantiationService;
@@ -112,7 +122,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public Dictionary<BlockchainType, ChainSettings> ChainSettings {
 			get { return this.supportedChains.ToDictionary(t => t.Key, t => t.Value.ChainSettings); }
 		}
-
+		
 		/// <summary>
 		///     Return the list of confirmed and active peer connections we have
 		/// </summary>
@@ -145,6 +155,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		public void Start() {
 			if(GlobalSettings.ApplicationSettings.P2pEnabled) {
+
+				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
 				this.connectionListener.Start();
 
 				this.StartWorkers();
@@ -160,6 +172,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		public void Stop() {
 			try {
+				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Stoped;
+				
 				this.connectionListener?.Dispose();
 
 				this.IsStarted = false;

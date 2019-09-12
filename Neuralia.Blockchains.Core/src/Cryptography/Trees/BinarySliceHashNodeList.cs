@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
@@ -11,6 +12,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		private readonly ByteArray content;
 		private readonly int sizeSize = 64;
 
+		private readonly List<IByteArray> buffersSet = new List<IByteArray>();
+		
 		public BinarySliceHashNodeList(ByteArray content, int sizeSize = 64) {
 			this.content = content;
 			this.sizeSize = sizeSize;
@@ -30,10 +33,41 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					length = this.sizeSize;
 				}
 
-				return this.content.SliceReference(i * this.sizeSize, length);
+				var buffer = this.content.SliceReference(i * this.sizeSize, length);
+				this.buffersSet.Add(buffer);
+
+				return buffer;
 			}
 		}
 
 		public int Count { get; }
+		
+			
+	#region Dispose
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+			
+			if(disposing && !this.IsDisposed) {
+	
+				foreach(var entry in buffersSet) {
+					entry?.Dispose();
+				}
+			}
+			
+			this.IsDisposed = true;
+		}
+
+		~BinarySliceHashNodeList() {
+			this.Dispose(false);
+		}
+
+	#endregion
 	}
 }

@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 	public class MessageBuilder : IMessageBuilder {
 
 		public static readonly ProtocolVersion ProtocolVersion = new ProtocolVersion(1, 1);
-		public static readonly ProtocolCompression ProtocolCompression = new ProtocolCompression(ProtocolCompression.CompressionAlgorithm.Brotli, CompressionLevelByte.Nine);
+		public static readonly ProtocolCompression ProtocolCompression = new ProtocolCompression(ProtocolCompression.CompressionAlgorithm.Deflate, CompressionLevelByte.Fastest);
 
 		public IByteArray BuildTinyMessage(IByteArray bytes) {
 

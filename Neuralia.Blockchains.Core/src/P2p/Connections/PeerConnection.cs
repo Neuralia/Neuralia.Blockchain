@@ -75,8 +75,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			set => this.NodeAddressInfoInfo.PeerType = value;
 		}
 
-		public string ScopedIp => this.NodeAddressInfoInfo?.ScopedIp;
-		public string ScopedAdjustedIp => this.NodeAddressInfoInfo?.ScopedAdjustedIp;
+		public string ScoppedIp => this.NodeAddressInfoInfo?.ScoppedIp;
+		public string ScoppedAdjustedIp => this.NodeAddressInfoInfo?.ScoppedAdjustedIp;
 
 		public string Ip => this.NodeAddressInfoInfo?.Ip;
 		public string AdjustedIp => this.NodeAddressInfoInfo?.AdjustedIp;
@@ -133,11 +133,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				return true;
 			}
 
-			if(obj.GetType() != this.GetType()) {
-				return false;
-			}
-
-			return this.Equals((PeerConnection) obj);
+			return obj.GetType() == this.GetType() && this.Equals((PeerConnection) obj);
 		}
 
 		public override int GetHashCode() {

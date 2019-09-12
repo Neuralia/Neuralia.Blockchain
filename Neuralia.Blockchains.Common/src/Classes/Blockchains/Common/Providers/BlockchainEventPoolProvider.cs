@@ -90,7 +90,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 
 					// save it for future use
-					FileExtensions.OpenWrite(Path.Combine(publicPath, transactionEnvelope.Contents.Uuid.ToString()), envelope);
+					FileExtensions.OpenWrite(Path.Combine(publicPath, transactionEnvelope.Contents.Uuid.SimpleTransactionId.ToString()), envelope);
 				}
 			}
 		}

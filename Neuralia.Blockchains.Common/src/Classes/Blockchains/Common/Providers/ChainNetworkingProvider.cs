@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Core;
@@ -9,11 +10,13 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IChainNetworkingProvider {
 
+		bool IsPaused { get; }
 		ulong MyClientIdNonce { get; }
 		Guid MyclientUuid { get; }
 		IPAddress PublicIp { get; }
@@ -49,6 +52,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void ReceiveConnectionsManagerTask(ISimpleTask task);
 		void ReceiveConnectionsManagerTask(IColoredTask task);
+
+		void PauseNetwork();
+		void RestoreNetwork();
 	}
 
 	public interface IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainNetworkingProvider
@@ -72,6 +78,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public ChainNetworkingProvider(IBlockchainNetworkingService networkingService, CENTRAL_COORDINATOR centralCoordinator) {
 			this.networkingService = networkingService;
 			this.centralCoordinator = centralCoordinator;
+
+			if(networkingService?.ConnectionStore != null) {
+				this.networkingService.ConnectionStore.IsConnectibleChange += (connectible) => {
+				
+					// alert that our connectible status has changed
+					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnecableChanged(connectible));
+				};
+			}
 		}
 
 		protected BlockchainType ChainId => this.centralCoordinator.ChainId;
@@ -83,6 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.networkingService.PostNewGossipMessage(gossipMessageSet);
 		}
 
+		public bool IsPaused => this.networkingService?.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused;
 		public ulong MyClientIdNonce => this.networkingService.ConnectionStore.MyClientIdNonce;
 		public Guid MyclientUuid => this.networkingService.ConnectionStore.MyClientUuid;
 		public IPAddress PublicIp => this.networkingService.ConnectionStore.PublicIp;
@@ -91,6 +106,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.networkingService.ConnectionStore.AddAvailablePeerNode(new NodeAddressInfo("192.168.1.118", 33888, Enums.PeerTypes.Unknown), false);
 		}
 
+		public void PauseNetwork() {
+			if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Active) {
+				this.networkingService.NetworkingStatus = NetworkingService.NetworkingStatuses.Paused;
+			}
+		}
+		
+		public void RestoreNetwork() {
+			if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
+				this.networkingService.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
+			}
+		}
+		
 		public int CurrentPeerCount => this.networkingService.CurrentPeerCount;
 
 		public bool HasPeerConnections => this.CurrentPeerCount != 0;

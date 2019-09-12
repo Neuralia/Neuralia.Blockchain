@@ -10,6 +10,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		public long AccountId { get; set; }
 		public long InceptionBlockId { get; set; }
 		public byte TrustLevel { get; set; }
+		public long? CorrelationId { get; set; }
 		public List<ACCOUNT_FEATURE> AppliedFeatures { get; } = new List<ACCOUNT_FEATURE>();
 
 		public void ClearCollection() {

@@ -3,11 +3,12 @@ using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
-	public interface ICryptographicKey : ISerializableCombo {
+	public interface ICryptographicKey : ISerializableCombo, IDisposable2 {
 		byte Id { get; set; }
 		byte Version { get; }
 		IByteArray Key { get; set; }
@@ -17,6 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	}
 
 	public abstract class CryptographicKey : ICryptographicKey {
+		private IByteArray key;
 
 		public CryptographicKey() {
 			this.SetType();
@@ -28,7 +30,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public byte Version { get; } = 1;
 		public byte Id { get; set; }
-		public IByteArray Key { get; set; }
+
+		public IByteArray Key {
+			get => this.key;
+			set => this.key = value.Clone();
+		}
+
 		public Enums.KeyTypes Type { get; protected set; } = Enums.KeyTypes.Unknown;
 
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {
@@ -85,6 +92,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		protected abstract void SetType();
+		
+	#region Disposable
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+
+			if(!this.IsDisposed) {
+				try {
+					this.DisposeAll(disposing);
+				} finally {
+						
+				}
+			}
+		}
+
+		protected virtual void DisposeAll(bool disposing) {
+			if(disposing) {
+				this.Key?.Dispose();
+			}
+		}
+
+		~CryptographicKey() {
+			this.Dispose(false);
+		}
+
+		public bool IsDisposed { get; private set; }
+
+	#endregion
 	}
 
 }

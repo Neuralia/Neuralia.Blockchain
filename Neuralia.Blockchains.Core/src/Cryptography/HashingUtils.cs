@@ -49,9 +49,10 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		}
 
 		public static bool ValidateGossipMessageSetHash(IGossipMessageSet gossipMessageSet) {
-			long ownHash = 0;
 
 			HashNodeList structure = gossipMessageSet.GetStructuresArray();
+
+			long ownHash = 0;
 
 			lock(XxhasherTreeLocker) {
 				ownHash = XxhasherTree.HashLong(structure);
@@ -77,29 +78,18 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			// sha2
 			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(publicKey);
-			HashNodeList hashNodeList = new HashNodeList();
-
-			lock(Hasher2Locker) {
-				hashNodeList.Add(Hasher2.Hash(sliceHashNodeList));
-			}
 
 			IByteArray sha2 = null;
-
+			
 			lock(Hasher2Locker) {
-				sha2 = Hasher2.Hash(hashNodeList);
-			}
-
-			// sha3
-			hashNodeList = new HashNodeList();
-
-			lock(Hasher3Locker) {
-				hashNodeList.Add(Hasher3.Hash(sliceHashNodeList));
+				sha2 = Hasher2.Hash(sliceHashNodeList);
 			}
 
 			IByteArray sha3 = null;
+			// sha3
 
 			lock(Hasher3Locker) {
-				sha3 = Hasher3.Hash(hashNodeList);
+				sha3 = Hasher3.Hash(sliceHashNodeList);
 			}
 
 			return (sha2, sha3);
@@ -110,45 +100,55 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			// sha2
 			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(publicKey);
+
+			IByteArray sha2 = null;
 			HashNodeList hashNodeList = new HashNodeList();
 
+			IByteArray hash2 = null;
 			lock(Hasher2Locker) {
-				hashNodeList.Add(Hasher2.Hash(sliceHashNodeList));
+				hash2 = Hasher2.Hash(sliceHashNodeList);
 			}
 
+			hashNodeList.Add(hash2);
 			hashNodeList.Add(promisedNonce1);
 			hashNodeList.Add(promisedNonce2);
-			IByteArray sha2 = null;
-
+			
 			lock(Hasher2Locker) {
 				sha2 = Hasher2.Hash(hashNodeList);
 			}
+			
+			hash2.Return();
+			
 
+			IByteArray sha3 = null;
 			// sha3
 			hashNodeList = new HashNodeList();
 
+			IByteArray hash3 = null;
 			lock(Hasher3Locker) {
-				hashNodeList.Add(Hasher3.Hash(sliceHashNodeList));
+				hash3 = Hasher3.Hash(sliceHashNodeList);
 			}
 
+			hashNodeList.Add(hash3);
 			hashNodeList.Add(promisedNonce1);
 			hashNodeList.Add(promisedNonce2);
-
-			IByteArray sha3 = null;
 
 			lock(Hasher3Locker) {
 				sha3 = Hasher3.Hash(hashNodeList);
 			}
+			
+			hash3.Return();
+			
 
+			int nonceHash = 0;
 			hashNodeList = new HashNodeList();
 			hashNodeList.Add(promisedNonce1);
 			hashNodeList.Add(promisedNonce2);
 
-			int nonceHash = 0;
-
 			lock(XxhasherTree32Locker) {
 				nonceHash = XxhasherTree32.HashInt(hashNodeList);
 			}
+		
 
 			return (sha2, sha3, nonceHash);
 
@@ -198,18 +198,21 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			Sha512Hasher sha512Hasher = new Sha512Hasher();
 			IByteArray newsha2 = sha512Hasher.Hash(hash);
 
-			if(!newsha2.Equals(sha2)) {
+			bool result = newsha2.Equals(sha2);
+			newsha2.Return();
+			
+			if(!result) {
 				return false;
 			}
 
 			Sha3_512Hasher sha3Hasher = new Sha3_512Hasher();
 			IByteArray newsha3 = sha3Hasher.Hash(hash);
 
-			if(!newsha3.Equals(sha3)) {
-				return false;
-			}
+			result = newsha3.Equals(sha3);
+			
+			newsha3.Return();
 
-			return true;
+			return result;
 		}
 
 		public static IByteArray GenerateHash(ITreeHashable hashable) {
@@ -219,6 +222,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			lock(Hasher3Locker) {
 				return Hasher3.Hash(structure);
 			}
+			
 		}
 
 		public static IByteArray GenerateHash256(ITreeHashable hashable) {
@@ -227,6 +231,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			lock(Hasher3256Locker) {
 				return Hasher3256.Hash(structure);
 			}
+			
 		}
 
 		public static long Generate_xxHash(ITreeHashable hashable) {
@@ -294,7 +299,9 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				nodes.Add(hash);
 			}
 
-			return XxhasherTree32.HashInt(nodes);
+			lock(XxhasherTree32Locker) {
+				return XxhasherTree32.HashInt(nodes);
+			}
 		}
 	}
 }

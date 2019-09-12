@@ -64,13 +64,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			return this.PerformProcessingSetHoldTransactions(actions);
 		}
 
-		public void InsertNewJointAccount(AccountId accountId, long inceptionBlockId) {
+		public void InsertNewJointAccount(AccountId accountId, long inceptionBlockId, long? correlationId) {
 
 			this.PerformOperation(db => {
 				JOINT_ACCOUNT_SNAPSHOT accountEntry = new JOINT_ACCOUNT_SNAPSHOT();
 
 				accountEntry.AccountId = accountId.ToLongRepresentation();
 				accountEntry.InceptionBlockId = inceptionBlockId;
+				accountEntry.CorrelationId = correlationId;
 
 				db.JointAccountSnapshots.Add(accountEntry);
 

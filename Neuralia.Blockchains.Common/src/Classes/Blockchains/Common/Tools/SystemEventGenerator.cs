@@ -201,6 +201,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			return generator;
 		}
+		
+		public static SystemEventGenerator ConnecableChanged(bool connectable) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.ConnectableStatusChanged;
+			generator.Parameters = new object[] {connectable};
+
+			return generator;
+		}
 
 		public class CreationStepSet {
 
@@ -217,6 +226,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 				return step;
 			}
+			
 		}
 
 		public class WalletCreationStepSet : CreationStepSet {

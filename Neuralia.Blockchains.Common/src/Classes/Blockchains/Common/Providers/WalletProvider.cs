@@ -82,7 +82,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		public const int CHANGE_KEY_XMSS_TREE_HEIGHT = XMSSProvider.DEFAULT_XMSS_TREE_HEIGHT;
 
-		public const int MINIMAL_XMSS_KEY_HEIGHT = 9;
+		public const int MINIMAL_XMSS_KEY_HEIGHT = 5;
 	}
 
 	public interface IUtilityWalletProvider {
@@ -702,12 +702,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		/// <summary>
-		///     Return the base wallet directory, not scoped by chain
+		///     Return the base wallet directory, not scopped by chain
 		/// </summary>
 		/// <returns></returns>
 		public string GetSystemFilesDirectoryPath() {
 
-			return this.globalsService.GetSystemFilesDirectoryPath();
+			return GlobalsService.GetGeneralSystemFilesDirectoryPath();
 		}
 
 		public IWalletAccount GetActiveAccount() {
@@ -1487,10 +1487,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				this.SetChainStateHeight(account.AccountUuid, block.BlockId);
 
-				if(block.AccountScoped.ContainsKey(publicAccountId)) {
+				if(block.AccountScopped.ContainsKey(publicAccountId)) {
 					// get the highest key use in the block for this account
 
-					var transactionIds = block.AccountScoped[publicAccountId].ConfirmedLocalTransactions.Keys.Where(t => t.KeyUseIndex != null).ToList();
+					var transactionIds = block.AccountScopped[publicAccountId].ConfirmedLocalTransactions.Keys.Where(t => t.KeyUseIndex != null).ToList();
 
 					foreach(var group in transactionIds.GroupBy(t => t.KeyUseIndex.Ordinal)) {
 						KeyUseIndexSet highestKeyUse = null;
@@ -1665,6 +1665,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			try {
 
+				// the keys are often heavy on the network, lets pause it
+				this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
+				
 				this.centralCoordinator.PostSystemEvent(walletCreationStepSet?.CreatingAccountKeys, correlationContext);
 				this.centralCoordinator.PostSystemEvent(accountCreationStepSet?.CreatingTransactionKey, correlationContext);
 
@@ -1673,6 +1676,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				Thread.Sleep(1000);
 				mainKey = this.CreateXmssKey(GlobalsService.TRANSACTION_KEY_NAME);
 
+				GC.Collect();
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.TRANSACTION_KEY_NAME, 1, 4}, correlationContext);
 
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.MESSAGE_KEY_NAME, 2, 4}, correlationContext);
@@ -1681,6 +1685,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				Thread.Sleep(1000);
 				messageKey = this.CreateXmssKey(GlobalsService.MESSAGE_KEY_NAME);
+				
+				GC.Collect();
 
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.MESSAGE_KEY_NAME, 2, 4}, correlationContext);
 
@@ -1690,6 +1696,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				Thread.Sleep(1000);
 				changeKey = this.CreateXmssKey(GlobalsService.CHANGE_KEY_NAME);
+				
+				GC.Collect();
 
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.CHANGE_KEY_NAME, 3, 4}, correlationContext);
 
@@ -1699,6 +1707,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				Thread.Sleep(1000);
 				superKey = this.CreateSuperKey();
+				
+				GC.Collect();
 
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.SUPER_KEY_NAME, 4, 4}, correlationContext);
 
@@ -1736,6 +1746,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				} catch {
 
 				}
+				
+				// back in business
+				this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RestoreNetwork();
 			}
 
 			return true;
@@ -1745,12 +1758,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			accountSnapshot.AccountId = account.PublicAccountId.ToLongRepresentation();
 			accountSnapshot.InceptionBlockId = account.ConfirmationBlockId;
+			accountSnapshot.CorrelationId = account.CorrelationId;
 		}
 
 		protected virtual void FillJointAccountSnapshot(IWalletAccount account, IWalletJointAccountSnapshot accountSnapshot) {
 
 			accountSnapshot.AccountId = account.PublicAccountId.ToLongRepresentation();
 			accountSnapshot.InceptionBlockId = account.ConfirmationBlockId;
+			accountSnapshot.CorrelationId = account.CorrelationId;
 		}
 
 		protected virtual IAccountFileInfo CreateNewAccountFileInfo(IWalletAccount account) {
@@ -1839,8 +1854,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().UseKeyLog && !keyLogSynced) {
 				AccountId accountId = account.GetAccountId();
 
-				if(block.AccountScoped.ContainsKey(accountId)) {
-					SynthesizedBlock.SynthesizedBlockAccountSet scoppedSynthesizedBlock = block.AccountScoped[accountId];
+				if(block.AccountScopped.ContainsKey(accountId)) {
+					SynthesizedBlock.SynthesizedBlockAccountSet scoppedSynthesizedBlock = block.AccountScopped[accountId];
 
 					foreach(var transactionId in scoppedSynthesizedBlock.ConfirmedLocalTransactions) {
 
@@ -2268,7 +2283,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			walletElectionsHistory.BlockId = electionResult.BlockId;
 			walletElectionsHistory.Timestamp = electionResult.Timestamp;
 			walletElectionsHistory.DelegateAccount = electionResult.ElectedAccounts[electedAccountId].delegateAccountId;
-			walletElectionsHistory.PeerType = electionResult.ElectedAccounts[electedAccountId].peerType;
+			walletElectionsHistory.PeerShareType = electionResult.ElectedAccounts[electedAccountId].peerShareType;
 			walletElectionsHistory.SelectedTransactions = electionResult.ElectedAccounts[electedAccountId].selectedTransactions;
 		}
 
@@ -2316,7 +2331,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			walletAccountTransactionHistory.Recipient = transaction.TransactionId.Account.ToString();
 
 			walletAccountTransactionHistory.Note = note;
-			walletAccountTransactionHistory.Timestamp = this.serviceSet.BlockchainTimeService.GetTransactionDateTime(transaction.TransactionId, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
+			walletAccountTransactionHistory.Timestamp = this.serviceSet.BlockchainTimeService.GetTransactionDateTime(transaction.TransactionId.SimpleTransactionId, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
 
 			bool ours = transaction.TransactionId.Account == targetAccountId;
 
@@ -2356,7 +2371,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public virtual void InsertLocalTransactionCacheEntry(ITransactionEnvelope transactionEnvelope) {
 			this.EnsureWalletIsLoaded();
-			TransactionId transactionId = transactionEnvelope.Contents.RehydratedTransaction.TransactionId;
+			TransactionId transactionId = transactionEnvelope.Contents.RehydratedTransaction.TransactionId.SimpleTransactionId;
 
 			IWalletAccount account = this.WalletFileInfo.WalletBase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != null) && a.PublicAccountId.Equals(transactionId.Account));
 
@@ -2382,7 +2397,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected virtual void FillWalletTransactionCacheEntry(IWalletTransactionCache walletAccountTransactionCache, ITransactionEnvelope transactionEnvelope, AccountId targetAccountId) {
 			walletAccountTransactionCache.TransactionId = transactionEnvelope.Contents.RehydratedTransaction.TransactionId.ToString();
 			walletAccountTransactionCache.Version = transactionEnvelope.Contents.RehydratedTransaction.Version.ToString();
-			walletAccountTransactionCache.Timestamp = this.serviceSet.BlockchainTimeService.GetTransactionDateTime(transactionEnvelope.Contents.RehydratedTransaction.TransactionId, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
+			walletAccountTransactionCache.Timestamp = this.serviceSet.BlockchainTimeService.GetTransactionDateTime(transactionEnvelope.Contents.RehydratedTransaction.TransactionId.SimpleTransactionId, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
 			walletAccountTransactionCache.Transaction = transactionEnvelope.DehydrateEnvelope();
 
 			walletAccountTransactionCache.Expiration = transactionEnvelope.GetExpirationTime(this.serviceSet.TimeService, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
@@ -3163,7 +3178,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.HashKey(key);
 
-			Log.Information("XMSS Keys created");
+			Log.Information($"XMSS Key '{name}' created");
 
 			return key;
 		}
@@ -3649,7 +3664,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			synthesizedBlock.BlockId = synthesizedBlockApi.BlockId;
 
-			BrotliCompression compressor = new BrotliCompression();
+			GzipCompression compressor = new GzipCompression();
 
 			foreach(var apiTransaction in synthesizedBlockApi.ConfirmedGeneralTransactions) {
 				IDehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
@@ -3660,7 +3675,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				ITransaction transaction = dehydratedTransaction.RehydrateTransaction(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
-				synthesizedBlock.ConfirmedGeneralTransactions.Add(transaction.TransactionId, transaction);
+				synthesizedBlock.ConfirmedGeneralTransactions.Add(transaction.TransactionId.SimpleTransactionId, transaction);
 			}
 
 			synthesizedBlock.RejectedTransactions.AddRange(synthesizedBlockApi.RejectedTransactions.Select(t => new RejectedTransaction {TransactionId = new TransactionIdExtended(t.Key), Reason = (RejectionCode) t.Value}));
@@ -3706,13 +3721,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					if(transaction.TransactionId.Account == accountId) {
 						synthesizedBlockAccountSet.ConfirmedLocalTransactions.Add(transaction.TransactionId, transaction);
 					} else {
-						synthesizedBlockAccountSet.ConfirmedExternalsTransactions.Add(transaction.TransactionId, transaction);
+						synthesizedBlockAccountSet.ConfirmedExternalsTransactions.Add(transaction.TransactionId.SimpleTransactionId, transaction);
 					}
 
-					synthesizedBlock.ConfirmedTransactions.Add(transaction.TransactionId, transaction);
+					synthesizedBlock.ConfirmedTransactions.Add(transaction.TransactionId.SimpleTransactionId, transaction);
 				}
 
-				synthesizedBlock.AccountScoped.Add(accountId, synthesizedBlockAccountSet);
+				synthesizedBlock.AccountScopped.Add(accountId, synthesizedBlockAccountSet);
 				synthesizedBlock.Accounts.Add(accountId);
 
 			}

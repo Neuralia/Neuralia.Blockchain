@@ -13,7 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		AccountId DelegateAccount { get; set; }
 
-		Enums.PeerTypes PeerType { get; set; }
+		Enums.ElectedPeerShareTypes PeerShareType { get; set; }
 
 		string SelectedTransactions { get; set; }
 	}
@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public DateTime Timestamp { get; set; }
 
 		public AccountId DelegateAccount { get; set; }
-		public Enums.PeerTypes PeerType { get; set; }
+		public Enums.ElectedPeerShareTypes PeerShareType { get; set; }
 		public string SelectedTransactions { get; set; }
 	}
 }

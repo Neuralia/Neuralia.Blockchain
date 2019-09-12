@@ -29,6 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public long InceptionBlockId { get; set; }
 		public byte TrustLevel { get; set; }
+		public long? CorrelationId { get; set; }
 		public List<IAccountFeature> AppliedFeatures { get; } = new List<IAccountFeature>();
 
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
@@ -38,7 +39,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			this.AccountIdFull.Rehydrate(rehydrator);
 			this.InceptionBlockId = rehydrator.ReadLong();
-
+			this.CorrelationId = rehydrator.ReadNullableLong();
+			
 			this.TrustLevel = rehydrator.ReadByte();
 
 			this.AppliedFeatures.Clear();
@@ -69,9 +71,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			this.AccountIdFull.Dehydrate(dehydrator);
 			dehydrator.Write(this.InceptionBlockId);
-
+			dehydrator.Write(this.CorrelationId);
+			
 			dehydrator.Write(this.TrustLevel);
-
+			
 			dehydrator.Write((byte) this.AppliedFeatures.Count);
 
 			bool any = this.AppliedFeatures.Any();
