@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 	public interface ISetAccountRecoveryTransaction : ITransaction {
 		SetAccountRecoveryTransaction.OperationTypes Operation { get; set; }
-		IByteArray AccountRecoveryHash { get; set; }
+		SafeArrayHandle AccountRecoveryHash { get; }
 	}
 
 	public abstract class SetAccountRecoveryTransaction : Transaction, ISetAccountRecoveryTransaction {
@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public OperationTypes Operation { get; set; }
-		public IByteArray AccountRecoveryHash { get; set; }
+		public SafeArrayHandle AccountRecoveryHash { get;  } = SafeArrayHandle.Create();
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
@@ -44,7 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.RehydrateContents(dataChannels, rehydrationFactory);
 
 			this.Operation = (OperationTypes) dataChannels.ContentsData.ReadByte();
-			this.AccountRecoveryHash = dataChannels.ContentsData.ReadNonNullableArray();
+			this.AccountRecoveryHash.Entry = dataChannels.ContentsData.ReadNonNullableArray();
 
 		}
 

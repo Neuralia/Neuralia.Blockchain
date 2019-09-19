@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 	public class PromisedSecretPublishedAccountSignature : PublishedAccountSignature, IPromisedSecretPublishedAccountSignature {
 
-		public IByteArray PromisedPublicKey { get; set; }
+		public SafeArrayHandle PromisedPublicKey { get; } = SafeArrayHandle.Create();
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = base.GetStructuresArray();
@@ -29,7 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
-			this.PromisedPublicKey = rehydrator.ReadNonNullableArray();
+			this.PromisedPublicKey.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

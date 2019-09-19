@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 
 		}
 
-		public SplitMessageHeader(IByteArray message) : base(0, message) {
+		public SplitMessageHeader(SafeArrayHandle message) : base(0, message) {
 
 			this.CompleteMessageLength = message.Length;
 
@@ -82,18 +82,19 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 
 		public static long ComputeSliceHash(List<long> hashes) {
 
-			HashNodeList nodeList = new HashNodeList();
+			using(HashNodeList nodeList = new HashNodeList()) {
 
-			foreach(long hash in hashes) {
-				nodeList.Add(hash);
+				foreach(long hash in hashes) {
+					nodeList.Add(hash);
+				}
+
+				xxHashSakuraTree hasher = new xxHashSakuraTree();
+
+				return hasher.HashLong(nodeList);
 			}
-
-			xxHashSakuraTree hasher = new xxHashSakuraTree();
-
-			return hasher.HashLong(nodeList);
 		}
 
-		protected override IMessageHash CreateHash(IByteArray message = null) {
+		protected override IMessageHash CreateHash(SafeArrayHandle message = null) {
 			return new MessageHash64();
 		}
 

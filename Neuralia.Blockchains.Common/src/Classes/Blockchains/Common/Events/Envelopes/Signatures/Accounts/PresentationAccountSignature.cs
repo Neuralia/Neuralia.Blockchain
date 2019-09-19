@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	}
 
 	public class PresentationAccountSignature : AccountSignature, IPresentationAccountSignature {
-		public IByteArray PublicKey { get; set; }
+		public SafeArrayHandle PublicKey { get; } = SafeArrayHandle.Create();
 		public QTESLASecurityCategory.SecurityCategories SecurityCategory { get; set; }
 
 		public override HashNodeList GetStructuresArray() {
@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
-			this.PublicKey = rehydrator.ReadNonNullableArray();
+			this.PublicKey.Entry = rehydrator.ReadNonNullableArray();
 			this.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) rehydrator.ReadByte();
 		}
 

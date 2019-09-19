@@ -31,9 +31,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 
 	public interface IEnvelopeRehydrationFactory : ICommonRehydrationFactory {
 
-		IEnvelope RehydrateEnvelope(IByteArray data);
+		IEnvelope RehydrateEnvelope(SafeArrayHandle data);
 
-		ENVELOPE_TYPE RehydrateEnvelope<ENVELOPE_TYPE>(IByteArray data)
+		ENVELOPE_TYPE RehydrateEnvelope<ENVELOPE_TYPE>(SafeArrayHandle data)
 			where ENVELOPE_TYPE : IEnvelope;
 	}
 
@@ -101,18 +101,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 
 		public abstract IBlockchainMessage CreateMessage(IDehydratedBlockchainMessage dehydratedMessage);
 
-		public virtual IEnvelope RehydrateEnvelope(IByteArray data) {
+		public virtual IEnvelope RehydrateEnvelope(SafeArrayHandle data) {
 			var version = new ComponentVersion<EnvelopeType>();
-			version.Rehydrate(DataSerializationFactory.CreateRehydrator(data));
 
-			IEnvelope hashedEnvelope = this.CreateNewEnvelope(version);
+			using(var rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
+				version.Rehydrate(rehydrator);
 
-			hashedEnvelope.RehydrateEnvelope(data);
+				IEnvelope hashedEnvelope = this.CreateNewEnvelope(version);
 
-			return hashedEnvelope;
+				hashedEnvelope.RehydrateEnvelope(data);
+
+				return hashedEnvelope;
+			}
 		}
 
-		public virtual ENVELOPE_TYPE RehydrateEnvelope<ENVELOPE_TYPE>(IByteArray data)
+		public virtual ENVELOPE_TYPE RehydrateEnvelope<ENVELOPE_TYPE>(SafeArrayHandle data)
 			where ENVELOPE_TYPE : IEnvelope {
 
 			return (ENVELOPE_TYPE) this.RehydrateEnvelope(data);

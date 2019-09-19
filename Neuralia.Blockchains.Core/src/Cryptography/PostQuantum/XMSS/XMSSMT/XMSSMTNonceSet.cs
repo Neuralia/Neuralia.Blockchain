@@ -33,18 +33,19 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 		public (int nonce1, int nonce2) this[XMSSMTLeafId i] => this.Nonces[i];
 
-		public virtual void Load(IByteArray bytes, int leafCount) {
+		public virtual void Load(ByteArray bytes, int leafCount) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 
 			this.Rehydrate(rehydrator, leafCount);
 		}
 
-		public virtual IByteArray Save() {
+		public virtual ByteArray Save() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			//TODO: this should be a realease, not clone
+			return dehydrator.ToArray().Entry.Clone();
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator, int leafCount) {
@@ -84,27 +85,28 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			dehydrator.Write(this.Minor);
 			dehydrator.Write(this.Revision);
 
-			var layerGroups = this.Nonces.GroupBy(e => e.Key.Layer);
+			var layerGroups = this.Nonces.GroupBy(e => e.Key.Layer).ToList();
 
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 			adaptiveLong.Value = layerGroups.Count();
 			adaptiveLong.Dehydrate(dehydrator);
 
-			foreach(var layerGroup in layerGroups) {
+			foreach(var layerGroup in layerGroups.OrderBy(e => e.Key)) {
 
 				adaptiveLong.Value = layerGroup.Key;
 				adaptiveLong.Dehydrate(dehydrator);
+				
+				var treeGroups = layerGroup.GroupBy(e => e.Key.Tree).OrderBy(e => e.Key).ToList();
 
-				adaptiveLong.Value = layerGroup.Count();
+				adaptiveLong.Value = treeGroups.Count();
 				adaptiveLong.Dehydrate(dehydrator);
 
-				var treeGroups = layerGroup.GroupBy(e => e.Key.Tree);
-
-				foreach(var entry in treeGroups) {
+				
+				foreach(var entry in treeGroups.OrderBy(e => e.Key)) {
 					adaptiveLong.Value = entry.Key;
 					adaptiveLong.Dehydrate(dehydrator);
 
-					foreach(var nonce in entry) {
+					foreach(var nonce in entry.OrderBy(e => e.Key.Index)) {
 						dehydrator.Write(nonce.Value.nonce1);
 						dehydrator.Write(nonce.Value.nonce2);
 					}

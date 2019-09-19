@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		string TransactionId { get; set; }
 
 		DateTime Timestamp { get; set; }
-		IByteArray Transaction { get; set; }
+		SafeArrayHandle Transaction { get;  }
 		string Version { get; set; }
 		byte Status { get; set; }
 		long GossipMessageHash { get; set; }
@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public string TransactionId { get; set; }
 
 		public DateTime Timestamp { get; set; }
-		public IByteArray Transaction { get; set; }
+		public SafeArrayHandle Transaction { get; } = SafeArrayHandle.Create();
 		public string Version { get; set; }
 		public byte Status { get; set; }
 		public long GossipMessageHash { get; set; }

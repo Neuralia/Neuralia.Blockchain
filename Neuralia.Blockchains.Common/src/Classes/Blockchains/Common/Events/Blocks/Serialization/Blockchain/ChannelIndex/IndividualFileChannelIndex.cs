@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			set => this.Providers[this.ChannelType] = value;
 		}
 
-		public override void WriteEntry(ChannelsEntries<IByteArray> blockData) {
+		public override void WriteEntry(ChannelsEntries<SafeArrayHandle> blockData) {
 
 			uint length = this.Provider.DataFile.FileSize;
 
@@ -45,16 +45,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result;
 		}
 
-		public override ChannelsEntries<IByteArray> QueryBytes(uint adjustedBlockId) {
-			var result = new ChannelsEntries<IByteArray>();
+		public override ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId) {
+			var result = new ChannelsEntries<SafeArrayHandle>();
 
 			result[this.ChannelType] = this.Provider.DataFile.ReadAllBytes();
 
 			return result;
 		}
 
-		public override ChannelsEntries<IByteArray> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
-			var result = new ChannelsEntries<IByteArray>();
+		public override ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
+			var result = new ChannelsEntries<SafeArrayHandle>();
 
 			(int offset, int length) index = offsets[this.ChannelType];
 			result[this.ChannelType] = this.Provider.DataFile.ReadBytes(index.offset, index.length);
@@ -62,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result;
 		}
 
-		public override IByteArray QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
+		public override SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
 			throw new NotImplementedException();
 		}
 

@@ -64,7 +64,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				return;
 			}
 
-			reply.BaseMessage.Dispose();
+			//reply.BaseMessage.Dispose();
 			if(!reply.Message.messageApprovals.Any(a => a)) {
 				return;
 			}
@@ -74,9 +74,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			Log.Verbose($"We received {serverMessageGroupManifest.Message.gossipMessageSets.Count} gossip messages from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// ok, these are really messages, lets handle them as such
-			foreach(IByteArray message in serverMessageGroupManifest.Message.gossipMessageSets) // thats it, we formally receive the messages and send them to our message manager.
+			foreach(SafeArrayHandle message in serverMessageGroupManifest.Message.gossipMessageSets) // thats it, we formally receive the messages and send them to our message manager.
 			{
 				this.networkingService.PostNetworkMessage(message, this.ClientConnection);
+				message.Dispose();
 			}
 		}
 

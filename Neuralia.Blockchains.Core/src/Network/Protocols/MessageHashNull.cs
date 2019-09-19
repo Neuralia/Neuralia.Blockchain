@@ -5,11 +5,11 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Network.Protocols {
 	public class MessageHashNull : MessageHash<byte> {
 
-		public MessageHashNull(IByteArray message = null) {
+		public MessageHashNull(SafeArrayHandle message = null) {
 
 		}
 
-		public override byte HashMessage(IByteArray message) {
+		public override byte HashMessage(SafeArrayHandle message) {
 			return 0;
 		}
 

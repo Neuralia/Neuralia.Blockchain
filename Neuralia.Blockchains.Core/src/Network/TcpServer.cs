@@ -10,6 +10,7 @@ using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Serilog;
+using SafeArrayHandle = Neuralia.Blockchains.Tools.Data.SafeArrayHandle;
 
 namespace Neuralia.Blockchains.Core.Network {
 
@@ -56,7 +57,7 @@ namespace Neuralia.Blockchains.Core.Network {
 	/// <inheritdoc />
 	public class TcpServer : ITcpServer {
 
-		public delegate void MessageBytesReceived(TcpServer listener, ITcpConnection connection, IByteArray buffer);
+		public delegate void MessageBytesReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer);
 
 		protected readonly List<ITcpConnection> connections = new List<ITcpConnection>();
 
@@ -158,7 +159,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.Dispose();
 		}
 
-		private void InvokeNewConnection(IByteArray bytes, ITcpConnection connection) {
+		private void InvokeNewConnection(SafeArrayHandle bytes, ITcpConnection connection) {
 			this.NewConnection?.Invoke(this, connection, bytes);
 		}
 

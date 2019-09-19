@@ -22,7 +22,6 @@ namespace Neuralia.Blockchains.Core.Network {
 				.SetAbsoluteExpiration(TimeSpan.FromHours(1)).SetSlidingExpiration(TimeSpan.FromMinutes(1)).RegisterPostEvictionCallback((key, value, reason, state) => {
 					//TODO: do something when the item is evicted from cache     
 					// lets clean up its memory
-					((ISplitMessageEntry) value).Dispose();
 				});
 
 			lock(this.locker) {

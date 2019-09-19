@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		static LiteDBDAL() {
 			// register mapping types
 			BsonMapper.Global.RegisterType(wrapper => wrapper.Bytes, bson => {
-				return new ByteArray(bson.AsBinary);
+				return ByteArray.Create(bson.AsBinary);
 			});
 		}
 

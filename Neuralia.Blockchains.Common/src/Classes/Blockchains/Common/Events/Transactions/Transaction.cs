@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Serialization;
+using Org.BouncyCastle.Crypto.Prng;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions {
 
@@ -134,20 +135,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		protected virtual void RehydrateFullTransaction(IDehydratedTransaction dehydratedTransaction, ITransactionRehydrationFactory rehydrationFactory, AccountId accountId, TransactionTimestamp timestamp) {
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(dehydratedTransaction.Header);
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(dehydratedTransaction.Header)) {
 
-			// the header
-			var rehydratedVersion = RehydrateTopHeader(rehydrator, this.TransactionId, accountId, timestamp);
-			this.Version.EnsureEqual(rehydratedVersion);
+				// the header
+				var rehydratedVersion = RehydrateTopHeader(rehydrator, this.TransactionId, accountId, timestamp);
+				this.Version.EnsureEqual(rehydratedVersion);
 
-			// the rest in the header
-			this.RehydrateHeader(rehydrator);
+				// the rest in the header
+				this.RehydrateHeader(rehydrator);
 
-			// and the rest
-			this.RehydrateContents(dehydratedTransaction.DataChannels.ConvertAll(DataSerializationFactory.CreateRehydrator, BlockChannelUtils.BlockChannelTypes.Headers), rehydrationFactory);
+				// and the rest
+				var channels = dehydratedTransaction.DataChannels.ConvertAll(DataSerializationFactory.CreateRehydrator, BlockChannelUtils.BlockChannelTypes.Headers);
+					this.RehydrateContents(channels, rehydrationFactory);
+			}
 
 			// any finalizer we need to do now that we rehydrated
 			this.TransactionRehydrated();
+			
 		}
 
 		protected virtual void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {

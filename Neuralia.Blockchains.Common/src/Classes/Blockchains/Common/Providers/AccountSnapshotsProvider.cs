@@ -28,9 +28,9 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IAccountSnapshotsProvider {
 
-		//		void InsertModeratorKey(TransactionId transactionId, byte keyId, IByteArray key);
-		//		void UpdateModeratorKey(TransactionId transactionId, byte keyId, IByteArray key);
-		//		IByteArray GetModeratorKey(byte keyId);
+		//		void InsertModeratorKey(TransactionId transactionId, byte keyId, ArrayWrapper key);
+		//		void UpdateModeratorKey(TransactionId transactionId, byte keyId, ArrayWrapper key);
+		//		ArrayWrapper GetModeratorKey(byte keyId);
 		//		Enums.ChainSyncState GetChainSyncState();
 		bool AnyAccountTracked(List<AccountId> accountId);
 		bool AnyAccountTracked();

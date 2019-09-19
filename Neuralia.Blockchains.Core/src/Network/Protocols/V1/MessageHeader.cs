@@ -33,7 +33,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 			this.SetCreateHash();
 		}
 
-		public MessageHeader(int messageLength, IByteArray message) : this() {
+		public MessageHeader(int messageLength, SafeArrayHandle message) : this() {
 
 			this.CheckMessageSize(messageLength);
 
@@ -75,18 +75,19 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 
 		public int MessageOffset { get; private set; }
 
-		public void Rehydrate(IByteArray data) {
+		public void Rehydrate(SafeArrayHandle data) {
 
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
 
-			this.PerformInitialRehydration(rehydrator);
+				this.PerformInitialRehydration(rehydrator);
+			}
 		}
 
 		public abstract int GetMaximumHeaderSize();
 
-		protected abstract IMessageHash CreateHash(IByteArray message = null);
+		protected abstract IMessageHash CreateHash(SafeArrayHandle message = null);
 
-		private void SetCreateHash(IByteArray message = null) {
+		private void SetCreateHash(SafeArrayHandle message = null) {
 			if(this.Hash == null) {
 				this.Hash = this.CreateHash();
 			}
@@ -168,5 +169,6 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 				throw new MessageTooLargeException($"Message size of type {this.MessageType.ToString()} cannot exceed {this.MaxiumMessageSize} bytes.");
 			}
 		}
+
 	}
 }

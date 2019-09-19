@@ -263,7 +263,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 										blockchainTask.SetAction(action, (result3, executionContext3) => {
 											
 											// clean up when we are done
-											blockchainGossipMessageSet.BaseMessage.Dispose();
+											//blockchainGossipMessageSet.BaseMessage.Dispose();
 										});
 
 										this.DispatchTaskNoReturnAsync(blockchainTask);

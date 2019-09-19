@@ -21,7 +21,8 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 				this.HandleLargeMessageSliceResponse(responseSliceMessageEntry, callback, connection);
 			} else {
 				if(messageEntry.IsComplete) {
-					callback(messageEntry.Message);
+					callback(messageEntry.Message.Branch());
+					
 				}
 			}
 		}
@@ -66,11 +67,11 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 
 			if(splitMessageEntry.IsComplete) {
 
-				IByteArray assembledMessage = splitMessageEntry.AssembleCompleteMessage();
+				SafeArrayHandle assembledMessage = splitMessageEntry.AssembleCompleteMessage();
 
 				//TODO: this is over, trigger the message complete event
 				callback(assembledMessage, splitMessageEntry);
-
+				
 				return;
 			}
 
@@ -85,16 +86,18 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 				return;
 			}
 
-			IByteArray request = splitMessageEntry.CreateNextSliceRequestMessage();
+			using(SafeArrayHandle request = splitMessageEntry.CreateNextSliceRequestMessage()) {
 
-			connection.SendSocketBytes(request);
+				connection.SendSocketBytes(request);
+			}
 		}
 
 		private void SendLargeMessagePiece(ISliceRequestMessageEntry requestSliceMessageEntry, ISplitMessageEntry splitMessageEntry, IProtocolTcpConnection connection) {
 
-			IByteArray response = splitMessageEntry.CreateSliceResponseMessage(requestSliceMessageEntry);
+			using(SafeArrayHandle response = splitMessageEntry.CreateSliceResponseMessage(requestSliceMessageEntry)) {
 
-			connection.SendSocketBytes(response);
+				connection.SendSocketBytes(response);
+			}
 		}
 	}
 }

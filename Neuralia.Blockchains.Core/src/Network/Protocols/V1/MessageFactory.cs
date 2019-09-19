@@ -11,7 +11,7 @@ using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 	public class MessageFactory : IMessageFactory {
 
-		public IByteArray CreateMessage(IByteArray bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
+		public SafeArrayHandle CreateMessage(SafeArrayHandle bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
 			IMessageBuilder messageBuilder = new MessageBuilder();
 
 			// here we compress our message, this is what will be sent on the wire
@@ -54,7 +54,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 			return null;
 		}
 
-		public ISplitMessageEntry WrapBigMessage(IByteArray bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
+		public ISplitMessageEntry WrapBigMessage(SafeArrayHandle bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
 
 			if(protocolMessageFilters.MissesOption(TcpConnection.ProtocolMessageTypes.Split)) {
 				throw new ApplicationException("Split messages are proscribed by the filtering rules");

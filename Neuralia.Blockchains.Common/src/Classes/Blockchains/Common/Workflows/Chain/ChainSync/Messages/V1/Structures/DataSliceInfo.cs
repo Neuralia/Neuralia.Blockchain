@@ -3,6 +3,15 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures {
 	public class DataSliceInfo : DataSliceSize {
+		
+		public DataSliceInfo() {
+			
+		}
+		
+		public DataSliceInfo(long length, long offset) : base(length) {
+			this.Offset = offset;
+		}
+
 		public long Offset { get; set; }
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {

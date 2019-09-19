@@ -35,7 +35,6 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			return biglow * BigInteger.Pow(BIGINT_TWO, 8 * high);
 		}
 
-		//private const int MAX_HASH_256 = 0x1d_000900; // seems this is the ideal level. lets not touch it anymore
 		private const int MAX_HASH_256 = 0x1d_00ffff; // seems this is the ideal level. lets not touch it anymore
 
 		public static BigInteger GetHash256TargetMaximum() {

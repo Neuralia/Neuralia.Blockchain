@@ -8,20 +8,20 @@ namespace Neuralia.Blockchains.Core.Compression {
 	/// </summary>
 	public class NullCompression : Compression<NullCompression> {
 
-		protected override IByteArray CompressData(IByteArray data, CompressionLevelByte level) {
-			return ByteArray.CreateFrom(data);
+		protected override SafeArrayHandle CompressData(SafeArrayHandle data, CompressionLevelByte level) {
+			return data.Branch();
 		}
 
-		protected override IByteArray CompressData(IByteArray data) {
+		protected override SafeArrayHandle CompressData(SafeArrayHandle data) {
 			return this.CompressData(data, CompressionLevelByte.Fastest);
 		}
 
-		protected override IByteArray DecompressData(IByteArray data) {
+		protected override SafeArrayHandle DecompressData(SafeArrayHandle data) {
 
-			return ByteArray.CreateFrom(data);
+			return data.Branch();
 		}
 
-		protected override IByteArray DecompressData(Stream stream) {
+		protected override SafeArrayHandle DecompressData(Stream stream) {
 			throw new NotImplementedException();
 		}
 

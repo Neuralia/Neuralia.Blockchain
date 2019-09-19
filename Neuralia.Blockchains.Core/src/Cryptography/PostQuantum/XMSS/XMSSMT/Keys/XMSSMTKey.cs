@@ -6,7 +6,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 	public abstract class XMSSMTKey : IDisposable2 {
 
-		public virtual void LoadKey(IByteArray publicKey) {
+		public virtual void LoadKey(ByteArray publicKey) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(publicKey);
 
 			this.Rehydrate(rehydrator);
@@ -16,12 +16,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 		}
 
-		public virtual IByteArray SaveKey() {
+		public virtual ByteArray SaveKey() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			//TODO: this should be a realease, not clone
+			return dehydrator.ToArray().Entry.Clone();
 		}
 
 		protected virtual void Dehydrate(IDataDehydrator dehydrator) {

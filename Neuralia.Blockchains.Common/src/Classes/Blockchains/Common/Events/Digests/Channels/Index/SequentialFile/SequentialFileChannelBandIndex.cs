@@ -9,7 +9,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile {
-	public abstract class SequentialFileChannelBandIndex<CHANEL_BANDS, INPUT_KEY> : DigestChannelBandIndex<CHANEL_BANDS, IByteArray, int, INPUT_KEY, (uint offset, uint length), GroupDigestChannelBandFileNamingProvider<uint>>
+	public abstract class SequentialFileChannelBandIndex<CHANEL_BANDS, INPUT_KEY> : DigestChannelBandIndex<CHANEL_BANDS, SafeArrayHandle, int, INPUT_KEY, (uint offset, uint length), GroupDigestChannelBandFileNamingProvider<uint>>
 		where CHANEL_BANDS : struct, Enum, IConvertible {
 
 		protected readonly ImmutableList<CHANEL_BANDS> EnabledBands;
@@ -30,8 +30,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		protected SequentialFileChannelBandIndex(List<(string filename, CHANEL_BANDS band)> filenames, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base("", baseFolder, scopeFolder, enabledBands, fileSystem) {
 		}
 
-		public DigestChannelBandEntries<IByteArray, CHANEL_BANDS> QueryFiles(DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS> offsets, uint index) {
-			var results = new DigestChannelBandEntries<IByteArray, CHANEL_BANDS>(this.enabledBands);
+		public DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS> QueryFiles(DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS> offsets, uint index) {
+			var results = new DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS>(this.enabledBands);
 
 			foreach(var providerSet in this.Providers) {
 				var provider = (SequentialChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>>) providerSet.Value;

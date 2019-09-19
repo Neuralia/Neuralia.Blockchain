@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Tiny {
 
 		}
 
-		public TinyMessageHeader(int messageLength, IByteArray message) : base(messageLength, message) {
+		public TinyMessageHeader(int messageLength, SafeArrayHandle message) : base(messageLength, message) {
 		}
 
 		protected override int MaxiumMessageSize => MAXIMUM_SIZE;
@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Tiny {
 
 		}
 
-		protected override IMessageHash CreateHash(IByteArray message = null) {
+		protected override IMessageHash CreateHash(SafeArrayHandle message = null) {
 			return new MessageHashNull();
 		}
 

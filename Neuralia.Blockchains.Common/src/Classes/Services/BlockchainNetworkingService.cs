@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		///     so its all done here in top priority
 		/// </summary>
 		/// <param name="buffer"></param>
-		protected override void HandleIpValidatorRequest(IByteArray buffer, ITcpConnection connection) {
+		protected override void HandleIpValidatorRequest(SafeArrayHandle buffer, ITcpConnection connection) {
 
 			try {
 				(byte version, IValidatorRequest request, IMinerResponse response) messages = IpValidationFactory.RehydrateRequest(buffer);

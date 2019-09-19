@@ -4,14 +4,13 @@ using System.Security.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.SHA3;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Org.BouncyCastle.Crypto;
 
 namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 	public abstract class ShaDigestBase : IDigest, IDisposable2 {
 
 		private const int BYTE_LENGTH = 64;
-		private MemoryBlock data;
+		private SafeArrayHandle data = SafeArrayHandle.Create();
 
 		private List<object> datas;
 		protected int DigestLength;
@@ -44,7 +43,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 		public void BlockUpdate(byte[] input, int inOff, int length) {
 			if(this.preFixed) {
-				this.data.CopyFrom(ref input, inOff, this.prefixedOffset, length);
+				this.data.Entry.CopyFrom(ref input, inOff, this.prefixedOffset, length);
 				this.prefixedOffset += length;
 			} else {
 				this.LazyLoadDatas();
@@ -57,9 +56,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 		public int DoFinal(byte[] output, int outOff) {
 
 			if(this is Sha3ExternalDigest sha3) {
-				sha3.DoFinalReturn(out IByteArray hash);
+				sha3.DoFinalReturn(out SafeArrayHandle hash);
 
-				hash.CopyTo(output, 0, outOff, hash.Length);
+				hash.Entry.CopyTo(output, 0, outOff, hash.Length);
 
 				hash.Return();
 			} else {
@@ -81,13 +80,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 			this.prefixedOffset = 0;
 		}
 
-		public void BlockUpdate(IByteArray input) {
+		public void BlockUpdate(SafeArrayHandle input) {
 			this.BlockUpdate(input, 0, input.Length);
 		}
 
-		public void BlockUpdate(IByteArray input, int inOff, int length) {
+		public void BlockUpdate(SafeArrayHandle input, int inOff, int length) {
 			if(this.preFixed) {
-				this.data.CopyFrom(input, inOff, this.prefixedOffset, length);
+				this.data.Entry.CopyFrom(input.Entry, inOff, this.prefixedOffset, length);
 				this.prefixedOffset += length;
 			} else {
 				this.LazyLoadDatas();
@@ -110,7 +109,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 				this.data?.Return();
 
-				this.data = MemoryAllocators.Instance.cryptoAllocator.Take(length);
+				this.data = ByteArray.Create(length);
 			}
 		}
 
@@ -120,7 +119,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 			}
 		}
 
-		public int DoFinal(byte[] output, int outOff, out IByteArray result) {
+		public int DoFinal(byte[] output, int outOff, out SafeArrayHandle result) {
 
 			this.DoFinalReturn(out result);
 
@@ -128,12 +127,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 		}
 
 		public byte[] DoFinalReturn() {
-			this.DoFinalReturn(out IByteArray result);
+			this.DoFinalReturn(out ByteArray result);
 
 			return result.ToExactByteArray();
 		}
 
-		public void DoFinalReturn(out IByteArray hash) {
+		public void DoFinalReturn(out SafeArrayHandle hash) {
+
+			this.DoFinalReturn(out ByteArray result);
+			hash = result;
+		}
+
+		public void DoFinalReturn(out ByteArray hash) {
 
 			if(!this.preFixed) {
 				this.ResetFixed(this.length);
@@ -141,12 +146,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 				int offset = 0;
 
 				foreach(object item in this.datas) {
-					if(item is IByteArray block) {
-						this.data.CopyFrom(block, 0, offset, block.Length);
+					if(item is SafeArrayHandle block) {
+						this.data.Entry.CopyFrom(block.Entry, 0, offset, block.Length);
 						offset += block.Length;
 					} else if(item is ValueTuple<byte[], int, int> array) {
 						var buffer = array.Item1;
-						this.data.CopyFrom(ref buffer, array.Item2, offset, array.Item3);
+						this.data.Entry.CopyFrom(ref buffer, array.Item2, offset, array.Item3);
 						offset += array.Item3;
 					} else if(item is byte smallByte) {
 						this.data[offset] = smallByte;
@@ -157,7 +162,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 			if(this.sha is SHA3Managed sha3) {
 				// this is a special case where we can use the MemoryBlock directly.
-				hash = sha3.CustomComputeHash(this.data, 0, this.length);
+				hash = sha3.CustomComputeHash(this.data.Entry, 0, this.length);
 
 			} else {
 				hash = (ByteArray) this.sha.ComputeHash(this.data.Bytes, this.data.Offset, this.length);
@@ -181,6 +186,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 					this.sha.Dispose();
 
 					this.data?.Return();
+					this.data = null;
 
 				} finally {
 					this.IsDisposed = true;

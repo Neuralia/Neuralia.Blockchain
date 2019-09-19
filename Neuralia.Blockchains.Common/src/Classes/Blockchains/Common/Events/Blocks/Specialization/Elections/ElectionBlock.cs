@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	/// </summary>
 	public interface IElectionBlock : ISimpleBlock {
 		IElectionContext ElectionContext { get; set; }
-		IByteArray DehydratedElectionContext { get; }
+		SafeArrayHandle DehydratedElectionContext { get; }
 	}
 
 	public abstract class ElectionBlock : SimpleBlock, IElectionBlock {
@@ -26,9 +26,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <summary>
 		///     the compressed ytes of the election context
 		/// </summary>
-		public IByteArray DehydratedElectionContext { get; private set; }
+		public SafeArrayHandle DehydratedElectionContext { get;  } = SafeArrayHandle.Create();
 
-		public override HashNodeList GetStructuresArray(IByteArray previousBlockHash) {
+		public override HashNodeList GetStructuresArray(SafeArrayHandle previousBlockHash) {
 			HashNodeList nodeList = base.GetStructuresArray(previousBlockHash);
 
 			nodeList.Add(this.ElectionContext);
@@ -49,7 +49,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		protected override void RehydrateBody(IDataRehydrator rehydratorBody, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 
-			this.DehydratedElectionContext = rehydratorBody.ReadNonNullableArray();
+			this.DehydratedElectionContext.Entry = rehydratorBody.ReadNonNullableArray();
 
 			IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
 			this.ElectionContext = electionContextRehydrationFactory.CreateElectionContext(this.DehydratedElectionContext);

@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Medium {
 
 		}
 
-		public MediumMessageHeader(int messageLength, IByteArray message) : base(messageLength, message) {
+		public MediumMessageHeader(int messageLength, SafeArrayHandle message) : base(messageLength, message) {
 		}
 
 		protected override int MaxiumMessageSize => MAXIMUM_SIZE;
@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Medium {
 
 		}
 
-		protected override IMessageHash CreateHash(IByteArray message = null) {
+		protected override IMessageHash CreateHash(SafeArrayHandle message = null) {
 			return new MessageHash32(message);
 		}
 

@@ -7,7 +7,7 @@
 //
 //namespace Neuralia.Blockchains.Common.Classes.Neuralia.Blockchains.Common.Events.Digests.Channels.Specialization {
 //	public interface ISqlite2KeysDigestChannel : IDigestChannel {
-//		IByteArray GetKey(long accountSequenceId, Enums.AccountTypes accountType, byte ordinal);
+//		ArrayWrapper GetKey(long accountSequenceId, Enums.AccountTypes accountType, byte ordinal);
 //	}
 //	
 //	public abstract class Sqlite2KeysDigestChannel<ACCREDITATION_CARD>: DigestChannel<Sqlite2KeysDigestChannel.Sqlite2KeysDigestChannelBands, ACCREDITATION_CARD, ulong, (ulong id, byte ordinal), (uint id, byte ordinal)>, ISqlite2KeysDigestChannel
@@ -36,7 +36,7 @@
 //			this.Minor = 1;
 //		}
 //
-//		public IByteArray GetKey(long accountSequenceId, Enums.AccountTypes accountType, byte ordinal) {
+//		public readonly ArrayWrapper GetKey(long accountSequenceId, Enums.AccountTypes accountType, byte ordinal) {
 //
 ////			//entry => new object[]{entry.id, entry.ordinal}
 ////			var f = this.channelBandIndexSet.QueryCard((accountId, ordinal));

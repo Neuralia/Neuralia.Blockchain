@@ -115,7 +115,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						standardPresentation.TransactionCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.TransactionCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.TransactionCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.TransactionCryptographicKey.Key = ByteArray.CreateFrom(key.PublicKey);
+						standardPresentation.TransactionCryptographicKey.Key.Entry = key.PublicKey;
 					}
 
 					using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.MESSAGE_KEY_NAME)) {
@@ -131,7 +131,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						standardPresentation.MessageCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.MessageCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.MessageCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.MessageCryptographicKey.Key = ByteArray.CreateFrom(key.PublicKey);
+						standardPresentation.MessageCryptographicKey.Key.Entry = key.PublicKey;
 					}
 
 					using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.CHANGE_KEY_NAME)) {
@@ -147,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						standardPresentation.ChangeCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.ChangeCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.ChangeCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.ChangeCryptographicKey.Key = ByteArray.CreateFrom(key.PublicKey);
+						standardPresentation.ChangeCryptographicKey.Key.Entry = key.PublicKey;
 					}
 
 					using(ISecretWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretWalletKey>(account.AccountUuid, GlobalsService.SUPER_KEY_NAME)) {
@@ -163,37 +163,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						standardPresentation.SuperCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.SuperCryptographicKey.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) key.SecurityCategory;
 
-						(standardPresentation.SuperCryptographicKey.NextKeyHashSha2, standardPresentation.SuperCryptographicKey.NextKeyHashSha3) = BlockchainHashingUtils.HashSecretKey(key);
+						var hashes = BlockchainHashingUtils.HashSecretKey(key);
+
+						standardPresentation.SuperCryptographicKey.NextKeyHashSha2.Entry = hashes.sha2.Entry;
+						standardPresentation.SuperCryptographicKey.NextKeyHashSha3.Entry = hashes.sha3.Entry;
 					}
 
 				});
 
 				// this is a very special case where we hash before we create the envelope
-				IByteArray hash = HashingUtils.GenerateHash(standardPresentation);
+				SafeArrayHandle hash = HashingUtils.GenerateHash(standardPresentation);
 
 				try {
-					using(AesSearchPow pow = new AesSearchPow()) {
+					AesSearchPow pow = new AesSearchPow();
+					this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOW, correlationContext);
 
-						this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOW, correlationContext);
+					try {
+						this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
 
-						try {
-							this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
+						(var solutions, int nonce) = pow.PerformPow(hash, GlobalsService.POW_DIFFICULTY, (currentNonce, difficulty) => {
 
-							(var solutions, int nonce) = pow.PerformPow(hash, GlobalsService.POW_DIFFICULTY, (currentNonce, difficulty) => {
+							this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOWIteration(currentNonce, difficulty), correlationContext);
+							Thread.Sleep(500);
+						});
+						
+						standardPresentation.PowSolutions = solutions.Take(GlobalsService.POW_MAX_SOLUTIONS).ToList(); // take the top ones
+						standardPresentation.PowNonce = nonce;
+						standardPresentation.PowDifficulty = GlobalsService.POW_DIFFICULTY;
 
-								this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOWIteration(currentNonce, difficulty), correlationContext);
-								Thread.Sleep(500);
-							});
-							
-							standardPresentation.PowSolutions = solutions.Take(GlobalsService.POW_MAX_SOLUTIONS).ToList(); // take the top ones
-							standardPresentation.PowNonce = nonce;
-							standardPresentation.PowDifficulty = GlobalsService.POW_DIFFICULTY;
-
-							this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.FoundPOWSolution(nonce, standardPresentation.PowDifficulty, standardPresentation.PowSolutions), correlationContext);
-						} finally {
-							this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RestoreNetwork();
-						}
+						this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.FoundPOWSolution(nonce, standardPresentation.PowDifficulty, standardPresentation.PowSolutions), correlationContext);
+					} finally {
+						this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RestoreNetwork();
 					}
+				
 				} catch(Exception ex) {
 					throw new ApplicationException("Failed to generate presentation transaction proof of work", ex);
 				}
@@ -261,7 +263,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							// lets publish its public details
 							standardAccountKeyChange.XmssNewCryptographicKey.TreeHeight = (byte) nextKey.TreeHeight;
 							standardAccountKeyChange.XmssNewCryptographicKey.BitSize = (byte) nextKey.HashBits;
-							standardAccountKeyChange.XmssNewCryptographicKey.Key = (ByteArray) nextKey.PublicKey;
+							standardAccountKeyChange.XmssNewCryptographicKey.Key.Entry =  nextKey.PublicKey;
 						}
 
 						if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(account.AccountUuid, keyChangeName)) {
@@ -299,7 +301,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							// lets publish its public details
 							standardAccountKeyChange.NextSuperCryptographicKey.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) nextKey.SecurityCategory;
-							(standardAccountKeyChange.NextSuperCryptographicKey.NextKeyHashSha2, standardAccountKeyChange.NextSuperCryptographicKey.NextKeyHashSha3) = BlockchainHashingUtils.HashSecretKey(nextKey);
+							var hashes = BlockchainHashingUtils.HashSecretKey(nextKey);
+
+							standardAccountKeyChange.NextSuperCryptographicKey.NextKeyHashSha2.Entry = hashes.sha2.Entry;
+							standardAccountKeyChange.NextSuperCryptographicKey.NextKeyHashSha3.Entry = hashes.sha3.Entry;
 
 						}
 
@@ -336,10 +341,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				if(key is NtruCryptographicKey ntruCryptographicKey) {
 					NtruEncryptor encryptor = new NtruEncryptor();
-					registrationMessage.EncryptedMessage = encryptor.Encrypt(electionsCandidateRegistrationInfo.Dehydrate(), ntruCryptographicKey.Key);
+					registrationMessage.EncryptedMessage.Entry = encryptor.Encrypt(electionsCandidateRegistrationInfo.Dehydrate(), ntruCryptographicKey.Key).Entry;
 				} else if(key is McElieceCryptographicKey mcElieceCryptographicKey) {
 					McElieceEncryptor encryptor = new McElieceEncryptor();
-					registrationMessage.EncryptedMessage = encryptor.Encrypt(electionsCandidateRegistrationInfo.Dehydrate(), mcElieceCryptographicKey.Key, mcElieceCryptographicKey.McElieceCipherMode);
+					registrationMessage.EncryptedMessage.Entry = encryptor.Encrypt(electionsCandidateRegistrationInfo.Dehydrate(), mcElieceCryptographicKey.Key, mcElieceCryptographicKey.McElieceCipherMode).Entry;
 				}
 
 				IMessageEnvelope envelope = this.GenerateBlockchainMessage(registrationMessage);
@@ -498,14 +503,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// now as the last step in the building, we hash the entire transaction to get the sakura tree root
 
-				transactionEnvelope.Hash = HashingUtils.GenerateHash(transaction);
+				transactionEnvelope.Hash.Entry = HashingUtils.GenerateHash(transaction).Entry;
 
 				void SignTransaction(IWalletKey key) {
 					// hash the finalized transaction
 
 					Log.Verbose("Singing transaction...");
 
-					IByteArray signature = null;
+					SafeArrayHandle signature = null;
 
 					if(key is IXmssWalletKey xmssWalletKey) {
 						signature = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignTransactionXmss(transactionEnvelope.Hash, xmssWalletKey);
@@ -524,17 +529,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							if(key is ISecretWalletKey secretWalletKey2) {
 								SecretCryptographicKey publicKey = new SecretCryptographicKey();
 								publicKey.Id = publishedAccountSignature.KeyAddress.OrdinalId;
-								publicKey.Key = new ByteArray(secretWalletKey2.PublicKey.Length);
-								publicKey.Key.CopyFrom(secretWalletKey2.PublicKey);
-								(publicKey.NextKeyHashSha2, publicKey.NextKeyHashSha3) = BlockchainHashingUtils.HashSecretKey(secretWalletKey2);
+								publicKey.Key.Entry = ByteArray.Create(secretWalletKey2.PublicKey.Length);
+								publicKey.Key.Entry.CopyFrom(secretWalletKey2.PublicKey.AsSpan());
+		
+								var hashes = BlockchainHashingUtils.HashSecretKey(secretWalletKey2);
+
+								publicKey.NextKeyHashSha2.Entry = hashes.sha2.Entry;
+								publicKey.NextKeyHashSha3.Entry = hashes.sha3.Entry;
+								
 								publicKey.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) secretWalletKey2.SecurityCategory;
 
 								publishedAccountSignature.PublicKey = publicKey;
 							} else if(key is IXmssWalletKey xmssWalletKey2) {
 								XmssCryptographicKey publicKey = new XmssCryptographicKey();
 								publicKey.Id = publishedAccountSignature.KeyAddress.OrdinalId;
-								publicKey.Key = new ByteArray(xmssWalletKey2.PublicKey.Length);
-								publicKey.Key.CopyFrom(xmssWalletKey2.PublicKey);
+								publicKey.Key.Entry = ByteArray.Create(xmssWalletKey2.PublicKey.Length);
+								publicKey.Key.Entry.CopyFrom(xmssWalletKey2.PublicKey.AsSpan());
 								publicKey.BitSize = (byte) xmssWalletKey2.HashBits;
 								publicKey.TreeHeight = (byte) xmssWalletKey2.TreeHeight;
 								publishedAccountSignature.PublicKey = publicKey;
@@ -542,12 +552,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						// and sign the whole thing with our key
-						sig.Autograph = signature;
+						sig.Autograph.Entry = signature.Entry;
 
 						if(sig is IPromisedSecretAccountSignature secretSig) {
 							if(key is ISecretWalletKey secretWalletKey) {
 								// a secret key publishes only the hash
-								secretSig.PromisedPublicKey = (ByteArray) secretWalletKey.PublicKey;
+								secretSig.PromisedPublicKey.Entry =  secretWalletKey.PublicKey;
 
 							} else {
 								throw new ApplicationException("Wallet key is not of secret type.");
@@ -557,7 +567,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						if(sig is IPromisedSecretComboAccountSignature secretComboSig) {
 							if(key is ISecretDoubleWalletKey secretDoubleWalletKey) {
 								// a secret key publishes only the hash
-								secretComboSig.PromisedPublicKey = (ByteArray) secretDoubleWalletKey.PublicKey;
+								secretComboSig.PromisedPublicKey.Entry =  secretDoubleWalletKey.PublicKey;
 								secretComboSig.PromisedNonce1 = secretDoubleWalletKey.PromisedNonce1;
 								secretComboSig.PromisedNonce2 = secretDoubleWalletKey.PromisedNonce2;
 
@@ -565,7 +575,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							if(key is ISecretComboWalletKey secretComboWalletKey) {
 								// a secret key publishes only the hash
-								secretComboSig.PromisedPublicKey = (ByteArray) secretComboWalletKey.PublicKey;
+								secretComboSig.PromisedPublicKey.Entry =  secretComboWalletKey.PublicKey;
 								secretComboSig.PromisedNonce1 = secretComboWalletKey.PromisedNonce1;
 								secretComboSig.PromisedNonce2 = secretComboWalletKey.PromisedNonce2;
 
@@ -575,7 +585,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						} else if(sig is IFirstAccountKey firstSig) {
 							if(key is IQTeslaWalletKey secretWalletKey) {
 								// a first time signature will publish its public key, since there is nothing to refer to
-								firstSig.PublicKey = (ByteArray) secretWalletKey.PublicKey;
+								firstSig.PublicKey.Entry =  secretWalletKey.PublicKey;
 								firstSig.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) secretWalletKey.SecurityCategory;
 							} else {
 								throw new ApplicationException("Wallet key is not of secret type.");
@@ -667,21 +677,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(GlobalsService.MESSAGE_KEY_NAME)) {
 
 					// hash the finalized transaction
-					messageEnvelope.Hash = HashingUtils.GenerateHash(message);
+					messageEnvelope.Hash.Entry = HashingUtils.GenerateHash(message).Entry;
 
 					Log.Verbose("Singing message...");
 
 					messageEnvelope.Signature.AccountSignature.KeyAddress = key.KeyAddress.Copy();
 
 					XmssCryptographicKey publicKey = new XmssCryptographicKey();
-					publicKey.Key = new ByteArray(key.PublicKey.Length);
-					publicKey.Key.CopyFrom(key.PublicKey);
+					publicKey.Key.Entry = ByteArray.Create(key.PublicKey.Length);
+					publicKey.Key.Entry.CopyFrom(key.PublicKey.AsSpan());
 					publicKey.BitSize = (byte) key.HashBits;
 					publicKey.TreeHeight = (byte) key.TreeHeight;
 					messageEnvelope.Signature.AccountSignature.PublicKey = publicKey;
 
 					// and sign the whole thing with our key
-					messageEnvelope.Signature.AccountSignature.Autograph = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(messageEnvelope.Hash, key);
+					messageEnvelope.Signature.AccountSignature.Autograph.Entry = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(messageEnvelope.Hash, key).Entry;
 
 					Log.Verbose("Message successfully signed.");
 				}

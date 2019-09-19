@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			}
 
 			Log.Information("We are beginning an election...");
-			IByteArray electionBallot = this.DetermineIfElected(blockElectionDistillate, miningAccount);
+			SafeArrayHandle electionBallot = this.DetermineIfElected(blockElectionDistillate, miningAccount);
 
 			if(electionBallot == null) {
 				Log.Information("We are not elected.");
@@ -98,7 +98,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 
 					dehydrator.Write(transactionsIds);
-					IByteArray data = dehydrator.ToArray();
+					SafeArrayHandle data = dehydrator.ToArray();
 					
 					parameters.Add("selectedTransactions", data.ToExactByteArrayCopy());
 					data.Return();
@@ -112,7 +112,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 					var dehydrator = DataSerializationFactory.CreateDehydrator();
 					
 					dehydrator.Write(ballotingApplications);
-					IByteArray data = dehydrator.ToArray();
+					SafeArrayHandle data = dehydrator.ToArray();
 					
 					parameters.Add("representativeBallotingApplications", data.ToExactByteArrayCopy());
 					data.Return();
@@ -147,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 
 					dehydrator.Write(transactionsIds);
-					IByteArray data = dehydrator.ToArray();
+					SafeArrayHandle data = dehydrator.ToArray();
 					
 					parameters.Add("selectedTransactions", data.ToExactByteArrayCopy());
 					data.Return();
@@ -221,10 +221,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		///     Determine if we are elected, or an election candidate on this turn
 		/// </summary>
 		/// <returns></returns>
-		public virtual IByteArray DetermineIfElected(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
+		public virtual SafeArrayHandle DetermineIfElected(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
 
 			// initially, lets get our candidacy
-			IByteArray candidacyHash = this.DetermineCandidacy(blockElectionDistillate, miningAccount);
+			SafeArrayHandle candidacyHash = this.DetermineCandidacy(blockElectionDistillate, miningAccount);
 
 			// first step, lets run for the primaries and see if we qualify in the election
 			return this.RunForPrimaries(candidacyHash, blockElectionDistillate, miningAccount);
@@ -306,7 +306,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		/// <param name="electionBlock"></param>
 		/// <param name="miningAccount"></param>
 		/// <returns></returns>
-		protected IByteArray DetermineCandidacy(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
+		protected SafeArrayHandle DetermineCandidacy(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
 
 			if(blockElectionDistillate.electionContext.CandidatureMethod.Version.Type == CandidatureMethodTypes.Instance.SimpleHash) {
 				if(blockElectionDistillate.electionContext.CandidatureMethod.Version == (1, 0)) {
@@ -323,9 +323,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		/// <param name="electionBlock"></param>
 		/// <param name="miningAccount"></param>
 		/// <returns></returns>
-		protected IByteArray RunForPrimaries(IByteArray candidacy, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
+		protected SafeArrayHandle RunForPrimaries(SafeArrayHandle candidacy, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
 
-			IByteArray resultingBallot = candidacy;
+			SafeArrayHandle resultingBallot = candidacy;
 
 			resultingBallot = blockElectionDistillate.electionContext.PrimariesBallotingMethod.PerformBallot(resultingBallot, blockElectionDistillate, miningAccount);
 

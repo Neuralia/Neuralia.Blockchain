@@ -129,6 +129,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			return generator;
 		}
+		
+		public static SystemEventGenerator KeyGenerationPercentageEvent(string keyName, int percentage) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.KeyGenerationPercentageUpdate;
+
+			generator.Parameters = new object[] {keyName, percentage};
+
+			return generator;
+		}
+
 
 		public static SystemEventGenerator BlockchainSyncUpdate(long blockId, long publicBlockHeight, string estimatedTimeRemaining) {
 			SystemEventGenerator generator = new SystemEventGenerator();

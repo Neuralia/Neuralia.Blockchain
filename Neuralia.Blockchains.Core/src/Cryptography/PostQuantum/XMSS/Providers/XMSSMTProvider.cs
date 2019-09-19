@@ -37,37 +37,42 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			this.excutionContext = this.GetNewExecutionContext();
 
 			//TODO: make modes configurable
-			this.xmssmt = new XMSSMTEngine(XMSSOperationModes.Both, Enums.ThreadMode.Half, this.excutionContext, this.TreeHeight, this.TreeLayers);
+			this.xmssmt = new XMSSMTEngine(XMSSOperationModes.Both,  this.threadMode, this.excutionContext, this.TreeHeight, this.TreeLayers);
 		}
 
-		public (IByteArray privateKey, IByteArray publicKey) GenerateKeys() {
+		public (ByteArray privateKey, ByteArray publicKey) GenerateKeys() {
 			(XMSSMTPrivateKey privateKey, XMSSMTPublicKey publicKey) xmssKeys = this.xmssmt.GenerateKeys();
 
-			IByteArray publicKey = xmssKeys.publicKey.SaveKey();
-			IByteArray privateKey = xmssKeys.privateKey.SaveKey();
+			ByteArray publicKey = xmssKeys.publicKey.SaveKey();
+			ByteArray privateKey = xmssKeys.privateKey.SaveKey();
 
 			return (privateKey, publicKey);
 		}
 
-		public (IByteArray signature, IByteArray nextPrivateKey) Sign(IByteArray content, IByteArray privateKey) {
+		public (ByteArray signature, ByteArray nextPrivateKey) Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
+			return this.Sign(content.Entry, privateKey.Entry);
+		}
+		
+
+		public (ByteArray signature, ByteArray nextPrivateKey) Sign(ByteArray content, ByteArray privateKey) {
 			XMSSMTPrivateKey loadedPrivateKey = new XMSSMTPrivateKey(this.excutionContext);
 			loadedPrivateKey.LoadKey(privateKey);
 
-			IByteArray result = this.Sign(content, loadedPrivateKey);
+			ByteArray result = this.Sign(content, loadedPrivateKey);
 
 			// export the new private key
-			IByteArray nextPrivateKey = loadedPrivateKey.SaveKey();
+			ByteArray nextPrivateKey = loadedPrivateKey.SaveKey();
 
 			loadedPrivateKey.Dispose();
 
 			return (result, nextPrivateKey);
 		}
 
-		public IByteArray Sign(IByteArray content, XMSSMTPrivateKey privateKey) {
+		public ByteArray Sign(ByteArray content, XMSSMTPrivateKey privateKey) {
 
 			Log.Verbose($"Singing message using XMSS^MT (Key index: {privateKey.Index} of {this.MaximumHeight}, Tree height: {this.TreeHeight}, Tree layers: {this.TreeLayers}, Hash bits: {this.HashBits})");
 
-			IByteArray signature = this.xmssmt.Sign(content, privateKey);
+			ByteArray signature = this.xmssmt.Sign(content, privateKey);
 
 			// this is important, increment our key index
 			privateKey.IncrementIndex(this.xmssmt);
@@ -75,7 +80,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			return signature;
 		}
 
-		public override bool Verify(IByteArray message, IByteArray signature, IByteArray publicKey) {
+		public override bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
+
+			return this.Verify(message.Entry, signature.Entry, publicKey.Entry);
+		}
+		
+		public bool Verify(ByteArray message, ByteArray signature, ByteArray publicKey) {
 
 			return this.xmssmt.Verify(signature, message, publicKey);
 		}

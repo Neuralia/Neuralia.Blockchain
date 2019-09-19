@@ -16,12 +16,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		public EncryptorParameters encryptionParameters { get; set; }
 
-		public Func<IByteArray> Secret { get; set; }
+		public Func<SafeArrayHandle> Secret { get; set; }
 	}
 
 	public interface IWalletFileInfo {
 		string Filename { get; }
-		IByteArray Filebytes { get; }
+		SafeArrayHandle Filebytes { get; }
 		WalletPassphraseDetails WalletSecurityDetails { get; }
 		int? FileCacheTimeout { get; set; }
 		bool IsLoaded { get; }
@@ -72,7 +72,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		protected EncryptionInfo EncryptionInfo { get; set; }
 
 		public string Filename { get; protected set; }
-		public IByteArray Filebytes { get; protected set; }
+		public SafeArrayHandle Filebytes { get;  } = SafeArrayHandle.Create();
 		public WalletPassphraseDetails WalletSecurityDetails { get; }
 
 		public int? FileCacheTimeout {
@@ -83,7 +83,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
-		public bool IsLoaded => (this.Filebytes != null) && this.Filebytes.HasData;
+		public bool IsLoaded => this.Filebytes.HasData;
 
 		public bool FileExists => this.serialisationFal.TransactionalFileSystem.FileExists(this.Filename);
 
@@ -102,6 +102,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			this.CreateSecurityDetails();
 
 			this.SaveFile(true, data);
+		}
+		
+		public void DeleteFile() {
+
+			if(!this.FileExists) {
+				return;
+			}
+
+			this.serialisationFal.TransactionalFileSystem.FileDelete(this.Filename);
 		}
 
 		public virtual void Reset() {
@@ -195,18 +204,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			this.RunCryptoOperation(() => {
 				lock(this.locker) {
 					this.ClearFileBytes();
-					this.Filebytes = this.serialisationFal.LoadFile(this.Filename, this.EncryptionInfo, false);
-
+					this.Filebytes.Entry = this.serialisationFal.LoadFile(this.Filename, this.EncryptionInfo, false).Entry;
 					this.ResetFileBytesTimer();
 				}
 			}, data);
 		}
 
 		private void ClearFileBytes() {
-			if(this.Filebytes != null) {
-				this.Filebytes.Clear();
-				this.Filebytes.Return();
-				this.Filebytes = null;
+			if(this.Filebytes.HasData) {
+				this.Filebytes.Entry.Disposed = (entry) => entry.Clear();
+				this.Filebytes.Entry = null;
 			}
 		}
 
@@ -293,11 +300,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		private void RunNoLoadDbOperation(Action<LiteDBDAL> operation, object data = null) {
 			this.RunCryptoOperation(() => {
 				lock(this.locker) {
-					IByteArray newBytes = this.serialisationFal.RunDbOperation(operation, this.Filebytes);
+					using(SafeArrayHandle newBytes = this.serialisationFal.RunDbOperation(operation, this.Filebytes)) {
 
-					// clear previous memory since we replaced it
-					this.ClearFileBytes();
-					this.Filebytes = newBytes;
+						// clear previous memory since we replaced it
+						this.ClearFileBytes();
+						this.Filebytes.Entry = newBytes.Entry;
+					}
 				}
 			}, data);
 		}
@@ -305,11 +313,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		private T RunNoLoadDbOperation<T>(Func<LiteDBDAL, T> operation, object data = null) {
 			return this.RunCryptoOperation(() => {
 				lock(this.locker) {
-					(IByteArray newBytes, T result) = this.serialisationFal.RunDbOperation(operation, this.Filebytes);
+					(SafeArrayHandle newBytes, T result) = this.serialisationFal.RunDbOperation(operation, this.Filebytes);
 
-					// clear previous memory since we replaced it
-					this.ClearFileBytes();
-					this.Filebytes = newBytes;
+					using(newBytes) {
+						// clear previous memory since we replaced it
+						this.ClearFileBytes();
+						this.Filebytes.Entry = newBytes.Entry;
+					}
 
 					return result;
 				}

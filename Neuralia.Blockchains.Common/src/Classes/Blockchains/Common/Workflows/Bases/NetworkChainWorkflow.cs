@@ -121,11 +121,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			return this.dataDispatcher?.SendFinalMessage(peerConnection, message) ?? false;
 		}
 
-		protected bool SendBytes(PeerConnection peerConnection, IByteArray data) {
+		protected bool SendBytes(PeerConnection peerConnection, SafeArrayHandle data) {
 			return this.dataDispatcher?.SendBytes(peerConnection, data) ?? false;
 		}
 
-		protected bool SendFinalBytes(PeerConnection peerConnection, IByteArray data) {
+		protected bool SendFinalBytes(PeerConnection peerConnection, SafeArrayHandle data) {
 			return this.dataDispatcher?.SendFinalBytes(peerConnection, data) ?? false;
 		}
 	}

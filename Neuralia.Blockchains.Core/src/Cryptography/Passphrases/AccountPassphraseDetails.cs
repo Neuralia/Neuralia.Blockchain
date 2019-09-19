@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 		public SecureString WalletPassphrase { get; private set; }
 
-		public IByteArray WalletPassphraseBytes => (ByteArray) Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString());
+		public SafeArrayHandle WalletPassphraseBytes => (ByteArray) Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString());
 
 		public bool HasKeysPassphrases => this.keys.Count != 0;
 

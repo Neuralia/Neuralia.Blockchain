@@ -35,9 +35,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		event Action<Guid> ConnectedUuidProvided;
 
 		void Close();
-		void Connect(IByteArray bytes, int timeout = 5000);
+		void Connect(SafeArrayHandle bytes, int timeout = 5000);
 		bool SendMessage(long hash);
-		void SendBytes(IByteArray bytes);
+		void SendBytes(SafeArrayHandle bytes);
 		void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback);
 		bool CheckConnected();
 
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Network {
 	}
 
 	public interface IProtocolTcpConnection : ITcpConnection {
-		void SendSocketBytes(IByteArray bytes, bool sendSize = true);
+		void SendSocketBytes(SafeArrayHandle bytes, bool sendSize = true);
 		void SendSocketBytes(in Span<byte> bytes, bool sendSize = true);
 	}
 
@@ -53,7 +53,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public delegate void ExceptionOccured(Exception exception, ITcpConnection connection);
 
-		public delegate void MessageBytesReceived(IByteArray buffer);
+		public delegate void MessageBytesReceived(SafeArrayHandle buffer);
 
 		/// <summary>
 		///     All the protocol messages we support
@@ -103,12 +103,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		///     set this to false.
 		/// </summary>
 		private bool alertExceptions = true;
-
-		protected TcpConnectionInformation connectionInfo;
-
+		
 		protected Task dataReceptionTask;
 
-		protected IByteArray handshakeBytes;
+		protected readonly SafeArrayHandle handshakeBytes = SafeArrayHandle.Create();
 
 		/// <summary>
 		///     Did we send the handshake payload yet?
@@ -157,9 +155,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			this.socket = socket;
 			this.socket.NoDelay = true;
-
-			this.connectionInfo = this.socket.GetActiveConnectionInformation();
-
+			
 			this.SocketNewlyConnected();
 
 			this.State = ConnectionState.Connected;
@@ -199,7 +195,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public Guid ReportedUuid { get; private set; }
 
-		public void SendSocketBytes(IByteArray bytes, bool sendSize = true) {
+		public void SendSocketBytes(SafeArrayHandle bytes, bool sendSize = true) {
 			//Write the bytes to the socket
 
 			this.SendSocketBytes(bytes.Span, sendSize);
@@ -213,8 +209,6 @@ namespace Neuralia.Blockchains.Core.Network {
 					throw new SocketException((int) SocketError.Shutdown);
 				}
 
-				Task<bool> task = null;
-
 				lock(this.locker) {
 					if(sendSize) {
 						// write the size of the message first
@@ -223,7 +217,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					}
 
 					// now the message
-					task = this.Write(bytes);
+					var task = this.Write(bytes);
 
 					task?.Wait();
 				}
@@ -242,10 +236,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		public NetworkEndPoint EndPoint { get; }
 
 		public bool CheckConnected() {
-			if(!this.socket.IsReallyConnected(this.connectionInfo)) {
+			if(!this.socket.IsReallyConnected()) {
 				// yes, we try twice, just in case...
 				Thread.Sleep(300);
-				if(!this.socket.IsReallyConnected(this.connectionInfo)) {
+				if(!this.socket.IsReallyConnected()) {
 					// ok, we give up, connection is disconnected
 					this.State = ConnectionState.NotConnected;
 
@@ -316,7 +310,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			GC.SuppressFinalize(this);
 		}
 
-		public void Connect(IByteArray bytes, int timeout = 5000) {
+		public void Connect(SafeArrayHandle bytes, int timeout = 5000) {
 			if(this.IsDisposed || this.IsDisposing) {
 				throw new SocketException((int) SocketError.Shutdown);
 			}
@@ -343,9 +337,8 @@ namespace Neuralia.Blockchains.Core.Network {
 					throw new SocketException((int) SocketError.TimedOut);
 				}
 
-				this.connectionInfo = this.socket.GetActiveConnectionInformation();
 
-				if(this.socket.IsReallyConnected(this.connectionInfo)) {
+				if(this.socket.IsReallyConnected()) {
 
 					this.Connected?.Invoke();
 					
@@ -367,7 +360,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			//Start receiving data
 			this.StartReceivingData();
 
-			this.handshakeBytes = bytes;
+			this.handshakeBytes.Entry = bytes.Entry;
 			this.handshakeStatus = HandshakeStatuses.VersionSentNoBytes;
 
 			//Send handshake
@@ -448,7 +441,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			return true;
 		}
 
-		public void SendBytes(IByteArray bytes) {
+		public void SendBytes(SafeArrayHandle bytes) {
 
 			if((bytes == null) || bytes.IsEmpty) {
 				throw new TcpApplicationException("The message bytes can not be null");
@@ -460,9 +453,8 @@ namespace Neuralia.Blockchains.Core.Network {
 				messageInstance = this.protocolFactory.WrapMessage(bytes, this.protocolMessageFilters);
 			}
 
-			using(messageInstance) {
-				this.SendMessage(messageInstance);
-			}
+
+			this.SendMessage(messageInstance);
 		}
 
 		public void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback) {
@@ -559,7 +551,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			return 1;
 		}
 
-		protected virtual void TriggerHandshakeCallback(ref TcpConnection.MessageBytesReceived handshakeCallback, IByteArray bytes) {
+		protected virtual void TriggerHandshakeCallback(ref TcpConnection.MessageBytesReceived handshakeCallback, SafeArrayHandle bytes) {
 
 			if(this.handshakeStatus != HandshakeStatuses.VersionReceivedNoBytes) {
 				throw new TcpApplicationException("Handshake bytes received in the wrong order");
@@ -680,7 +672,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected async Task ReadMessage(TcpConnection.MessageBytesReceived callback, CancellationToken cancellationNeuralium = default) {
-			IByteArray mainBuffer = null;
+			SafeArrayHandle mainBuffer = null;
 
 			int bytesCopied = 0;
 			int sizeByteSize = 0;
@@ -721,8 +713,8 @@ namespace Neuralia.Blockchains.Core.Network {
 							sizeByteSize = this.receiveByteShrinker.ReadBytes(read);
 							messageSize = (int) this.receiveByteShrinker.Value;
 
-							// yup, we will need this so lets not make it clearable
-							mainBuffer = new ByteArray(messageSize);
+ 							// yup, we will need this so lets not make it clearable
+							mainBuffer = SafeArrayHandle.Create(messageSize);
 
 							read.DataRead(sizeByteSize);
 
@@ -730,6 +722,8 @@ namespace Neuralia.Blockchains.Core.Network {
 
 						} catch(Exception) {
 							sizeByteSize = 0;
+							mainBuffer?.Dispose();
+							mainBuffer = null;
 						}
 					} else if(mainBuffer != null) {
 
@@ -763,26 +757,24 @@ namespace Neuralia.Blockchains.Core.Network {
 							read.DataRead(usefulBufferLength);
 
 							if(bytesCopied == mainBuffer.Length) {
-
+								
 								IMessageEntry messageEntry = null;
 
 								//we expect to read the header to start. if the header is corrupted, this will break and thats it.
 								lock(this.locker) {
-									messageEntry = this.protocolFactory.CreateMessageParser(mainBuffer).RehydrateHeader(this.protocolMessageFilters);
+									messageEntry = this.protocolFactory.CreateMessageParser(mainBuffer.Branch()).RehydrateHeader(this.protocolMessageFilters);
 								}
 
 								// use the entry
 								IMessageEntry entry = messageEntry;
 								sizeByteSize = 0;
 								messageSize = 0;
-								IDataRehydrator bufferRehydrator = DataSerializationFactory.CreateRehydrator(mainBuffer);
-
-								// skip the header offset
-								bufferRehydrator.Forward(messageEntry.Header.MessageOffset);
+								
 
 								// free the message entry for another message
+								var releasedMainBuffer = mainBuffer;
+								
 								mainBuffer = null;
-								messageEntry = null;
 
 								if(cancellationNeuralium.IsCancellationRequested) {
 									this.ReadTaskCancelled();
@@ -793,11 +785,17 @@ namespace Neuralia.Blockchains.Core.Network {
 								//lets handle the completed message. we can launch it in its own thread since message pumping can continue meanwhile independently
 								await Task<bool>.Factory.StartNew(() => {
 
-									entry.SetMessageContent(bufferRehydrator);
+									using(releasedMainBuffer) {
+										using(IDataRehydrator bufferRehydrator = DataSerializationFactory.CreateRehydrator(releasedMainBuffer)) {
 
-									this.protocolFactory.DeflateCompressionsage(entry, callback, this);
-									
-									entry.Message?.Return();
+											// skip the header offset
+											bufferRehydrator.Forward(messageEntry.Header.MessageOffset);
+
+											entry.SetMessageContent(bufferRehydrator);
+
+											this.protocolFactory.HandleCompetedMessage(entry, callback, this);
+										}
+									}
 
 									return true;
 								}, TaskCreationOptions.AttachedToParent).WithAllExceptions().ContinueWith(task => {
@@ -828,12 +826,12 @@ namespace Neuralia.Blockchains.Core.Network {
 				throw new TcpApplicationException("Can not use a disposed tcp connection");
 			}
 
-			IByteArray wrappedBytes = this.CreateHandshakeBytes();
+			SafeArrayHandle wrappedBytes = this.CreateHandshakeBytes();
 
 			this.SendSocketBytes(wrappedBytes, false);
 		}
 
-		protected virtual IByteArray CreateHandshakeBytes() {
+		protected virtual SafeArrayHandle CreateHandshakeBytes() {
 			return this.protocolFactory.CreateHandshake();
 		}
 
@@ -843,7 +841,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				throw new TcpApplicationException("Can not use a disposed tcp connection");
 			}
 
-			IByteArray sendBytes = null;
+			SafeArrayHandle sendBytes = null;
 
 			if(messageInstance.IsSpliMessage) {
 				if(!MessageCaches.SendCaches.Exists(messageInstance.Hash)) {
@@ -858,7 +856,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				// here we send the server the header of our big message so they can start the sliced download
 				sendBytes = messageInstance.SplitMessage.Dehydrate();
 			} else {
-				sendBytes = messageInstance.MessageBytes;
+				sendBytes = messageInstance.MessageBytes.Branch();
 			}
 
 			this.SendSocketBytes(sendBytes);
@@ -871,10 +869,10 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			this.SendBytes(this.handshakeBytes);
-			this.handshakeBytes = null;
+			this.handshakeBytes?.Dispose();
 		}
 
-		protected void InvokeDataReceived(IByteArray bytes) {
+		protected void InvokeDataReceived(SafeArrayHandle bytes) {
 			this.DataReceived?.Invoke(bytes);
 		}
 

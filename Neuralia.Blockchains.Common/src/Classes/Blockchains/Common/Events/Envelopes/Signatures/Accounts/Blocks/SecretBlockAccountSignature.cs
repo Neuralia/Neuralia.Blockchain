@@ -7,14 +7,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public interface ISecretBlockAccountSignature : IBlockAccountSignature {
 		long PromisedNonce1 { get; set; }
 		long PromisedNonce2 { get; set; }
-		IByteArray PromisedPublicKey { get; set; }
+		SafeArrayHandle PromisedPublicKey { get; }
 	}
 
 	public class SecretBlockAccountSignature : BlockAccountSignature, ISecretBlockAccountSignature {
 
 		public long PromisedNonce1 { get; set; }
 		public long PromisedNonce2 { get; set; }
-		public IByteArray PromisedPublicKey { get; set; }
+		public SafeArrayHandle PromisedPublicKey { get; } = SafeArrayHandle.Create();
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = base.GetStructuresArray();
@@ -39,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			this.PromisedNonce1 = rehydrator.ReadLong();
 			this.PromisedNonce2 = rehydrator.ReadLong();
-			this.PromisedPublicKey = rehydrator.ReadNonNullableArray();
+			this.PromisedPublicKey.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

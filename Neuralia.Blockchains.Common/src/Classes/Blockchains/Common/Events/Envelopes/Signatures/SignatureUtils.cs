@@ -8,29 +8,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public static ISecretDoubleCryptographicKey ConvertToSecretKey(ISecretBlockNextAccountSignature source, byte ordinalId) {
 			ISecretDoubleCryptographicKey secretCryptographicKey = new SecretDoubleCryptographicKey();
 
-			secretCryptographicKey.NextKeyHashSha2 = source.NextKeyHashSha2;
-			secretCryptographicKey.NextKeyHashSha3 = source.NextKeyHashSha3;
+			secretCryptographicKey.NextKeyHashSha2.Entry = source.NextKeyHashSha2.Entry;
+			secretCryptographicKey.NextKeyHashSha3.Entry = source.NextKeyHashSha3.Entry;
 			secretCryptographicKey.NonceHash = source.NonceHash;
 			secretCryptographicKey.Id = ordinalId;
 
 			secretCryptographicKey.SecondKey.SecurityCategory = source.NextSecondSecurityCategory;
-			secretCryptographicKey.SecondKey.Key = source.NextSecondPublicKey;
+			secretCryptographicKey.SecondKey.Key.Entry = source.NextSecondPublicKey.Entry;
+			secretCryptographicKey.SecondKey.Id = ordinalId;
 
 			return secretCryptographicKey;
 		}
 
-		public static IByteArray ConvertToDehydratedKey(ISecretBlockNextAccountSignature source, byte ordinalId) {
-			ISecretDoubleCryptographicKey secretKey = ConvertToSecretKey(source, ordinalId);
+		public static SafeArrayHandle ConvertToDehydratedKey(ISecretBlockNextAccountSignature source, byte ordinalId) {
+			using(ISecretDoubleCryptographicKey secretKey = ConvertToSecretKey(source, ordinalId)) {
 
-			return ConvertToDehydratedKey(secretKey);
+				return ConvertToDehydratedKey(secretKey);
+			}
 		}
 
-		public static IByteArray ConvertToDehydratedKey(ISecretDoubleCryptographicKey secretKey) {
+		public static SafeArrayHandle ConvertToDehydratedKey(ISecretDoubleCryptographicKey secretKey) {
 
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
-			secretKey.Dehydrate(dehydrator);
+			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
+				secretKey.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+				return dehydrator.ToArray();
+			}
 		}
 	}
 }

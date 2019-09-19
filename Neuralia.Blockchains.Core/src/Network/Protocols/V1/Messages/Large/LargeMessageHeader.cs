@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Large {
 
 		}
 
-		public LargeMessageHeader(int messageLength, IByteArray message) : base(messageLength, message) {
+		public LargeMessageHeader(int messageLength, SafeArrayHandle message) : base(messageLength, message) {
 		}
 
 		protected override int MaxiumMessageSize => MAXIMUM_SIZE;
@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Large {
 
 		}
 
-		protected override IMessageHash CreateHash(IByteArray message = null) {
+		protected override IMessageHash CreateHash(SafeArrayHandle message = null) {
 			return new MessageHash64(message);
 		}
 

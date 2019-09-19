@@ -28,18 +28,19 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 		public (int nonce1, int nonce2) this[int i] => this.Nonces[i];
 
-		public virtual void Load(IByteArray bytes, int leafCount) {
+		public virtual void Load(ByteArray bytes, int leafCount) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 
 			this.Rehydrate(rehydrator, leafCount);
 		}
 
-		public virtual IByteArray Save() {
+		public virtual ByteArray Save() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			//TODO: this should be a realease, not clone
+			return dehydrator.ToArray().Entry.Clone();
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator, int leafCount) {

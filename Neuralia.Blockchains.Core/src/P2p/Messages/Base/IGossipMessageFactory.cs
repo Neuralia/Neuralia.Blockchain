@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
 	public interface IGossipMessageFactory<R> : IGossipMessageFactory, IMessageFactory<R>
 		where R : IRehydrationFactory {
-		IGossipMessageSet RehydrateGossipMessage(IByteArray data, GossipHeader header, R rehydrationFactory);
+		IGossipMessageSet RehydrateGossipMessage(SafeArrayHandle data, GossipHeader header, R rehydrationFactory);
 	}
 
 	public abstract class GossipMessageFactory<R> : MessageFactory<R>, IGossipMessageFactory<R>
@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
 		}
 
-		public abstract IGossipMessageSet RehydrateGossipMessage(IByteArray data, GossipHeader header, R rehydrationFactory);
+		public abstract IGossipMessageSet RehydrateGossipMessage(SafeArrayHandle data, GossipHeader header, R rehydrationFactory);
 
 		public void CopyGossipHeaderHeaderInfo(GossipHeader newHeader, GossipHeader triggerHeader) {
 			if(triggerHeader != null) {

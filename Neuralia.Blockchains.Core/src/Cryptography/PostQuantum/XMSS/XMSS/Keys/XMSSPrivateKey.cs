@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys {
 		///     Instantiate a new XMSS Private Key
 		/// </summary>
 		/// <param name="heigth">Height (number of levels - 1) of the tree</param>
-		public XMSSPrivateKey(int heigth, IByteArray publicSeed, IByteArray privateSeed, IByteArray secretPrf, XMSSNonceSet nonces, XMSSExecutionContext xmssExecutionContext, XMSSNodeCache xmssNodeCache = null, int index = 0, IByteArray root = null) {
+		public XMSSPrivateKey(int heigth, ByteArray publicSeed, ByteArray privateSeed, ByteArray secretPrf, XMSSNonceSet nonces, XMSSExecutionContext xmssExecutionContext, XMSSNodeCache xmssNodeCache = null, int index = 0, ByteArray root = null) {
 			this.Index = index;
 			this.Height = (byte) heigth;
 			this.LeafCount = 1 << heigth;
@@ -58,14 +58,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys {
 		/// </summary>
 		public int IndexOne => this.Index + 1;
 
-		public IByteArray PublicSeed { get; private set; }
-		public IByteArray SecretSeed { get; private set; }
-		public IByteArray SecretPrf { get; private set; }
+		public ByteArray PublicSeed { get; private set; }
+		public ByteArray SecretSeed { get; private set; }
+		public ByteArray SecretPrf { get; private set; }
 
 		public int Nonce1 => this.Nonces[this.Index].nonce1;
 		public int Nonce2 => this.Nonces[this.Index].nonce2;
 
-		public IByteArray Root { get; set; }
+		public ByteArray Root { get; set; }
 
 		public void IncrementIndex(XMSSEngine engine) {
 			engine.CleanAuthTree(this);

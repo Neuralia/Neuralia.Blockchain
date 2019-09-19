@@ -33,14 +33,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 	public interface ISerializationManager : IManagerBase {
 
-		(ChannelsEntries<int> sizes, IByteArray hash)? GetBlockSizeAndHash(BlockId blockId);
-		ChannelsEntries<IByteArray> LoadBlockSlice(BlockId blockId, ChannelsEntries<(int offset, int length)> offsets);
+		(ChannelsEntries<int> sizes, SafeArrayHandle hash)? GetBlockSizeAndHash(BlockId blockId);
+		ChannelsEntries<SafeArrayHandle> LoadBlockSlice(BlockId blockId, ChannelsEntries<(int offset, int length)> offsets);
 		(List<int> sliceHashes, int hash)? BuildBlockSliceHashes(BlockId blockId, List<ChannelsEntries<(int offset, int length)>> slices);
 		
-		IByteArray LoadBlockHeaderSlice(BlockId blockId, int offset, int length);
-		IByteArray LoadBlockContentsSlice(BlockId blockId, int offset, int length);
+		SafeArrayHandle LoadBlockHeaderSlice(BlockId blockId, int offset, int length);
+		SafeArrayHandle LoadBlockContentsSlice(BlockId blockId, int offset, int length);
 
-		IByteArray LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length);
+		SafeArrayHandle LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length);
 
 		ChannelsEntries<int> GetBlockSize(BlockId blockId);
 		int? GetBlockHeaderSize(BlockId blockId);
@@ -48,24 +48,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		void SerializeBlock(IDehydratedBlock dehydratedBlock);
 		void SerializeBlockchainMessage(IDehydratedBlockchainMessage dehydratedBlockchainMessage);
-		ChannelsEntries<IByteArray> LoadBlockData(BlockId blockId);
-		IByteArray LoadBlockHash(BlockId blockId);
+		ChannelsEntries<SafeArrayHandle> LoadBlockData(BlockId blockId);
+		SafeArrayHandle LoadBlockHash(BlockId blockId);
 		IKeyedTransaction LoadKeyedTransaction(KeyAddress keyAddress);
 
-		Dictionary<AccountId, IByteArray> LoadKeys(List<KeyAddress> keyAddresses);
+		Dictionary<AccountId, SafeArrayHandle> LoadKeys(List<KeyAddress> keyAddresses);
 		Dictionary<AccountId, ICryptographicKey> LoadFullKeys(List<KeyAddress> keyAddresses);
 
 		Dictionary<AccountId, T> LoadFullKeys<T>(List<KeyAddress> keyAddresses)
 			where T : class, ICryptographicKey;
 
-		IByteArray LoadKey(KeyAddress keyAddress);
+		SafeArrayHandle LoadKey(KeyAddress keyAddress);
 		ICryptographicKey LoadFullKey(KeyAddress keyAddress);
 
 		T LoadFullKey<T>(KeyAddress keyAddress)
 			where T : class, ICryptographicKey;
 
-		IByteArray LoadDigestKey(KeyAddress keyAddress);
-		IByteArray LoadDigestKey(AccountId accountId, byte ordinal);
+		SafeArrayHandle LoadDigestKey(KeyAddress keyAddress);
+		SafeArrayHandle LoadDigestKey(AccountId accountId, byte ordinal);
 
 		IAccountSnapshotDigestChannelCard LoadDigestAccount(long accountSequenceId, Enums.AccountTypes accountType);
 		IStandardAccountSnapshotDigestChannelCard LoadDigestStandardAccount(long accountId);
@@ -84,8 +84,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			where T : class, IBlock;
 
 		IBlockchainDigest LoadDigestHeader(int digestId);
-		IByteArray LoadDigestHeaderArchiveData(int digestId, int offset, int length);
-		IByteArray LoadDigestHeaderArchiveData(int digestId);
+		SafeArrayHandle LoadDigestHeaderArchiveData(int digestId, int offset, int length);
+		SafeArrayHandle LoadDigestHeaderArchiveData(int digestId);
 
 		T LoadDigestHeader<T>(int digestId)
 			where T : class, IBlockchainDigest;
@@ -97,8 +97,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		void UpdateCurrentDigest(IBlockchainDigest digest);
 
-		void SaveDigestHeader(int digestId, IByteArray digestHeader);
-		void SaveAccountKeyIndex(AccountId accountId, IByteArray key, byte treeHeight, byte hashBits, byte ordinal);
+		void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader);
+		void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal);
 
 		void CacheUnvalidatedBlockGossipMessage(IBlockEnvelope blockEnvelope, long xxHash);
 		List<(IBlockEnvelope envelope, long xxHash)> GetCachedUnvalidatedBlockGossipMessage(long blockId);
@@ -148,7 +148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.ChainDataWriteProvider.SerializeBlockchainMessage(dehydratedBlockchainMessage);
 		}
 
-		public ChannelsEntries<IByteArray> LoadBlockData(BlockId blockId) {
+		public ChannelsEntries<SafeArrayHandle> LoadBlockData(BlockId blockId) {
 
 			return this.ChainDataLoadProvider.LoadBlockData(blockId.Value);
 		}
@@ -183,11 +183,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.ChainDataLoadProvider.LoadDigestHeader(digestId);
 		}
 
-		public IByteArray LoadDigestHeaderArchiveData(int digestId, int offset, int length) {
+		public SafeArrayHandle LoadDigestHeaderArchiveData(int digestId, int offset, int length) {
 			return this.ChainDataLoadProvider.LoadDigestHeaderArchiveData(digestId, offset, length);
 		}
 
-		public IByteArray LoadDigestHeaderArchiveData(int digestId) {
+		public SafeArrayHandle LoadDigestHeaderArchiveData(int digestId) {
 			return this.ChainDataLoadProvider.LoadDigestHeaderArchiveData(digestId);
 		}
 
@@ -216,7 +216,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.ChainDataWriteProvider.UpdateCurrentDigest(digest.DigestId, digest.BlockId.Value);
 		}
 
-		public void SaveDigestHeader(int digestId, IByteArray digestHeader) {
+		public void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader) {
 			this.ChainDataWriteProvider.SaveDigestHeader(digestId, digestHeader);
 		}
 
@@ -225,7 +225,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <returns></returns>
-		public (ChannelsEntries<int> sizes, IByteArray hash)? GetBlockSizeAndHash(BlockId blockId) {
+		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? GetBlockSizeAndHash(BlockId blockId) {
 
 			(int offset, int length) hashOffsets = BlockHeader.GetBlockHashOffsets(blockId);
 
@@ -246,17 +246,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.ChainDataLoadProvider.LoadBlockContentsSize(blockId.Value);
 		}
 
-		public IByteArray LoadBlockHeaderSlice(BlockId blockId, int offset, int length) {
+		public SafeArrayHandle LoadBlockHeaderSlice(BlockId blockId, int offset, int length) {
 
 			return this.ChainDataLoadProvider.LoadBlockPartialHighHeaderData(blockId.Value, offset, offset);
 		}
 
-		public IByteArray LoadBlockContentsSlice(BlockId blockId, int offset, int length) {
+		public SafeArrayHandle LoadBlockContentsSlice(BlockId blockId, int offset, int length) {
 
 			return this.ChainDataLoadProvider.LoadBlockPartialContentsData(blockId.Value, offset, offset);
 		}
 
-		public IByteArray LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length) {
+		public SafeArrayHandle LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length) {
 			return this.ChainDataLoadProvider.LoadDigestFile(channelId, indexId, fileId, partIndex, offset, length);
 		}
 
@@ -268,7 +268,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			foreach(var slice in slices) {
 				var sliceInfo = this.ChainDataLoadProvider.LoadBlockPartialData(blockId.Value, slice);
 
-				List<IByteArray> datas = new List<IByteArray>();
+				List<SafeArrayHandle> datas = new List<SafeArrayHandle>();
 				sliceInfo.RunForAll((flag, data) => {
 					datas.Add(data);
 				});
@@ -278,15 +278,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				topNodes.Add(sliceHash);
 			}
 			 
-			return (sliceHashes, HashingUtils.XxhasherTree32.HashInt(topNodes));
+			return (sliceHashes, HashingUtils.HashxxTree32(topNodes));
 		}
 		
-		public ChannelsEntries<IByteArray> LoadBlockSlice(BlockId blockId, ChannelsEntries<(int offset, int length)> offsets) {
+		public ChannelsEntries<SafeArrayHandle> LoadBlockSlice(BlockId blockId, ChannelsEntries<(int offset, int length)> offsets) {
 
 			return this.ChainDataLoadProvider.LoadBlockPartialData(blockId.Value, offsets);
 		}
 
-		public IByteArray LoadBlockHash(BlockId blockId) {
+		public SafeArrayHandle LoadBlockHash(BlockId blockId) {
 			IBlock cachedBlock = this.ChainDataLoadProvider.GetCachedBlock(blockId.Value);
 
 			if(cachedBlock != null) {
@@ -312,8 +312,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadKeyedTransaction(keyAddress);
 		}
 
-		public Dictionary<AccountId, IByteArray> LoadKeys(List<KeyAddress> keyAddresses) {
-			var accountKeys = new Dictionary<AccountId, IByteArray>();
+		public Dictionary<AccountId, SafeArrayHandle> LoadKeys(List<KeyAddress> keyAddresses) {
+			var accountKeys = new Dictionary<AccountId, SafeArrayHandle>();
 
 			foreach(KeyAddress keyAddress in keyAddresses) {
 				accountKeys.Add(keyAddress.DeclarationTransactionId.Account, this.LoadKey(keyAddress));
@@ -343,7 +343,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return accountKeys;
 		}
 
-		public IByteArray LoadKey(KeyAddress keyAddress) {
+		public SafeArrayHandle LoadKey(KeyAddress keyAddress) {
 
 			bool digestScope = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockWithinDigest(keyAddress.AnnouncementBlockId.Value);
 
@@ -373,7 +373,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			bool digestScope = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockWithinDigest(keyAddress.AnnouncementBlockId.Value);
 
 			if(digestScope) {
-				IByteArray keyBytes = this.LoadDigestKey(keyAddress);
+				SafeArrayHandle keyBytes = this.LoadDigestKey(keyAddress);
 
 				return KeyFactory.RehydrateKey<T>(DataSerializationFactory.CreateRehydrator(keyBytes));
 			}
@@ -385,7 +385,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return (T) keyedTransaction.Keyset.Keys[keyAddress.OrdinalId];
 		}
 
-		public IByteArray LoadDigestKey(KeyAddress keyAddress) {
+		public SafeArrayHandle LoadDigestKey(KeyAddress keyAddress) {
 			return this.LoadDigestKey(keyAddress.DeclarationTransactionId.Account, keyAddress.OrdinalId);
 		}
 
@@ -401,7 +401,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestJointAccount(accountId);
 		}
 
-		public IByteArray LoadDigestKey(AccountId accountId, byte ordinal) {
+		public SafeArrayHandle LoadDigestKey(AccountId accountId, byte ordinal) {
 			return this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestKey(accountId, ordinal);
 		}
 
@@ -417,7 +417,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestAccreditationCertificateCard(id);
 		}
 
-		public void SaveAccountKeyIndex(AccountId accountId, IByteArray key, byte treeHeight, byte hashBits, byte ordinal) {
+		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
 
 			void Action() {
 				this.ChainDataWriteProvider.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal);
@@ -433,7 +433,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					undoOperation = new SerializationFastKeysOperations(this, this.ChainDataWriteProvider);
 					undoOperation.AccountId = accountId;
 					undoOperation.Ordinal = ordinal;
-					undoOperation.Key = keyData.Value.keyBytes;
+					undoOperation.Key.Entry = keyData.Value.keyBytes.Entry;
 					undoOperation.TreeHeight = keyData.Value.treeheight;
 					undoOperation.HashBits = keyData.Value.hashBits;
 

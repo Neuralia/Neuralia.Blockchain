@@ -1,6 +1,7 @@
 using System;
 using LiteDB;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
@@ -35,6 +36,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 		Enums.KeyTypes KeyType { get; set; }
 
 		Enums.KeyStatus Status { get; set; }
+		
+		TransactionIdExtended ChangeTransactionId { get; set; }
 
 		// the address of the key inside the confirmation block and keyedTransaction
 		KeyAddress KeyAddress { get; set; }
@@ -94,6 +97,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 		public Enums.KeyStatus Status { get; set; } = Enums.KeyStatus.Ok;
 
+		public TransactionIdExtended ChangeTransactionId { get; set; }
+
 		public IWalletKey NextKey { get; set; }
 
 		public void Dispose() {
@@ -111,7 +116,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			nodeList.Add(this.PublicKey);
 			nodeList.Add((byte) this.KeyType);
 			nodeList.Add(this.KeyAddress);
-
+			nodeList.Add(this.ChangeTransactionId);
+			
 			nodeList.Add(this.EncryptionParameters.GetStructuresArray());
 
 			return nodeList;

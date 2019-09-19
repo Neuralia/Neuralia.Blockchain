@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string Sender { get; set; }
 		public string Recipient { get; set; }
 
-		public DateTime Timestamp { get; set; }
+		public string Timestamp { get; set; }
 		public object Version { get; set; }
 		public byte Status { get; set; }
 		public string Note { get; set; }
@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string Sender { get; set; }
 		public string Recipient { get; set; }
 
-		public DateTime Timestamp { get; set; }
+		public string Timestamp { get; set; }
 		public string Contents { get; set; }
 		public object Version { get; set; }
 		public byte Status { get; set; }

@@ -20,17 +20,17 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			this.XmssExecutionContext = xmssExecutionContext;
 		}
 
-		public XMSSMTSignature(IByteArray random, long index, XMSSExecutionContext xmssExecutionContext) : this(xmssExecutionContext) {
+		public XMSSMTSignature(ByteArray random, long index, XMSSExecutionContext xmssExecutionContext) : this(xmssExecutionContext) {
 			this.Random = random;
 			this.Index = index;
 		}
 
-		public IByteArray Random { get; private set; }
+		public ByteArray Random { get; private set; }
 		public long Index { get; private set; }
 
 		public Dictionary<int, XMSSSignature> Signatures { get; } = new Dictionary<int, XMSSSignature>();
 
-		public void Load(IByteArray signature, WotsPlusEngine wotsPlusProvider, int height, int layers) {
+		public void Load(ByteArray signature, WotsPlusEngine wotsPlusProvider, int height, int layers) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature);
 
 			this.Rehydrate(rehydrator, wotsPlusProvider, height, layers);
@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 				int layer = rehydrator.ReadInt();
 
-				IByteArray signatureBytes = rehydrator.ReadArray();
+				ByteArray signatureBytes = rehydrator.ReadArray();
 
 				XMSSSignature xmssSignature = new XMSSSignature(this.XmssExecutionContext);
 
@@ -66,13 +66,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			}
 		}
 
-		public IByteArray Save() {
+		public ByteArray Save() {
 
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			return dehydrator.ToArray().Release();
 		}
 
 		protected virtual void Dehydrate(IDataDehydrator dehydrator) {
@@ -91,7 +91,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 				dehydrator.Write(signature.Key);
 
-				IByteArray bytes = signature.Value.Save();
+				ByteArray bytes = signature.Value.Save();
 				dehydrator.Write(bytes);
 				bytes.Return();
 			}

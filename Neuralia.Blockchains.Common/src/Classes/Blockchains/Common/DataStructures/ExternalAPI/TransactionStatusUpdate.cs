@@ -6,7 +6,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 
 		public string TransactionId { get; set; }
-		public Statuses Status { get; set; }
+		public int Status { get; set; }
 		public bool AccountPublish { get; set; }
 	}
 }

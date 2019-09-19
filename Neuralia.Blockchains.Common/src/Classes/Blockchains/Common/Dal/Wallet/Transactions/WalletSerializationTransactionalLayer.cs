@@ -17,6 +17,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Serilog;
+using SafeArrayHandle = Neuralia.Blockchains.Tools.Data.SafeArrayHandle;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Transactions {
 	/// <summary>
@@ -679,8 +680,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 		private long HashFile(IFileInfo file) {
 			if(file.Exists && (file.Length != 0)) {
-				using(FileStreamSliceHashNodeList fileStreamSliceHashNodeList = new FileStreamSliceHashNodeList(file.FullName, this.physicalFileSystem)) {
-					return HashingUtils.XxhasherTree.HashLong(fileStreamSliceHashNodeList);
+				using(var sliceHashNodes = new FileStreamSliceHashNodeList(file.FullName, this.physicalFileSystem)) {
+					return HashingUtils.HashxxTree(sliceHashNodes);
 				}
 			}
 
@@ -893,7 +894,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		public void OpenWrite(string filename, IByteArray bytes) {
+		public void OpenWrite(string filename, SafeArrayHandle bytes) {
 			// complete the path if it is relative
 			string path = this.CompletePath(filename);
 

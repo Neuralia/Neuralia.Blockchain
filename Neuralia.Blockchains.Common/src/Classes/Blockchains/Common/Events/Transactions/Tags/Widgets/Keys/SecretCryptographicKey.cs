@@ -6,8 +6,8 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
 	public interface ISecretCryptographicKey : IQTeslaCryptographicKey {
-		IByteArray NextKeyHashSha2 { get; set; }
-		IByteArray NextKeyHashSha3 { get; set; }
+		SafeArrayHandle NextKeyHashSha2 { get;  }
+		SafeArrayHandle NextKeyHashSha3 { get;  }
 	}
 
 	/// <summary>
@@ -15,14 +15,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	/// </summary>
 	public class SecretCryptographicKey : QTeslaCryptographicKey, ISecretCryptographicKey {
 
-		public IByteArray NextKeyHashSha2 { get; set; }
+		public SafeArrayHandle NextKeyHashSha2 { get; } = SafeArrayHandle.Create();
 
 		/// <summary>
 		///     just a passthrough nextKeyHash
 		/// </summary>
-		public IByteArray NextKeyHashSha3 {
+		/// 
+		public SafeArrayHandle NextKeyHashSha3 {
 			get => this.Key;
-			set => this.Key = value;
+			set => this.Key.Entry = value.Entry;
 		}
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -34,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public override void Rehydrate(byte id, IDataRehydrator rehydrator) {
 			base.Rehydrate(id, rehydrator);
 
-			this.NextKeyHashSha2 = rehydrator.ReadNonNullableArray();
+			this.NextKeyHashSha2.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		public override HashNodeList GetStructuresArray() {
@@ -56,6 +57,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.Secret;
+		}
+
+		protected override void DisposeAll(bool disposing) {
+			base.DisposeAll(disposing);
+			
+			this.NextKeyHashSha2?.Dispose();
+			this.NextKeyHashSha3?.Dispose();
 		}
 	}
 }

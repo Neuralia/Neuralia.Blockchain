@@ -20,11 +20,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 		int DigestId { get; set; }
 
 		TransactionTimestamp Timestamp { get; set; }
-		IByteArray Hash { get; set; }
-		IByteArray PreviousDigestHash { get; set; }
+		SafeArrayHandle Hash { get; }
+		SafeArrayHandle PreviousDigestHash { get; }
 
-		IByteArray GenesisBlockHash { get; set; }
-		IByteArray BlockHash { get; set; }
+		SafeArrayHandle GenesisBlockHash { get; }
+		SafeArrayHandle BlockHash { get;  }
 		BlockId BlockId { get; set; }
 		long LastStandardAccountId { get; set; }
 		long LastJointAccountId { get; set; }
@@ -48,11 +48,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 		public TransactionTimestamp Timestamp { get; set; } = new TransactionTimestamp();
 
 		public IPublishedAccountSignature Signature { get; } = new PublishedAccountSignature();
-		public IByteArray Hash { get; set; }
-		public IByteArray PreviousDigestHash { get; set; }
+		public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
+		public SafeArrayHandle PreviousDigestHash { get;  } = SafeArrayHandle.Create();
 
-		public IByteArray BlockHash { get; set; }
-		public IByteArray GenesisBlockHash { get; set; }
+		public SafeArrayHandle BlockHash { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle GenesisBlockHash { get;  } = SafeArrayHandle.Create();
 
 		public long LastStandardAccountId { get; set; }
 		public long LastJointAccountId { get; set; }
@@ -87,13 +87,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 			this.Version.EnsureEqual(rehydratedVersion);
 
 			this.DigestId = rehydrator.ReadInt();
-			this.Hash = rehydrator.ReadNonNullableArray();
+			this.Hash.Entry = rehydrator.ReadNonNullableArray();
 
 			this.BlockId.Rehydrate(rehydrator);
-			this.BlockHash = rehydrator.ReadNonNullableArray();
+			this.BlockHash.Entry = rehydrator.ReadNonNullableArray();
 
-			this.PreviousDigestHash = rehydrator.ReadArray();
-			this.GenesisBlockHash = rehydrator.ReadNonNullableArray();
+			this.PreviousDigestHash.Entry = rehydrator.ReadArray();
+			this.GenesisBlockHash.Entry = rehydrator.ReadNonNullableArray();
 
 			this.Timestamp.Rehydrate(rehydrator);
 			this.LastStandardAccountId = rehydrator.ReadLong();

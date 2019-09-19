@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+﻿using System;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -6,9 +7,9 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Serialization {
 
 	public interface IDehydratedBlockchainDigest : IDehydrateBlockchainEvent {
-		IByteArray Hash { get; set; }
+		SafeArrayHandle Hash { get;  }
 		int DigestId { get; set; }
-		IByteArray Contents { get; set; }
+		SafeArrayHandle Contents { get; }
 		IBlockchainDigest RehydratedDigest { get; }
 		IBlockchainDigest RehydrateDigest(IBlockchainEventsRehydrationFactory rehydrationFactory);
 	}
@@ -16,10 +17,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public class DehydratedBlockchainDigest : IDehydratedBlockchainDigest {
 
 		public int DigestId { get; set; }
-		public IByteArray Contents { get; set; }
+		public SafeArrayHandle Contents { get;  } = SafeArrayHandle.Create();
 		public IBlockchainDigest RehydratedDigest { get; private set; }
 
-		public IByteArray Dehydrate() {
+		public SafeArrayHandle Dehydrate() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
@@ -27,7 +28,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return dehydrator.ToArray();
 		}
 
-		public void Rehydrate(IByteArray data) {
+		public void Rehydrate(SafeArrayHandle data) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 
 			this.Rehydrate(rehydrator);
@@ -52,9 +53,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
 			this.DigestId = rehydrator.ReadInt();
-			this.Hash = rehydrator.ReadNonNullableArray();
+			this.Hash.Entry = rehydrator.ReadNonNullableArray();
 
-			this.Contents = rehydrator.ReadArrayToEnd();
+			this.Contents.Entry = rehydrator.ReadArrayToEnd();
 		}
 
 		public IBlockchainDigest RehydrateDigest(IBlockchainEventsRehydrationFactory rehydrationFactory) {
@@ -67,6 +68,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return this.RehydratedDigest;
 		}
 
-		public IByteArray Hash { get; set; }
+		public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
+		
+	#region Disposable
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+			if(this.IsDisposed) {
+				return;
+			}
+			
+			if(disposing) {
+				this.Contents?.Dispose();
+				this.Hash?.Dispose();
+			}
+			this.IsDisposed = true;
+		}
+
+		~DehydratedBlockchainDigest() {
+			this.Dispose(false);
+		}
+		
+		public bool IsDisposed { get; private set; }
+
+	#endregion
 	}
 }

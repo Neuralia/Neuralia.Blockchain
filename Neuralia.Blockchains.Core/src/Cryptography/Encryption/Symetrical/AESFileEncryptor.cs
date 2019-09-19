@@ -6,7 +6,6 @@ using Microsoft.IO;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
@@ -17,7 +16,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		public static EncryptorParameters GenerateEncryptionParameters() {
 			SecureRandom rnd = new SecureRandom();
 
-			ByteArray salt = new ByteArray(500);
+			ByteArray salt = ByteArray.Create(500);
 
 			// get a random salt
 			salt.FillSafeRandom();
@@ -29,7 +28,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return InitSymmetric(algorithm, (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString()), parameters);
 		}
 
-		public static SymmetricAlgorithm InitSymmetric(SymmetricAlgorithm algorithm, IByteArray password, EncryptorParameters parameters) {
+		public static SymmetricAlgorithm InitSymmetric(SymmetricAlgorithm algorithm, SafeArrayHandle password, EncryptorParameters parameters) {
 			//its not ideal i know, but we have no choice for now. no way to pass a secure string to the encryptor
 			//TODO: can this be made safer by clearing the password?
 
@@ -53,8 +52,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 		}
 
-		private static ByteArray Transform(IByteArray bytes, Func<ICryptoTransform> selectCryptoTransform) {
-			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryAllocators.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
+		private static ByteArray Transform(SafeArrayHandle bytes, Func<ICryptoTransform> selectCryptoTransform) {
+			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
 #if (NETSTANDARD2_0)
 				using(CryptoStream cryptoStream = new CryptoStream(memoryStream, selectCryptoTransform(), CryptoStreamMode.Write)) {
 #elif (NETCOREAPP2_2)
@@ -66,25 +65,25 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 					cryptoStream.FlushFinalBlock();
 
-					return ByteArray.CreateFrom(memoryStream);
+					return ByteArray.Create(memoryStream);
 				}
 			}
 		}
 
 		private static ByteArray Transform(byte[] bytes, Func<ICryptoTransform> selectCryptoTransform) {
-			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryAllocators.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
+			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
 				using(CryptoStream cryptoStream = new CryptoStream(memoryStream, selectCryptoTransform(), CryptoStreamMode.Write)) {
 					cryptoStream.Write(bytes, 0, bytes.Length);
 
 					cryptoStream.FlushFinalBlock();
 
-					return ByteArray.CreateFrom(memoryStream);
+					return ByteArray.Create(memoryStream);
 				}
 			}
 		}
 
 		private static ByteArray Transform(ReadOnlySpan<byte> bytes, Func<ICryptoTransform> selectCryptoTransform) {
-			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryAllocators.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
+			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
 				using(CryptoStream cryptoStream = new CryptoStream(memoryStream, selectCryptoTransform(), CryptoStreamMode.Write)) {
 #if (NETSTANDARD2_0)
 					cryptoStream.Write(bytes.ToArray(), 0, bytes.Length);
@@ -96,18 +95,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 					cryptoStream.FlushFinalBlock();
 
-					return ByteArray.CreateFrom(memoryStream);
+					return ByteArray.Create(memoryStream);
 				}
 			}
 		}
 
-		public static ByteArray Encrypt(IByteArray plain, SecureString password, EncryptorParameters parameters) {
+		public static ByteArray Encrypt(SafeArrayHandle plain, SecureString password, EncryptorParameters parameters) {
 			using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 				return Transform(plain, rijndael.CreateEncryptor);
 			}
 		}
 
-		public static ByteArray Encrypt(IByteArray plain, IByteArray password, EncryptorParameters parameters) {
+		public static ByteArray Encrypt(SafeArrayHandle plain, SafeArrayHandle password, EncryptorParameters parameters) {
 			using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 				return Transform(plain, rijndael.CreateEncryptor);
 			}
@@ -119,7 +118,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public static ByteArray Encrypt(byte[] plain, IByteArray password, EncryptorParameters parameters) {
+		public static ByteArray Encrypt(byte[] plain, SafeArrayHandle password, EncryptorParameters parameters) {
 			using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 				return Transform(plain, rijndael.CreateEncryptor);
 			}
@@ -131,13 +130,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public static ByteArray Encrypt(ReadOnlySpan<byte> plain, IByteArray password, EncryptorParameters parameters) {
+		public static ByteArray Encrypt(ReadOnlySpan<byte> plain, SafeArrayHandle password, EncryptorParameters parameters) {
 			using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 				return Transform(plain, rijndael.CreateEncryptor);
 			}
 		}
 
-		public static ByteArray Decrypt(IByteArray cipher, SecureString password, EncryptorParameters parameters) {
+		public static ByteArray Decrypt(SafeArrayHandle cipher, SecureString password, EncryptorParameters parameters) {
 			try {
 				using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 					return Transform(cipher, rijndael.CreateDecryptor);
@@ -149,7 +148,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public static ByteArray Decrypt(IByteArray cipher, IByteArray password, EncryptorParameters parameters) {
+		public static ByteArray Decrypt(SafeArrayHandle cipher, SafeArrayHandle password, EncryptorParameters parameters) {
 			try {
 				using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 					return Transform(cipher, rijndael.CreateDecryptor);
@@ -173,7 +172,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public static ByteArray Decrypt(byte[] cipher, IByteArray password, EncryptorParameters parameters) {
+		public static ByteArray Decrypt(byte[] cipher, SafeArrayHandle password, EncryptorParameters parameters) {
 			try {
 				using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 					return Transform(cipher, rijndael.CreateDecryptor);
@@ -197,7 +196,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public static ByteArray Decrypt(ReadOnlySpan<byte> cipher, IByteArray password, EncryptorParameters parameters) {
+		public static ByteArray Decrypt(ReadOnlySpan<byte> cipher, SafeArrayHandle password, EncryptorParameters parameters) {
 			try {
 				using(SymmetricAlgorithm rijndael = InitSymmetric(Rijndael.Create(), password, parameters)) {
 					return Transform(cipher, rijndael.CreateDecryptor);

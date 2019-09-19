@@ -9,11 +9,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 	public class BlockchainDigestDescriptor : ITreeHashable, IBinaryRehydratable {
 		public Dictionary<DigestChannelType, BlockchainDigestChannelDescriptor> Channels { get; } = new Dictionary<DigestChannelType, BlockchainDigestChannelDescriptor>();
 
-		public IByteArray Hash { get; set; }
+		public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.Hash = rehydrator.ReadNonNullableArray();
+			this.Hash.Entry = rehydrator.ReadNonNullableArray();
 			int count = rehydrator.ReadInt();
 
 			for(int i = 0; i < count; i++) {
@@ -41,7 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 	public class BlockchainDigestChannelDescriptor : BlockchainDigestSimpleChannelDescriptor, ITreeHashable {
 
-		public IByteArray Hash { get; set; }
+		public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
 
 		public Dictionary<int, DigestChannelIndexDescriptor> DigestChannelIndexDescriptors { get; } = new Dictionary<int, DigestChannelIndexDescriptor>();
 
@@ -64,7 +64,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 
 			base.Rehydrate(rehydrator);
-			this.Hash = rehydrator.ReadNonNullableArray();
+			this.Hash.Entry = rehydrator.ReadNonNullableArray();
 
 			int count = rehydrator.ReadInt();
 
@@ -79,13 +79,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 		public class DigestChannelIndexDescriptor : ITreeHashable, IBinaryRehydratable {
 
-			public IByteArray Hash { get; set; }
+			public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
 
 			public Dictionary<int, DigestChannelIndexFileDescriptor> Files { get; } = new Dictionary<int, DigestChannelIndexFileDescriptor>();
 
 			public void Rehydrate(IDataRehydrator rehydrator) {
 
-				this.Hash = rehydrator.ReadNonNullableArray();
+				this.Hash.Entry = rehydrator.ReadNonNullableArray();
 
 				int count = rehydrator.ReadInt();
 
@@ -118,7 +118,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 					Internal = 2
 				}
 
-				public IByteArray Hash { get; set; }
+				public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
 
 				/// <summary>
 				///     If true, the channel files may be missing and it will be acceptable. He hash will be used only.
@@ -135,7 +135,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 				public void Rehydrate(IDataRehydrator rehydrator) {
 
-					this.Hash = rehydrator.ReadNonNullableArray();
+					this.Hash.Entry = rehydrator.ReadNonNullableArray();
 					this.IsOptional = rehydrator.ReadBool();
 					this.HashingType = (DigestChannelHashingTypes) rehydrator.ReadByte();
 
@@ -169,12 +169,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 					public long FileSize { get; set; }
 
-					public IByteArray Hash { get; set; }
+					public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
 
 					public void Rehydrate(IDataRehydrator rehydrator) {
 
 						this.FileSize = rehydrator.ReadLong();
-						this.Hash = rehydrator.ReadNonNullableArray();
+						this.Hash.Entry = rehydrator.ReadNonNullableArray();
 					}
 
 					public HashNodeList GetStructuresArray() {

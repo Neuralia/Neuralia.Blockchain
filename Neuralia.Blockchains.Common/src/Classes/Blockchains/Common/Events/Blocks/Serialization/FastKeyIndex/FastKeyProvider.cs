@@ -51,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			}
 		}
 
-		public (IByteArray keyBytes, byte treeheight, byte hashBits) LoadKeyFile(AccountId accountId, byte ordinal) {
+		public (SafeArrayHandle keyBytes, byte treeheight, byte hashBits) LoadKeyFile(AccountId accountId, byte ordinal) {
 
 			this.TestKeyValidity(ordinal);
 
@@ -69,12 +69,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				return default;
 			}
 
-			IByteArray results = FileExtensions.ReadBytes(fileName, byteOffsets + offset, size, this.fileSystem);
+			SafeArrayHandle results = FileExtensions.ReadBytes(fileName, byteOffsets + offset, size, this.fileSystem);
 
-			ByteArray keyBytes = new ByteArray(this.GetKeySize(ordinal));
-			results.Slice(2).CopyTo(keyBytes.Span);
+			ByteArray keySimpleBytes = ByteArray.Create(this.GetKeySize(ordinal));
+			results.Entry.Slice(2).CopyTo(keySimpleBytes.Span);
 
-			return (keyBytes, results[0], results[1]);
+			return (keySimpleBytes, results[0], results[1]);
 		}
 
 		private int GetKeySize(byte ordinal) {
@@ -85,7 +85,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID ? TRANSACTION_ENTRY_SIZE : MESSAGE_ENTRY_SIZE;
 		}
 
-		public void WriteKey(AccountId accountId, IByteArray key, byte treeHeight, byte hashBits, byte ordinal) {
+		public void WriteKey(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
 
 			this.TestKeyValidity(ordinal);
 

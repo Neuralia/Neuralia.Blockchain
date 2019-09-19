@@ -9,7 +9,7 @@ using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 	public interface IStandardAccountKeysDigestChannel : IDigestChannel {
-		IByteArray GetKey(long accountId, byte ordinal);
+		SafeArrayHandle GetKey(long accountId, byte ordinal);
 	}
 
 	public interface IStandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD> : IStandardAccountKeysDigestChannel
@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		List<ACCOUNT_KEYS_CARD> GetKeys(long accountId);
 	}
 
-	public abstract class StandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD> : DigestChannel<AccountKeysDigestChannel.AccountKeysDigestChannelBands, IByteArray, int, (long accountId, byte ordinal), (uint offset, uint length)>, IStandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD>
+	public abstract class StandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD> : DigestChannel<AccountKeysDigestChannel.AccountKeysDigestChannelBands, SafeArrayHandle, int, (long accountId, byte ordinal), (uint offset, uint length)>, IStandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD>
 		where ACCOUNT_KEYS_CARD : class, IStandardAccountKeysDigestChannelCard, new() {
 
 		public enum FileTypes {
@@ -34,7 +34,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public override DigestChannelType ChannelType => DigestChannelTypes.Instance.StandardAccountKeys;
 
-		public IByteArray GetKey(long accountId, byte ordinal) {
+		public SafeArrayHandle GetKey(long accountId, byte ordinal) {
 
 			var results = this.channelBandIndexSet.QueryCard((accountId, ordinal));
 
@@ -42,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				return null;
 			}
 
-			return results[AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys];
+			return results[AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys].Branch();
 		}
 
 		public List<ACCOUNT_KEYS_CARD> GetKeys(long accountId) {

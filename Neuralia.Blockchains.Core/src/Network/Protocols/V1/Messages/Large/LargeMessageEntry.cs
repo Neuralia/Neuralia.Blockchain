@@ -3,11 +3,11 @@
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Large {
 	public class LargeMessageEntry : MessageEntry<LargeMessageHeader> {
 
-		public LargeMessageEntry(IByteArray message = null) : base(message) {
+		public LargeMessageEntry(SafeArrayHandle message = null) : base(message) {
 
 		}
 
-		public override void RebuildHeader(IByteArray buffer) {
+		public override void RebuildHeader(SafeArrayHandle buffer) {
 			this.HeaderT.Rehydrate(buffer);
 		}
 
@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Large {
 			return new LargeMessageHeader();
 		}
 
-		protected override LargeMessageHeader CreateHeader(int messageLength, IByteArray message) {
+		protected override LargeMessageHeader CreateHeader(int messageLength, SafeArrayHandle message) {
 			return new LargeMessageHeader(messageLength, message);
 		}
 	}

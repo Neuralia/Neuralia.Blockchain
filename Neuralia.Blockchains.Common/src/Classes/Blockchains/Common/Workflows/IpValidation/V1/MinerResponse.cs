@@ -29,7 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 			}
 		}
 
-		public IByteArray Dehydrate() {
+		public SafeArrayHandle Dehydrate() {
 
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 

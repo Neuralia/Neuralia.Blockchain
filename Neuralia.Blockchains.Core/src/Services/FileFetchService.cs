@@ -9,11 +9,11 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Services {
 
 	public interface IFileFetchService {
-		(IByteArray sha2, IByteArray sha3) FetchGenesisHash(string chainWalletPat, string name);
-		(IByteArray sha2, IByteArray sha3) FetchDigestHash(string chainWalletPath, int digestId);
+		(SafeArrayHandle sha2, SafeArrayHandle sha3) FetchGenesisHash(string chainWalletPat, string name);
+		(SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string chainWalletPath, int digestId);
 		Guid? FetchSuperkeyConfirmationUuid(long blockId);
 
-		IByteArray FetchBlockPublicHash(long blockId);
+		SafeArrayHandle FetchBlockPublicHash(long blockId);
 	}
 
 	public class FileFetchService : IFileFetchService {
@@ -30,17 +30,17 @@ namespace Neuralia.Blockchains.Core.Services {
 		public Guid? FetchSuperkeyConfirmationUuid(long blockId) {
 			string confirmationName = $"confirmation-{blockId}.conf";
 
-			IByteArray result = this.httpService.Download(("https://hash.neuralium.com/confirmations/" + confirmationName).ToLower());
+			SafeArrayHandle result = this.httpService.Download(("https://hash.neuralium.com/confirmations/" + confirmationName).ToLower());
 
 			TypeSerializer.Deserialize(result.Span, out Guid confirmation);
 
 			return confirmation;
 		}
 
-		public IByteArray FetchBlockPublicHash(long blockId) {
+		public SafeArrayHandle FetchBlockPublicHash(long blockId) {
 
 			string hashName = $"block-{blockId}.hash";
-			IByteArray result = this.httpService.Download(("https://hash.neuralium.com/hashes/" + hashName).ToLower());
+			SafeArrayHandle result = this.httpService.Download(("https://hash.neuralium.com/hashes/" + hashName).ToLower());
 
 			return result;
 		}
@@ -51,7 +51,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		/// <param name="name"></param>
 		/// <returns></returns>
-		public (IByteArray sha2, IByteArray sha3) FetchGenesisHash(string genesisPath, string filename) {
+		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchGenesisHash(string genesisPath, string filename) {
 
 			string hashName = $"{filename}.hash";
 			FileExtensions.EnsureDirectoryStructure(genesisPath, new FileSystem());
@@ -74,7 +74,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			return HashingUtils.ExtractCombinedDualHash((ByteArray) data);
 		}
 
-		public (IByteArray sha2, IByteArray sha3) FetchDigestHash(string digestHashPath, int digestId) {
+		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string digestHashPath, int digestId) {
 
 			string hashName = $"digest-{digestId}.hash";
 			FileExtensions.EnsureDirectoryStructure(digestHashPath, new FileSystem());

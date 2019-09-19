@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 		protected T hash;
 
-		public MessageHash(IByteArray message = null) {
+		public MessageHash(SafeArrayHandle message = null) {
 
 			this.hasher = this.CreateHasher();
 
@@ -21,14 +21,14 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		public abstract void WriteHash(IDataDehydrator dh);
 		public abstract void ReadHash(IDataRehydrator dr);
 
-		public void SetHash(IByteArray message) {
+		public void SetHash(SafeArrayHandle message) {
 
 			if((message != null) && !message.IsEmpty) {
 				this.hash = this.HashMessage(message);
 			}
 		}
 
-		public virtual T HashMessage(IByteArray message) {
+		public virtual T HashMessage(SafeArrayHandle message) {
 			if((message == null) || message.IsEmpty) {
 				throw new ApplicationException("Cannot hash a null message");
 			}
@@ -40,11 +40,11 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 		public T Hash => this.hash;
 
-		public bool CompareHash(IByteArray messasge) {
+		public bool CompareHash(SafeArrayHandle messasge) {
 			// first, lets compare the hashes
-			T hash = this.HashMessage(messasge);
+			T newHash = this.HashMessage(messasge);
 
-			return this.hash.Equals(hash);
+			return this.hash.Equals(newHash);
 		}
 
 		protected abstract IHasher<T> CreateHasher();

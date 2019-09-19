@@ -1,11 +1,11 @@
 ﻿using System;
-using Neuralia.Blockchains.Tools.Data.Allocation;
+using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Network {
 
 	public class DisconnectedEventArgs : EventArgs {
 
-		private static readonly MemoryBlockPool<DisconnectedEventArgs> objectPool = new MemoryBlockPool<DisconnectedEventArgs>(() => new DisconnectedEventArgs());
+		private static readonly ObjectPool<DisconnectedEventArgs> objectPool = new ObjectPool<DisconnectedEventArgs>(() => new DisconnectedEventArgs());
 
 		private DisconnectedEventArgs() {
 		}

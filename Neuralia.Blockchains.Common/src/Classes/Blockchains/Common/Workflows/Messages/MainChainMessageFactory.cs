@@ -105,11 +105,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 
 		public abstract IChainSyncMessageFactory GetChainSyncMessageFactory();
 
-		public override ITargettedMessageSet<IBlockchainEventsRehydrationFactory> RehydrateMessage(IByteArray data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		public override ITargettedMessageSet<IBlockchainEventsRehydrationFactory> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			//TODO: should there be anything here?
 			IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-			IByteArray messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+			SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
 			NetworkMessageSet.ResetAfterHeader(dr);
 			IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
 
@@ -134,11 +134,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			}
 		}
 
-		public override IGossipMessageSet RehydrateGossipMessage(IByteArray data, GossipHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		public override IGossipMessageSet RehydrateGossipMessage(SafeArrayHandle data, GossipHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 
 			IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-			IByteArray messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+			SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
 			NetworkMessageSet.ResetAfterHeader(dr);
 
 			short workflowType = 0;

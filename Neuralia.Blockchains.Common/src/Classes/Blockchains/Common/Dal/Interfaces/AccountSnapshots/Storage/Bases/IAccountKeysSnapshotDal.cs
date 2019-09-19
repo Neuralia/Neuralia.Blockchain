@@ -7,8 +7,8 @@ using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases {
 	public interface IAccountKeysSnapshotDal : ISnapshotDal {
-		void InsertUpdateAccountKey(AccountId accountId, byte ordinal, IByteArray key, TransactionId declarationTransactionId, long inceptionBlockId);
-		void InsertNewAccountKey(AccountId accountId, byte ordinal, IByteArray key, TransactionId declarationTransactionId, long inceptionBlockId);
+		void InsertUpdateAccountKey(AccountId accountId, byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId, long inceptionBlockId);
+		void InsertNewAccountKey(AccountId accountId, byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId, long inceptionBlockId);
 	}
 
 	public interface IAccountKeysSnapshotDal<ACCOUNT_KEYS_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT> : IAccountKeysSnapshotDal, ISnapshotDal<ACCOUNT_KEYS_SNAPSHOT_CONTEXT>

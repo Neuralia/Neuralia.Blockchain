@@ -1083,9 +1083,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(moderationKeyedTransaction is IGenesisModeratorAccountPresentationTransaction genesisModeratorAccountPresentationTransaction) {
 				this.HandleGenesisModeratorAccountTransaction(genesisModeratorAccountPresentationTransaction);
-			} else if(moderationKeyedTransaction is IGenesisAccountPresentationTransaction genesisAccountPresentationTransaction) {
-				this.HandleGenesisAccountPresentationTransaction(genesisAccountPresentationTransaction);
-			} else if(moderationKeyedTransaction is IModeratorKeyChangeTransaction moderatorKeyChangeTransaction) {
+			}
+			else if(moderationKeyedTransaction is IModeratorKeyChangeTransaction moderatorKeyChangeTransaction) {
 				this.HandleModeratorKeyChangeTransaction(moderatorKeyChangeTransaction);
 			}
 		}
@@ -1424,7 +1423,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray communicationsCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle communicationsCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, communicationsCryptographicKey);
 
@@ -1432,7 +1431,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray blocksXmssMTCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle blocksXmssMTCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, blocksXmssMTCryptographicKey);
 
@@ -1443,7 +1442,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray blocksChangeCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle blocksChangeCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, blocksChangeCryptographicKey);
 
@@ -1451,7 +1450,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray digestBlocksCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle digestBlocksCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, digestBlocksCryptographicKey);
 
@@ -1459,7 +1458,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray digestBlocksChangeCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle digestBlocksChangeCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, digestBlocksChangeCryptographicKey);
 
@@ -1467,7 +1466,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray binaryCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle binaryCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, binaryCryptographicKey);
 
@@ -1475,7 +1474,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray superChangeCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle superChangeCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, superChangeCryptographicKey);
 
@@ -1483,7 +1482,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray ptahCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle ptahCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, ptahCryptographicKey);
 		}
@@ -1504,7 +1503,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
-			IByteArray modifiedCryptographicKey = dehydrator.ToArray();
+			SafeArrayHandle modifiedCryptographicKey = dehydrator.ToArray();
 
 			chainStateProvider.UpdateModeratorKey(moderatorKeyChangeTransaction.TransactionId.SimpleTransactionId, cryptographicKey.Id, modifiedCryptographicKey);
 		}

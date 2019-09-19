@@ -2,15 +2,15 @@
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols.SplitMessages {
-	public interface ISplitMessageEntry : IMessageEntry, IDisposable2 {
+	public interface ISplitMessageEntry : IMessageEntry {
 
 		long Hash { get; }
 		int CompleteMessageLength { get; }
 
-		IByteArray CreateNextSliceRequestMessage();
-		IByteArray CreateSliceResponseMessage(ISliceRequestMessageEntry requestSliceMessageEntry);
+		SafeArrayHandle CreateNextSliceRequestMessage();
+		SafeArrayHandle CreateSliceResponseMessage(ISliceRequestMessageEntry requestSliceMessageEntry);
 		void SetSliceData(ISliceResponseMessageEntry responseSliceMessageEntry);
-		IByteArray AssembleCompleteMessage();
+		SafeArrayHandle AssembleCompleteMessage();
 	}
 
 	public interface ISplitMessageEntry<HEADER_TYPE> : ISplitMessageEntry, IMessageEntry<HEADER_TYPE>

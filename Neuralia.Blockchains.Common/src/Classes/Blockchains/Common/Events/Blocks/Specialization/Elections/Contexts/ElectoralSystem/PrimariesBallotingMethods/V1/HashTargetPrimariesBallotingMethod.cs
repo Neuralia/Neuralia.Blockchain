@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return (PrimariesBallotingMethodTypes.Instance.HashTarget, 1, 0);
 		}
 
-		public override IByteArray PerformBallot(IByteArray candidature, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
+		public override SafeArrayHandle PerformBallot(SafeArrayHandle candidature, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
 
 			BigInteger hashTarget = HashDifficultyUtils.GetHash512TargetByIncrementalDifficulty(this.Difficulty.Value);
 

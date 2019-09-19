@@ -9,11 +9,11 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 	public class SplitMessageEntry : MessageEntry<SplitMessageHeader>, ISplitMessageEntry<SplitMessageHeader> {
 
-		private ByteArray assembledMessage;
+		private readonly SafeArrayHandle assembledMessage = SafeArrayHandle.Create();
 
-		private IByteArray dehydratedHeaderBytes;
+		private readonly SafeArrayHandle dehydratedHeaderBytes = SafeArrayHandle.Create();
 
-		public SplitMessageEntry(IByteArray message = null) : base(message) {
+		public SplitMessageEntry(SafeArrayHandle message = null) : base(message) {
 
 			if(message != null) {
 				// now lets set our slice descriptions 
@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 
 		protected override bool AllowEmptyMessage => true;
 
-		public override void RebuildHeader(IByteArray buffer) {
+		public override void RebuildHeader(SafeArrayHandle buffer) {
 			this.Header.Rehydrate(buffer);
 		}
 
@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 		/// <summary>
 		///     we should never call Message on a large message
 		/// </summary>
-		public override IByteArray Message => throw new NotImplementedException();
+		public override SafeArrayHandle Message => throw new NotImplementedException();
 
 		public int CompleteMessageLength => this.HeaderT.CompleteMessageLength;
 
@@ -43,19 +43,19 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 		///     Take all the slices and rebuild the complete message
 		/// </summary>
 		/// <returns></returns>
-		public IByteArray AssembleCompleteMessage() {
+		public SafeArrayHandle AssembleCompleteMessage() {
 			if(!this.IsComplete) {
 				return null;
 			}
 
-			if(this.assembledMessage == null) {
-				this.assembledMessage = new ByteArray(this.HeaderT.CompleteMessageLength);
+			if(this.assembledMessage.IsEmpty) {
+				this.assembledMessage.Entry = ByteArray.Create(this.HeaderT.CompleteMessageLength);
 
 				int offset = 0;
 
 				foreach(Slice slice in this.HeaderT.Slices.Values.OrderBy(s => s.index)) {
 
-					this.assembledMessage.CopyFrom(slice.bytes, offset);
+					this.assembledMessage.Entry.CopyFrom(slice.bytes.Entry, offset);
 					offset += slice.length;
 				}
 
@@ -64,12 +64,12 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 				}
 			}
 
-			return this.assembledMessage;
+			return this.assembledMessage.Branch();
 		}
 
 		public long Hash => ((MessageHash64) this.HeaderT.Hash).Hash;
 
-		public IByteArray CreateNextSliceRequestMessage() {
+		public SafeArrayHandle CreateNextSliceRequestMessage() {
 			if(this.IsComplete) {
 				throw new ApplicationException("There are no more slices to request. the download is complete.");
 			}
@@ -82,7 +82,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 			return nextrequestEntry.Dehydrate();
 		}
 
-		public IByteArray CreateSliceResponseMessage(ISliceRequestMessageEntry requestSliceMessageEntry) {
+		public SafeArrayHandle CreateSliceResponseMessage(ISliceRequestMessageEntry requestSliceMessageEntry) {
 
 			Slice slice = this.HeaderT.Slices[requestSliceMessageEntry.Index];
 
@@ -100,7 +100,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 				throw new ApplicationException("Slice hash provided is not the same as the one we have locally");
 			}
 
-			slice.bytes = messageEntry.Message;
+			slice.bytes.Entry = messageEntry.Message.Entry;
 
 			//now we recompute and confirm the total slice hashes if we are complete to confirm we match what was promissed in the header.
 			if(this.IsComplete) {
@@ -112,13 +112,13 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 			}
 		}
 
-		public override IByteArray Dehydrate() {
+		public override SafeArrayHandle Dehydrate() {
 			// since we cache the split messages, we store the bytes, in case we need to reuse them
-			if(this.dehydratedHeaderBytes != null) {
+			if(this.dehydratedHeaderBytes.HasData) {
 				return this.dehydratedHeaderBytes;
 			}
 
-			this.dehydratedHeaderBytes = base.Dehydrate();
+			this.dehydratedHeaderBytes.Entry = base.Dehydrate().Entry;
 
 			return this.dehydratedHeaderBytes;
 		}
@@ -131,14 +131,14 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 			return new SplitMessageHeader();
 		}
 
-		protected override SplitMessageHeader CreateHeader(int messageLength, IByteArray message) {
+		protected override SplitMessageHeader CreateHeader(int messageLength, SafeArrayHandle message) {
 			return new SplitMessageHeader(message);
 		}
 
 		/// <summary>
 		///     cut the message in multiple slices
 		/// </summary>
-		private Dictionary<int, Slice> SliceMessage(IByteArray bytes) {
+		private Dictionary<int, Slice> SliceMessage(SafeArrayHandle bytes) {
 
 			int startIndex = 0;
 			int length = Slice.MAXIMUM_SIZE;
@@ -154,10 +154,10 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 					length = endIndex - startIndex;
 				}
 
-				ByteArray sliceBytes = new ByteArray(length);
-				sliceBytes.CopyFrom(bytes, startIndex, length);
+				ByteArray sliceSimpleBytes = ByteArray.Create(length);
+				sliceSimpleBytes.CopyFrom(bytes.Entry, startIndex, length);
 
-				slices.Add(index, new Slice(index, startIndex, length, sliceBytes));
+				slices.Add(index, new Slice(index, startIndex, length, sliceSimpleBytes));
 
 				index++;
 				startIndex += length;
@@ -167,35 +167,5 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 
 			return slices;
 		}
-
-	#region Disposable
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		protected virtual void Dispose(bool disposing) {
-
-			if(disposing && !this.IsDisposed) {
-				try {
-					// dispose of the slices, so they can free their memory
-					foreach(Slice slice in this.HeaderT.Slices.Values) {
-						slice.Dispose();
-					}
-				} finally {
-					this.IsDisposed = true;
-				}
-			}
-		}
-
-		~SplitMessageEntry() {
-			this.Dispose(false);
-		}
-
-		public bool IsDisposed { get; private set; }
-
-	#endregion
-
 	}
 }

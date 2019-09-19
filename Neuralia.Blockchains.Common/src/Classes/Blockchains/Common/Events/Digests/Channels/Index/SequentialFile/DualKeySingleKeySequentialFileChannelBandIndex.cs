@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return fileTypes;
 		}
 
-		public override Dictionary<int, IByteArray> HashFiles(int groupIndex) {
+		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {
 			var results = base.HashFiles(groupIndex);
 
 			// now the L2 index
@@ -58,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return results;
 		}
 
-		public override IByteArray GetFileBytes(int fileId, uint partIndex, long offset, int length) {
+		public override SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length) {
 
 			if(fileId == SECOND_INDEX_FILE_ID) {
 				return FileExtensions.ReadBytes(this.GetL2archivedName(partIndex), offset, length, this.fileSystem);
@@ -86,7 +86,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return results;
 		}
 
-		public override DigestChannelBandEntries<IByteArray, CHANEL_BANDS> QueryCard((long accountId, byte ordinal) keySet) {
+		public override DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS> QueryCard((long accountId, byte ordinal) keySet) {
 			(uint adjustedAccountId, uint index) adjustedKey = this.AdjustAccountId(keySet.accountId);
 
 			var expanded = this.EnsureFilesetExtracted(adjustedKey.index);
@@ -104,7 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			// now query in l2
 			this.L2IndexProvider.SetActiveFilename(this.GetL2expandedName(adjustedKey.index));
 
-			IByteArray l2data = this.L2IndexProvider.QueryCard(l1Offsets.offset, l1Offsets.length);
+			SafeArrayHandle l2data = this.L2IndexProvider.QueryCard(l1Offsets.offset, l1Offsets.length);
 
 			Span<byte> buffer = stackalloc byte[L2_ENTRY_COUNT_SIZE];
 
@@ -158,7 +158,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		/// </summary>
 		/// <param name="keySet"></param>
 		/// <returns></returns>
-		public Dictionary<byte, DigestChannelBandEntries<IByteArray, CHANEL_BANDS>> QuerySubCards(long accountId) {
+		public Dictionary<byte, DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS>> QuerySubCards(long accountId) {
 			//TODO: this needs a good refactor with above
 			(uint adjustedAccountId, uint index) adjustedKey = this.AdjustAccountId(accountId);
 
@@ -177,7 +177,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			// now query in l2
 			this.L2IndexProvider.SetActiveFilename(this.GetL2expandedName(adjustedKey.index));
 
-			IByteArray l2data = this.L2IndexProvider.QueryCard(l1Offsets.offset, l1Offsets.length);
+			SafeArrayHandle l2data = this.L2IndexProvider.QueryCard(l1Offsets.offset, l1Offsets.length);
 
 			Span<byte> buffer = stackalloc byte[L2_ENTRY_COUNT_SIZE];
 
@@ -189,7 +189,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			int offset = L2_INTRO_SIZE;
 			uint keyLength = 0;
 
-			var results = new Dictionary<byte, DigestChannelBandEntries<IByteArray, CHANEL_BANDS>>();
+			var results = new Dictionary<byte, DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS>>();
 
 			bool found = false;
 

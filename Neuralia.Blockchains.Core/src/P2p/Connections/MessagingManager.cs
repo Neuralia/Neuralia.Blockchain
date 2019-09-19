@@ -206,8 +206,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			IGossipMessageSet gossipMessageSet = this.networkingService.MessageFactory.RehydrateGossipMessage(task.data, gossipHeader, chainFactory);
 
-			task.data?.Return();
-			
 			if(gossipMessageSet == null) {
 				throw new ApplicationException("Failed to rehydrate the chain gossip message");
 			}
@@ -327,7 +325,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 						return;
 					} finally {
-						task.data?.Return();
+				
 					}
 				}
 
@@ -369,19 +367,17 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 										// this means we did not pass the trigger filter above, it could be an evil trigger and we default
 										throw new ApplicationException("An invalid trigger was sent");
 									}
-
-									triggeMessageSet.BaseMessage?.Dispose();
 								}
 							} else {
 
 								if(messageSet.BaseMessage is WorkflowTriggerMessage<R>) {
-									messageSet.BaseMessage?.Dispose();
+									//messageSet.BaseMessage?.Dispose();
 
 									throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is not set, but the message type is a workflow trigger");
 								}
 
 								if(messageSet.Header.IsWorkflowTrigger) {
-									messageSet.BaseMessage?.Dispose();
+									//messageSet.BaseMessage?.Dispose();
 
 									throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
 								}
@@ -399,12 +395,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 									workflow.ReceiveNetworkMessage(messageSet);
 								} else {
-									messageSet.BaseMessage?.Dispose();
+									//messageSet.BaseMessage?.Dispose();
 									Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' which does not exist");
 								}
 							}
 						} finally {
-							task.data?.Return();
+							
 						}
 						
 					}
@@ -416,10 +412,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 					// this message is targeted at a specific chain, so we route it over there
 					// first confirm that we support this chain
-					((NetworkingService<R>) this.networkingService).RouteNetworkMessage(header, task.data, task.Connection);
+					((NetworkingService<R>) this.networkingService).RouteNetworkMessage(header, task.data.Branch(), task.Connection);
 				}
 			} finally {
-		
+
 			}
 		}
 
@@ -480,15 +476,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public class MessageReceivedTask : ColoredTask {
 			public readonly List<Type> acceptedTriggers;
 			public readonly PeerConnection Connection;
-			public readonly IByteArray data;
+			public readonly SafeArrayHandle data = SafeArrayHandle.Create();
 
-			public MessageReceivedTask(IByteArray data, PeerConnection connection, List<Type> acceptedTriggers) {
-				this.data = data;
+			public MessageReceivedTask(SafeArrayHandle data, PeerConnection connection, List<Type> acceptedTriggers) {
+				this.data = data.Branch();
 				this.Connection = connection;
 				this.acceptedTriggers = acceptedTriggers;
 			}
 
-			public MessageReceivedTask(IByteArray data, PeerConnection connection) : this(data, connection, new List<Type>(new[] {typeof(WorkflowTriggerMessage<R>)})) {
+			public MessageReceivedTask(SafeArrayHandle data, PeerConnection connection) : this(data, connection, new List<Type>(new[] {typeof(WorkflowTriggerMessage<R>)})) {
 
 			}
 

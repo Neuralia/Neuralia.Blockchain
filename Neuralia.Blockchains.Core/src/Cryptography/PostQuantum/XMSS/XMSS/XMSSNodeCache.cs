@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		public readonly byte Major = 1;
 		public readonly byte Minor = 0;
 
-		private readonly ConcurrentDictionary<XMSSNodeId, IByteArray> nodes = new ConcurrentDictionary<XMSSNodeId, IByteArray>();
+		private readonly ConcurrentDictionary<XMSSNodeId, ByteArray> nodes = new ConcurrentDictionary<XMSSNodeId, ByteArray>();
 		public readonly byte Revision = 0;
 
 		public XMSSNodeCache() {
@@ -34,9 +34,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		public byte Height { get; private set; }
 		public byte DigestSize { get; private set; }
 
-		public IByteArray this[XMSSNodeId id] {
+		public ByteArray this[XMSSNodeId id] {
 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
-			get => !this.nodes.ContainsKey(id) ? null : this.nodes[id];
+			get => !this.nodes.ContainsKey(id) ? null : this.nodes[id].Clone();
 
 		}
 
@@ -84,14 +84,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				int index = (int) adaptiveLong.Value;
 				int height = rehydrator.ReadByte();
 
-				IByteArray buffer = rehydrator.ReadArray(this.DigestSize);
+				ByteArray buffer = rehydrator.ReadArray(this.DigestSize);
 
 				this.nodes.AddSafe((index, height), buffer);
 			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void Cache(XMSSNodeId id, IByteArray node) {
+		public void Cache(XMSSNodeId id, ByteArray node) {
 			if(this.nodes.ContainsKey(id)) {
 				return;
 			}
@@ -116,18 +116,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			}
 		}
 
-		public virtual void Load(IByteArray publicKey) {
+		public virtual void Load(ByteArray publicKey) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(publicKey);
 
 			this.Rehydrate(rehydrator);
 		}
 
-		public virtual IByteArray Save() {
+		public virtual ByteArray Save() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			return dehydrator.ToArray().Release();
 		}
 
 	#region disposable
@@ -142,7 +142,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				foreach(IByteArray entry in this.nodes.Values) {
+				foreach(ByteArray entry in this.nodes.Values) {
 					entry?.Dispose();
 				}
 			}

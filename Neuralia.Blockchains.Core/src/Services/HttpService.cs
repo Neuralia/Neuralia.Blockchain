@@ -9,7 +9,7 @@ using Neuralia.Blockchains.Tools.Data;
 namespace Neuralia.Blockchains.Core.Services {
 	public interface IHttpService {
 		void Download(string requestUri, string filename);
-		IByteArray Download(string requestUri);
+		SafeArrayHandle Download(string requestUri);
 	}
 
 	public class HttpService : IHttpService {
@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.Download(new Uri(requestUri), filename);
 		}
 
-		public IByteArray Download(string requestUri) {
+		public SafeArrayHandle Download(string requestUri) {
 			if(requestUri == null) {
 				throw new ArgumentNullException(nameof(requestUri));
 			}
@@ -65,7 +65,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			}
 		}
 
-		private IByteArray Download(Uri requestUri) {
+		private SafeArrayHandle Download(Uri requestUri) {
 
 			using(MemoryStream memoryStream = new MemoryStream()) {
 

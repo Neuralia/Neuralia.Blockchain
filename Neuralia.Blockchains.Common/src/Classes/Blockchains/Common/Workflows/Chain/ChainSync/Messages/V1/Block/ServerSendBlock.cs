@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// </summary>
 		public long ChainBlockHeight { get; set; }
 
-		public IByteArray NextBlockHash { get; set; }
+		public SafeArrayHandle NextBlockHash { get; } = SafeArrayHandle.Create();
 
 		public BlockChannelsInfoSet<DataSliceSize> NextBlockChannelSizes { get; } = new BlockChannelsInfoSet<DataSliceSize>();
 
@@ -93,7 +93,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			if(this.HasNextInfo) {
 				this.NextBlockHeight = rehydrator.ReadLong();
-				this.NextBlockHash = rehydrator.ReadNonNullableArray();
+				this.NextBlockHash.Entry = rehydrator.ReadNonNullableArray();
 				this.NextBlockChannelSizes.Rehydrate(rehydrator);
 			}
 		}
@@ -105,10 +105,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected override short SetWorkflowType() {
 			return WorkflowIDs.CHAIN_SYNC;
 		}
-
-		protected override void DisposeAll() {
-			base.DisposeAll();
-			
-		}
+		
 	}
 }

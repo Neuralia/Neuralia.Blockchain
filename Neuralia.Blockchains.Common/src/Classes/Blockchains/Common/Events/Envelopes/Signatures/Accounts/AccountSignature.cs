@@ -9,13 +9,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public interface IAccountSignature : ITreeHashable, IBinarySerializable, IJsonSerializable {
 
 		byte Version { get; }
-		IByteArray Autograph { get; set; }
+		SafeArrayHandle Autograph { get; }
 	}
 
 	public class AccountSignature : IAccountSignature {
 
 		public byte Version { get; private set; } = 1;
-		public IByteArray Autograph { get; set; }
+		public SafeArrayHandle Autograph { get;  } = SafeArrayHandle.Create();
 
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = new HashNodeList();
@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
 			this.Version = rehydrator.ReadByte();
-			this.Autograph = rehydrator.ReadNonNullableArray();
+			this.Autograph.Entry = rehydrator.ReadNonNullableArray();
 
 		}
 

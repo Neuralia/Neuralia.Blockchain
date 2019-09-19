@@ -44,7 +44,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		void Initialize();
 
-		void PostNetworkMessage(IByteArray data, PeerConnection connection);
+		void PostNetworkMessage(SafeArrayHandle data, PeerConnection connection);
 
 		void ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
 
@@ -186,7 +186,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			}
 		}
 
-		public void PostNetworkMessage(IByteArray data, PeerConnection connection) {
+		public void PostNetworkMessage(SafeArrayHandle data, PeerConnection connection) {
 			MessagingManager<R>.MessageReceivedTask messageTask = new MessagingManager<R>.MessageReceivedTask(data, connection);
 			this.PostNetworkMessage(messageTask);
 		}
@@ -254,7 +254,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			return new ServiceSet<R>(BlockchainTypes.Instance.None);
 		}
 
-		protected virtual void ConnectionListenerOnNewConnectionReceived(TcpServer listener, ITcpConnection connection, IByteArray buffer) {
+		protected virtual void ConnectionListenerOnNewConnectionReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer) {
 
 			try {
 				if((buffer == null) || buffer.IsEmpty) {
@@ -354,7 +354,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		/// <param name="data"></param>
 		/// <param name="connection"></param>
-		public void HandleDataReceivedEvent<TRIGGER>(IByteArray data, PeerConnection connection, IEnumerable<Type> acceptedTriggers = null) {
+		public void HandleDataReceivedEvent<TRIGGER>(SafeArrayHandle data, PeerConnection connection, IEnumerable<Type> acceptedTriggers = null) {
 
 			// redirect the received message into the message manager worker, who will know what to do with it in its own time
 			var acceptedTriggerTypes = acceptedTriggers != null ? acceptedTriggers.ToList() : new List<Type>();
@@ -371,7 +371,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		///     so its all done here in top priority
 		/// </summary>
 		/// <param name="buffer"></param>
-		protected virtual void HandleIpValidatorRequest(IByteArray buffer, ITcpConnection connection) {
+		protected virtual void HandleIpValidatorRequest(SafeArrayHandle buffer, ITcpConnection connection) {
 
 			//TODO: what should happen by default here?
 			// we dont know what to do with this
@@ -399,7 +399,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <param name="header"></param>
 		/// <param name="data"></param>
 		/// <param name="connection"></param>
-		public void RouteNetworkMessage(IRoutingHeader header, IByteArray data, PeerConnection connection) {
+		public void RouteNetworkMessage(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection) {
 			if(!this.SupportsChain(header.ChainId)) {
 				throw new ApplicationException("A message was received that targets a transactionchain that we do not support.");
 			}

@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core.Compression;
+using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Data;
 
@@ -16,11 +17,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public interface IDigestChannelBandIndex {
 		void Initialize();
 
-		Dictionary<int, IByteArray> HashFiles(int groupIndex);
+		Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex);
 
 		List<int> GetFileTypes();
 
-		IByteArray GetFileBytes(int fileId, uint partIndex, long offset, int length);
+		SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length);
 	}
 
 	public interface IDigestChannelBandIndex<CARD_TYPE, KEY> : IDigestChannelBandIndex
@@ -85,8 +86,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		}
 
-		public abstract IByteArray GetFileBytes(int fileId, uint partIndex, long offset, int length);
-		public abstract Dictionary<int, IByteArray> HashFiles(int groupIndex);
+		public abstract SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length);
+		public abstract Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex);
 
 		public abstract List<int> GetFileTypes();
 
@@ -162,11 +163,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return results;
 		}
 
-		protected IByteArray HashFile(string filename) {
-			Sha3SakuraTree hasher = new Sha3SakuraTree();
+		protected SafeArrayHandle HashFile(string filename) {
 
-			using(FileStreamSliceHashNodeList streamSliceHashNodeList = new FileStreamSliceHashNodeList(filename, this.fileSystem)) {
-				return hasher.Hash(streamSliceHashNodeList);
+			using(var sliceHashNodes = new FileStreamSliceHashNodeList(filename, this.fileSystem)) {
+				return HashingUtils.Hash3(sliceHashNodes);
 			}
 		}
 	}

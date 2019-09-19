@@ -22,9 +22,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 
 		}
 
-		public (IByteArray privateKey, IByteArray publicKey) GenerateKeys() {
+		public (SafeArrayHandle privateKey, SafeArrayHandle publicKey) GenerateKeys() {
 
-			(IByteArray privateKey, IByteArray publicKey) results = default;
+			(SafeArrayHandle privateKey, SafeArrayHandle publicKey) results = default;
 
 			//TODO: fix this issue in qTesla! see test to reproduce:  (it seems to loop infinitely, eventually int overflows into negative size)
 			// SecureRandom random = DeterministicRandomSourceProvider.GetDeterministicRandom();
@@ -54,7 +54,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 			return results;
 		}
 
-		public IByteArray Sign(IByteArray content, IByteArray privateKey) {
+		public SafeArrayHandle Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
 
 			QTESLASigner signer = new QTESLASigner();
 
@@ -63,7 +63,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 			return (ByteArray) signer.generateSignature(content.ToExactByteArray());
 		}
 
-		public override bool Verify(IByteArray message, IByteArray signature, IByteArray publicKey) {
+		public override bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
 			QTESLASigner signer = new QTESLASigner();
 
 			signer.init(false, QTESLAPublicKeyParameters.Rehydrate(publicKey));

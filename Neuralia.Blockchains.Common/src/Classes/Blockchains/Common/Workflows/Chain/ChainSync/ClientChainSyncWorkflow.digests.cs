@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			(consensusSpecs.digestId, nextBlockHeightConsensusType) = ConsensusUtilities.GetConsensus(peerBlockSpecs.Values.Where(v => v.digestId > 0), a => a.digestId);
 
-			//(IByteArray nextBlockHash, ConsensusUtilities.ConsensusType nextBlockHashConsensusType) = ConsensusUtilities.GetConsensus(peerBlockSpecs.Values.Where(v => (v.nextBlockHash != null) && v.nextBlockHash.HasData), a => (a.nextBlockHash.GetArrayHash(), a.nextBlockHash));
+			//(ArrayWrapper nextBlockHash, ConsensusUtilities.ConsensusType nextBlockHashConsensusType) = ConsensusUtilities.GetConsensus(peerBlockSpecs.Values.Where(v => (v.nextBlockHash != null) && v.nextBlockHash.HasData), a => (a.nextBlockHash.GetArrayHash(), a.nextBlockHash));
 
 			this.TestConsensus(nextBlockHeightConsensusType, nameof(consensusSpecs.digestId));
 
@@ -448,7 +448,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				DigestFilesetSyncManifest syncManifest = parameters.singleEntryContext.syncManifest;
 
-				IByteArray digestHeaderFile = this.LoadDigestSyncManifestFile(syncManifest, syncManifest.Key);
+				SafeArrayHandle digestHeaderFile = this.LoadDigestSyncManifestFile(syncManifest, syncManifest.Key);
 
 				IDehydratedBlockchainDigest dehydratedDigest = new DehydratedBlockchainDigest();
 				dehydratedDigest.Rehydrate(Compressors.DigestCompressor.Decompress(digestHeaderFile));
@@ -624,7 +624,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return this.LoadSyncManifest<int, DigestFilesetSyncManifest, DigestFilesetSyncManifest.DigestSyncingDataSlice>(path);
 		}
 
-		public IByteArray LoadDigestSyncManifestFile(DigestFilesetSyncManifest filesetSyncManifest, int key) {
+		public SafeArrayHandle LoadDigestSyncManifestFile(DigestFilesetSyncManifest filesetSyncManifest, int key) {
 
 			string path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetDigestSyncManifestFileName();
 
@@ -673,7 +673,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return this.LoadSyncManifest<ChannelFileSetKey, ChannelsFilesetSyncManifest, ChannelsFilesetSyncManifest.ChannelsSyncingDataSlice>(path);
 		}
 
-		public IByteArray LoadDigestFileSyncManifestFile(ChannelsFilesetSyncManifest filesetSyncManifest, ChannelFileSetKey key) {
+		public SafeArrayHandle LoadDigestFileSyncManifestFile(ChannelsFilesetSyncManifest filesetSyncManifest, ChannelFileSetKey key) {
 
 			string path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetDigestFileSyncManifestFileName();
 

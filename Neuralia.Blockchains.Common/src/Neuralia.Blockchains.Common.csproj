@@ -46,16 +46,12 @@
     <PackageReference Include="Neuralia.Data.HashFunction.xxHash" Version="1.0.0" />
 
 
-    <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.2.2" />
+       <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.2.2" />
 
     <PackageReference Include="morelinq" Version="3.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
-    <!--<PackageReference Include="sharpcompress" Version="0.20.0" />-->
     <PackageReference Include="CommandLineParser" Version="2.6.0" />
     <PackageReference Include="LiteDB" Version="4.1.4" />
-
-    <!-- https://docs.microsoft.com/en-us/aspnet/core/tutorials/first-mvc-app-xplat/working-with-sql -->
-    <!-- https://docs.microsoft.com/en-us/ef/core/get-started/netcore/new-db-sqlite -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="2.2.6" />
     <PackageReference Include="RestSharp" Version="106.6.10" />
     <PackageReference Include="RT.Comb" Version="2.3.0" />

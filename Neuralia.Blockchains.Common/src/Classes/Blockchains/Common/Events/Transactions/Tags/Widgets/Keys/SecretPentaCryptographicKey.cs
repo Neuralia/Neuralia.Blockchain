@@ -57,5 +57,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.SecretPenta;
 		}
+		
+		protected override void DisposeAll(bool disposing) {
+			base.DisposeAll(disposing);
+			
+			this.ThirdKey?.Dispose();
+			this.FourthKey?.Dispose();
+			this.FifthKey?.Dispose();
+		}
 	}
 }

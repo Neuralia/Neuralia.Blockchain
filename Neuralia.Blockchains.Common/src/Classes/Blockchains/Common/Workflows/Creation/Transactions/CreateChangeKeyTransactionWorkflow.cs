@@ -1,5 +1,6 @@
 ﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
@@ -20,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		protected readonly byte changingKeyOrdinal;
 		protected readonly string keyChangeName;
-
+		protected TransactionIdExtended transactionId;
 		public CreateChangeKeyTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, string note, byte changingKeyOrdinal, CorrelationContext correlationContext) : base(centralCoordinator, note, correlationContext) {
 
 			this.changingKeyOrdinal = changingKeyOrdinal;
@@ -77,9 +78,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
 			}
 		}
+		
+		protected override void PostProcess() {
+			base.PreProcess();
+
+			// first thing, lets mark the key as changing status
+
+			// now we publish our keys
+			IWalletAccount account = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();
+
+			using(IWalletKey key = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey(account.AccountUuid, this.keyChangeName)) {
+
+				if(key.Status != Enums.KeyStatus.Changing) {
+					throw new EventGenerationException("The key is already in the process of changing. we can not do it again.");
+				}
+
+				key.ChangeTransactionId = this.transactionId;
+
+				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
+			}
+		}
 
 		protected override ITransactionEnvelope AssembleEvent() {
-			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateKeyChangeTransaction(this.changingKeyOrdinal, this.keyChangeName, this.correlationContext);
+			var envelope = this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateKeyChangeTransaction(this.changingKeyOrdinal, this.keyChangeName, this.correlationContext);
+
+			this.transactionId = envelope.Contents.Uuid;
+			
+			return envelope;
 		}
 	}
 

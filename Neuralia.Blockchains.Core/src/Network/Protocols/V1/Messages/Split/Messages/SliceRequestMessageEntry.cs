@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 
 		protected override bool AllowEmptyMessage => true;
 		public override bool IsComplete => true;
-		public override IByteArray Message => null;
+		public override SafeArrayHandle Message => null;
 		public long LargeMessageHash => ((MessageHash64) this.HeaderT.Hash).Hash;
 		public int Index => this.HeaderT.slice.index;
 		public long SliceHash => this.HeaderT.slice.hash;
@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 			// do nothing, we have no body here
 		}
 
-		public override void RebuildHeader(IByteArray buffer) {
+		public override void RebuildHeader(SafeArrayHandle buffer) {
 			this.Header.Rehydrate(buffer);
 
 		}
@@ -33,12 +33,12 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 			return new SliceRequestMessageHeader();
 		}
 
-		protected override SliceRequestMessageHeader CreateHeader(int messageLength, IByteArray message) {
+		protected override SliceRequestMessageHeader CreateHeader(int messageLength, SafeArrayHandle message) {
 			// we wont be using this
 			return null;
 		}
 
-		public override IByteArray Dehydrate() {
+		public override SafeArrayHandle Dehydrate() {
 
 			IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
 

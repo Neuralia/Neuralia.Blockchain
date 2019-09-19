@@ -2,13 +2,12 @@
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
 	public abstract class CommonAddress : IDisposable2 {
 
-		private readonly IByteArray bytes;
+		private readonly ByteArray bytes;
 		private int keyAndMask;
 		private int layerAddress;
 		private long treeAddress;
@@ -16,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
 
 		public CommonAddress(AddressTypes type) {
 
-			this.bytes = MemoryAllocators.Instance.cryptoAllocator.Take(32);
+			this.bytes = ByteArray.Create(32);
 			this.Type = type;
 		}
 
@@ -140,7 +139,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal IByteArray ToByteArray() {
+		internal ByteArray ToByteArray() {
 
 			return this.bytes;
 		}
@@ -164,7 +163,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				this.bytes?.Return();
+				this.bytes?.Dispose();
 			}
 
 			this.IsDisposed = true;

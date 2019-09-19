@@ -148,7 +148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 						dehydrator.Write(this.blockGroupingConfig.Value.GroupingCount);
 
-						IByteArray bytes = dehydrator.ToArray();
+						SafeArrayHandle bytes = dehydrator.ToArray();
 
 						FileExtensions.WriteAllBytes(blocksConfigFile, bytes, this.centralCoordinator.FileSystem);
 
@@ -181,7 +181,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 						dehydrator.Write(this.messageGroupingConfig.Value.GroupingCount);
 
-						IByteArray bytes = dehydrator.ToArray();
+						SafeArrayHandle bytes = dehydrator.ToArray();
 
 						FileExtensions.WriteAllBytes(messagesConfigFile, bytes, this.centralCoordinator.FileSystem);
 

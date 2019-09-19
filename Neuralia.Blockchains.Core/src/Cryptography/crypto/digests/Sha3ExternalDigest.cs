@@ -1,6 +1,5 @@
 ﻿using System;
 using Neuralia.Blockchains.Core.Cryptography.SHA3;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 
 namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 	public class Sha3ExternalDigest : ShaDigestBase {
@@ -15,11 +14,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 			switch(bitLength) {
 				case 256:
-					this.sha = new SHA3256Managed(MemoryAllocators.Instance.cryptoAllocator);
+					this.sha = new SHA3256Managed();
 
 					break;
 				case 512:
-					this.sha = new SHA3512Managed(MemoryAllocators.Instance.cryptoAllocator);
+					this.sha = new SHA3512Managed();
 
 					break;
 				default:

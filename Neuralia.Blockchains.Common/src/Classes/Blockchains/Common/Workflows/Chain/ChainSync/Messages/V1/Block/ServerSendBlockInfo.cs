@@ -12,7 +12,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Block {
 	public class ServerSendBlockInfo : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncInfoResponse<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, long, BlockChannelUtils.BlockChannelTypes> {
-		public IByteArray BlockHash { get; set; }
+		public SafeArrayHandle BlockHash { get;} = SafeArrayHandle.Create();
 
 		/// <summary>
 		///     The last block we have in our chain. we send it every time, as this number changes as we sync locally
@@ -71,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.HasBlockDetails = rehydrator.ReadBool();
 
 			if(this.HasBlockDetails) {
-				this.BlockHash = rehydrator.ReadNonNullableArray();
+				this.BlockHash.Entry = rehydrator.ReadNonNullableArray();
 				this.SlicesSize.Rehydrate(rehydrator);
 			}
 		}
@@ -82,11 +82,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected override short SetWorkflowType() {
 			return WorkflowIDs.CHAIN_SYNC;
-		}
-		
-		protected override void DisposeAll() {
-			base.DisposeAll();
-			
 		}
 	}
 }

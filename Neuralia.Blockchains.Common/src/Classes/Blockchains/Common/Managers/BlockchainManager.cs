@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security;
 using System.Threading;
@@ -108,6 +109,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		private IEventPoolProvider chainEventPoolProvider;
 
+		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
+		
 		// the sync workflow we keep as a reference.
 		private IClientChainSyncWorkflow chainSynchWorkflow;
 		private DateTime? nextBlockchainSynchCheck;
@@ -409,7 +412,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					if(!isBlockAlreadyInserted) {
 
 						// now, alert the world of this new block!
-						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInserted(block.BlockId.Value, block.FullTimestamp, block.Hash.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
+						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInserted(block.BlockId.Value, block.FullTimestamp, block.Hash.Entry.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
 
 						try {
 							this.BlockInstalled(block, dehydratedBlock);
@@ -516,7 +519,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			chainStateProvider.BlockHeight = block.BlockId.Value;
 
 			// now, alert the world of this new block newly interpreted!
-			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInterpreted(block.BlockId.Value, block.FullTimestamp, block.Hash.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
+			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInterpreted(block.BlockId.Value, block.FullTimestamp, block.Hash.Entry.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
 
 			if(syncWallet) {
 				try {
@@ -1061,9 +1064,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						//TODO: passphrases? this here is mostly for debug
 						// if we must, we will create a new wallet
-						if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(default, chainConfig.EncryptWallet, chainConfig.EncryptWalletKeys, false, null)) {
-							throw new ApplicationException("Failed to create a new wallet");
-						}
+						Repeater.Repeat(() => {
+							if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(default, chainConfig.EncryptWallet, chainConfig.EncryptWalletKeys, false, null)) {
+								throw new ApplicationException("Failed to create a new wallet");
+							}
+						}, 2);
+						
 
 						LoadWallet();
 					}
@@ -1084,8 +1090,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			IChainStateProvider chainState = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 			return new BlockchainInfo {
-				BlockId = chainState.BlockHeight, BlockHash = ((ByteArray) chainState.LastBlockHash)?.ToBase58(), BlockTimestamp = chainState.LastBlockTimestamp, PublicBlockId = chainState.PublicBlockHeight,
-				DigestId = chainState.DigestHeight, DigestHash = ((ByteArray) chainState.LastDigestHash)?.ToBase58(), DigestBlockId = chainState.DigestBlockHeight, DigestTimestamp = chainState.LastDigestTimestamp,
+				BlockId = chainState.BlockHeight, BlockHash = ((ByteArray) chainState.LastBlockHash)?.ToBase58(), BlockTimestamp = chainState.LastBlockTimestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture), PublicBlockId = chainState.PublicBlockHeight,
+				DigestId = chainState.DigestHeight, DigestHash = ((ByteArray) chainState.LastDigestHash)?.ToBase58(), DigestBlockId = chainState.DigestBlockHeight, DigestTimestamp = chainState.LastDigestTimestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture),
 				PublicDigestId = chainState.PublicDigestHeight
 			};
 		}
@@ -1136,7 +1142,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = DateTime.MinValue;
 				}
 
-				if(!this.BlockchainSyncing && !this.BlockchainSynced) {
+				if(!this.NetworkPaused && !this.BlockchainSyncing && !this.BlockchainSynced) {
 
 					IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
@@ -1248,6 +1254,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.SynchronizeWallet(blocks, force, false, allowGrowth);
 		}
 
+		
 		public virtual void SynchronizeWallet(List<IBlock> blocks, bool force, bool mobileForce, bool? allowGrowth = null) {
 
 			var walletSynced = this.WalletSyncedNoWait;
@@ -1259,7 +1266,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return;
 			}
 
-			if(this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded && ((mobileForce && GlobalSettings.ApplicationSettings.MobileMode) || (!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableWalletSync && force) || !walletSynced.Value)) {
+			if(!this.NetworkPaused && this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded && ((mobileForce && GlobalSettings.ApplicationSettings.MobileMode) || (!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableWalletSync && force) || !walletSynced.Value)) {
 				lock(this.locker) {
 					if(this.synchWalletWorkflow == null) {
 
@@ -1352,7 +1359,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				if(synthesizedBlockApi.BlockId == 1) {
 
 					// that's pretty important
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = synthesizedBlockApi.SynthesizedGenesisBlockBase.Inception;
+					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = DateTime.Parse(synthesizedBlockApi.SynthesizedGenesisBlockBase.Inception);
 				}
 
 				// we set the chain height to this block id

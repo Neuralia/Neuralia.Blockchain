@@ -23,9 +23,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.BandIndices.Add(key, bandIndex);
 		}
 
-		public Dictionary<int, Dictionary<int, IByteArray>> HashIndexes(int groupIndex) {
+		public Dictionary<int, Dictionary<int, SafeArrayHandle>> HashIndexes(int groupIndex) {
 
-			var indicesResults = new Dictionary<int, Dictionary<int, IByteArray>>();
+			var indicesResults = new Dictionary<int, Dictionary<int, SafeArrayHandle>>();
 
 			foreach(var index in this.BandIndices) {
 

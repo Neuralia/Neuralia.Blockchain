@@ -60,7 +60,8 @@ namespace Neuralia.Blockchains.Core {
 		public readonly BlockchainSystemEventType KeyGenerationEnded;
 		public readonly BlockchainSystemEventType KeyGenerationError;
 		public readonly BlockchainSystemEventType KeyGenerationMessage;
-
+		public readonly BlockchainSystemEventType KeyGenerationPercentageUpdate;
+		
 		public readonly BlockchainSystemEventType KeyGenerationStarted;
 		public readonly BlockchainSystemEventType ConnectableStatusChanged;
 		
@@ -133,6 +134,7 @@ namespace Neuralia.Blockchains.Core {
 			this.KeyGenerationStarted = this.CreateBaseConstant();
 			this.KeyGenerationEnded = this.CreateBaseConstant();
 			this.KeyGenerationMessage = this.CreateBaseConstant();
+			this.KeyGenerationPercentageUpdate = this.CreateBaseConstant();
 			this.KeyGenerationError = this.CreateBaseConstant();
 
 			this.AccountPublicationStarted = this.CreateBaseConstant();

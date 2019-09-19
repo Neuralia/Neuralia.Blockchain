@@ -10,11 +10,11 @@ using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 	public class MessageParser : IMessageParser {
-		private readonly IByteArray buffer;
+		private readonly SafeArrayHandle buffer;
 
 		private readonly object locker = new object();
 
-		public MessageParser(IByteArray buffer) {
+		public MessageParser(SafeArrayHandle buffer) {
 			this.buffer = buffer;
 		}
 
@@ -105,7 +105,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 					throw new ApplicationException("Unsupported header type");
 			}
 
-			messageEntry.RebuildHeader(this.buffer);
+			messageEntry.RebuildHeader(this.buffer.Branch());
 
 			return messageEntry;
 

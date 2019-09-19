@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 
 		}
 
-		public SliceResponseMessageEntry(IMessageHash messageHash, int sliceindex, long sliceHash, IByteArray message) : base(message) {
+		public SliceResponseMessageEntry(IMessageHash messageHash, int sliceindex, long sliceHash, SafeArrayHandle message) : base(message) {
 			this.HeaderT = new SliceResponseMessageHeader(message.Length, messageHash, sliceindex, sliceHash);
 		}
 
@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 		public int Index => this.HeaderT.SliceIndex;
 		public long SliceHash => this.HeaderT.SliceHash;
 
-		public override void RebuildHeader(IByteArray buffer) {
+		public override void RebuildHeader(SafeArrayHandle buffer) {
 			this.Header.Rehydrate(buffer);
 		}
 
@@ -25,18 +25,18 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 			return new SliceResponseMessageHeader();
 		}
 
-		protected override SliceResponseMessageHeader CreateHeader(int messageLength, IByteArray message) {
+		protected override SliceResponseMessageHeader CreateHeader(int messageLength, SafeArrayHandle message) {
 			// we wont be using this
 			return null;
 		}
 
-		public override IByteArray Dehydrate() {
+		public override SafeArrayHandle Dehydrate() {
 
 			return base.Dehydrate();
 
 		}
 
-		protected override void ValidateMessageHash(IByteArray message) {
+		protected override void ValidateMessageHash(SafeArrayHandle message) {
 			// first, lets compare the hashes
 			// first, lets compare the hashes
 			long hash = Slice.ComputeSliceHash(message);

@@ -16,7 +16,7 @@ using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
+using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
@@ -45,14 +45,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// </summary>
 		/// <param name="buffer"></param>
 		/// <returns></returns>
-		IByteArray WrapEncryptedBytes(IByteArray buffer);
+		SafeArrayHandle WrapEncryptedBytes(SafeArrayHandle buffer);
 
-		IByteArray RunDbOperation(Action<LiteDBDAL> operation, IByteArray databaseBytes);
-		(IByteArray newBytes, T result) RunDbOperation<T>(Func<LiteDBDAL, T> operation, IByteArray databaseBytes);
+		SafeArrayHandle RunDbOperation(Action<LiteDBDAL> operation, SafeArrayHandle databaseBytes);
+		(SafeArrayHandle newBytes, T result) RunDbOperation<T>(Func<LiteDBDAL, T> operation, SafeArrayHandle databaseBytes);
 
-		T RunQueryDbOperation<T>(Func<LiteDBDAL, T> operation, IByteArray databaseBytes);
-		void SaveFile(string filename, IByteArray databaseBytes, EncryptionInfo encryptionInfo, bool wrapEncryptedBytes);
-		IByteArray LoadFile(string filename, EncryptionInfo encryptionInfo, bool wrappedEncryptedBytes);
+		T RunQueryDbOperation<T>(Func<LiteDBDAL, T> operation, SafeArrayHandle databaseBytes);
+		void SaveFile(string filename, SafeArrayHandle databaseBytes, EncryptionInfo encryptionInfo, bool wrapEncryptedBytes);
+		SafeArrayHandle LoadFile(string filename, EncryptionInfo encryptionInfo, bool wrappedEncryptedBytes);
 		IUserWalletFileInfo CreateWalletFileInfo();
 
 		WalletKeyFileInfo CreateWalletKeysFileInfo<KEY_TYPE>(IWalletAccount account, string keyName, byte ordinalId, WalletPassphraseDetails walletPassphraseDetails, AccountPassphraseDetails accountPassphraseDetails)
@@ -205,19 +205,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// </summary>
 		/// <param name="buffer"></param>
 		/// <returns></returns>
-		public IByteArray WrapEncryptedBytes(IByteArray buffer) {
+		public SafeArrayHandle WrapEncryptedBytes(SafeArrayHandle buffer) {
 			//TODO: might be faster to avoid the copy and simply write the bytes directly
-			IByteArray completeEncryptedFile = new ByteArray(buffer.Length + sizeof(long));
+			SafeArrayHandle completeEncryptedFile = ByteArray.Create(buffer.Length + sizeof(long));
 
-			Buffer.BlockCopy(BitConverter.GetBytes(ENCRYPTED_WALLET_TAG), 0, completeEncryptedFile.Bytes, completeEncryptedFile.Offset, sizeof(long));
+			byte[] tagBytes = new byte[sizeof(long)];
+			TypeSerializer.Serialize(ENCRYPTED_WALLET_TAG, tagBytes);
+			
+			Buffer.BlockCopy(tagBytes, 0, completeEncryptedFile.Bytes, completeEncryptedFile.Offset, sizeof(long));
 			Buffer.BlockCopy(buffer.Bytes, buffer.Offset, completeEncryptedFile.Bytes, sizeof(long), buffer.Length);
 
 			return completeEncryptedFile;
 		}
 
-		public IByteArray RunDbOperation(Action<LiteDBDAL> operation, IByteArray databaseBytes) {
-			using(RecyclableMemoryStream walletStream = (RecyclableMemoryStream) MemoryAllocators.Instance.recyclableMemoryStreamManager.GetStream("dbstream")) {
-				if(databaseBytes != null) {
+		public SafeArrayHandle RunDbOperation(Action<LiteDBDAL> operation, SafeArrayHandle databaseBytes) {
+			using(RecyclableMemoryStream walletStream = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("dbstream")) {
+				if(databaseBytes.HasData) {
 					walletStream.Write(databaseBytes.Bytes, databaseBytes.Offset, databaseBytes.Length);
 					walletStream.Position = 0;
 				}
@@ -226,7 +229,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				operation?.Invoke(litedbDal);
 
-				IByteArray result = ByteArray.CreateFrom(walletStream);
+				SafeArrayHandle result = ByteArray.Create(walletStream);
 
 				walletStream.ClearStream();
 
@@ -234,11 +237,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
-		public (IByteArray newBytes, T result) RunDbOperation<T>(Func<LiteDBDAL, T> operation, IByteArray databaseBytes) {
+		public (SafeArrayHandle newBytes, T result) RunDbOperation<T>(Func<LiteDBDAL, T> operation, SafeArrayHandle databaseBytes) {
 
 			T result = default;
 
-			IByteArray newbytes = this.RunDbOperation(LiteDBDAL => {
+			SafeArrayHandle newbytes = this.RunDbOperation(LiteDBDAL => {
 
 				result = operation(LiteDBDAL);
 			}, databaseBytes);
@@ -246,9 +249,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			return (newbytes, result);
 		}
 
-		public T RunQueryDbOperation<T>(Func<LiteDBDAL, T> operation, IByteArray databaseBytes) {
-			using(RecyclableMemoryStream walletStream = (RecyclableMemoryStream) MemoryAllocators.Instance.recyclableMemoryStreamManager.GetStream("dbstream")) {
-				if((databaseBytes == null) || databaseBytes.IsNull) {
+		public T RunQueryDbOperation<T>(Func<LiteDBDAL, T> operation, SafeArrayHandle databaseBytes) {
+			using(RecyclableMemoryStream walletStream = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("dbstream")) {
+				if(databaseBytes.IsEmpty) {
 					throw new ApplicationException("database bytes can not be null");
 				}
 
@@ -265,10 +268,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
-		public void SaveFile(string filename, IByteArray databaseBytes, EncryptionInfo encryptionInfo, bool wrapEncryptedBytes) {
+		public void SaveFile(string filename, SafeArrayHandle databaseBytes, EncryptionInfo encryptionInfo, bool wrapEncryptedBytes) {
 			try {
 
-				if((databaseBytes == null) || databaseBytes.IsNull) {
+				if(databaseBytes.IsEmpty) {
 					throw new ApplicationException("Cannot save null database data");
 				}
 
@@ -279,8 +282,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					this.TransactionalFileSystem.CreateDirectory(directory);
 				}
 
-				IByteArray compressedBytes = null;
-				IByteArray encryptedBytes = null;
+				SafeArrayHandle compressedBytes = null;
+				SafeArrayHandle encryptedBytes = null;
 
 				try {
 					if(encryptionInfo.encrypt) {
@@ -295,8 +298,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 						if(wrapEncryptedBytes) {
 							// wrap the encrypted byes with the flag marker
-							IByteArray wrappedBytes = this.WrapEncryptedBytes(encryptedBytes);
-							encryptedBytes.Clear();
+							SafeArrayHandle wrappedBytes = this.WrapEncryptedBytes(encryptedBytes);
+							encryptedBytes.Entry.Clear();
 							encryptedBytes.Return();
 							encryptedBytes = wrappedBytes;
 						}
@@ -311,12 +314,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					}
 				} finally {
 					if(compressedBytes != null) {
-						compressedBytes.Clear();
+						compressedBytes.Entry.Clear();
 						compressedBytes.Return();
 					}
 
 					if(encryptedBytes != null) {
-						encryptedBytes.Clear();
+						encryptedBytes.Entry.Clear();
 						encryptedBytes.Return();
 					}
 				}
@@ -328,7 +331,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
-		public IByteArray LoadFile(string filename, EncryptionInfo encryptionInfo, bool wrappedEncryptedBytes) {
+		public SafeArrayHandle LoadFile(string filename, EncryptionInfo encryptionInfo, bool wrappedEncryptedBytes) {
 			try {
 
 				if(!this.TransactionalFileSystem.FileExists(filename)) {
@@ -348,22 +351,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						throw new ApplicationException("Encryption parameters were null. can not encrypt");
 					}
 
-					IByteArray encryptedWalletFileBytes = null;
+					SafeArrayHandle encryptedWalletFileBytes = null;
 
 					if(wrappedEncryptedBytes) {
 						encryptedWalletFileBytes = this.GetEncryptedWalletFileBytes(filename);
 					} else {
-						encryptedWalletFileBytes = (ByteArray) this.TransactionalFileSystem.ReadAllBytes(filename);
+						encryptedWalletFileBytes = this.TransactionalFileSystem.ReadAllBytes(filename);
 					}
 
-					IByteArray decryptedWalletBytes = new FileEncryptor().Decrypt(encryptedWalletFileBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters);
+					using(SafeArrayHandle decryptedWalletBytes = new FileEncryptor().Decrypt(encryptedWalletFileBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters)) {
 
-					return Compressors.WalletCompressor.Decompress(decryptedWalletBytes);
+						return Compressors.WalletCompressor.Decompress(decryptedWalletBytes);
+					}
 				}
 
-				ByteArray walletBytes = this.TransactionalFileSystem.ReadAllBytes(filename);
+				using(ByteArray walletSimpleBytes = this.TransactionalFileSystem.ReadAllBytes(filename)) {
 
-				return Compressors.WalletCompressor.Decompress(walletBytes);
+					return Compressors.WalletCompressor.Decompress(walletSimpleBytes);
+				}
 
 			} catch(Exception e) {
 				Log.Verbose("error occured", e);
@@ -420,9 +425,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 			XChaChaFileEncryptor encryptor = new XChaChaFileEncryptor(encryptionParameters);
 
-			IByteArray passwordBytes = (ByteArray) Encoding.UTF8.GetBytes(passphrase.ToUpper());
-			IByteArray fileBytes = FileExtensions.ReadAllBytes(zipFile, this.centralCoordinator.FileSystem);
-			IByteArray encrypted = encryptor.Encrypt(fileBytes, passwordBytes);
+			SafeArrayHandle passwordBytes = (ByteArray) Encoding.UTF8.GetBytes(passphrase.ToUpper());
+			SafeArrayHandle fileBytes = FileExtensions.ReadAllBytes(zipFile, this.centralCoordinator.FileSystem);
+			SafeArrayHandle encrypted = encryptor.Encrypt(fileBytes, passwordBytes);
 
 			FileExtensions.WriteAllBytes(resultsFile, encrypted, this.centralCoordinator.FileSystem);
 
@@ -485,17 +490,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					throw new ApplicationException("Wallet size cannot be 0.");
 				}
 
-				ByteArray buffer = new ByteArray(sizeof(long));
-				stream.Read(buffer.Bytes, buffer.Offset, buffer.Length);
+				using(ByteArray buffer = ByteArray.Create(sizeof(long))) {
+					stream.Read(buffer.Bytes, buffer.Offset, buffer.Length);
 
-#if (NETSTANDARD2_0)
-				return BitConverter.ToInt64(buffer.Bytes.ToArray(), 0) == ENCRYPTED_WALLET_TAG;
-#elif (NETCOREAPP2_2)
-				return BitConverter.ToInt64(buffer.Bytes) == ENCRYPTED_WALLET_TAG;
-#else
-	throw new NotImplementedException();
-#endif
-
+					TypeSerializer.Deserialize(buffer.Span, out long tag);
+					return tag == ENCRYPTED_WALLET_TAG;
+				}
 			}
 		}
 
@@ -504,16 +504,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// </summary>
 		/// <param name="walletFile"></param>
 		/// <returns></returns>
-		private IByteArray GetEncryptedWalletFileBytes(string walletFile) {
+		private SafeArrayHandle GetEncryptedWalletFileBytes(string walletFile) {
 
 			using(Stream fs = this.TransactionalFileSystem.OpenRead(walletFile)) {
 				fs.Position = sizeof(long); // skip the marker
 
-				ByteArray buffer = new ByteArray((int) fs.Length - sizeof(long));
+				using(ByteArray buffer = ByteArray.Create((int) fs.Length - sizeof(long))) {
 
-				fs.Read(buffer.Bytes, buffer.Offset, buffer.Length);
+					fs.Read(buffer.Bytes, buffer.Offset, buffer.Length);
 
-				return buffer;
+					return buffer;
+				}
 			}
 		}
 

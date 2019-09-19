@@ -6,7 +6,7 @@ using Neuralia.Blockchains.Tools.Data;
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 	public class FileEncryptor {
 
-		public IByteArray Encrypt(IByteArray plain, SecureString password, EncryptorParameters parameters) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle plain, SecureString password, EncryptorParameters parameters) {
 			if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
 				return AESFileEncryptor.Encrypt(plain, password, parameters);
 			}
@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			throw new ApplicationException("Invalid cipher");
 		}
 
-		public IByteArray Encrypt(IByteArray plain, IByteArray password, EncryptorParameters parameters) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle plain, SafeArrayHandle password, EncryptorParameters parameters) {
 			if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
 				return AESFileEncryptor.Encrypt(plain, password, parameters);
 			}
@@ -34,15 +34,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			throw new ApplicationException("Invalid cipher");
 		}
 
-		public IByteArray Decrypt(IByteArray cipher, SecureString password, EncryptorParameters parameters) {
+		public SafeArrayHandle Decrypt(SafeArrayHandle cipher, SecureString password, EncryptorParameters parameters) {
 			return this.Decrypt(cipher, 0, cipher.Length, password, parameters);
 		}
 
-		public IByteArray Decrypt(IByteArray cipher, IByteArray password, EncryptorParameters parameters) {
+		public SafeArrayHandle Decrypt(SafeArrayHandle cipher, SafeArrayHandle password, EncryptorParameters parameters) {
 			return this.Decrypt(cipher, 0, cipher.Length, password, parameters);
 		}
 
-		public IByteArray Decrypt(IByteArray cipher, int offset, int length, SecureString password, EncryptorParameters parameters) {
+		public SafeArrayHandle Decrypt(SafeArrayHandle cipher, int offset, int length, SecureString password, EncryptorParameters parameters) {
 			try {
 				if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
 					return AESFileEncryptor.Decrypt(cipher, password, parameters);
@@ -62,7 +62,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public IByteArray Decrypt(IByteArray cipher, int offset, int length, IByteArray password, EncryptorParameters parameters) {
+		public SafeArrayHandle Decrypt(SafeArrayHandle cipher, int offset, int length, SafeArrayHandle password, EncryptorParameters parameters) {
 			try {
 				if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
 					return AESFileEncryptor.Decrypt(cipher, password, parameters);

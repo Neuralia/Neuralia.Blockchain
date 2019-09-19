@@ -80,7 +80,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.ChainPoolDal.InsertTransactionEntry(transactionEnvelope, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
 
 				if(this.SaveTransactionEnvelopes) {
-					IByteArray envelope = transactionEnvelope.DehydrateEnvelope();
+					SafeArrayHandle envelope = transactionEnvelope.DehydrateEnvelope();
 
 					string publicPath = this.GetPublicPath();
 
@@ -120,7 +120,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				ITransactionEnvelope envelope = null;
 
 				if(this.SaveTransactionEnvelopes && File.Exists(trxfile)) {
-					IByteArray trxBytes = (ByteArray) File.ReadAllBytes(trxfile);
+					SafeArrayHandle trxBytes = (ByteArray) File.ReadAllBytes(trxfile);
 
 					envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(trxBytes);
 				}

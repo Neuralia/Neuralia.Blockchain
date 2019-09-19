@@ -116,18 +116,19 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			}
 		}
 
-		public virtual void Load(IByteArray publicKey) {
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(publicKey);
+		public virtual void Load(ByteArray publicKey) {
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(publicKey)) {
 
-			this.Rehydrate(rehydrator);
+				this.Rehydrate(rehydrator);
+			}
 		}
 
-		public virtual IByteArray Save() {
+		public virtual ByteArray Save() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			return dehydrator.ToArray().Release();
 		}
 
 	#region disposable

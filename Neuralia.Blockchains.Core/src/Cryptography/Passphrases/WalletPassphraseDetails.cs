@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 		public SecureString WalletPassphrase { get; private set; }
 
-		public IByteArray WalletPassphraseBytes => this.WalletPassphrase == null ? null : (ByteArray) Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString());
+		public SafeArrayHandle WalletPassphraseBytes => this.WalletPassphrase == null ? null : (ByteArray) Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString());
 
 		/// <summary>
 		///     An explicit flag to determine if we should encrypt the wallet

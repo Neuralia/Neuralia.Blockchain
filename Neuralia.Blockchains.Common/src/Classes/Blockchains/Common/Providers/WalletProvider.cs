@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Abstractions;
 using System.Linq;
@@ -103,9 +104,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			where T : IWalletKey;
 
 		IWalletKey CreateBasicKey(string name, Enums.KeyTypes keyType);
-		IXmssWalletKey CreateXmssKey(string name);
-		IXmssWalletKey CreateXmssKey(string name, float warningLevel, float changeLevel);
-		IXmssWalletKey CreateXmssKey(string name, int treeHeight, int hashBits, WalletProvider.HashTypes HashType, float warningLevel, float changeLevel);
+		IXmssWalletKey CreateXmssKey(string name, Action<int> progressCallback = null);
+		IXmssWalletKey CreateXmssKey(string name, float warningLevel, float changeLevel, Action<int> progressCallback = null);
+		IXmssWalletKey CreateXmssKey(string name, int treeHeight, int hashBits, WalletProvider.HashTypes HashType, float warningLevel, float changeLevel, Action<int> progressCallback = null);
 		IXmssMTWalletKey CreateXmssmtKey(string name, float warningLevel, float changeLevel);
 		IXmssMTWalletKey CreateXmssmtKey(string name, int treeHeight, int treeLayers, Enums.KeyHashBits hashBits, float warningLevel, float changeLevel);
 		IQTeslaWalletKey CreateQTeslaKey(string name, QTESLASecurityCategory.SecurityCategories securityCategory);
@@ -346,9 +347,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="message"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		IByteArray PerformCryptographicSignature(Guid accountUuid, string keyName, IByteArray message);
+		SafeArrayHandle PerformCryptographicSignature(Guid accountUuid, string keyName, SafeArrayHandle message);
 
-		IByteArray PerformCryptographicSignature(IWalletKey key, IByteArray message);
+		SafeArrayHandle PerformCryptographicSignature(IWalletKey key, SafeArrayHandle message);
 
 		IWalletStandardAccountSnapshot GetStandardAccountSnapshot(AccountId accountId);
 		IWalletJointAccountSnapshot GetJointAccountSnapshot(AccountId accountId);
@@ -357,13 +358,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void UpdateWalletChainStateSyncStatus(Guid accountUuid, long BlockId, WalletAccountChainState.BlockSyncStatuses blockSyncStatus);
 
-		IByteArray SignTransaction(IByteArray transactionHash, string keyName);
-		IByteArray SignTransactionXmss(IByteArray transactionHash, IXmssWalletKey key);
-		IByteArray SignTransaction(IByteArray transactionHash, IWalletKey key);
+		SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, string keyName);
+		SafeArrayHandle SignTransactionXmss(SafeArrayHandle transactionHash, IXmssWalletKey key);
+		SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, IWalletKey key);
 
-		IByteArray SignMessageXmss(IByteArray messageHash, IXmssWalletKey key);
-		IByteArray SignMessageXmss(Guid accountUuid, IByteArray messageHash);
-		IByteArray SignMessage(IByteArray messageHash, IWalletKey key);
+		SafeArrayHandle SignMessageXmss(SafeArrayHandle messageHash, IXmssWalletKey key);
+		SafeArrayHandle SignMessageXmss(Guid accountUuid, SafeArrayHandle messageHash);
+		SafeArrayHandle SignMessage(SafeArrayHandle messageHash, IWalletKey key);
 	}
 
 	public interface IWalletProvider : IWalletProviderWrite, IReadonlyWalletProvider, IUtilityWalletProvider {
@@ -883,47 +884,63 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public virtual bool CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
 
-			SystemEventGenerator.WalletCreationStepSet walletCreationStepSet = new SystemEventGenerator.WalletCreationStepSet();
+			try {
+				SystemEventGenerator.WalletCreationStepSet walletCreationStepSet = new SystemEventGenerator.WalletCreationStepSet();
 
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.WalletCreationStartedEvent(), correlationContext);
-			Log.Information("Creating a new wallet");
+				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.WalletCreationStartedEvent(), correlationContext);
+				Log.Information("Creating a new wallet");
 
-			string walletPassphrase = null;
+				string walletPassphrase = null;
 
-			if(passphrases?.ContainsKey(0) ?? false) {
-				walletPassphrase = passphrases[0];
+				if(passphrases?.ContainsKey(0) ?? false) {
+					walletPassphrase = passphrases[0];
+				}
+
+				this.CreateNewEmptyWallet(correlationContext, encryptWallet, walletPassphrase, walletCreationStepSet);
+
+				this.CreateNewCompleteAccount(correlationContext, accountName, encryptKey, encryptKeysIndividually, passphrases, walletCreationStepSet, accountCreatedCallback);
+
+				Log.Information("WalletBase successfully created and loaded");
+				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.WalletCreationEndedEvent(), correlationContext);
+
+				return true;
+			} catch(Exception ex) {
+				try {
+					// delete the folder
+					if(Directory.Exists(this.WalletFileInfo.WalletPath)) {
+						Directory.Delete(this.WalletFileInfo.WalletPath, true);
+					}
+				} catch(Exception ex2) {
+					Log.Error("Failed to delete faulty wallet files.");
+				}
+				throw new ApplicationException($"Failed to create wallet", ex);
 			}
-
-			this.CreateNewEmptyWallet(correlationContext, encryptWallet, walletPassphrase, walletCreationStepSet);
-
-			this.CreateNewCompleteAccount(correlationContext, accountName, encryptKey, encryptKeysIndividually, passphrases, walletCreationStepSet, accountCreatedCallback);
-
-			Log.Information("WalletBase successfully created and loaded");
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.WalletCreationEndedEvent(), correlationContext);
-
-			return true;
 
 		}
 
 		public virtual bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null) {
 
-			SystemEventGenerator.AccountCreationStepSet accountCreationStepSet = new SystemEventGenerator.AccountCreationStepSet();
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.AccountCreationStartedEvent(), correlationContext);
-			this.centralCoordinator.PostSystemEvent(walletCreationStepSet?.AccountCreationStartedStep, correlationContext);
+			try {
+				SystemEventGenerator.AccountCreationStepSet accountCreationStepSet = new SystemEventGenerator.AccountCreationStepSet();
+				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.AccountCreationStartedEvent(), correlationContext);
+				this.centralCoordinator.PostSystemEvent(walletCreationStepSet?.AccountCreationStartedStep, correlationContext);
 
-			IWalletAccount account = this.CreateNewAccount(accountName, encryptKeys, encryptKeysIndividually, correlationContext, walletCreationStepSet, accountCreationStepSet, true);
+				IWalletAccount account = this.CreateNewAccount(accountName, encryptKeys, encryptKeysIndividually, correlationContext, walletCreationStepSet, accountCreationStepSet, true);
 
-			Log.Information($"Your new default account Uuid is '{account.AccountUuid}'");
+				Log.Information($"Your new default account Uuid is '{account.AccountUuid}'");
 
-			accountCreatedCallback?.Invoke(account);
+				accountCreatedCallback?.Invoke(account);
 
-			// now create the keys
-			this.CreateStandardAccountKeys(account.AccountUuid, passphrases, correlationContext, walletCreationStepSet, accountCreationStepSet);
+				// now create the keys
+				this.CreateStandardAccountKeys(account.AccountUuid, passphrases, correlationContext, walletCreationStepSet, accountCreationStepSet);
 
-			this.centralCoordinator.PostSystemEvent(walletCreationStepSet?.AccountCreationEndedStep, correlationContext);
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.AccountCreationEndedEvent(account.AccountUuid), correlationContext);
+				this.centralCoordinator.PostSystemEvent(walletCreationStepSet?.AccountCreationEndedStep, correlationContext);
+				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.AccountCreationEndedEvent(account.AccountUuid), correlationContext);
 
-			return true;
+				return true;
+			} catch(Exception ex) {
+				throw new ApplicationException($"Failed to create account.", ex);
+			}
 		}
 
 		public virtual bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
@@ -1383,21 +1400,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// lets generate the hash of this key. this hash can be used as a unique key in public uses. Still, data must be encrypted!
 
-			HashNodeList nodeList = new HashNodeList();
+			using(HashNodeList nodeList = new HashNodeList()) {
 
-			// lets add three random nonces
-			nodeList.Add(GlobalRandom.GetNextLong());
-			nodeList.Add(GlobalRandom.GetNextLong());
-			nodeList.Add(GlobalRandom.GetNextLong());
+				// lets add three random nonces
+				nodeList.Add(GlobalRandom.GetNextLong());
+				nodeList.Add(GlobalRandom.GetNextLong());
+				nodeList.Add(GlobalRandom.GetNextLong());
 
-			nodeList.Add(key.GetStructuresArray());
+				nodeList.Add(key.GetStructuresArray());
 
-			// lets add three random nonces
-			nodeList.Add(GlobalRandom.GetNextLong());
-			nodeList.Add(GlobalRandom.GetNextLong());
-			nodeList.Add(GlobalRandom.GetNextLong());
+				// lets add three random nonces
+				nodeList.Add(GlobalRandom.GetNextLong());
+				nodeList.Add(GlobalRandom.GetNextLong());
+				nodeList.Add(GlobalRandom.GetNextLong());
 
-			key.Hash = HashingUtils.XxhasherTree.HashLong(nodeList);
+				key.Hash = HashingUtils.HashxxTree(nodeList);
+			}
 		}
 
 		public bool AllAccountsWalletKeyLogSet(SynthesizedBlock block) {
@@ -1594,7 +1612,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(this.fileSystem.File.Exists(pidfile)) {
 				try {
-					IByteArray pidBytes = FileExtensions.ReadAllBytes(pidfile, this.fileSystem);
+					SafeArrayHandle pidBytes = FileExtensions.ReadAllBytes(pidfile, this.fileSystem);
 
 					int lockPid = 0;
 
@@ -1667,14 +1685,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// the keys are often heavy on the network, lets pause it
 				this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
-				
+
 				this.centralCoordinator.PostSystemEvent(walletCreationStepSet?.CreatingAccountKeys, correlationContext);
 				this.centralCoordinator.PostSystemEvent(accountCreationStepSet?.CreatingTransactionKey, correlationContext);
 
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.TRANSACTION_KEY_NAME, 1, 4}, correlationContext);
 
 				Thread.Sleep(1000);
-				mainKey = this.CreateXmssKey(GlobalsService.TRANSACTION_KEY_NAME);
+				int lastTenth = -1;
+				int lastFifth = -1;
+				mainKey = this.CreateXmssKey(GlobalsService.TRANSACTION_KEY_NAME, (percentage) => {
+					int tenth = percentage / 10;
+					int fifth = percentage / 5;
+
+					bool info = false;
+					string message = $"Generation {percentage}% completed for key {GlobalsService.TRANSACTION_KEY_NAME}.";
+					if(lastTenth != tenth) {
+						lastTenth = tenth;
+						Log.Information(message);
+						info = true;
+					} 
+					if(lastFifth != fifth) {
+						lastFifth = fifth;
+						this.centralCoordinator.PostSystemEvent(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.TRANSACTION_KEY_NAME, percentage), correlationContext);
+					}
+					
+					if(!info) {
+						Log.Verbose(message);
+					}
+				});
 
 				GC.Collect();
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.TRANSACTION_KEY_NAME, 1, 4}, correlationContext);
@@ -1684,8 +1723,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.centralCoordinator.PostSystemEvent(accountCreationStepSet?.CreatingMessageKey, correlationContext);
 
 				Thread.Sleep(1000);
-				messageKey = this.CreateXmssKey(GlobalsService.MESSAGE_KEY_NAME);
-				
+				lastTenth = -1;
+				lastFifth = -1;
+				messageKey = this.CreateXmssKey(GlobalsService.MESSAGE_KEY_NAME, (percentage) => {
+					int tenth = percentage / 10;
+					int fifth = percentage / 5;
+
+					bool info = false;
+					string message = $"Generation {percentage}% completed for key {GlobalsService.MESSAGE_KEY_NAME}.";
+					if(lastTenth != tenth) {
+						lastTenth = tenth;
+						Log.Information(message);
+						info = true;
+					} 
+					if(lastFifth != fifth) {
+						lastFifth = fifth;
+						this.centralCoordinator.PostSystemEvent(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.MESSAGE_KEY_NAME, percentage), correlationContext);
+					}
+					
+					if(!info) {
+						Log.Verbose(message);
+					}		
+				});
+
 				GC.Collect();
 
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.MESSAGE_KEY_NAME, 2, 4}, correlationContext);
@@ -1695,8 +1755,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.centralCoordinator.PostSystemEvent(accountCreationStepSet?.CreatingChangeKey, correlationContext);
 
 				Thread.Sleep(1000);
-				changeKey = this.CreateXmssKey(GlobalsService.CHANGE_KEY_NAME);
-				
+				lastTenth = -1;
+				lastFifth = -1;
+				changeKey = this.CreateXmssKey(GlobalsService.CHANGE_KEY_NAME, (percentage) => {
+					int tenth = percentage / 10;
+					int fifth = percentage / 5;
+
+					bool info = false;
+					string message = $"Generation {percentage}% completed for key {GlobalsService.CHANGE_KEY_NAME}.";
+					if(lastTenth != tenth) {
+						lastTenth = tenth;
+						Log.Information(message);
+						info = true;
+					} 
+					if(lastFifth != fifth) {
+						lastFifth = fifth;
+						this.centralCoordinator.PostSystemEvent(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.CHANGE_KEY_NAME, percentage), correlationContext);
+					}
+					
+					if(!info) {
+						Log.Verbose(message);
+					}		
+				});
+
 				GC.Collect();
 
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.CHANGE_KEY_NAME, 3, 4}, correlationContext);
@@ -1708,21 +1789,52 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				Thread.Sleep(1000);
 				superKey = this.CreateSuperKey();
 				
-				GC.Collect();
-
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.SUPER_KEY_NAME, 4, 4}, correlationContext);
 
 				this.centralCoordinator.PostSystemEvent(accountCreationStepSet?.KeysCreated, correlationContext);
 				this.centralCoordinator.PostSystemEvent(walletCreationStepSet?.AccountKeysCreated, correlationContext);
 
-				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(t => {
+				Repeater.Repeat(() => {
+					this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(t => {
 
-					this.AddAccountKey(account.AccountUuid, mainKey, passphrases);
-					this.AddAccountKey(account.AccountUuid, messageKey, passphrases);
-					this.AddAccountKey(account.AccountUuid, changeKey, passphrases);
-					this.AddAccountKey(account.AccountUuid, superKey, passphrases);
+						this.AddAccountKey(account.AccountUuid, mainKey, passphrases);
+						this.AddAccountKey(account.AccountUuid, messageKey, passphrases);
+						this.AddAccountKey(account.AccountUuid, changeKey, passphrases);
+						this.AddAccountKey(account.AccountUuid, superKey, passphrases);
+					});
 				});
-			} finally {
+
+				// let's verify and confirm the keys are there
+				using(var key = this.LoadKey(GlobalsService.TRANSACTION_KEY_NAME)) {
+					if(key == null) {
+						throw new ApplicationException($"Failed to generate and load key {GlobalsService.TRANSACTION_KEY_NAME}.");
+					}
+				}
+
+				using(var key = this.LoadKey(GlobalsService.MESSAGE_KEY_NAME)) {
+					if(key == null) {
+						throw new ApplicationException($"Failed to generate and load key {GlobalsService.MESSAGE_KEY_NAME}.");
+					}
+				}
+
+				using(var key = this.LoadKey(GlobalsService.CHANGE_KEY_NAME)) {
+					if(key == null) {
+						throw new ApplicationException($"Failed to generate and load key {GlobalsService.CHANGE_KEY_NAME}.");
+					}
+				}
+
+				using(var key = this.LoadKey(GlobalsService.SUPER_KEY_NAME)) {
+					if(key == null) {
+						throw new ApplicationException($"Failed to generate and load key {GlobalsService.SUPER_KEY_NAME}.");
+					}
+				}
+
+				GC.Collect();
+
+			} catch(Exception ex) {
+				throw new ApplicationException($"Failed to generate wallet keys. this is serious and the wallet remains invalid.", ex);
+			}
+			finally {
 				try {
 					mainKey?.Dispose();
 				} catch {
@@ -2398,7 +2510,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			walletAccountTransactionCache.TransactionId = transactionEnvelope.Contents.RehydratedTransaction.TransactionId.ToString();
 			walletAccountTransactionCache.Version = transactionEnvelope.Contents.RehydratedTransaction.Version.ToString();
 			walletAccountTransactionCache.Timestamp = this.serviceSet.BlockchainTimeService.GetTransactionDateTime(transactionEnvelope.Contents.RehydratedTransaction.TransactionId.SimpleTransactionId, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
-			walletAccountTransactionCache.Transaction = transactionEnvelope.DehydrateEnvelope();
+			walletAccountTransactionCache.Transaction.Entry = transactionEnvelope.DehydrateEnvelope().Entry;
 
 			walletAccountTransactionCache.Expiration = transactionEnvelope.GetExpirationTime(this.serviceSet.TimeService, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
 
@@ -2555,7 +2667,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			(KeyInfo keyInfo, IWalletAccount account) keyMeta = this.GetKeyInfo(accountUuid, key.Name);
 
 			if(keyMeta.keyInfo != null) {
-				throw new ApplicationException("Key already exists in account");
+				keyMeta.account.Keys.Remove(keyMeta.keyInfo);
 			}
 
 			// its a brand new key
@@ -2601,6 +2713,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			// ensure we create the key file
+			walletAccountFileInfo.WalletKeysFileInfo[key.Name].Reset();
+			walletAccountFileInfo.WalletKeysFileInfo[key.Name].DeleteFile();
 			walletAccountFileInfo.WalletKeysFileInfo[key.Name].CreateEmptyFile(key);
 
 			// add the key chainstate
@@ -2616,6 +2730,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateKey.LocalKeyUse = keyUseIndex;
 			chainStateKey.LatestBlockSyncKeyUse = new KeyUseIndexSet(0, 0, chainStateKey.Ordinal);
 
+			if(walletAccountFileInfo.WalletChainStatesInfo.ChainState.Keys.ContainsKey(chainStateKey.Ordinal)) {
+				walletAccountFileInfo.WalletChainStatesInfo.ChainState.Keys.Remove(chainStateKey.Ordinal);
+			}
 			walletAccountFileInfo.WalletChainStatesInfo.ChainState.Keys.Add(chainStateKey.Ordinal, chainStateKey);
 
 			this.SaveWallet();
@@ -3095,7 +3212,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#region XMSS
 
-		public IXmssWalletKey CreateXmssKey(string name) {
+		public IXmssWalletKey CreateXmssKey(string name, Action<int> progressCallback = null) {
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			int treeHeight = WalletProvider.MINIMAL_XMSS_KEY_HEIGHT;
@@ -3128,14 +3245,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				keyHashBits = WalletProvider.CHANGE_KEY_HASH_BITS;
 			}
 
-			return this.CreateXmssKey(name, treeHeight, keyHashBits, hashType, xmssKeyWarningLevel, xmssKeyChangeLevel);
+			return this.CreateXmssKey(name, treeHeight, keyHashBits, hashType, xmssKeyWarningLevel, xmssKeyChangeLevel, progressCallback);
 		}
 
-		public IXmssWalletKey CreateXmssKey(string name, float warningLevel, float changeLevel) {
-			return this.CreateXmssKey(name, XMSSProvider.DEFAULT_XMSS_TREE_HEIGHT, WalletProvider.DEFAULT_KEY_HASH_BITS, WalletProvider.HashTypes.Sha2, warningLevel, changeLevel);
+		public IXmssWalletKey CreateXmssKey(string name, float warningLevel, float changeLevel, Action<int> progressCallback = null) {
+			return this.CreateXmssKey(name, XMSSProvider.DEFAULT_XMSS_TREE_HEIGHT, WalletProvider.DEFAULT_KEY_HASH_BITS, WalletProvider.HashTypes.Sha2, warningLevel, changeLevel, progressCallback);
 		}
 
-		public IXmssWalletKey CreateXmssKey(string name, int treeHeight, int hashBits, WalletProvider.HashTypes HashType, float warningLevel, float changeLevel) {
+		public IXmssWalletKey CreateXmssKey(string name, int treeHeight, int hashBits, WalletProvider.HashTypes HashType, float warningLevel, float changeLevel, Action<int> progressCallback = null) {
 			IXmssWalletKey key = this.CreateBasicKey<IXmssWalletKey>(name, Enums.KeyTypes.XMSS);
 
 			Enums.KeyHashBits fullHashbits = Enums.KeyHashBits.SHA2_256;
@@ -3150,13 +3267,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				fullHashbits = Enums.KeyHashBits.SHA3_512;
 			}
 
-			using(XMSSProvider provider = new XMSSProvider(fullHashbits, treeHeight)) {
+			using(XMSSProvider provider = new XMSSProvider(fullHashbits, treeHeight, Enums.ThreadMode.Half)) {
 
 				provider.Initialize();
 
 				Log.Information($"Creating a new XMSS key named '{name}' with tree height {treeHeight} and hashBits {provider.HashBits}");
 
-				(IByteArray privateKey, IByteArray publicKey) keys = provider.GenerateKeys();
+				(SafeArrayHandle privateKey, SafeArrayHandle publicKey) keys = provider.GenerateKeys(progressCallback);
 
 				key.HashBits = provider.HashBitsEnum;
 				key.TreeHeight = provider.TreeHeight;
@@ -3195,7 +3312,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				Log.Information($"Creating a new XMSS^MT key named '{name}' with tree height {treeHeight}, tree layers {treeLayers} and hashBits {provider.HashBits}");
 
-				(IByteArray privateKey, IByteArray publicKey) keys = provider.GenerateKeys();
+				(SafeArrayHandle privateKey, SafeArrayHandle publicKey) keys = provider.GenerateKeys();
 
 				key.HashBits = provider.HashBitsEnum;
 				key.TreeHeight = provider.TreeHeight;
@@ -3244,7 +3361,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				key.KeyType = Enums.KeyTypes.QTESLA;
 				key.SecurityCategory = (byte) securityCategory;
 
-				(IByteArray privateKey, IByteArray publicKey) keys = provider.GenerateKeys();
+				(SafeArrayHandle privateKey, SafeArrayHandle publicKey) keys = provider.GenerateKeys();
 				key.PrivateKey = keys.privateKey.ToExactByteArrayCopy();
 				key.PublicKey = keys.publicKey.ToExactByteArrayCopy();
 
@@ -3334,7 +3451,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="message"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		public virtual IByteArray PerformCryptographicSignature(Guid accountUuid, string keyName, IByteArray message) {
+		public virtual SafeArrayHandle PerformCryptographicSignature(Guid accountUuid, string keyName, SafeArrayHandle message) {
 
 			this.EnsureWalletIsLoaded();
 			this.EnsureWalletKeyIsReady(accountUuid, keyName);
@@ -3350,12 +3467,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.PerformCryptographicSignature(key, message);
 		}
 
-		public virtual IByteArray PerformCryptographicSignature(IWalletKey key, IByteArray message) {
+		public virtual SafeArrayHandle PerformCryptographicSignature(IWalletKey key, SafeArrayHandle message) {
 
 			this.EnsureWalletIsLoaded();
 			this.EnsureWalletKeyIsReady(key.AccountUuid, key.Name);
 
-			IByteArray signature = null;
+			SafeArrayHandle signature = null;
 
 			if(key is IXmssWalletKey xmssWalletKey) {
 
@@ -3372,7 +3489,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						provider = new XMSSProvider(xmssWalletKey.HashBits, xmssWalletKey.TreeHeight);
 					}
 
-					(IByteArray signature, IByteArray nextPrivateKey) result;
+					(SafeArrayHandle signature, SafeArrayHandle nextPrivateKey) result;
 
 					using(provider) {
 
@@ -3416,8 +3533,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 			} else if(key is ISecretDoubleWalletKey qsecretDoubleWalletKey) {
-				IByteArray signature1 = null;
-				IByteArray signature2 = null;
+				SafeArrayHandle signature1 = null;
+				SafeArrayHandle signature2 = null;
 
 				using(QTeslaProvider provider = new QTeslaProvider(qsecretDoubleWalletKey.SecurityCategory)) {
 					provider.Initialize();
@@ -3486,7 +3603,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				var version = new ComponentVersion<TransactionType>(t.Version);
 
 				return new WalletTransactionHistoryHeaderAPI {
-					TransactionId = t.TransactionId, Sender = transactionId.Account.ToString(), Timestamp = t.Timestamp, Status = t.Status,
+					TransactionId = t.TransactionId, Sender = transactionId.Account.ToString(), Timestamp = t.Timestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture), Status = t.Status,
 					Version = new {transactionType = version.Type.Value, major = version.Major.Value, minor = version.Minor.Value}, Local = t.Local, Note = t.Note, Recipient = t.Recipient
 				};
 			}).OrderByDescending(t => t.Timestamp).ToList());
@@ -3507,7 +3624,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				var version = new ComponentVersion<TransactionType>(t.Version);
 
 				return new WalletTransactionHistoryDetailsAPI {
-					TransactionId = t.TransactionId, Sender = new TransactionId(t.TransactionId).Account.ToString(), Timestamp = t.Timestamp, Status = t.Status,
+					TransactionId = t.TransactionId, Sender = new TransactionId(t.TransactionId).Account.ToString(), Timestamp = t.Timestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture), Status = t.Status,
 					Version = new {transactionType = version.Type.Value, major = version.Major.Value, minor = version.Minor.Value}, Recipient = t.Recipient, Contents = t.Contents, Local = t.Local,
 					Note = t.Note
 				};
@@ -3532,7 +3649,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			foreach(IWalletAccount account in this.GetAccounts()) {
 
 				apiAccounts.Add(new WalletAccountAPI {
-					AccountUuid = account.AccountUuid, AccountId = account.GetAccountId().ToString(), FriendlyName = account.FriendlyName, Status = account.Status,
+					AccountUuid = account.AccountUuid, AccountId = account.GetAccountId().ToString(), FriendlyName = account.FriendlyName, Status = (int)account.Status,
 					IsActive = account.AccountUuid == activeAccountUuid
 				});
 			}
@@ -3556,7 +3673,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			return new WalletAccountDetailsAPI {
 				AccountUuid = account.AccountUuid, AccountId = account.PublicAccountId?.ToString(), AccountHash = account.AccountUuidHash?.ToString(), FriendlyName = account.FriendlyName,
-				Status = account.Status, IsActive = account.AccountUuid == activeAccountUuid, AccountType = (int) account.WalletAccountType, TrustLevel = account.TrustLevel,
+				Status = (int)account.Status, IsActive = account.AccountUuid == activeAccountUuid, AccountType = (int) account.WalletAccountType, TrustLevel = account.TrustLevel,
 				DeclarationBlockid = account.ConfirmationBlockId, KeysEncrypted = account.KeyLogFileEncryptionParameters != null
 			};
 
@@ -3579,7 +3696,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#region walletservice methods
 
-		public IByteArray SignTransaction(IByteArray transactionHash, string keyName) {
+		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, string keyName) {
 			this.EnsureWalletIsLoaded();
 
 			//TODO: make sure we confirm our signature height in the wallet with the recorded one on chain. To prevent mistaken wallet copies.
@@ -3607,7 +3724,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		public IByteArray SignTransactionXmss(IByteArray transactionHash, IXmssWalletKey key) {
+		public SafeArrayHandle SignTransactionXmss(SafeArrayHandle transactionHash, IXmssWalletKey key) {
 			this.EnsureWalletIsLoaded();
 
 			//TODO: we would want to do it for (potentially) sphincs and xmssmt too
@@ -3625,16 +3742,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.SignTransaction(transactionHash, key);
 		}
 
-		public IByteArray SignTransaction(IByteArray transactionHash, IWalletKey key) {
+		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, IWalletKey key) {
 
 			// thats it, lets perform the signature
 			return this.PerformCryptographicSignature(key, transactionHash);
 		}
 
-		public IByteArray SignMessageXmss(IByteArray messageHash, IXmssWalletKey key) {
+		public SafeArrayHandle SignMessageXmss(SafeArrayHandle messageHash, IXmssWalletKey key) {
 
 			// thats it, lets perform the signature
-			IByteArray results = this.SignTransactionXmss(messageHash, key);
+			SafeArrayHandle results = this.SignTransactionXmss(messageHash, key);
 
 			// for messages, we never get confirmation, so we update the key height right away
 			this.UpdateLocalChainStateKeyHeight(key);
@@ -3645,7 +3762,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return results;
 		}
 
-		public IByteArray SignMessageXmss(Guid accountUuid, IByteArray message) {
+		public SafeArrayHandle SignMessageXmss(Guid accountUuid, SafeArrayHandle message) {
 			using(IXmssWalletKey key = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(accountUuid, GlobalsService.MESSAGE_KEY_NAME)) {
 
 				// and sign the whole thing with our key
@@ -3653,7 +3770,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public IByteArray SignMessage(IByteArray messageHash, IWalletKey key) {
+		public SafeArrayHandle SignMessage(SafeArrayHandle messageHash, IWalletKey key) {
 
 			// thats it, lets perform the signature
 			return this.SignTransaction(messageHash, key);
@@ -3669,7 +3786,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			foreach(var apiTransaction in synthesizedBlockApi.ConfirmedGeneralTransactions) {
 				IDehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
 
-				IByteArray bytes = compressor.Decompress((ByteArray) apiTransaction.Value);
+				SafeArrayHandle bytes = compressor.Decompress((ByteArray) apiTransaction.Value);
 				dehydratedTransaction.Rehydrate(bytes);
 				bytes.Return();
 
@@ -3712,7 +3829,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					IDehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
 
-					IByteArray bytes = compressor.Decompress((ByteArray) apiTransaction.Value);
+					SafeArrayHandle bytes = compressor.Decompress((ByteArray) apiTransaction.Value);
 					dehydratedTransaction.Rehydrate(bytes);
 					bytes.Return();
 

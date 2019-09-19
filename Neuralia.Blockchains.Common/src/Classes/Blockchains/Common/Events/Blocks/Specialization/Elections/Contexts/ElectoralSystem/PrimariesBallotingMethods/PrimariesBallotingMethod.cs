@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public interface IPrimariesBallotingMethod : IVersionable<PrimariesBallotingMethodType>, IJsonSerializable {
 
 		AdaptiveLong1_9 Difficulty { get; set; }
-		IByteArray PerformBallot(IByteArray candidature, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount);
+		SafeArrayHandle PerformBallot(SafeArrayHandle candidature, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount);
 	}
 
 	/// <summary>
@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public AdaptiveLong1_9 Difficulty { get; set; } = new AdaptiveLong1_9();
 
-		public abstract IByteArray PerformBallot(IByteArray candidature, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount);
+		public abstract SafeArrayHandle PerformBallot(SafeArrayHandle candidature, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount);
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			throw new NotSupportedException();

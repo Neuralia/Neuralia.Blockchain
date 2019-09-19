@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		long PromisedNonce1 { get; set; }
 		long PromisedNonce2 { get; set; }
-		IByteArray PromisedPublicKey { get; set; }
+		SafeArrayHandle PromisedPublicKey { get;  }
 
 		Guid ConfirmationUuid { get; set; }
 	}
@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public long PromisedNonce1 { get; set; }
 		public long PromisedNonce2 { get; set; }
 
-		public IByteArray PromisedPublicKey { get; set; }
+		public SafeArrayHandle PromisedPublicKey { get; } = SafeArrayHandle.Create();
 
 		public Guid ConfirmationUuid { get; set; }
 
@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			this.PromisedNonce1 = rehydrator.ReadLong();
 			this.PromisedNonce2 = rehydrator.ReadLong();
-			this.PromisedPublicKey = rehydrator.ReadNonNullableArray();
+			this.PromisedPublicKey.Entry = rehydrator.ReadNonNullableArray();
 
 			this.ConfirmationUuid = rehydrator.ReadGuid();
 		}

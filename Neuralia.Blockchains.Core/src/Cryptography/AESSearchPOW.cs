@@ -10,12 +10,11 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
-	public class AesSearchPow : IDisposable2 {
+	public class AesSearchPow  {
 
 		private const int AES_BLOCK_SIZE = 16;
 
@@ -79,9 +78,9 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			return numThreads;
 		}
 
-		public (List<int> solutions, int nonce) PerformPow(IByteArray root, int hashTargetDifficulty, Action<int, int> iteration = null) {
+		public (List<int> solutions, int nonce) PerformPow(SafeArrayHandle root, int hashTargetDifficulty, Action<int, int> iteration = null) {
 
-			IByteArray rootHash = this.Sha3(root);
+			SafeArrayHandle rootHash = this.Sha3(root);
 
 			BigInteger hash = new BigInteger(rootHash.ToExactByteArrayCopy().Concat(new byte[] {0}).ToArray());
 
@@ -90,7 +89,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			Log.Verbose("target: {0}", hashTarget);
 
 			int nThreads = this.GetNumThreads(Enums.ThreadMode.Quarter);
-			IByteArray scratchpad = MemoryAllocators.Instance.cryptoAllocator.Take(MAIN_BUFFER_DATA_SIZEX2);
+			SafeArrayHandle scratchpad = ByteArray.Create(MAIN_BUFFER_DATA_SIZEX2);
 
 			int nonce = 1;
 
@@ -169,9 +168,9 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		/// <param name="hashTargetDifficulty"></param>
 		/// <param name="solutions"></param>
 		/// <returns></returns>
-		public bool Verify(IByteArray root, int nonce, int hashTargetDifficulty, List<int> solutions, Enums.ThreadMode threadMode) {
+		public bool Verify(SafeArrayHandle root, int nonce, int hashTargetDifficulty, List<int> solutions, Enums.ThreadMode threadMode) {
 
-			IByteArray rootHash = this.Sha3(root);
+			SafeArrayHandle rootHash = this.Sha3(root);
 
 			BigInteger hash = new BigInteger(rootHash.ToExactByteArray().Concat(new byte[] {0}).ToArray());
 
@@ -184,7 +183,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			int nThreads = this.GetNumThreads(threadMode);
 
-			IByteArray scratchpad = MemoryAllocators.Instance.cryptoAllocator.Take(MAIN_BUFFER_DATA_SIZEX2);
+			SafeArrayHandle scratchpad = ByteArray.Create(MAIN_BUFFER_DATA_SIZEX2);
 
 			var currentSolutions = new List<int>();
 
@@ -221,14 +220,14 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			return solutions.SequenceEqual(currentSolutions);
 		}
 
-		private List<BigInteger> FindBestPatternHash(out int collisions, BigInteger hash, IByteArray scratchpad, int nThreads, int nonce) {
+		private List<BigInteger> FindBestPatternHash(out int collisions, BigInteger hash, SafeArrayHandle scratchpad, int nThreads, int nonce) {
 			var results = new List<BigInteger>();
 
 			collisions = 0;
 
 			// hash the transaction header
-			IByteArray dataHash = this.GetHash(hash, nonce);
-			Log.Verbose("current hash {0}", dataHash.ToBase58());
+			SafeArrayHandle dataHash = this.GetHash(hash, nonce);
+			Log.Verbose("current hash {0}", dataHash.Entry.ToBase58());
 
 			var searchResults = this.pattern_search(nonce, dataHash, scratchpad, nThreads);
 
@@ -236,7 +235,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			collisions = searchResults.Count();
 
-			IByteArray result = MemoryAllocators.Instance.cryptoAllocator.Take(sizeof(long) + sizeof(uint));
+			SafeArrayHandle result = ByteArray.Create(sizeof(long) + sizeof(uint));
 
 			Span<byte> startLocBytes = stackalloc byte[sizeof(long)];
 			Span<byte> finalCalculationBytes = stackalloc byte[sizeof(uint)];
@@ -248,12 +247,12 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				//arbitrary put together
 
 				TypeSerializer.Serialize(startLocation, startLocBytes);
-				result.CopyFrom(startLocBytes);
+				result.Entry.CopyFrom(startLocBytes);
 
 				TypeSerializer.Serialize(finalCalculation, finalCalculationBytes);
-				result.CopyFrom(finalCalculationBytes, 0, sizeof(long), sizeof(uint));
+				result.Entry.CopyFrom(finalCalculationBytes, 0, sizeof(long), sizeof(uint));
 
-				IByteArray hashres = this.Sha3_256(result);
+				SafeArrayHandle hashres = this.Sha3_256(result);
 
 				results.Add(new BigInteger(hashres.ToExactByteArray().Concat(new byte[] {0}).ToArray())); // add a 0 to make sure the results are positive
 
@@ -265,24 +264,24 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			return results;
 		}
 
-		private List<(long, uint)> pattern_search(int nonce, IByteArray hash, IByteArray mainBuffer, int totalThreads) {
+		private List<(long, uint)> pattern_search(int nonce, SafeArrayHandle hash, SafeArrayHandle mainBuffer, int totalThreads) {
 			// create many threads
 			var results = new List<(long, uint)>();
 
 			var tasks = new Task[totalThreads];
 
-			mainBuffer.Clear();
+			mainBuffer.Entry.Clear();
 
-			IByteArray hashWorkSpace = MemoryAllocators.Instance.cryptoAllocator.Take(64 * 3);
+			SafeArrayHandle hashWorkSpace = ByteArray.Create(64 * 3);
 
-			IByteArray buffer = MemoryAllocators.Instance.cryptoAllocator.Take(sizeof(long));
+			SafeArrayHandle buffer = ByteArray.Create(sizeof(long));
 
 			TypeSerializer.Serialize(nonce, buffer.Span);
-			IByteArray nonceHash = this.Sha3(buffer);
+			SafeArrayHandle nonceHash = this.Sha3(buffer);
 			buffer.Return();
 
-			hashWorkSpace.CopyFrom(hash);
-			hashWorkSpace.CopyFrom(nonceHash, 64);
+			hashWorkSpace.Entry.CopyFrom(hash.Entry);
+			hashWorkSpace.Entry.CopyFrom(nonceHash.Entry, 64);
 
 			nonceHash.Return();
 
@@ -326,16 +325,16 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			return results;
 		}
 
-		private List<(long, uint)> AesSearch(IByteArray mainBuffer, int threadNumber, int totalThreads) {
+		private List<(long, uint)> AesSearch(SafeArrayHandle mainBuffer, int threadNumber, int totalThreads) {
 			var results = new List<(long, uint)>();
 
-			IByteArray cache = MemoryAllocators.Instance.cryptoAllocator.Take(CACHE_MEMORY_SIZE);
-			IByteArray encrypted = MemoryAllocators.Instance.cryptoAllocator.Take(CACHE_MEMORY_SIZE);
+			SafeArrayHandle cache = ByteArray.Create(CACHE_MEMORY_SIZE);
+			SafeArrayHandle encrypted = ByteArray.Create(CACHE_MEMORY_SIZE);
 
-			IByteArray data64 = MemoryAllocators.Instance.cryptoAllocator.Take(8);
+			SafeArrayHandle data64 = ByteArray.Create(8);
 
-			IByteArray key = MemoryAllocators.Instance.cryptoAllocator.Take(AES_KEY_SIZE);
-			IByteArray iv = MemoryAllocators.Instance.cryptoAllocator.Take(AES_BLOCK_SIZE);
+			SafeArrayHandle key = ByteArray.Create(AES_KEY_SIZE);
+			SafeArrayHandle iv = ByteArray.Create(AES_BLOCK_SIZE);
 
 			long searchNumber = COMPARISON_SIZE / totalThreads;
 			long startLoc = threadNumber * searchNumber;
@@ -347,7 +346,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			}
 
 			for(long k = startLoc; k < (startLoc + searchNumber + remainder); k++) {
-				cache.CopyFrom(mainBuffer, (int) (k * CACHE_MEMORY_SIZE), 0, CACHE_MEMORY_SIZE);
+				cache.Entry.CopyFrom(mainBuffer.Entry, (int) (k * CACHE_MEMORY_SIZE), 0, CACHE_MEMORY_SIZE);
 
 				uint cache32 = 0;
 
@@ -360,24 +359,24 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 						int offset = i * sizeof(ulong);
 
-						data64.CopyFrom(mainBuffer, (int) (nextLocation * CACHE_MEMORY_SIZE) + offset, data64.Length);
+						data64.Entry.CopyFrom(mainBuffer.Entry, (int) (nextLocation * CACHE_MEMORY_SIZE) + offset, data64.Length);
 						TypeSerializer.Deserialize(data64, 0, out ulong cache64A);
 
-						data64.CopyFrom(mainBuffer, offset, data64.Length);
+						data64.Entry.CopyFrom(mainBuffer.Entry, offset, data64.Length);
 						TypeSerializer.Deserialize(data64, 0, out ulong cache64B);
 
 						cache64B ^= cache64A;
 						TypeSerializer.Serialize(cache64B, data64.Span);
 
-						mainBuffer.CopyFrom(data64, offset);
+						mainBuffer.Entry.CopyFrom(data64.Entry, offset);
 					}
 
-					key.CopyFrom(cache, CACHE_MEMORY_SIZE - AES_KEY_SIZE, 0, key.Length);
-					iv.CopyFrom(cache, CACHE_MEMORY_SIZE - AES_BLOCK_SIZE, 0, iv.Length);
+					key.Entry.CopyFrom(cache.Entry, CACHE_MEMORY_SIZE - AES_KEY_SIZE, 0, key.Length);
+					iv.Entry.CopyFrom(cache.Entry, CACHE_MEMORY_SIZE - AES_BLOCK_SIZE, 0, iv.Length);
 
 					this.AesEncryptStringToBytes(cache, encrypted, key, iv);
 
-					cache.CopyFrom(encrypted, 0, 0, encrypted.Length);
+					cache.Entry.CopyFrom(encrypted.Entry, 0, 0, encrypted.Length);
 				}
 
 				TypeSerializer.Deserialize(cache, (CACHE_MEMORY_SIZE / sizeof(int)) - 1, out cache32);
@@ -399,7 +398,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			return results;
 		}
 
-		private void AesEncryptStringToBytes(IByteArray message, IByteArray encrypted, IByteArray key, IByteArray iv) {
+		private void AesEncryptStringToBytes(SafeArrayHandle message, SafeArrayHandle encrypted, SafeArrayHandle key, SafeArrayHandle iv) {
 			using(Aes aesAlg = Aes.Create()) {
 				aesAlg.Key = key.ToExactByteArrayCopy();
 				aesAlg.IV = iv.ToExactByteArrayCopy();
@@ -409,7 +408,8 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				using(ICryptoTransform encryptor = aesAlg.CreateEncryptor(aesAlg.Key, aesAlg.IV)) {
 
 					// Create the streams used for encryption. 
-					using(MemoryStream msEncrypt = new MemoryStream()) {
+					
+					using(MemoryStream msEncrypt = MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("AES256")) {
 						using(CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write)) {
 							csEncrypt.Write(message.Bytes, message.Offset, message.Length);
 							msEncrypt.Position = 0;
@@ -420,14 +420,14 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			}
 		}
 
-		private void Sha512Filler(int nonce, IByteArray mainBuffer, int threadNumber, int totalThreads, IByteArray hashWorkSpace) {
+		private void Sha512Filler(int nonce, SafeArrayHandle mainBuffer, int threadNumber, int totalThreads, SafeArrayHandle hashWorkSpace) {
 			long chunksToProcess = CHUNKS / (uint) totalThreads;
 			long startChunk = threadNumber * chunksToProcess;
 
-			IByteArray localHashWorkSpace = MemoryAllocators.Instance.cryptoAllocator.Take(hashWorkSpace.Length);
-			localHashWorkSpace.CopyFrom(hashWorkSpace);
+			SafeArrayHandle localHashWorkSpace = ByteArray.Create(hashWorkSpace.Length);
+			localHashWorkSpace.Entry.CopyFrom(hashWorkSpace.Entry);
 
-			IByteArray data = mainBuffer;
+			SafeArrayHandle data = mainBuffer;
 
 			long remainder = 0;
 
@@ -437,18 +437,18 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			using(Sha3ExternalDigest sha3 = new Sha3ExternalDigest(512)) {
 
-				IByteArray buffer = MemoryAllocators.Instance.cryptoAllocator.Take(sizeof(long));
+				SafeArrayHandle buffer = ByteArray.Create(sizeof(long));
 
 				for(long i = startChunk; i < (startChunk + chunksToProcess + remainder); i++) {
 
 					TypeSerializer.Serialize(i, buffer.Span);
-					IByteArray chunkHash = this.Sha3(sha3, buffer);
-					localHashWorkSpace.CopyFrom(chunkHash, 64 * 2);
+					SafeArrayHandle chunkHash = this.Sha3(sha3, buffer);
+					localHashWorkSpace.Entry.CopyFrom(chunkHash.Entry, 64 * 2);
 					chunkHash.Return();
 
-					IByteArray resultingHash = this.Sha3(localHashWorkSpace);
+					SafeArrayHandle resultingHash = this.Sha3(localHashWorkSpace);
 
-					data.CopyFrom(resultingHash, 0, (int) (i * CHUNK_SIZE), resultingHash.Length);
+					data.Entry.CopyFrom(resultingHash.Entry, 0, (int) (i * CHUNK_SIZE), resultingHash.Length);
 
 					resultingHash.Return();
 				}
@@ -459,60 +459,46 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			localHashWorkSpace.Return();
 		}
 
-		private IByteArray Sha512(IByteArray message) {
+		private SafeArrayHandle Sha512(SafeArrayHandle message) {
 
 			using(SHA512 sha512 = new SHA512Managed()) {
 				var hash = sha512.ComputeHash(message.ToExactByteArray());
 
-				return ByteArray.CreateFrom(hash);
+				return ByteArray.Create(ref hash);
 			}
 		}
 
-		private IByteArray Sha512(SHA512 sha512, IByteArray message) {
-
-			var hash = sha512.ComputeHash(message.ToExactByteArray());
-
-			return ByteArray.CreateFrom(hash);
-
-		}
-
-		private IByteArray Sha3_256(IByteArray message) {
+		private SafeArrayHandle Sha3_256(SafeArrayHandle message) {
 
 			using(Sha3ExternalDigest digester = new Sha3ExternalDigest(256)) {
-				digester.BlockUpdate(message, 0, message.Length);
-				digester.DoFinalReturn(out IByteArray block);
-
-				return block;
+				return this.Sha3(digester, message);
 			}
 		}
 
-		private IByteArray Sha3(IByteArray message) {
+		private SafeArrayHandle Sha3(SafeArrayHandle message) {
 
 			using(Sha3ExternalDigest digester = new Sha3ExternalDigest(512)) {
-				digester.BlockUpdate(message, 0, message.Length);
-				digester.DoFinalReturn(out IByteArray block);
-
-				return block;
+				return this.Sha3(digester, message);
 			}
 		}
 
-		private IByteArray Sha3(Sha3ExternalDigest digester, IByteArray message) {
+		private SafeArrayHandle Sha3(Sha3ExternalDigest digester, SafeArrayHandle message) {
 
 			digester.BlockUpdate(message, 0, message.Length);
-			digester.DoFinalReturn(out IByteArray block);
+			digester.DoFinalReturn(out SafeArrayHandle block);
 
 			return block;
 		}
 
-		private IByteArray GetHash(BigInteger hash, int nonce) {
+		private SafeArrayHandle GetHash(BigInteger hash, int nonce) {
 
 #if (NETSTANDARD2_0)
 			Span<byte> bytes = hash.ToByteArray();
-			IByteArray hashbytes = MemoryAllocators.Instance.cryptoAllocator.Take(bytes.Length);
+			SafeArrayHandle hashbytes = ByteArray.Create(bytes.Length);
 			bytes.CopyTo(hashbytes.Span);
 #elif (NETCOREAPP2_2)
 			int        byteCount = hash.GetByteCount();
-			IByteArray hashbytes = MemoryAllocators.Instance.cryptoAllocator.Take(byteCount);
+			SafeArrayHandle hashbytes = ByteArray.Create(byteCount);
 			hash.TryWriteBytes(hashbytes.Span, out int bytesWritten);
 
 #else
@@ -522,49 +508,19 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			Span<byte> noncebytes = stackalloc byte[sizeof(int)];
 			TypeSerializer.Serialize(nonce, noncebytes);
 
-			IByteArray message = MemoryAllocators.Instance.cryptoAllocator.Take(hashbytes.Length + noncebytes.Length);
+			SafeArrayHandle message = ByteArray.Create(hashbytes.Length + noncebytes.Length);
 
 			//arbitrary put together
-			message.CopyFrom(hashbytes);
-			message.CopyFrom(noncebytes, 0, hashbytes.Length, noncebytes.Length);
+			message.Entry.CopyFrom(hashbytes.Entry);
+			message.Entry.CopyFrom(noncebytes, 0, hashbytes.Length, noncebytes.Length);
 
-			IByteArray result = this.Sha3(message);
+			SafeArrayHandle result = this.Sha3(message);
 
 			message.Return();
 			hashbytes.Return();
 
 			return result;
 		}
-
-	#region dispose
-
-		protected virtual void Dispose(bool disposing) {
-			if(disposing && !this.IsDisposed) {
-				try {
-					try {
-
-					} catch(Exception ex) {
-
-					}
-				} finally {
-					this.IsDisposed = true;
-				}
-			}
-		}
-
-		~AesSearchPow() {
-			this.Dispose(false);
-		}
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		public bool IsDisposed { get; private set; }
-
-	#endregion
-
 	}
 
 }

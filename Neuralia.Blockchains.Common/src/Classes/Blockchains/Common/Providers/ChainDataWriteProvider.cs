@@ -26,8 +26,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void UpdateCurrentDigest(int digestId, long blockHeight);
 
-		void SaveDigestHeader(int digestId, IByteArray digestHeader);
-		void SaveAccountKeyIndex(AccountId accountId, IByteArray key, byte treeHeight, byte hashBits, byte ordinal);
+		void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader);
+		void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal);
 
 		void CacheUnvalidatedBlockGossipMessage(IBlockEnvelope unvalidatedBlockEnvelope, long xxHash);
 		void ClearCachedUnvalidatedBlockGossipMessage(long blockId);
@@ -109,7 +109,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			//TODO: make this method atomic!!!
 			// get our message bytes
-			IByteArray messageBytes = dehydratedBlockchainMessage.Dehydrate();
+			SafeArrayHandle messageBytes = dehydratedBlockchainMessage.Dehydrate();
 
 			Guid uuid = dehydratedBlockchainMessage.RehydratedMessage.Uuid;
 
@@ -147,11 +147,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.BlockchainEventSerializationFal.UpdateCurrentDigest(this.GetDigestsScoppedFolderPath(digestId), deletePreviousBlocks, blockGroupIndex);
 		}
 
-		public void SaveDigestHeader(int digestId, IByteArray digestHeader) {
+		public void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader) {
 			this.BlockchainEventSerializationFal.SaveDigestHeader(this.GetDigestsScoppedFolderPath(digestId), digestHeader);
 		}
 
-		public void SaveAccountKeyIndex(AccountId accountId, IByteArray key, byte treeHeight, byte hashBits, byte ordinal) {
+		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
 			this.BlockchainEventSerializationFal.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal);
 		}
 

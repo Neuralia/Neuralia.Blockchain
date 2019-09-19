@@ -18,14 +18,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		bool IsChainSynced { get; }
 		bool IsChainDesynced { get; }
 
-		void InsertModeratorKey(TransactionId transactionId, byte keyId, IByteArray key);
-		void UpdateModeratorKey(TransactionId transactionId, byte keyId, IByteArray key);
+		void InsertModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key);
+		void UpdateModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key);
 		ICryptographicKey GetModeratorKey(byte keyId);
 
 		T GetModeratorKey<T>(byte keyId)
 			where T : class, ICryptographicKey;
 
-		IByteArray GetModeratorKeyBytes(byte keyId);
+		SafeArrayHandle GetModeratorKeyBytes(byte keyId);
 
 		Enums.ChainSyncState GetChainSyncState();
 
@@ -148,7 +148,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			get { return this.GetField(entry => entry.GenesisBlockHash); }
 			set {
 				this.UpdateFields(db => {
-					this.chainStateEntry.Value.entry.GenesisBlockHash = value;
+					var stateEntry = this.chainStateEntry;
+
+					if(stateEntry != null) {
+						stateEntry.Value.entry.GenesisBlockHash = value;
+					}
 				});
 			}
 		}
@@ -440,26 +444,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.GetModeratorKey<ICryptographicKey>(keyId);
 		}
 
-		public IByteArray GetModeratorKeyBytes(byte keyId) {
+		public SafeArrayHandle GetModeratorKeyBytes(byte keyId) {
 			MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.GetJoinedField(entry => entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId));
 
-			if(chainKeyEntry == null) {
-				return null;
-			}
-
-			return (ByteArray) chainKeyEntry.PublicKey;
+			return chainKeyEntry?.PublicKey;
 		}
 
 		public T GetModeratorKey<T>(byte keyId)
 			where T : class, ICryptographicKey {
 
-			IByteArray bytes = this.GetModeratorKeyBytes(keyId);
+			using(SafeArrayHandle bytes = this.GetModeratorKeyBytes(keyId)) {
 
-			if(bytes == null) {
-				return null;
+				if(bytes == null) {
+					return null;
+				}
+
+				using(var rehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
+					return KeyFactory.RehydrateKey<T>(rehydrator);
+				}
 			}
-
-			return KeyFactory.RehydrateKey<T>(DataSerializationFactory.CreateRehydrator(bytes));
 		}
 
 		/// <summary>
@@ -467,10 +470,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public void InsertModeratorKey(TransactionId transactionId, byte keyId, IByteArray key) {
+		public void InsertModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key) {
 
 			this.UpdateJoinedFields(db => {
-				MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.chainStateEntry.Value.entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId);
+				MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.chainStateEntry?.entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId);
 
 				if(chainKeyEntry != null) {
 					throw new ApplicationException($"Moderator key {keyId} is already defined in the chain state");
@@ -483,7 +486,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				chainKeyEntry.PublicKey = key?.ToExactByteArrayCopy();
 				chainKeyEntry.DeclarationTransactionId = transactionId.ToString();
 
-				this.chainStateEntry.Value.entry.ModeratorKeys.Add(chainKeyEntry);
+				this.chainStateEntry?.entry.ModeratorKeys.Add(chainKeyEntry);
 			});
 		}
 
@@ -492,9 +495,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public void UpdateModeratorKey(TransactionId transactionId, byte keyId, IByteArray key) {
+		public void UpdateModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key) {
 			this.UpdateJoinedFields(db => {
-				MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.chainStateEntry.Value.entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId);
+				MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.chainStateEntry?.entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId);
 
 				if(chainKeyEntry == null) {
 					throw new ApplicationException($"Moderator key with ordinal {keyId} does not exist.");
@@ -530,11 +533,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			string filePath = this.GetBlocksIdFilePath();
 
-			IByteArray bytes = FileExtensions.ReadAllBytes(filePath, this.centralCoordinator.FileSystem);
+			SafeArrayHandle bytes = FileExtensions.ReadAllBytes(filePath, this.centralCoordinator.FileSystem);
 
 			TypeSerializer.Deserialize(bytes.Span, out long fileBlockId);
 
-			return this.chainStateEntry.Value.entry.DiskBlockHeight != fileBlockId;
+			return this.chainStateEntry?.entry.DiskBlockHeight != fileBlockId;
 		}
 
 		protected virtual CHAIN_STATE_SNAPSHOT CreateNewEntry() {
@@ -553,9 +556,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateEntry.LastDigestTimestamp = DateTime.MinValue;
 			chainStateEntry.MaxBlockInterval = 0;
 
-			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 2).ToString();
-			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 2).ToString();
-			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 2).ToString();
+			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 3).ToString();
+			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 3).ToString();
+			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 3).ToString();
 
 			return chainStateEntry;
 		}
@@ -588,7 +591,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					});
 				}
 
-				return function(this.chainStateEntry.Value.entry);
+				return function(this.chainStateEntry?.entry);
 			}
 		}
 
@@ -620,7 +623,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					});
 				}
 
-				return function(this.chainStateEntry.Value.entry);
+				return function(this.chainStateEntry?.entry);
 			}
 		}
 	}

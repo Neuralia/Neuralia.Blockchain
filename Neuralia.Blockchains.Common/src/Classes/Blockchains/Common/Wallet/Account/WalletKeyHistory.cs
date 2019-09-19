@@ -49,7 +49,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			this.KeySequenceId = key.KeySequenceId;
 
 			string keyDeserialized = JsonConvert.SerializeObject(key, JsonUtils.CreateSerializerSettings());
-			IByteArray bytes = Compressors.GeneralPurposeCompressor.Compress((ByteArray) Encoding.UTF8.GetBytes(keyDeserialized));
+			SafeArrayHandle bytes = Compressors.GeneralPurposeCompressor.Compress((ByteArray) Encoding.UTF8.GetBytes(keyDeserialized));
 			this.Key = bytes.ToExactByteArrayCopy();
 			bytes.Return();
 		}

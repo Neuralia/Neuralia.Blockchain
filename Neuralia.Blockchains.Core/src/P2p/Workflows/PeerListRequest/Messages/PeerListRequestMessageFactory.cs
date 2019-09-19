@@ -21,66 +21,69 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages {
 		public PeerListRequestMessageFactory(ServiceSet<R> serviceSet) : base(serviceSet) {
 		}
 
-		public override ITargettedMessageSet<R> RehydrateMessage(IByteArray data, TargettedHeader header, R rehydrationFactory) {
-			IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
+		public override ITargettedMessageSet<R> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory) {
+			using(IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data)) {
 
-			IByteArray messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
-			NetworkMessageSet.ResetAfterHeader(dr);
-			IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
+				SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+				NetworkMessageSet.ResetAfterHeader(dr);
 
-			ITargettedMessageSet<R> messageSet = null;
+				using(IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes)) {
 
-			try {
-				if(data?.Length == 0) {
-					throw new ApplicationException("null message");
-				}
+					ITargettedMessageSet<R> messageSet = null;
 
-				short workflowType = 0;
-				ComponentVersion<SimpleUShort> version = null;
+					try {
+						if(data?.Length == 0) {
+							throw new ApplicationException("null message");
+						}
 
-				messageRehydrator.Peek(rehydrator => {
-					workflowType = rehydrator.ReadShort();
+						short workflowType = 0;
+						ComponentVersion<SimpleUShort> version = null;
 
-					if(workflowType != WorkflowIDs.PEER_LIST_REQUEST) {
-						throw new ApplicationException("Invalid workflow type");
+						messageRehydrator.Peek(rehydrator => {
+							workflowType = rehydrator.ReadShort();
+
+							if(workflowType != WorkflowIDs.PEER_LIST_REQUEST) {
+								throw new ApplicationException("Invalid workflow type");
+							}
+
+							version = rehydrator.Rehydrate<ComponentVersion<SimpleUShort>>();
+						});
+
+						switch(version.Type.Value) {
+							case TRIGGER_ID:
+
+								if(version == (1, 0)) {
+									messageSet = this.CreatePeerListRequestWorkflowTriggerSet(header);
+								}
+
+								break;
+
+							case SERVER_REPLY_ID:
+
+								if(version == (1, 0)) {
+									messageSet = this.CreateServerPeerListRequestSet(header);
+								}
+
+								break;
+
+							default:
+
+								throw new ApplicationException("invalid message type");
+						}
+
+						if(messageSet?.BaseMessage == null) {
+							throw new ApplicationException("Invalid message type or version");
+						}
+
+						messageSet.Header = header; // set the header explicitely
+						messageSet.RehydrateRest(dr, rehydrationFactory);
+					} catch(Exception ex) {
+						Log.Error(ex, "Invalid data sent");
 					}
 
-					version = rehydrator.Rehydrate<ComponentVersion<SimpleUShort>>();
-				});
-
-				switch(version.Type.Value) {
-					case TRIGGER_ID:
-
-						if(version == (1, 0)) {
-							messageSet = this.CreatePeerListRequestWorkflowTriggerSet(header);
-						}
-
-						break;
-
-					case SERVER_REPLY_ID:
-
-						if(version == (1, 0)) {
-							messageSet = this.CreateServerPeerListRequestSet(header);
-						}
-
-						break;
-
-					default:
-
-						throw new ApplicationException("invalid message type");
+					return messageSet;
 				}
-
-				if(messageSet?.BaseMessage == null) {
-					throw new ApplicationException("Invalid message type or version");
-				}
-
-				messageSet.Header = header; // set the header explicitely
-				messageSet.RehydrateRest(dr, rehydrationFactory);
-			} catch(Exception ex) {
-				Log.Error(ex, "Invalid data sent");
 			}
-
-			return messageSet;
 		}
 
 	#region Explicit Creation methods

@@ -10,7 +10,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections {
 
 	public interface IElectionsRegistrationMessage : IBlockchainMessage {
-		IByteArray EncryptedMessage { get; set; }
+		SafeArrayHandle EncryptedMessage { get; }
 		AccountId AccountId { get; set; }
 		AccountId DelegateAccountId { get; set; }
 
@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 	public abstract class ElectionsRegistrationMessage : BlockchainMessage, IElectionsRegistrationMessage {
 
 		// an encrypted instance of MinerRegistrationInfo
-		public IByteArray EncryptedMessage { get; set; }
+		public SafeArrayHandle EncryptedMessage { get;  } = SafeArrayHandle.Create();
 
 		/// <summary>
 		///     We want this to be public and unencrypted, so everybody can know this account requested to be registered for the
@@ -41,7 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		protected override void RehydrateContents(IDataRehydrator rehydrator, IMessageRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(rehydrator, rehydrationFactory);
 
-			this.EncryptedMessage = rehydrator.ReadNonNullableArray();
+			this.EncryptedMessage.Entry = rehydrator.ReadNonNullableArray();
 			this.AccountId.Rehydrate(rehydrator);
 
 			this.DelegateAccountId = rehydrator.ReadRehydratable<AccountId>();
@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 				for(int i = 0; i < count; i++) {
 
-					IByteArray data = rehydrator.ReadNonNullableArray();
+					SafeArrayHandle data = rehydrator.ReadNonNullableArray();
 
 					this.Certificates.Add(factory.RehydrateMetadata(data));
 				}
@@ -84,7 +84,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 					using(IDataDehydrator subDh = DataSerializationFactory.CreateDehydrator()) {
 						entry.Dehydrate(subDh);
 
-						IByteArray data = subDh.ToArray();
+						SafeArrayHandle data = subDh.ToArray();
 
 						dehydrator.WriteNonNullable(data);
 						data.Return();

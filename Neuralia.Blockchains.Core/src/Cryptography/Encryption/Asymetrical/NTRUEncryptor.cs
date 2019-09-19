@@ -31,12 +31,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 			return new NTRUEncryptionKeyPairGenerator(this.parameters);
 		}
 
-		public IByteArray Encrypt(IByteArray message, IByteArray publicKey) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle message, SafeArrayHandle publicKey) {
 
 			return this.Encrypt(message, new NTRUEncryptionPublicKeyParameters(publicKey, this.parameters.EncryptionParameters));
 		}
 
-		public IByteArray Encrypt(IByteArray message, NTRUEncryptionPublicKeyParameters publicKey) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle message, NTRUEncryptionPublicKeyParameters publicKey) {
 			using(NTRUEngine ntru = new NTRUEngine()) {
 
 				NTRUEncryptionKeyPairGenerator ntruGen = this.CreateNtruGenerator();

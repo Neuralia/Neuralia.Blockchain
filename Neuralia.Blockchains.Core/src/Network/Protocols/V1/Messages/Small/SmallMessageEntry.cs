@@ -3,11 +3,11 @@
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Small {
 	public class SmallMessageEntry : MessageEntry<SmallMessageHeader> {
 
-		public SmallMessageEntry(IByteArray message = null) : base(message) {
+		public SmallMessageEntry(SafeArrayHandle message = null) : base(message) {
 
 		}
 
-		public override void RebuildHeader(IByteArray buffer) {
+		public override void RebuildHeader(SafeArrayHandle buffer) {
 			this.Header.Rehydrate(buffer);
 		}
 
@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Small {
 			return new SmallMessageHeader();
 		}
 
-		protected override SmallMessageHeader CreateHeader(int messageLength, IByteArray message) {
+		protected override SmallMessageHeader CreateHeader(int messageLength, SafeArrayHandle message) {
 			return new SmallMessageHeader(messageLength, message);
 		}
 	}

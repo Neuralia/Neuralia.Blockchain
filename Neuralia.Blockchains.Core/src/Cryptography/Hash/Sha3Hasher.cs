@@ -14,11 +14,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Hash {
 
 		}
 
-		public override IByteArray Hash(IByteArray message) {
+		public override SafeArrayHandle Hash(SafeArrayHandle message) {
 			Sha3ExternalDigest sha3Digest = (Sha3ExternalDigest) this.digest;
 
 			sha3Digest.BlockUpdate(message);
-			sha3Digest.DoFinalReturn(out IByteArray result);
+			sha3Digest.DoFinalReturn(out SafeArrayHandle result);
 
 			return result;
 		}

@@ -5,12 +5,12 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 	public interface IMessageHash {
 		void WriteHash(IDataDehydrator dh);
 		void ReadHash(IDataRehydrator dh);
-		void SetHash(IByteArray mesasge);
-		bool CompareHash(IByteArray messasge);
+		void SetHash(SafeArrayHandle mesasge);
+		bool CompareHash(SafeArrayHandle messasge);
 	}
 
 	public interface IMessageHash<out T> : IMessageHash {
 		T Hash { get; }
-		T HashMessage(IByteArray messasge);
+		T HashMessage(SafeArrayHandle messasge);
 	}
 }

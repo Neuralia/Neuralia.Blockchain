@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 	public abstract class SynthesizedBlockAPI {
 
 		public long BlockId { get; set; }
-		public DateTime Timestamp { get; set; }
+		public string Timestamp { get; set; }
 
 		public string AccountId { get; set; }
 		public string AccountHash { get; set; }
@@ -24,14 +24,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 		public abstract class SynthesizedElectionResultAPI {
 			public byte Offset { get; set; }
-			public DateTime Timestamp { get; set; }
+			public string Timestamp { get; set; }
 			public byte PeerType { get; set; }
 			public string DelegateAccountId { get; set; }
 			public string SelectedTransactions { get; set; }
 		}
 
 		public abstract class SynthesizedGenesisBlockAPI {
-			public DateTime Inception { get; set; }
+			public string Inception { get; set; }
 		}
 	}
 

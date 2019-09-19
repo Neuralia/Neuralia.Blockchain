@@ -14,12 +14,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 		long DiskBlockHeight { get; set; }
 		DateTime LastBlockTimestamp { get; set; }
 		ushort LastBlockLifespan { get; set; }
-		IByteArray LastBlockHash { get; set; }
+		SafeArrayHandle LastBlockHash { get;  }
 		int BlockInsertionStatus { get; set; }
 		(int index, long startingBlockId) BlockIndex { get; set; }
 		Dictionary<string, long> FileSizes { get; set; }
-		IByteArray BlockIdFile { get; set; }
-		IByteArray ModeratorKey { get; set; }
+		SafeArrayHandle BlockIdFile { get;  }
+		SafeArrayHandle ModeratorKey { get;  }
 		void CreateSnapshot();
 		void Commit();
 		void Rollback();
@@ -46,15 +46,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 
 		public DateTime LastBlockTimestamp { get; set; }
 		public ushort LastBlockLifespan { get; set; }
-		public IByteArray LastBlockHash { get; set; }
+		public SafeArrayHandle LastBlockHash { get;  } = SafeArrayHandle.Create();
 		public int BlockInsertionStatus { get; set; }
 
 		public (int index, long startingBlockId) BlockIndex { get; set; }
 
 		public Dictionary<string, long> FileSizes { get; set; }
 
-		public IByteArray BlockIdFile { get; set; }
-		public IByteArray ModeratorKey { get; set; }
+		public  SafeArrayHandle BlockIdFile { get;  } = SafeArrayHandle.Create();
+		public  SafeArrayHandle ModeratorKey { get;  } = SafeArrayHandle.Create();
 
 		public void CreateSnapshot() {
 
@@ -63,11 +63,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 			this.DiskBlockHeight = chainStateProvider.DiskBlockHeight;
 			this.LastBlockTimestamp = chainStateProvider.LastBlockTimestamp;
 			this.LastBlockLifespan = chainStateProvider.LastBlockLifespan;
-			this.LastBlockHash = (ByteArray) chainStateProvider.LastBlockHash;
+			this.LastBlockHash.Entry =  chainStateProvider.LastBlockHash;
 			this.BlockInsertionStatus = (int) chainStateProvider.BlockInterpretationStatus;
 
 			if(this.moderatorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-				this.ModeratorKey = chainStateProvider.GetModeratorKeyBytes(this.moderatorKeyOrdinal);
+				this.ModeratorKey.Entry = chainStateProvider.GetModeratorKeyBytes(this.moderatorKeyOrdinal).Entry;
 			}
 
 			this.BlockIndex = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.FindBlockIndex(this.DiskBlockHeight);

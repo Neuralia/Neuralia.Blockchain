@@ -17,27 +17,26 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			hasher = xxHashFactory.Instance.Create(XxHashConfig);
 		}
 
-		protected override IByteArray GenerateHash(IByteArray entry) {
+		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry) {
 			return (ByteArray) hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length).Hash;
 		}
 
 		public ulong HashULong(IHashNodeList nodeList) {
-			IByteArray hash = this.HashBytes(nodeList);
+			using(SafeArrayHandle hash = this.HashBytes(nodeList)) {
 
-			TypeSerializer.Deserialize(hash.Span, out ulong result);
-			hash.Return();
-
-			return result;
+				TypeSerializer.Deserialize(hash.Span, out ulong result);
+				
+				return result;
+			}
 		}
 
 		public long HashLong(IHashNodeList nodeList) {
-			IByteArray hash = this.HashBytes(nodeList);
+			using(SafeArrayHandle hash = this.HashBytes(nodeList)) {
 
-			TypeSerializer.Deserialize(hash.Span, out long result);
-
-			hash.Return();
-
-			return result;
+				TypeSerializer.Deserialize(hash.Span, out long result);
+				
+				return result;
+			}
 		}
 	}
 }

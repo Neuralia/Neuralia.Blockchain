@@ -6,7 +6,6 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.Engines;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Neuralia.Blockchains.Tools.Serialization;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
@@ -39,7 +38,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			this.xchachaCipher = new XChachaEngine(rounds);
 		}
 
-		private KeyParameter InitRecordMAC(XChachaEngine cipher, bool forEncryption, IByteArray password) {
+		private KeyParameter InitRecordMAC(XChachaEngine cipher, bool forEncryption, SafeArrayHandle password) {
 			//its not ideal i know, but we have no choice for now. no way to pass a secure string to the encryptor
 			//TODO: can this be made safer by clearing the password?
 
@@ -58,7 +57,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 				GC.Collect();
 			}
 
-			IByteArray startingBlock = new ByteArray(64);
+			SafeArrayHandle startingBlock = ByteArray.Create(64);
 			cipher.ProcessBytes(startingBlock.Bytes, startingBlock.Offset, startingBlock.Length, startingBlock.Bytes, startingBlock.Offset);
 
 			// NOTE: The BC implementation puts 'r' after 'k'
@@ -74,7 +73,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 			SecureRandom rnd = new SecureRandom();
 
-			ByteArray salt = new ByteArray(saltLength);
+			ByteArray salt = ByteArray.Create(saltLength);
 
 			// get a random salt
 			salt.FillSafeRandom();
@@ -88,34 +87,34 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return new EncryptorParameters {cipher = cipherType, salt = salt.ToExactByteArrayCopy(), iterations = rnd.Next(1000, short.MaxValue), keyBitLength = 256};
 		}
 
-		public IByteArray Encrypt(IByteArray plain, SecureString password) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle plain, SecureString password) {
 
-			IByteArray passwordBtyes = (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString());
+			SafeArrayHandle passwordBtyes = (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString());
 
 			return this.Encrypt(plain, passwordBtyes);
 		}
 
-		public IByteArray Encrypt(IByteArray plain, IByteArray password) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle plain, SafeArrayHandle password) {
 
 			int ciphertextLength = plain.Length + 16; // 16 is the size of the HMAC
 
 			KeyParameter macKey = this.InitRecordMAC(this.xchachaCipher, true, password);
 
-			ByteArray output = new ByteArray(ciphertextLength);
+			ByteArray output = ByteArray.Create(ciphertextLength);
 			this.xchachaCipher.ProcessBytes(plain.Bytes, plain.Offset, plain.Length, output.Bytes, output.Offset);
 
-			IByteArray additionalData = this.getAdditionalData();
-			IByteArray mac = this.calculateRecordMAC(macKey, additionalData, output, 0, plain.Length);
+			SafeArrayHandle additionalData = this.getAdditionalData();
+			SafeArrayHandle mac = this.calculateRecordMAC(macKey, additionalData, output, 0, plain.Length);
 
-			mac.CopyTo(output, plain.Length);
+			mac.Entry.CopyTo(output, plain.Length);
 
 			return output;
 
 		}
 
-		public IByteArray Decrypt(IByteArray cipher, SecureString password) {
+		public SafeArrayHandle Decrypt(SafeArrayHandle cipher, SecureString password) {
 			try {
-				IByteArray passwordBtyes = (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString());
+				SafeArrayHandle passwordBtyes = (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString());
 
 				return this.Decrypt(cipher, 0, cipher.Length, passwordBtyes);
 
@@ -126,7 +125,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public IByteArray Decrypt(IByteArray cipher, IByteArray password) {
+		public SafeArrayHandle Decrypt(SafeArrayHandle cipher, SafeArrayHandle password) {
 			try {
 				return this.Decrypt(cipher, 0, cipher.Length, password);
 			} catch(DataEncryptionException ex) {
@@ -136,7 +135,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public IByteArray Decrypt(IByteArray ciphertext, int offset, int length, IByteArray password) {
+		public SafeArrayHandle Decrypt(SafeArrayHandle ciphertext, int offset, int length, SafeArrayHandle password) {
 
 			try {
 				int lengthDelta = length - offset;
@@ -146,22 +145,24 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 					throw new DataEncryptionException("Decoding error");
 				}
 
-				IByteArray receivedMAC = MemoryAllocators.Instance.allocator.Take((offset + lengthDelta) - (offset + plaintextLength));
+				SafeArrayHandle receivedMAC = ByteArray.Create((offset + lengthDelta) - (offset + plaintextLength));
 
-				ciphertext.CopyTo(receivedMAC, offset + plaintextLength, 0, receivedMAC.Length);
+				ciphertext.Entry.CopyTo(receivedMAC.Entry, offset + plaintextLength, 0, receivedMAC.Length);
 
 				KeyParameter macKey = this.InitRecordMAC(this.xchachaCipher, false, password);
 
-				IByteArray additionalData = this.getAdditionalData();
-				IByteArray calculatedMAC = this.calculateRecordMAC(macKey, additionalData, ciphertext, offset, plaintextLength);
+				SafeArrayHandle additionalData = this.getAdditionalData();
+				SafeArrayHandle calculatedMAC = this.calculateRecordMAC(macKey, additionalData, ciphertext, offset, plaintextLength);
 
 				if(!calculatedMAC.Equals(receivedMAC)) {
 					throw new DataEncryptionException("Bad record MAC");
 				}
 
 				receivedMAC.Return();
+				additionalData.Return();
+				calculatedMAC.Return();
 
-				IByteArray output = new ByteArray(plaintextLength);
+				SafeArrayHandle output = ByteArray.Create(plaintextLength);
 				this.xchachaCipher.ProcessBytes(ciphertext.Bytes, ciphertext.Offset + offset, plaintextLength, output.Bytes, output.Offset);
 
 				return output;
@@ -176,20 +177,20 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return ciphertextLimit;
 		}
 
-		protected IByteArray calculateRecordMAC(KeyParameter macKey, IByteArray additionalData, IByteArray buf, int off, int len) {
+		protected SafeArrayHandle calculateRecordMAC(KeyParameter macKey, SafeArrayHandle additionalData, SafeArrayHandle buf, int off, int len) {
 			IMac mac = new Poly1305();
 			mac.Init(macKey);
 
 			this.updateRecordMAC(mac, additionalData, 0, additionalData.Length);
 			this.updateRecordMAC(mac, buf, off, len);
 
-			IByteArray output = new ByteArray(mac.GetMacSize());
+			SafeArrayHandle output = ByteArray.Create(mac.GetMacSize());
 			mac.DoFinal(output.Bytes, output.Offset);
 
 			return output;
 		}
 
-		protected void updateRecordMAC(IMac mac, IByteArray buf, int off, int len) {
+		protected void updateRecordMAC(IMac mac, SafeArrayHandle buf, int off, int len) {
 			mac.BlockUpdate(buf.Bytes, buf.Offset + off, len);
 
 			Span<byte> buffer = stackalloc byte[sizeof(long)];
@@ -198,12 +199,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			mac.BlockUpdate(buffer.ToArray(), 0, buffer.Length);
 		}
 
-		protected IByteArray getAdditionalData() {
+		protected SafeArrayHandle getAdditionalData() {
 			/*
 			 * additional_data = seq_num + TLSCompressed.type + TLSCompressed.version +
 			 * TLSCompressed.length
 			 */
-			IByteArray additional_data = new ByteArray(0);
+			SafeArrayHandle additional_data = ByteArray.Create(0);
 
 			//		TlsUtils.writeUint64(seqNo, additional_data, 0);
 			//		TlsUtils.writeUint8(type, additional_data, 8);

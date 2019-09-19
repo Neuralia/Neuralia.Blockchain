@@ -8,18 +8,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
-	public class HashNodeList : IHashNodeList {
-		private readonly List<IByteArray> nodes = new List<IByteArray>();
+	public class HashNodeList : IHashNodeList, IDisposable2 {
+		private readonly List<SafeArrayHandle> nodes = new List<SafeArrayHandle>();
 
 #if LOG_SOURCE
-		public List<IByteArray> Nodes => this.nodes;
+		public List<ArrayWrapper> Nodes => this.nodes;
 		public readonly List<string> Sources = new List<string>();
 		
 #endif
-		public IByteArray this[int i] => this.nodes[i];
+		public SafeArrayHandle this[int i] => this.nodes[i].Branch();
 
 		public int Count => this.nodes.Count;
 
@@ -38,7 +40,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(short value) {
-			return this.Add(BitConverter.GetBytes(value));
+			
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(short? value) {
@@ -52,7 +55,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(ushort value) {
-			return this.Add(BitConverter.GetBytes(value));
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(ushort? value) {
@@ -66,7 +69,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(int value) {
-			return this.Add(BitConverter.GetBytes(value));
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(int? value) {
@@ -80,7 +83,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(uint value) {
-			return this.Add(BitConverter.GetBytes(value));
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(uint? value) {
@@ -94,7 +97,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(long value) {
-			return this.Add(BitConverter.GetBytes(value));
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(long? value) {
@@ -108,7 +111,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(ulong value) {
-			return this.Add(BitConverter.GetBytes(value));
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(ulong? value) {
@@ -122,7 +125,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(double value) {
-			return this.Add(BitConverter.GetBytes(value));
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(double? value) {
@@ -136,18 +139,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(decimal value) {
-			var bytesSets = decimal.GetBits(value).Select(BitConverter.GetBytes);
-			int fullSize = bytesSets.Sum(b => b.Length);
-
-			IByteArray bytes = new ByteArray(fullSize);
-			int offset = 0;
-
-			foreach(var byteset in bytesSets) {
-				bytes.CopyFrom(byteset, 0, offset, byteset.Length);
-				offset += byteset.Length;
-			}
-
-			return this.Add(bytes);
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(decimal? value) {
@@ -161,7 +153,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(bool value) {
-			return this.Add(BitConverter.GetBytes(value));
+			return this.Add(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(bool? value) {
@@ -206,11 +198,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			return this;
 		}
 
-		public HashNodeList Add(IByteArray array) {
+		public HashNodeList Add(SafeArrayHandle array) {
 			if(array == null) {
 				this.AddNull();
 			} else {
-				this.nodes.Add(array);
+				this.nodes.Add(array.Branch());
 
 #if LOG_SOURCE
 				this.Sources.Add(System.Environment.StackTrace.ToString());
@@ -220,16 +212,34 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			return this;
 		}
 
+		public HashNodeList Add(Span<byte> array) {
+			this.nodes.Add(array.ToArray());
+
+			return this;
+		}
+		
 		public HashNodeList Add(byte[] array) {
-			return this.Add(new ByteArray(array));
+			this.nodes.Add(array);
+
+			return this;
 		}
 
+		public HashNodeList Add(ByteArray array) {
+			this.nodes.Add(array.Clone());
+
+			return this;
+		}
+		
 		public HashNodeList Add(ref byte[] array, int length) {
-			return this.Add(new ByteArray(array, length));
+			this.nodes.Add(ByteArray.Create(array, length));
+
+			return this;
 		}
 
 		public HashNodeList Add(byte[] array, int length) {
-			return this.Add(new ByteArray(array, length));
+
+			var bytes = array;
+			return this.Add(ref bytes, length);
 		}
 
 		public HashNodeList Add(Enum entry) {
@@ -293,10 +303,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				return this.Add(time);
 			}
 
-			if(obj is IByteArray array) {
+			if(obj is SafeArrayHandle array) {
 				return this.Add(array);
 			}
-
+			
+			if(obj is ByteArray byteArray) {
+				return this.Add(byteArray);
+			}
+			
 			if(obj is byte[] bytes) {
 				return this.Add(bytes);
 			}
@@ -309,7 +323,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList AddNull() {
-			this.Add(new ByteArray());
+			this.Add(ByteArray.Create());
 
 			return this;
 		}
@@ -376,7 +390,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			if(disposing && !this.IsDisposed) {
 
 				try {
-					// do nothing, we do not clear buffers in this class
+					foreach(var entry in this.nodes) {
+						entry?.Dispose();
+					}
+					
 				}  finally {
 					
 				}

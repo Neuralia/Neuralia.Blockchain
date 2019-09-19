@@ -5,7 +5,6 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Neuralia.BouncyCastle.extra.pqc.math.ntru.util;
 using Org.BouncyCastle.Crypto;
 
@@ -30,7 +29,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		/// <param name="first"></param>
 		/// <param name="second"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void Xor(IByteArray result, IByteArray first, IByteArray second) {
+		public static void Xor(ByteArray result, ByteArray first, ByteArray second) {
 			int len = first.Length / sizeof(long);
 
 			var cFirst = first.CastedArray<long>();
@@ -47,46 +46,44 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray PRF(IByteArray key, int index, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray PRF(ByteArray key, int index, XMSSExecutionContext xmssExecutionContext) {
 
-			IByteArray indexBytes = ToBytes(index, 32);
+			using(ByteArray indexBytes = ToBytes(index, 32)) {
 
-			IByteArray result = PRF(key, indexBytes, xmssExecutionContext);
+				return PRF(key, indexBytes, xmssExecutionContext);
 
-			indexBytes.Return();
-
-			return result;
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray PRF(IByteArray key, CommonAddress adrs, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray PRF(ByteArray key, CommonAddress adrs, XMSSExecutionContext xmssExecutionContext) {
 
 			// do note return this array, it is only lent for performance
 			return PRF(key, adrs.ToByteArray(), xmssExecutionContext);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray PRF(IByteArray key, IByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray PRF(ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
 
 			return HashEntry(HashCodes.Prf, key, buffer, xmssExecutionContext);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray PRF(IByteArray key, CommonAddress adrs, WotsPlusEngine.ThreadContext threadContext) {
+		public static ByteArray PRF(ByteArray key, CommonAddress adrs, WotsPlusEngine.ThreadContext threadContext) {
 			return HashEntry(HashCodes.Prf, threadContext.digest, key, adrs.ToByteArray(), threadContext.XmssExecutionContext);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray F(IByteArray key, IByteArray buffer, WotsPlusEngine.ThreadContext threadContext) {
+		public static ByteArray F(ByteArray key, ByteArray buffer, WotsPlusEngine.ThreadContext threadContext) {
 
 			return HashEntry(HashCodes.F, threadContext.digest, key, buffer, threadContext.XmssExecutionContext);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray HashEntry(HashCodes hashCode, IByteArray key, IByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray HashEntry(HashCodes hashCode, ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
 
 			IDigest digest = xmssExecutionContext.DigestPool.GetObject();
-			IByteArray hash = HashEntry(hashCode, digest, key, buffer, xmssExecutionContext);
+			ByteArray hash = HashEntry(hashCode, digest, key, buffer, xmssExecutionContext);
 
 			xmssExecutionContext.DigestPool.PutObject(digest);
 
@@ -94,34 +91,33 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray HashEntry(HashCodes hashCode, IDigest digest, IByteArray key, IByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray HashEntry(HashCodes hashCode, IDigest digest, ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
 
-			IByteArray hash = null;
+			ByteArray hash = null;
 
 			if(digest is ShaDigestBase digestBase) {
 
-				IByteArray index = ToBytes((int) hashCode, xmssExecutionContext.DigestSize);
+				using(ByteArray index = ToBytes((int) hashCode, xmssExecutionContext.DigestSize)) {
 
-				// soince we know the final size, lets preset the size of the buffer
-				digestBase.ResetFixed(buffer.Length + key.Length + index.Length);
+					// soince we know the final size, lets preset the size of the buffer
+					digestBase.ResetFixed(buffer.Length + key.Length + index.Length);
 
-				digest.BlockUpdate(index.Bytes, index.Offset, index.Length);
-				digest.BlockUpdate(key.Bytes, key.Offset, key.Length);
-				digest.BlockUpdate(buffer.Bytes, buffer.Offset, buffer.Length);
+					digest.BlockUpdate(index.Bytes, index.Offset, index.Length);
+					digest.BlockUpdate(key.Bytes, key.Offset, key.Length);
+					digest.BlockUpdate(buffer.Bytes, buffer.Offset, buffer.Length);
 
-				digestBase.DoFinalReturn(out hash);
-
-				index.Return();
+					digestBase.DoFinalReturn(out hash);
+				}
 			}
 
 			return hash;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray Hash(IByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray Hash(ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
 
 			IDigest digest = xmssExecutionContext.DigestPool.GetObject();
-			IByteArray hash = null;
+			ByteArray hash = null;
 
 			if(digest is ShaDigestBase digestBase) {
 				// soince we know the final size, lets preset the size of the buffer
@@ -129,7 +125,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 
 				digest.BlockUpdate(buffer.Bytes, buffer.Offset, buffer.Length);
 
-				digestBase.DoFinalReturn(out hash);
+				digestBase.DoFinalReturn(out  hash);
 			}
 
 			xmssExecutionContext.DigestPool.PutObject(digest);
@@ -138,10 +134,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray Hash(IByteArray buffer, IByteArray buffer2, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray Hash(ByteArray buffer, ByteArray buffer2, XMSSExecutionContext xmssExecutionContext) {
 
 			IDigest digest = xmssExecutionContext.DigestPool.GetObject();
-			IByteArray hash = null;
+			ByteArray hash = null;
 
 			if(digest is ShaDigestBase digestBase) {
 				// soince we know the final size, lets preset the size of the buffer
@@ -169,14 +165,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray ToBytes(long value, int sizeInByte) {
-			IByteArray result = MemoryAllocators.Instance.cryptoAllocator.Take(sizeInByte);
+		public static ByteArray ToBytes(long value, int sizeInByte) {
+			ByteArray result = ByteArray.Create(sizeInByte);
 
 			return ToBytes(value, result);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray ToBytes(long value, IByteArray result) {
+		public static ByteArray ToBytes(long value, ByteArray result) {
 
 			int length = Math.Min(sizeof(long), result.Length);
 			result.Span.Slice(0, length).Clear();
@@ -197,7 +193,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray Concatenate(IByteArray a, IByteArray b) {
+		public static ByteArray Concatenate(ByteArray a, ByteArray b) {
 			if(a == null) {
 				return b.Clone();
 			}
@@ -206,7 +202,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 				return a.Clone();
 			}
 
-			IByteArray joined = MemoryAllocators.Instance.cryptoAllocator.Take(a.Length + b.Length);
+			ByteArray joined = ByteArray.Create(a.Length + b.Length);
 
 			a.CopyTo(joined, 0, 0, a.Length);
 			b.CopyTo(joined, 0, a.Length, b.Length);
@@ -215,9 +211,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static IByteArray Concatenate(IByteArray a, IByteArray b, IByteArray c) {
+		public static ByteArray Concatenate(ByteArray a, ByteArray b, ByteArray c) {
 			if((a != null) && (b != null) && (c != null)) {
-				IByteArray rv = MemoryAllocators.Instance.cryptoAllocator.Take(a.Length + b.Length + c.Length);
+				ByteArray rv = ByteArray.Create(a.Length + b.Length + c.Length);
 
 				a.CopyTo(rv, 0, 0, a.Length);
 				b.CopyTo(rv, 0, a.Length, b.Length);
@@ -238,7 +234,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static bool EqualsConstantTime(IByteArray a, IByteArray b) {
+		public static bool EqualsConstantTime(ByteArray a, ByteArray b) {
 			int len = a.Length;
 
 			if(len != b.Length) {
@@ -296,26 +292,26 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		/// <param name="XMSSMTPrivateKey"></param>
 		/// <param name="xmssExecutionContext"></param>
 		/// <returns></returns>
-		public static (IByteArray publicSeed, IByteArray secretSeed, IByteArray secretSeedPrf) GenerateSeeds(XMSSExecutionContext xmssExecutionContext) {
+		public static (ByteArray publicSeed, ByteArray secretSeed, ByteArray secretSeedPrf) GenerateSeeds(XMSSExecutionContext xmssExecutionContext) {
 #if DETERMINISTIC_DEBUG
 			// do not change this order, to match Bouncy's code
 
-			IByteArray secretSeed = MemoryAllocators.Instance.cryptoAllocator.Take(xmssExecutionContext.DigestSize);
+			ArrayWrapperBase secretSeed = ByteArray.Create(xmssExecutionContext.DigestSize);
 			xmssExecutionContext.Random.NextBytes(secretSeed.Bytes, secretSeed.Offset, secretSeed.Length);
 
-			IByteArray secretSeedPrf = MemoryAllocators.Instance.cryptoAllocator.Take(xmssExecutionContext.DigestSize);
+			ArrayWrapperBase secretSeedPrf = ByteArray.Create(xmssExecutionContext.DigestSize);
 			xmssExecutionContext.Random.NextBytes(secretSeedPrf.Bytes, secretSeedPrf.Offset, secretSeedPrf.Length);
 
-			IByteArray publicSeed = MemoryAllocators.Instance.cryptoAllocator.Take(xmssExecutionContext.DigestSize);
+			ArrayWrapperBase publicSeed = ByteArray.Create(xmssExecutionContext.DigestSize);
 			xmssExecutionContext.Random.NextBytes(publicSeed.Bytes, publicSeed.Offset, publicSeed.Length);
 #else
 
 			// it is VERY important
-			MemoryBlockDoubleArray pool = MemoryAllocators.Instance.doubleArrayCryptoAllocator.Take(50);
+			ByteArray[] pool = new ByteArray[50];
 
 			for(int i = 0; i < pool.Length; i++) {
 
-				IByteArray buffer = MemoryAllocators.Instance.cryptoAllocator.Take(xmssExecutionContext.DigestSize);
+				ByteArray buffer = ByteArray.Create(xmssExecutionContext.DigestSize);
 				xmssExecutionContext.Random.NextBytes(buffer.Bytes, buffer.Offset, buffer.Length);
 				pool[i] = buffer;
 			}
@@ -324,11 +320,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 
 			entries.Shuffle(xmssExecutionContext.Random);
 
-			IByteArray publicSeed = entries[0].Clone();
-			IByteArray secretSeedPrf = entries[1].Clone();
-			IByteArray secretSeed = entries[2].Clone();
+			ByteArray publicSeed = entries[0].Clone();
+			ByteArray secretSeedPrf = entries[1].Clone();
+			ByteArray secretSeed = entries[2].Clone();
 
-			pool.Return();
+			DoubleArrayHelper.Return(pool);
 #endif
 			return (publicSeed, secretSeed, secretSeedPrf);
 		}

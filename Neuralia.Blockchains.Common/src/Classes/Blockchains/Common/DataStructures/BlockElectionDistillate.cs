@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures {
 
 	public abstract class BlockElectionDistillate {
-		public IByteArray blockHash;
+		public readonly SafeArrayHandle blockHash = SafeArrayHandle.Create();
 		public string blockHash64;
 
 		public List<string> BlockTransactionIds;
@@ -41,10 +41,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public void RehydrateElectionContext(IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			if((this.electionContext == null) && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
 
-				IByteArray compressed = (ByteArray) Convert.FromBase64String(this.DehydratedElectionContext);
+				SafeArrayHandle compressed = (ByteArray) Convert.FromBase64String(this.DehydratedElectionContext);
 
 				GzipCompression compressor = new GzipCompression();
-				IByteArray bytes = compressor.Decompress(compressed);
+				SafeArrayHandle bytes = compressor.Decompress(compressed);
 
 				IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
 				this.electionContext = electionContextRehydrationFactory.CreateElectionContext(bytes);
@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 			// if(dehydrateElectionContext) {
 			// 	var dehydrator = DataSerializationFactory.CreateDehydrator();
 			// 	currentElection.ElectionContext.Dehydrate(dehydrator);
-			// 	IByteArray data = dehydrator.ToArray();
+			// 	ArrayWrapper data = dehydrator.ToArray();
 			// 	blockElectionContext.DehydratedElectionContext = Compressors.BlockCompressor.Compress(data).ToBase64();
 			// 	data.Return();
 			// }

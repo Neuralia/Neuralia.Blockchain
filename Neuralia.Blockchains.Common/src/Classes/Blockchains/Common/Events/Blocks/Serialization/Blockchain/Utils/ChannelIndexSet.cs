@@ -48,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			}
 		}
 
-		public void WriteEntry(ChannelsEntries<IByteArray> blockData) {
+		public void WriteEntry(ChannelsEntries<SafeArrayHandle> blockData) {
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
 				index.WriteEntry(blockData);
@@ -70,8 +70,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result;
 		}
 
-		public ChannelsEntries<IByteArray> QueryBytes(uint adjustedBlockId) {
-			var result = new ChannelsEntries<IByteArray>(this.ChannelTypes);
+		public ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId) {
+			var result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
 				var subResults = index.QueryBytes(adjustedBlockId);
@@ -82,8 +82,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result;
 		}
 
-		public ChannelsEntries<IByteArray> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
-			var result = new ChannelsEntries<IByteArray>(this.ChannelTypes);
+		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
+			var result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
 				var subResults = index.QueryPartialBlockBytes(adjustedBlockId, offsets.GetSubset(index.ChannelTypes));
@@ -94,7 +94,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result;
 		}
 
-		public IByteArray QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
+		public SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
 

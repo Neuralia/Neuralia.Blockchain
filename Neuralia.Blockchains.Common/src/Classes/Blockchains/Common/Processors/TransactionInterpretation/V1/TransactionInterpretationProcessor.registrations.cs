@@ -376,7 +376,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 						STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key.Id));
 						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 						key.Dehydrate(dehydrator);
-						IByteArray bytes = dehydrator.ToArray();
+						SafeArrayHandle bytes = dehydrator.ToArray();
 						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
 						bytes.Return();
 						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
@@ -471,7 +471,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 						t.NewCryptographicKey.Dehydrate(dehydrator);
-						IByteArray bytes = dehydrator.ToArray();
+						SafeArrayHandle bytes = dehydrator.ToArray();
 						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
 						bytes.Return();
 						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();

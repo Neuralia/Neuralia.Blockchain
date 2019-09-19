@@ -74,7 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 				entry.Dehydrate(dehydrator);
 			}
 
-			IByteArray bytes = dehydrator.ToArray();
+			SafeArrayHandle bytes = dehydrator.ToArray();
 
 			this.DeleteUndoFile();
 
@@ -91,7 +91,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			string filename = this.GetUndoFilePath();
 
 			if(this.fileSystem.File.Exists(filename)) {
-				IByteArray bytes = FileExtensions.ReadAllBytes(filename, this.fileSystem);
+				SafeArrayHandle bytes = FileExtensions.ReadAllBytes(filename, this.fileSystem);
 
 				IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 

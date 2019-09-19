@@ -6,12 +6,21 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures {
 	public class DataSlice : DataSliceInfo, IDisposable2 {
-		public IByteArray Data { get; set; }
+
+		public DataSlice() {
+			
+		}
+		public DataSlice(long length, long offset, SafeArrayHandle data) : base(length, offset) {
+			this.Data.Entry = data.Entry;
+		}
+
+		public SafeArrayHandle Data { get; } = SafeArrayHandle.Create();
+
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
-			this.Data = rehydrator.ReadNonNullableArray();
+			this.Data.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {

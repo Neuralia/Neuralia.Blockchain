@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		ACCOUNT_SNAPSHOT_CARD GetAccount(long accountId);
 	}
 
-	public abstract class AccountSnapshotDigestChannel<CHANEL_BANDS, ACCOUNT_SNAPSHOT_CARD> : DigestChannel<CHANEL_BANDS, IByteArray, int, long, (uint offset, uint length)>, IAccountSnapshotDigestChannel<ACCOUNT_SNAPSHOT_CARD>
+	public abstract class AccountSnapshotDigestChannel<CHANEL_BANDS, ACCOUNT_SNAPSHOT_CARD> : DigestChannel<CHANEL_BANDS, SafeArrayHandle, int, long, (uint offset, uint length)>, IAccountSnapshotDigestChannel<ACCOUNT_SNAPSHOT_CARD>
 		where CHANEL_BANDS : struct, Enum
 		where ACCOUNT_SNAPSHOT_CARD : class, IAccountSnapshotDigestChannelCard {
 		protected readonly string bandName;
@@ -39,15 +39,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				return null;
 			}
 
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(results[this.channelBand]);
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(results[this.channelBand])) {
 
-			Enums.AccountTypes accountType = AccountSnapshotDigestChannelCard.GetAccountType(rehydrator);
+				Enums.AccountTypes accountType = AccountSnapshotDigestChannelCard.GetAccountType(rehydrator);
 
-			ACCOUNT_SNAPSHOT_CARD card = this.CreateNewCardInstance();
+				ACCOUNT_SNAPSHOT_CARD card = this.CreateNewCardInstance();
 
-			card.Rehydrate(rehydrator);
+				card.Rehydrate(rehydrator);
 
-			return card;
+				return card;
+			}
 		}
 
 		protected override void BuildBandsIndices() {

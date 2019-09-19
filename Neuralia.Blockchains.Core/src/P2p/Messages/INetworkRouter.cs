@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 	///     an entity that will route network messages to their destination
 	/// </summary>
 	public interface INetworkRouter {
-		void RouteNetworkMessage(IRoutingHeader header, IByteArray data, PeerConnection connection);
+		void RouteNetworkMessage(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection);
 
 		void RouteNetworkGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
 	}

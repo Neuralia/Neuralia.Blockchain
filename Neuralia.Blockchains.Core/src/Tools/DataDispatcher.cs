@@ -22,8 +22,8 @@ namespace Neuralia.Blockchains.Core.Tools {
 			this.timeService = timeService;
 		}
 
-		private IByteArray DehydrateMessage(INetworkMessageSet message) {
-			IByteArray bytes = message.Dehydrate();
+		private SafeArrayHandle DehydrateMessage(INetworkMessageSet message) {
+			SafeArrayHandle bytes = message.Dehydrate();
 
 			return bytes;
 		}
@@ -40,11 +40,11 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return this.SendFinalBytes(peerConnection, this.DehydrateMessage(message));
 		}
 
-		public bool SendBytes(PeerConnection peerConnection, IByteArray data) {
+		public bool SendBytes(PeerConnection peerConnection, SafeArrayHandle data) {
 			return this.Send(() => this.SendBytesToPeer(peerConnection, data));
 		}
 
-		public bool SendFinalBytes(PeerConnection peerConnection, IByteArray data) {
+		public bool SendFinalBytes(PeerConnection peerConnection, SafeArrayHandle data) {
 			bool SendAction() {
 				try {
 					return this.SendBytesToPeer(peerConnection, data);
@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return this.Send(SendAction);
 		}
 
-		private bool SendBytesToPeer(PeerConnection peerConnection, IByteArray data) {
+		private bool SendBytesToPeer(PeerConnection peerConnection, SafeArrayHandle data) {
 
 			lock(this.locker) {
 
@@ -113,7 +113,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return true;
 		}
 
-		private bool ConnectAndSendBytesToPeer(PeerConnection peerConnection, IByteArray data) {
+		private bool ConnectAndSendBytesToPeer(PeerConnection peerConnection, SafeArrayHandle data) {
 
 			if(peerConnection.IsDisposed) {
 				return false;

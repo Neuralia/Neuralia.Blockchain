@@ -30,7 +30,6 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 						// lets clean up its memory
 						if(value is MessageInstance instance) {
 							this.usedSize -= instance.Size;
-							instance.Dispose();
 						}
 					});
 

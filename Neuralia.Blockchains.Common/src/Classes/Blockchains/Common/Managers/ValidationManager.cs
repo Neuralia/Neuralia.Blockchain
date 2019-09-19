@@ -66,9 +66,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		protected const int DEFAULT_CACHE_COUNT = 5;
 
 		private readonly IGuidService guidService;
-
-		private readonly Sha3SakuraTree hasher = new Sha3SakuraTree();
-
+		
 		private readonly ITimeService timeService;
 
 		public ValidationManager(CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator, GlobalSettings.ApplicationSettings.GetChainConfiguration(centralCoordinator.ChainId).MaxValidationParallelCount) {
@@ -113,13 +111,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			ValidationResult result = null;
 
 			if(block is IGenesisBlock genesisBlock) {
-				result = this.ValidateGenesisBlock(genesisBlock, block.Hash);
+				result = this.ValidateGenesisBlockOnlineVerification(genesisBlock, block.Hash);
 
 				completedResultCallback(result);
 			} else if(block is ISimpleBlock simpleBlock) {
 				long previousId = block.BlockId.Value - 1;
 
-				void PerformBlockValidation(IByteArray previousBlockHash) {
+				void PerformBlockValidation(SafeArrayHandle previousBlockHash) {
 
 					// we try 3 times until it validates. some times it fails for some reason
 					//TODO: sometimes the validatino fails, even if it succeeds a bit later. why?  possible issue to fix
@@ -232,7 +230,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						IXmssCryptographicKey xmssKey = new XmssCryptographicKey();
 
 						xmssKey.Id = keyOrdinal;
-						xmssKey.Key = keyBytes.Value.keyBytes;
+						xmssKey.Key.Entry = keyBytes.Value.keyBytes.Entry;
 
 						xmssKey.TreeHeight = keyBytes.Value.treeheight;
 						xmssKey.BitSize = keyBytes.Value.hashBits;
@@ -426,7 +424,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 							IXmssCryptographicKey xmssKey = new XmssCryptographicKey();
 
 							xmssKey.Id = keyOrdinal;
-							xmssKey.Key = keyBytes.Value.keyBytes;
+							xmssKey.Key.Entry = keyBytes.Value.keyBytes.Entry;
 							xmssKey.TreeHeight = keyBytes.Value.treeheight;
 							xmssKey.BitSize = keyBytes.Value.hashBits;
 
@@ -522,7 +520,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 									IXmssCryptographicKey xmssKey = new XmssCryptographicKey();
 
 									xmssKey.Id = signature.KeyAddress.OrdinalId;
-									xmssKey.Key = keyBytes.Value.keyBytes;
+									xmssKey.Key.Entry = keyBytes.Value.keyBytes.Entry;
 									xmssKey.TreeHeight = keyBytes.Value.treeheight;
 									xmssKey.BitSize = keyBytes.Value.hashBits;
 
@@ -560,7 +558,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 							if(publicSignature?.PublicKey?.Key != null) {
 								// ok, this message has an embeded public key. lets confirm its the same that we pulled up
-								if(!publicSignature.PublicKey.Key.Equals(key.Key)) {
+								if(!publicSignature.PublicKey.Key.Entry.Equals(key.Key)) {
 									// ok, we have a discrepansy. they embeded a key that does not match the public record. 
 									//TODO: we should log the peer for bad acting here
 									completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.ENVELOPE_EMBEDED_PUBLIC_KEY_INVALID));
@@ -601,7 +599,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				string digestHashesPath = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.DigestHashesPath;
 				FileExtensions.EnsureDirectoryStructure(digestHashesPath, this.CentralCoordinator.FileSystem);
 
-				(IByteArray sha2, IByteArray sha3) genesis = fetchingService.FetchDigestHash(digestHashesPath, digest.DigestId);
+				(SafeArrayHandle sha2, SafeArrayHandle sha3) genesis = fetchingService.FetchDigestHash(digestHashesPath, digest.DigestId);
 
 				bool hashVerifyResult = BlockchainDoubleHasher.VerifyDigestHash(digest, genesis.sha2, genesis.sha3);
 
@@ -628,9 +626,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			//NOTE: we can do the below in the validation thread and NOT the serialization thread because we mostly only read and access a digest that is not yet installed, and thus not otherwise used
 			ValidatingDigestChannelSet validatingDigestChannelSet = serializationTask.Results;
-
-			Sha3SakuraTree hasher = new Sha3SakuraTree();
-
+			
 			// ok, lets validate the files.
 			HashNodeList topNodes = new HashNodeList();
 
@@ -659,7 +655,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						foreach(var fileset in indexSet.Value.Files) {
 
 							BlockchainDigestChannelDescriptor.DigestChannelIndexDescriptor.DigestChannelIndexFileDescriptor fileDescriptor = channel.Value.DigestChannelIndexDescriptors[indexSet.Key].Files[fileset.Key];
-							IByteArray descriptorHash = fileDescriptor.DigestChannelIndexFilePartDescriptors[i].Hash;
+							SafeArrayHandle descriptorHash = fileDescriptor.DigestChannelIndexFilePartDescriptors[i].Hash;
 
 							// if we are also verifying the files hash, then we do it here
 							if(verifyFiles && !descriptorHash.Equals(sliceHashes[indexSet.Key][fileset.Key])) {
@@ -684,7 +680,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					HashNodeList indexNodes = new HashNodeList();
 
 					foreach(var file in index.Value.Files.OrderBy(f => f.Key)) {
-						IByteArray fileHash = hasher.Hash(cascadingHashSets[(index.Key, file.Key)]);
+						SafeArrayHandle fileHash = HashingUtils.Hash3(cascadingHashSets[(index.Key, file.Key)]);
 
 						BlockchainDigestChannelDescriptor.DigestChannelIndexDescriptor.DigestChannelIndexFileDescriptor fileDescriptor = channel.Value.DigestChannelIndexDescriptors[index.Key].Files[file.Key];
 
@@ -699,7 +695,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						indexNodes.Add(fileDescriptor.Hash);
 					}
 
-					IByteArray indexHash = hasher.Hash(indexNodes);
+					SafeArrayHandle indexHash = HashingUtils.Hash3(indexNodes);
 
 					if(!channel.Value.DigestChannelIndexDescriptors[index.Key].Hash.Equals(indexHash)) {
 						return this.CreateDigestValidationResult(ValidationResult.ValidationResults.Invalid, DigestValidationErrorCodes.Instance.INVALID_CHANNEL_INDEX_HASH);
@@ -708,7 +704,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					channelNodes.Add(indexHash);
 				}
 
-				IByteArray channelHash = hasher.Hash(channelNodes);
+				SafeArrayHandle channelHash = HashingUtils.Hash3(channelNodes);
 
 				if(!channel.Value.Hash.Equals(channelHash)) {
 					return this.CreateDigestValidationResult(ValidationResult.ValidationResults.Invalid, DigestValidationErrorCodes.Instance.INVALID_DIGEST_CHANNEL_HASH);
@@ -717,7 +713,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				topNodes.Add(channelHash);
 			}
 
-			IByteArray topHash = hasher.Hash(topNodes);
+			SafeArrayHandle topHash = HashingUtils.Hash3(topNodes);
 
 			if(!digest.DigestDescriptor.Hash.Equals(topHash)) {
 				return this.CreateDigestValidationResult(ValidationResult.ValidationResults.Invalid, DigestValidationErrorCodes.Instance.INVALID_DIGEST_DESCRIPTOR_HASH);
@@ -726,8 +722,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			// we did it, our files match!!  now the digest itself...
 
 			// finally, at the top of the pyramid, lets compare the hashes
-			(IByteArray sha2, IByteArray sha3) digestHashes = HashingUtils.ExtractCombinedDualHash(digest.Hash);
-			(IByteArray sha2, IByteArray sha3) rebuiltHashes = HashingUtils.GenerateDualHash(digest);
+			(SafeArrayHandle sha2, SafeArrayHandle sha3) digestHashes = HashingUtils.ExtractCombinedDualHash(digest.Hash);
+			(SafeArrayHandle sha2, SafeArrayHandle sha3) rebuiltHashes = HashingUtils.GenerateDualHash(digest);
 
 			if(!digestHashes.sha2.Equals(rebuiltHashes.sha2) || !digestHashes.sha3.Equals(rebuiltHashes.sha3)) {
 				return this.CreateDigestValidationResult(ValidationResult.ValidationResults.Invalid, DigestValidationErrorCodes.Instance.INVALID_DIGEST_HASH);
@@ -773,11 +769,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="hash"></param>
 		/// <param name="previousBlockHash"></param>
 		/// <returns></returns>
-		protected ValidationResult ValidateBlock(ISimpleBlock block, IByteArray hash, IByteArray previousBlockHash) {
-
-			if(block is IGenesisBlock genesisBlock) {
-				return this.ValidateGenesisBlock(genesisBlock, hash, previousBlockHash);
-			}
+		protected ValidationResult ValidateBlock(ISimpleBlock block, SafeArrayHandle hash, SafeArrayHandle previousBlockHash) {
 
 			if(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight != (block.BlockId.Value - 1)) {
 				// thats too bad, we are not ready to validate this block. we must let it go
@@ -828,20 +820,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.ValidateBlockSignature(hash, block, key);
 		}
 
-		protected ValidationResult ValidateGenesisBlock(IGenesisBlock block, IByteArray hash, IByteArray previousBlockHash) {
+		protected ValidationResult ValidateGenesisBlock(IGenesisBlock block, SafeArrayHandle hash) {
 
-			if(previousBlockHash == null) {
-				previousBlockHash = new ByteArray();
-			}
+			using(var newHash = BlockchainHashingUtils.GenerateGenesisBlockHash(block)) {
+				bool hashValid = hash.Equals(newHash);
 
-			if(previousBlockHash.HasData) {
-				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.GENESIS_HASH_SET);
-			}
-
-			bool hashValid = hash.Equals(BlockchainHashingUtils.GenerateBlockHash(block, previousBlockHash));
-
-			if(hashValid != true) {
-				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.HASH_INVALID);
+				if(hashValid != true) {
+					return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.HASH_INVALID);
+				}
 			}
 
 			// ok, check the signature
@@ -849,13 +835,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			// for the genesisModeratorAccountPresentation block, we will transform the key into a secret key
 			SecretCryptographicKey secretCryptographicKey = new SecretCryptographicKey();
 			secretCryptographicKey.SecurityCategory = QTESLASecurityCategory.SecurityCategories.PROVABLY_SECURE_III;
-			secretCryptographicKey.Key = ((GenesisBlockAccountSignature) block.SignatureSet.BlockAccountSignature).PublicKey;
+			secretCryptographicKey.Key.Entry = ((GenesisBlockAccountSignature) block.SignatureSet.BlockAccountSignature).PublicKey.Entry;
 
 			return this.ValidateBlockSignature(hash, block, secretCryptographicKey);
 
 		}
 
-		protected virtual ValidationResult ValidateGenesisBlock(IGenesisBlock genesisBlock, IByteArray hash) {
+		protected virtual ValidationResult ValidateGenesisBlockOnlineVerification(IGenesisBlock genesisBlock, SafeArrayHandle hash) {
 			// ok, at this point, the signer is who he/she says he/she is. now we confirm the transaction signature
 			//for a genesisModeratorAccountPresentation transaction, thats all we verify
 
@@ -866,7 +852,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					//TODO: here we validate the hash from http file here
 					IFileFetchService fetchingService = this.CentralCoordinator.BlockchainServiceSet.FileFetchService;
 
-					(IByteArray sha2, IByteArray sha3) genesis = fetchingService.FetchGenesisHash(this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GenesisFolderPath, genesisBlock.Name);
+					(SafeArrayHandle sha2, SafeArrayHandle sha3) genesis = fetchingService.FetchGenesisHash(this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GenesisFolderPath, genesisBlock.Name);
 
 					if(genesis == default) {
 						return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.GENESIS_SATURN_HASH_VERIFICATION_FAILED);
@@ -887,7 +873,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				}
 			}
 
-			return this.ValidateGenesisBlock(genesisBlock, hash, new ByteArray());
+			return this.ValidateGenesisBlock(genesisBlock, hash);
 		}
 
 		/// <summary>
@@ -939,7 +925,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// for presentation transactions, the key is in the signature.
 				QTeslaCryptographicKey secretCryptographicKey = new QTeslaCryptographicKey();
 				secretCryptographicKey.SecurityCategory = presentationEnvelopeSignature.AccountSignature.SecurityCategory;
-				secretCryptographicKey.Key = presentationEnvelopeSignature.AccountSignature.PublicKey;
+				secretCryptographicKey.Key.Entry = presentationEnvelopeSignature.AccountSignature.PublicKey.Entry;
 
 				result = this.ValidateSingleSignature(envelope.Hash, presentationEnvelopeSignature.AccountSignature, secretCryptographicKey);
 			}
@@ -974,18 +960,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Valid);
 		}
 
-		protected ValidationResult ValidateProvedTransaction(IByteArray hash, IProved provedTransaction) {
+		protected ValidationResult ValidateProvedTransaction(SafeArrayHandle hash, IProved provedTransaction) {
 			if(provedTransaction.PowSolutions.Count > GlobalsService.POW_MAX_SOLUTIONS) {
 				return this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_POW_SOLUTIONS_COUNT);
 			}
 
-			using(AesSearchPow pow = new AesSearchPow()) {
-				if(pow.Verify(hash, provedTransaction.PowNonce, provedTransaction.PowDifficulty, provedTransaction.PowSolutions, Enums.ThreadMode.Single) == false) {
-					return this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_POW_SOLUTION);
-				}
-			}
+			AesSearchPow pow = new AesSearchPow();
+			return pow.Verify(hash, provedTransaction.PowNonce, provedTransaction.PowDifficulty, provedTransaction.PowSolutions, Enums.ThreadMode.Single) == false ? this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_POW_SOLUTION) : this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Valid);
 
-			return this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Valid);
 		}
 
 		/// <summary>
@@ -995,7 +977,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="signature"></param>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		protected virtual ValidationResult ValidateMultipleSignatures(IByteArray hash, List<IPublishedAccountSignature> signatures, Dictionary<AccountId, ICryptographicKey> keys) {
+		protected virtual ValidationResult ValidateMultipleSignatures(SafeArrayHandle hash, List<IPublishedAccountSignature> signatures, Dictionary<AccountId, ICryptographicKey> keys) {
 			// validate the secret nonce with the published key, if it matches the promise.
 
 			foreach(IPublishedAccountSignature signature in signatures) {
@@ -1035,10 +1017,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="signature"></param>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		protected virtual ValidationResult ValidateSecretSignature(IByteArray hash, IPromisedSecretAccountSignature signature, ISecretDoubleCryptographicKey key) {
+		protected virtual ValidationResult ValidateSecretSignature(SafeArrayHandle hash, IPromisedSecretAccountSignature signature, ISecretDoubleCryptographicKey key) {
 			// validate the secret nonce with the published key, if it matches the promise.
 
-			(IByteArray sha2, IByteArray sha3) hashedKey = HashingUtils.HashSecretKey(signature.PromisedPublicKey.ToExactByteArray());
+			(SafeArrayHandle sha2, SafeArrayHandle sha3) hashedKey = HashingUtils.HashSecretKey(signature.PromisedPublicKey.ToExactByteArray());
 
 			// make sure they match as promised
 			if(!hashedKey.sha2.Equals(key.NextKeyHashSha2) || !hashedKey.sha3.Equals(key.NextKeyHashSha3)) {
@@ -1055,25 +1037,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="signature"></param>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		protected virtual ValidationResult ValidateSecretComboSignature(IByteArray hash, IPromisedSecretComboAccountSignature signature, ISecretComboCryptographicKey key) {
+		protected virtual ValidationResult ValidateSecretComboSignature(SafeArrayHandle hash, IPromisedSecretComboAccountSignature signature, ISecretComboCryptographicKey key) {
 			// validate the secret nonce with the published key, if it matches the promise.
 
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature.Autograph);
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature.Autograph)) {
 
-			IByteArray signature1 = rehydrator.ReadNonNullableArray();
-			IByteArray signature2 = rehydrator.ReadNonNullableArray();
+				SafeArrayHandle signature1 = rehydrator.ReadNonNullableArray();
+				SafeArrayHandle signature2 = rehydrator.ReadNonNullableArray();
 
-			(IByteArray sha2, IByteArray sha3, int nonceHash) hashedKey = HashingUtils.HashSecretComboKey(signature.PromisedPublicKey.ToExactByteArray(), signature.PromisedNonce1, signature.PromisedNonce2);
+				(SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) hashedKey = HashingUtils.HashSecretComboKey(signature.PromisedPublicKey.ToExactByteArray(), signature.PromisedNonce1, signature.PromisedNonce2);
 
-			// make sure they match as promised
-			if((key.NonceHash != hashedKey.nonceHash) || !hashedKey.sha2.Equals(key.NextKeyHashSha2) || !hashedKey.sha3.Equals(key.NextKeyHashSha3)) {
-				return this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION);
+				// make sure they match as promised
+				if((key.NonceHash != hashedKey.nonceHash) || !hashedKey.sha2.Equals(key.NextKeyHashSha2) || !hashedKey.sha3.Equals(key.NextKeyHashSha3)) {
+					return this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION);
+				}
+
+				return this.ValidateSingleSignature(hash, signature, key);
 			}
-
-			return this.ValidateSingleSignature(hash, signature, key);
 		}
 
-		protected virtual ValidationResult ValidateBlockchainMessageSingleSignature(IByteArray hash, IAccountSignature signature, ICryptographicKey key) {
+		protected virtual ValidationResult ValidateBlockchainMessageSingleSignature(SafeArrayHandle hash, IAccountSignature signature, ICryptographicKey key) {
 
 			if(key.Id == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
 				if(key is IXmssCryptographicKey xmssCryptographicKey) {
@@ -1092,7 +1075,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.ValidateSingleSignature(hash, signature, key);
 		}
 
-		protected virtual ValidationResult ValidateTransationSingleSignature(IByteArray hash, IAccountSignature signature, ICryptographicKey key) {
+		protected virtual ValidationResult ValidateTransationSingleSignature(SafeArrayHandle hash, IAccountSignature signature, ICryptographicKey key) {
 
 			ValidationResult result = this.ValidateTransationKey(key);
 
@@ -1103,7 +1086,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.ValidateSingleSignature(hash, signature, key);
 		}
 
-		protected virtual ValidationResult ValidateTransationMultipleSignatures(IByteArray hash, List<IPublishedAccountSignature> signatures, Dictionary<AccountId, ICryptographicKey> keys) {
+		protected virtual ValidationResult ValidateTransationMultipleSignatures(SafeArrayHandle hash, List<IPublishedAccountSignature> signatures, Dictionary<AccountId, ICryptographicKey> keys) {
 
 			foreach(ICryptographicKey key in keys.Values) {
 				ValidationResult result = this.ValidateTransationKey(key);
@@ -1158,12 +1141,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		protected virtual ValidationResult ValidateSingleSignature(IByteArray hash, IAccountSignature signature, ICryptographicKey key) {
+		protected virtual ValidationResult ValidateSingleSignature(SafeArrayHandle hash, IAccountSignature signature, ICryptographicKey key) {
 			// ok, now lets confirm the signature. make sure the hash is authentic and not tempered with
 
 			SignatureProviderBase provider = null;
 
-			IByteArray publicKey = key.Key;
+			SafeArrayHandle publicKey = key.Key;
 
 			switch(key) {
 				case IXmssmtCryptographicKey xmssmtCryptographicKey:
@@ -1211,25 +1194,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						// ok, for secret accounts, we verified that it matched the promise, so we can used the provided public key
 						publicKey = secretAccountSignature.PromisedPublicKey;
 
-						IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature.Autograph);
+						using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature.Autograph)) {
 
-						IByteArray signature1 = rehydrator.ReadNonNullableArray();
-						IByteArray signature2 = rehydrator.ReadNonNullableArray();
+							SafeArrayHandle signature1 = rehydrator.ReadNonNullableArray();
+							SafeArrayHandle signature2 = rehydrator.ReadNonNullableArray();
 
-						using(provider = new QTeslaProvider(secretCryptographicKey.SecurityCategory)) {
-							provider.Initialize();
+							using(provider = new QTeslaProvider(secretCryptographicKey.SecurityCategory)) {
+								provider.Initialize();
 
-							bool result = provider.Verify(hash, signature1, publicKey);
+								bool result = provider.Verify(hash, signature1, publicKey);
 
-							if(result == false) {
-								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
-							}
+								if(result == false) {
+									return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+								}
 
-							// second signature
-							result = provider.Verify(hash, signature2, secretCryptographicKey.SecondKey.Key);
+								// second signature
+								result = provider.Verify(hash, signature2, secretCryptographicKey.SecondKey.Key);
 
-							if(result == false) {
-								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+								if(result == false) {
+									return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+								}
 							}
 						}
 					} else {
@@ -1269,12 +1253,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		protected virtual ValidationResult ValidateBlockSignature(IByteArray hash, IBlock block, ICryptographicKey key) {
+		protected virtual ValidationResult ValidateBlockSignature(SafeArrayHandle hash, IBlock block, ICryptographicKey key) {
 			// ok, now lets confirm the signature. make sure the hash is authentic and not tempered with
 
 			if(block.SignatureSet.BlockAccountSignature.IsHashPublished && !this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SkipPeriodicBlockHashVerification) {
 				IFileFetchService fetchingService = this.CentralCoordinator.BlockchainServiceSet.FileFetchService;
-				IByteArray publishedHash = fetchingService.FetchBlockPublicHash(block.BlockId.Value);
+				SafeArrayHandle publishedHash = fetchingService.FetchBlockPublicHash(block.BlockId.Value);
 
 				if(!hash.Equals(publishedHash)) {
 					return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.FAILED_PUBLISHED_HASH_VALIDATION);
@@ -1289,93 +1273,94 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 					SecretPentaCryptographicKey moderatorKey = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKey<SecretPentaCryptographicKey>(secretAccountSignature.KeyAddress.OrdinalId);
 
-					(IByteArray sha2, IByteArray sha3, int nonceHash) hashed = HashingUtils.HashSecretComboKey(secretAccountSignature.PromisedPublicKey.ToExactByteArray(), secretAccountSignature.PromisedNonce1, secretAccountSignature.PromisedNonce2);
+					(SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) hashed = HashingUtils.HashSecretComboKey(secretAccountSignature.PromisedPublicKey.ToExactByteArray(), secretAccountSignature.PromisedNonce1, secretAccountSignature.PromisedNonce2);
 
 					if((hashed.nonceHash != moderatorKey.NonceHash) || !moderatorKey.NextKeyHashSha2.Equals(hashed.sha2) || !moderatorKey.NextKeyHashSha3.Equals(hashed.sha3)) {
 						return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED);
 					}
 
-					IDataRehydrator autorgaphRehydrator = DataSerializationFactory.CreateRehydrator((ByteArray) block.SignatureSet.BlockAccountSignature.Autograph);
+					using(IDataRehydrator autorgaphRehydrator = DataSerializationFactory.CreateRehydrator(block.SignatureSet.BlockAccountSignature.Autograph)) {
 
-					IByteArray signature1 = autorgaphRehydrator.ReadNonNullableArray();
+						SafeArrayHandle signature1 = autorgaphRehydrator.ReadNonNullableArray();
 
-					using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecurityCategory)) {
-						provider.Initialize();
+						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecurityCategory)) {
+							provider.Initialize();
 
-						bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
-						
-						signature1.Return();
+							bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
 
-						if(result == false) {
+							signature1.Return();
+
+							if(result == false) {
+								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							}
+						}
+
+						SafeArrayHandle signature2 = autorgaphRehydrator.ReadNonNullableArray();
+
+						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecondKey.SecurityCategory)) {
+							provider.Initialize();
+
+							bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
+
+							signature2.Return();
+
+							if(result == false) {
+								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							}
+						}
+
+						SafeArrayHandle signature3 = autorgaphRehydrator.ReadNonNullableArray();
+
+						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.ThirdKey.SecurityCategory)) {
+							provider.Initialize();
+
+							bool result = provider.Verify(hash, signature3, moderatorKey.ThirdKey.Key);
+
+							signature3.Return();
+
+							if(result == false) {
+								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							}
+						}
+
+						SafeArrayHandle signature4 = autorgaphRehydrator.ReadNonNullableArray();
+
+						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.FourthKey.SecurityCategory)) {
+							provider.Initialize();
+
+							bool result = provider.Verify(hash, signature4, moderatorKey.FourthKey.Key);
+
+							signature4.Return();
+
+							if(result == false) {
+								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							}
+						}
+
+						SafeArrayHandle signature5 = autorgaphRehydrator.ReadNonNullableArray();
+
+						using(XMSSMTProvider provider = new XMSSMTProvider((Enums.KeyHashBits) moderatorKey.FifthKey.BitSize, moderatorKey.FifthKey.TreeHeight, moderatorKey.FifthKey.TreeLayer)) {
+							provider.Initialize();
+
+							bool result = provider.Verify(hash, signature5, key.Key);
+
+							signature5.Return();
+
+							if(result == false) {
+								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							}
+						}
+
+						// ok, when we got here, its doing really well. but we still need to validate the confirmation Id. let's do this
+						IFileFetchService fetchingService = this.CentralCoordinator.BlockchainServiceSet.FileFetchService;
+						var remoteConfirmationUuid = fetchingService.FetchSuperkeyConfirmationUuid(block.BlockId.Value);
+
+						if(!remoteConfirmationUuid.HasValue || (remoteConfirmationUuid.Value != secretAccountSignature.ConfirmationUuid)) {
 							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
 						}
+
+						return this.CreateValidationResult(ValidationResult.ValidationResults.Valid);
 					}
-
-					IByteArray signature2 = autorgaphRehydrator.ReadNonNullableArray();
-
-					using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecondKey.SecurityCategory)) {
-						provider.Initialize();
-
-						bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
-						
-						signature2.Return();
-
-						if(result == false) {
-							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
-						}
-					}
-
-					IByteArray signature3 = autorgaphRehydrator.ReadNonNullableArray();
-
-					using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.ThirdKey.SecurityCategory)) {
-						provider.Initialize();
-
-						bool result = provider.Verify(hash, signature3, moderatorKey.ThirdKey.Key);
-						
-						signature3.Return();
-
-						if(result == false) {
-							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
-						}
-					}
-
-					IByteArray signature4 = autorgaphRehydrator.ReadNonNullableArray();
-
-					using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.FourthKey.SecurityCategory)) {
-						provider.Initialize();
-
-						bool result = provider.Verify(hash, signature4, moderatorKey.FourthKey.Key);
-						
-						signature4.Return();
-
-						if(result == false) {
-							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
-						}
-					}
-
-					IByteArray signature5 = autorgaphRehydrator.ReadNonNullableArray();
-
-					using(XMSSMTProvider provider = new XMSSMTProvider((Enums.KeyHashBits) moderatorKey.FifthKey.BitSize, moderatorKey.FifthKey.TreeHeight, moderatorKey.FifthKey.TreeLayer)) {
-						provider.Initialize();
-
-						bool result = provider.Verify(hash, signature5, key.Key);
-						
-						signature5.Return();
-
-						if(result == false) {
-							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
-						}
-					}
-
-					// ok, when we got here, its doing really well. but we still need to validate the confirmation Id. let's do this
-					IFileFetchService fetchingService = this.CentralCoordinator.BlockchainServiceSet.FileFetchService;
-					var remoteConfirmationUuid = fetchingService.FetchSuperkeyConfirmationUuid(block.BlockId.Value);
-
-					if(!remoteConfirmationUuid.HasValue || (remoteConfirmationUuid.Value != secretAccountSignature.ConfirmationUuid)) {
-						return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
-					}
-
-					return this.CreateValidationResult(ValidationResult.ValidationResults.Valid);
 
 				}
 
@@ -1384,49 +1369,50 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(key is SecretDoubleCryptographicKey secretDoubleCryptographicKey) {
 
-				IByteArray publicKey = null;
+				SafeArrayHandle publicKey = null;
 
 				if(block.SignatureSet.BlockAccountSignature is SecretBlockAccountSignature secretAccountSignature) {
 
 					SecretDoubleCryptographicKey moderatorKey = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKey<SecretDoubleCryptographicKey>(GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID);
 
-					(IByteArray sha2, IByteArray sha3, int nonceHash) hashed = HashingUtils.HashSecretComboKey(secretAccountSignature.PromisedPublicKey.ToExactByteArray(), secretAccountSignature.PromisedNonce1, secretAccountSignature.PromisedNonce2);
+					(SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) hashed = HashingUtils.HashSecretComboKey(secretAccountSignature.PromisedPublicKey.ToExactByteArray(), secretAccountSignature.PromisedNonce1, secretAccountSignature.PromisedNonce2);
 
 					if((hashed.nonceHash != moderatorKey.NonceHash) || !moderatorKey.NextKeyHashSha2.Equals(hashed.sha2) || !moderatorKey.NextKeyHashSha3.Equals(hashed.sha3)) {
 						return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED);
 					}
 
-					IDataRehydrator autorgaphRehydrator = DataSerializationFactory.CreateRehydrator(block.SignatureSet.BlockAccountSignature.Autograph);
+					using(IDataRehydrator autorgaphRehydrator = DataSerializationFactory.CreateRehydrator(block.SignatureSet.BlockAccountSignature.Autograph)) {
 
-					IByteArray signature1 = autorgaphRehydrator.ReadNonNullableArray();
+						SafeArrayHandle signature1 = autorgaphRehydrator.ReadNonNullableArray();
 
-					using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecurityCategory)) {
-						provider.Initialize();
+						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecurityCategory)) {
+							provider.Initialize();
 
-						bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
-						
-						signature1.Return();
+							bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
 
-						if(result == false) {
-							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							signature1.Return();
+
+							if(result == false) {
+								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							}
 						}
-					}
 
-					IByteArray signature2 = autorgaphRehydrator.ReadNonNullableArray();
+						SafeArrayHandle signature2 = autorgaphRehydrator.ReadNonNullableArray();
 
-					using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecondKey.SecurityCategory)) {
-						provider.Initialize();
+						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecondKey.SecurityCategory)) {
+							provider.Initialize();
 
-						bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
-						
-						signature2.Return();
+							bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
 
-						if(result == false) {
-							return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							signature2.Return();
+
+							if(result == false) {
+								return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);
+							}
 						}
-					}
 
-					return this.CreateValidationResult(ValidationResult.ValidationResults.Valid);
+						return this.CreateValidationResult(ValidationResult.ValidationResults.Valid);
+					}
 
 				}
 
@@ -1494,7 +1480,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.INVALID_BLOCK_KEY_CORRELATION_TYPE);
 		}
 
-		protected virtual ValidationResult ValidateDigestSignature(IByteArray hash, IPublishedAccountSignature signature, IXmssmtCryptographicKey key) {
+		protected virtual ValidationResult ValidateDigestSignature(SafeArrayHandle hash, IPublishedAccountSignature signature, IXmssmtCryptographicKey key) {
 			// ok, now lets confirm the signature. make sure the hash is authentic and not tempered with
 
 			using(XMSSMTProvider provider = new XMSSMTProvider((Enums.KeyHashBits) key.BitSize, key.TreeHeight, key.TreeLayer)) {

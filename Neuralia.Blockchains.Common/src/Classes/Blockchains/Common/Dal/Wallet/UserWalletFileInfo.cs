@@ -18,6 +18,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		Dictionary<Guid, IAccountFileInfo> Accounts { get; }
 
+		string WalletPath { get; }
+		
 		void ChangeKeysEncryption();
 
 		/// <summary>
@@ -68,6 +70,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
+		public string WalletPath => this.serialisationFal.GetWalletFolderPath();
+		
 		public override void Save(object data = null) {
 			this.RunCryptoOperation(() => {
 				lock(this.locker) {
@@ -117,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						// ltes delete the crypto file
 						this.serialisationFal.TransactionalFileSystem.FileDelete(this.walletCryptoFile);
 					} else {
-						IByteArray edata = this.EncryptionInfo.encryptionParameters.Dehydrate();
+						SafeArrayHandle edata = this.EncryptionInfo.encryptionParameters.Dehydrate();
 						this.serialisationFal.TransactionalFileSystem.OpenWrite(this.walletCryptoFile, edata);
 					}
 
@@ -147,7 +151,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				if(this.EncryptionInfo.encrypt) {
 
 					// no need to overwrite this every time. write only if it does not exist
-					IByteArray data = this.EncryptionInfo.encryptionParameters.Dehydrate();
+					SafeArrayHandle data = this.EncryptionInfo.encryptionParameters.Dehydrate();
 
 					// write this unencrypted
 					this.serialisationFal.TransactionalFileSystem.OpenWrite(this.walletCryptoFile, data);
@@ -196,7 +200,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		protected override void LoadFileBytes(object data = null) {
 			this.RunCryptoOperation(() => {
 				lock(this.locker) {
-					this.Filebytes = this.serialisationFal.LoadFile(this.Filename, this.EncryptionInfo, true);
+					this.Filebytes.Entry = this.serialisationFal.LoadFile(this.Filename, this.EncryptionInfo, true).Entry;
 				}
 			}, data);
 		}
@@ -257,8 +261,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					this.EncryptionInfo.Secret = () => this.WalletSecurityDetails.WalletPassphraseBytes;
 
-					ByteArray cryptoParameterBytes = this.serialisationFal.TransactionalFileSystem.ReadAllBytes(this.walletCryptoFile);
-					this.EncryptionInfo.encryptionParameters = EncryptorParameters.RehydrateEncryptor(cryptoParameterBytes);
+					ByteArray cryptoParameterSimpleBytes = this.serialisationFal.TransactionalFileSystem.ReadAllBytes(this.walletCryptoFile);
+					this.EncryptionInfo.encryptionParameters = EncryptorParameters.RehydrateEncryptor(cryptoParameterSimpleBytes);
 				}
 			}
 		}

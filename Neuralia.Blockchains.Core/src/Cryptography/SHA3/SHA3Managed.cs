@@ -1,7 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 
 namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 	/// <summary>
@@ -14,16 +13,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 
 		private static readonly ulong[] RoundConstants = {0x0000000000000001UL, 0x0000000000008082UL, 0x800000000000808aUL, 0x8000000080008000UL, 0x000000000000808bUL, 0x0000000080000001UL, 0x8000000080008081UL, 0x8000000000008009UL, 0x000000000000008aUL, 0x0000000000000088UL, 0x0000000080008009UL, 0x000000008000000aUL, 0x000000008000808bUL, 0x800000000000008bUL, 0x8000000000008089UL, 0x8000000000008003UL, 0x8000000000008002UL, 0x8000000000000080UL, 0x000000000000800aUL, 0x800000008000000aUL, 0x8000000080008081UL, 0x8000000000008080UL, 0x0000000080000001UL, 0x8000000080008008UL};
 
-		private readonly FixedByteAllocator allocator;
-		private IByteArray buffer;
+		private readonly SafeArrayHandle buffer = SafeArrayHandle.Create();
 
 		private int bufferLength;
 		private int buffLength;
 		private byte[] obligatoryHashResult;
-		private IByteArray state;
+		private readonly SafeArrayHandle state = SafeArrayHandle.Create();
 
-		internal SHA3Managed(int hashBitLength, FixedByteAllocator allocator) {
-			this.allocator = allocator;
+		internal SHA3Managed(int hashBitLength) {
 
 			this.HashSize = hashBitLength;
 
@@ -56,26 +53,26 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 		///     the results of the last hashing.
 		/// </summary>
 		/// <remarks>We do NOT clear this memory. the caller owns it and is responsible for clearing it. not thread safe!</remarks>
-		public IByteArray LastResult { get; private set; }
+		public ByteArray LastResult { get; private set; }
 
 		public override void Initialize() {
-
-			if((this.buffer != null) && (this.buffer.Length != this.SizeInBytes)) {
-				this.buffer.Return();
-				this.buffer = null;
+			
+			if(this.buffer.Length != this.SizeInBytes) {
+				this.buffer.Entry = null;
 			}
 
-			if(this.buffer == null) {
-				this.buffer = this.allocator.Take(this.SizeInBytes);
+			if(this.buffer?.IsNull??true) {
+				this.buffer.Entry = ByteArray.Create(this.SizeInBytes);
 			}
 
+			
 			this.bufferLength = this.SizeInBytes;
 			this.buffLength = 0;
 
-			if(this.state == null) {
-				this.state = this.allocator.Take<ulong>(5 * 5);
+			if(this.state.IsEmpty) {
+				this.state.Entry = ByteArray.Create<ulong>(5 * 5);
 			} else {
-				this.state.Clear();
+				this.state.Entry.Clear();
 			}
 		}
 
@@ -83,8 +80,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			base.Dispose(disposing);
 
 			if(disposing && !this.IsDisposed) {
-				this.buffer.Return();
-				this.state.Return();
+				this.buffer.Dispose();
+				this.state.Dispose();
 			}
 
 			this.IsDisposed = true;
@@ -93,7 +90,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 		private void AddToBuffer(byte[] array, ref int offset, ref int count) {
 			int amount = Math.Min(count, this.bufferLength - this.buffLength);
 
-			this.buffer.CopyFrom((ReadOnlySpan<byte>) array, offset, this.buffLength, amount);
+			this.buffer.Entry.CopyFrom((ReadOnlySpan<byte>) array, offset, this.buffLength, amount);
 
 			//Buffer.BlockCopy(array, offset, this.buffer.Bytes, this.buffLength, amount);
 			offset += amount;
@@ -106,22 +103,26 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 		/// </summary>
 		/// <param name="buffer"></param>
 		/// <returns></returns>
-		public IByteArray CustomComputeHash(IByteArray buffer) {
+		public ByteArray CustomComputeHash(ByteArray buffer) {
 			return this.CustomComputeHash(buffer, 0, buffer.Length);
 		}
 
-		public IByteArray CustomComputeHash(IByteArray buffer, int offset, int length) {
+		public ByteArray CustomComputeHash(ByteArray buffer, int offset, int length) {
 			this.HashCore(buffer.Bytes, buffer.Offset + offset, length);
 
 			return this.CustomCaptureHashCodeAndReinitialize();
 		}
 
-		private IByteArray CustomCaptureHashCodeAndReinitialize() {
+		private ByteArray CustomCaptureHashCodeAndReinitialize() {
 
 			this.CustomHashFinal();
 			this.Initialize();
 
-			return this.LastResult;
+			var result = this.LastResult;
+
+			this.LastResult = null;
+			
+			return result;
 		}
 
 		protected override void HashCore(byte[] array, int ibStart, int cbSize) {
@@ -132,10 +133,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			}
 
 			int chunk = this.SizeInBytes >> 3;
-			IByteArray utempBlock = this.allocator.Take<ulong>(chunk);
-			var utemps = utempBlock.CastedArray<ulong>();
 
-			try {
+			using(SafeArrayHandle utempBlock = ByteArray.Create<ulong>(chunk)) {
+				var utemps = utempBlock.Entry.CastedArray<ulong>();
+				
 				if(this.buffLength == this.SizeInBytes) {
 					throw new InvalidOperationException("The buffer has no space.");
 				}
@@ -144,7 +145,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 
 				//buffer is full
 				if(this.buffLength == this.SizeInBytes) {
-					this.buffer.CopyTo(utempBlock, 0, 0, this.SizeInBytes);
+					this.buffer.Entry.CopyTo(utempBlock.Entry, 0, 0, this.SizeInBytes);
 
 					this.Keccak(utemps, chunk);
 					this.buffLength = 0;
@@ -152,24 +153,22 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 
 				for(; cbSize >= this.SizeInBytes; cbSize -= this.SizeInBytes, ibStart += this.SizeInBytes) {
 
-					utempBlock.CopyFrom(ref array, ibStart, 0, this.SizeInBytes);
+					utempBlock.Entry.CopyFrom(ref array, ibStart, 0, this.SizeInBytes);
 					this.Keccak(utemps, chunk);
 				}
 
 				if(cbSize > 0) //some left over
 				{
-					this.buffer.CopyFrom((ReadOnlySpan<byte>) array, ibStart, this.buffLength, cbSize);
+					this.buffer.Entry.CopyFrom((ReadOnlySpan<byte>) array, ibStart, this.buffLength, cbSize);
 
 					this.buffLength += cbSize;
 				}
-			} finally {
-				utempBlock.Return();
 			}
 		}
 
 		private void CustomHashFinal() {
 			//    padding
-			this.buffer.Clear(this.buffLength, this.SizeInBytes - this.buffLength);
+			this.buffer.Entry.Clear(this.buffLength, this.SizeInBytes - this.buffLength);
 
 			if(this.UseKeccakPadding) {
 				this.buffer[this.buffLength++] = 1;
@@ -180,23 +179,19 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			this.buffer[this.SizeInBytes - 1] |= 0x80;
 			int chunk = this.SizeInBytes >> 3;
 
-			IByteArray utempBlock = this.allocator.Take<ulong>(chunk);
+			using(SafeArrayHandle utempBlock = ByteArray.Create<ulong>(chunk)) {
 
-			var utemps = utempBlock.CastedArray<ulong>();
+				var utemps = utempBlock.Entry.CastedArray<ulong>();
 
-			// result will be return and cleared by the callers. we are not responsible for it
-			this.LastResult = this.allocator.Take(this.HashByteLength);
-
-			try {
-				this.buffer.CopyTo(utempBlock, 0, 0, this.SizeInBytes);
+				// result will be return and cleared by the callers. we are not responsible for it
+				this.LastResult = ByteArray.Create(this.HashByteLength);
+				
+				this.buffer.Entry.CopyTo(utempBlock.Entry, 0, 0, this.SizeInBytes);
 				this.Keccak(utemps, chunk);
-				this.state.CopyTo(this.LastResult, 0, 0, this.HashByteLength);
-
-			} finally {
-				utempBlock.Return();
+				this.state.Entry.CopyTo(this.LastResult, 0, 0, this.HashByteLength);
 			}
 		}
-
+		
 		protected override byte[] HashFinal() {
 
 			this.CustomHashFinal();
@@ -218,7 +213,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 		}
 
 		private void Keccak(in Span<ulong> inb, int laneCount) {
-			var stateBuffer = this.state.CastedArray<ulong>();
+			var stateBuffer = this.state.Entry.CastedArray<ulong>();
 
 			while(--laneCount >= 0) {
 				stateBuffer[laneCount] ^= inb[laneCount];

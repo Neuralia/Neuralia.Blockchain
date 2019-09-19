@@ -245,14 +245,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			Span<byte> buffer = stackalloc byte[sizeof(long)];
 			TypeSerializer.Serialize(this.Timestamp.Value, buffer);
-			string timeStamp = new ByteArray(buffer.TrimEnd().ToArray()).ToBase94();
+			string timeStamp = ByteArray.Create(buffer.TrimEnd().ToArray()).ToBase94();
 
 			string transactionId = $"{accountId}{COMPACT_SEPARATOR}{timeStamp}";
 
 			// we only display the scope if it is noy zero. otherwise it is ont put, and thus assumed to be 0
 			if(this.Scope != 0) {
 
-				transactionId += $"{COMPACT_SEPARATOR}{new ByteArray(new[] {this.Scope}).ToBase94()}";
+				transactionId += $"{COMPACT_SEPARATOR}{ByteArray.Create(new[] {this.Scope}).ToBase94()}";
 			}
 
 			return transactionId;
@@ -269,9 +269,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			AccountId accountId = AccountId.FromCompactString(items[0]);
 
-			IByteArray buffer = ByteArray.FromBase94(items[1]);
+			SafeArrayHandle buffer = ByteArray.FromBase94(items[1]);
 			Span<byte> fullbuffer = stackalloc byte[sizeof(long)];
-			buffer.CopyTo(fullbuffer);
+			buffer.Entry.CopyTo(fullbuffer);
 
 			TypeSerializer.Deserialize(fullbuffer, out long timestamp);
 

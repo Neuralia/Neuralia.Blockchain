@@ -68,7 +68,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.ResetSizes();
 		}
 
-		public void Write(IByteArray data) {
+		public void Write(SafeArrayHandle data) {
 			FileExtensions.OpenWrite(this.FilePath, data, this.fileSystem);
 			this.ResetSizes();
 		}
@@ -78,7 +78,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.ResetSizes();
 		}
 
-		public void Append(IByteArray data) {
+		public void Append(SafeArrayHandle data) {
 			FileExtensions.OpenAppend(this.FilePath, data, this.fileSystem);
 			this.ResetSizes();
 		}
@@ -88,11 +88,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.ResetSizes();
 		}
 
-		public IByteArray ReadBytes(long offset, int dataLength) {
+		public SafeArrayHandle ReadBytes(long offset, int dataLength) {
 			return FileExtensions.ReadBytes(this.FilePath, offset, dataLength, this.fileSystem);
 		}
 
-		public IByteArray ReadAllBytes() {
+		public SafeArrayHandle ReadAllBytes() {
 			return FileExtensions.ReadAllBytes(this.FilePath, this.fileSystem);
 		}
 

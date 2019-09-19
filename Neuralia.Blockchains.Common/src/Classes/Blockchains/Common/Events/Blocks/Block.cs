@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 	public interface IBlockHeader : IBlockchainEvent<IDehydratedBlock, IBlockchainEventsRehydrationFactory, BlockType> {
 
-		IByteArray Hash { get; set; }
+		SafeArrayHandle Hash { get;  } 
 
 		BlockId BlockId { get; set; }
 
@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		List<IFinalElectionResults> FinalElectionResults { get; }
 		List<IIntermediaryElectionResults> IntermediaryElectionResults { get; }
 
-		HashNodeList GetStructuresArray(IByteArray previousBlockHash);
+		HashNodeList GetStructuresArray(SafeArrayHandle previousBlockHash);
 
 		List<TransactionId> GetAllTransactions();
 		List<(TransactionId TransactionId, int index)> GetAllIndexedTransactions();
@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		/// </summary>
 		public DateTime FullTimestamp { get; set; }
 
-		public IByteArray Hash { get; set; } = new ByteArray();
+		public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
 
 		// header
 		public BlockId BlockId { get; set; } = BlockId.NullBlockId;
@@ -101,7 +101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			throw new NotImplementedException("Blocks do not implement this version of the structures array.");
 		}
 
-		public virtual HashNodeList GetStructuresArray(IByteArray previousBlockHash) {
+		public virtual HashNodeList GetStructuresArray(SafeArrayHandle previousBlockHash) {
 			HashNodeList nodeList = base.GetStructuresArray();
 
 			nodeList.Add(this.BlockId.GetStructuresArray());
@@ -153,10 +153,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			this.KeyedOffsets = new List<(int offset, int lengt)>();
 		}
 
-		public static (ComponentVersion<BlockType> version, IByteArray hash, BlockId blockId) RehydrateHeaderEssentials(IDataRehydrator rehydratorHeader) {
+		public static (ComponentVersion<BlockType> version, SafeArrayHandle hash, BlockId blockId) RehydrateHeaderEssentials(IDataRehydrator rehydratorHeader) {
 			var rehydratedVersion = rehydratorHeader.Rehydrate<ComponentVersion<BlockType>>();
 
-			IByteArray hash = rehydratorHeader.ReadSmallArray();
+			SafeArrayHandle hash = rehydratorHeader.ReadSmallArray();
 
 			BlockId blockId = new BlockId();
 			blockId.Rehydrate(rehydratorHeader);
@@ -168,11 +168,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 			GzipCompression compressor = null;
 
-			List<IByteArray> toReturn = new List<IByteArray>();
+			List<SafeArrayHandle> toReturn = new List<SafeArrayHandle>();
 			var channelRehydrators = dehydratedBlock.GetEssentialDataChannels().ConvertAll((band, data) => {
 
 				// make sure we dotn return the data here, its used by dehydratedBlock. it would cause a serious issue.
-				IByteArray bytes = data;
+				SafeArrayHandle bytes = data;
 
 				bool compressed = false;
 
@@ -197,7 +197,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			var essentialHeader = RehydrateHeaderEssentials(rehydratorHeader);
 			this.Version.EnsureEqual(essentialHeader.version);
 
-			this.Hash = essentialHeader.hash;
+			this.Hash.Entry = essentialHeader.hash.Entry;
 			this.BlockId = essentialHeader.blockId;
 
 			this.Timestamp.Rehydrate(rehydratorHeader);
@@ -219,21 +219,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 				int offset = rehydratorHeader.Offset;
 
 				// keyed transactions have their own independent rehydrator array which contains only the header (body)
-				IByteArray keyedBytes = rehydratorHeader.ReadNonNullableArray();
-				IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes);
+				SafeArrayHandle keyedBytes = rehydratorHeader.ReadNonNullableArray();
 
-				DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
-				dehydratedTransaction.Rehydrate(keyedRehydrator);
+				using(IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes)) {
 
-				IKeyedTransaction keyedTransaction = rehydrationFactory.CreateKeyedTransaction(dehydratedTransaction);
-				keyedTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
+					DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
+					dehydratedTransaction.Rehydrate(keyedRehydrator);
 
-				int nextOffset = rehydratorHeader.Offset;
+					IKeyedTransaction keyedTransaction = rehydrationFactory.CreateKeyedTransaction(dehydratedTransaction);
+					keyedTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
 
-				// and give it its address
-				this.KeyedOffsets?.Add((offset, nextOffset - offset));
+					int nextOffset = rehydratorHeader.Offset;
 
-				this.ConfirmedKeyedTransactions.Add(keyedTransaction);
+					// and give it its address
+					this.KeyedOffsets?.Add((offset, nextOffset - offset));
+
+					this.ConfirmedKeyedTransactions.Add(keyedTransaction);
+				}
 			}
 
 			this.Rehydrate(channelRehydrators, timestampBaseline, rehydrationFactory);
@@ -242,6 +244,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 			foreach(var entry in toReturn) {
 				entry.Return();
+			}
+			foreach(var entry in channelRehydrators.Entries.Values) {
+				entry?.Dispose();
 			}
 		}
 
@@ -283,7 +288,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			jsonDeserializer.SetArray("ConfirmedKeyedTransactions", this.ConfirmedKeyedTransactions);
 
 		}
-
+		
 	#endregion
 
 	}
@@ -296,7 +301,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		public List<IFinalElectionResults> FinalElectionResults { get; } = new List<IFinalElectionResults>();
 		public List<IIntermediaryElectionResults> IntermediaryElectionResults { get; } = new List<IIntermediaryElectionResults>();
 
-		public override HashNodeList GetStructuresArray(IByteArray previousBlockHash) {
+		public override HashNodeList GetStructuresArray(SafeArrayHandle previousBlockHash) {
 			HashNodeList nodeList = base.GetStructuresArray(previousBlockHash);
 
 			nodeList.Add(this.ConfirmedTransactions.Count);
@@ -450,7 +455,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		protected override void PrepareRehydrated(IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			rehydrationFactory.PrepareBlock(this);
 		}
-
+		
 	#endregion
 
 	}

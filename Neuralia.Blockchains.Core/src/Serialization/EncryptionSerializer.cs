@@ -14,33 +14,33 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		private readonly xxHasher64 hasher = new xxHasher64();
 
-		private readonly IByteArray nonce1;
-		private readonly IByteArray nonce2;
+		private readonly SafeArrayHandle nonce1 = SafeArrayHandle.Create();
+		private readonly SafeArrayHandle nonce2 = SafeArrayHandle.Create();
 
-		private readonly IByteArray secret;
+		private readonly SafeArrayHandle secret = SafeArrayHandle.Create();
 
-		public EncryptionSerializer(IByteArray secret, EncryptorParameters encryptorParameters, long nonce1, long nonce2) {
+		public EncryptionSerializer(SafeArrayHandle secret, EncryptorParameters encryptorParameters, long nonce1, long nonce2) {
 			this.secret = secret;
 			this.encryptorParameters = encryptorParameters;
 
 			Span<byte> bytes = stackalloc byte[sizeof(long)];
 			TypeSerializer.Serialize(nonce1, bytes);
 
-			this.nonce1 = new ByteArray(bytes.Length);
-			this.nonce1.CopyFrom(bytes);
+			this.nonce1 = ByteArray.Create(bytes.Length);
+			this.nonce1.Entry.CopyFrom(bytes);
 
 			TypeSerializer.Serialize(nonce2, bytes);
 
-			this.nonce2 = new ByteArray(bytes.Length);
-			this.nonce2.CopyFrom(bytes);
+			this.nonce2 = ByteArray.Create(bytes.Length);
+			this.nonce2.Entry.CopyFrom(bytes);
 		}
 
 		private long HashEntry(in Span<byte> bytes) {
 			Span<byte> finalbytes = stackalloc byte[bytes.Length + (sizeof(long) * 2)];
 			bytes.CopyTo(finalbytes);
 
-			this.nonce1.CopyTo(finalbytes.Slice(bytes.Length, sizeof(long)));
-			this.nonce2.CopyTo(finalbytes.Slice(bytes.Length + sizeof(long), sizeof(long)));
+			this.nonce1.Entry.CopyTo(finalbytes.Slice(bytes.Length, sizeof(long)));
+			this.nonce2.Entry.CopyTo(finalbytes.Slice(bytes.Length + sizeof(long), sizeof(long)));
 
 			return this.hasher.Hash(finalbytes);
 		}
@@ -110,7 +110,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.HashEntry(Encoding.UTF8.GetBytes(value));
 		}
 
-		public IByteArray Serialize(byte value) {
+		public SafeArrayHandle Serialize(byte value) {
 			Span<byte> bytes = stackalloc byte[sizeof(byte)];
 			TypeSerializer.Serialize(value, bytes);
 
@@ -131,7 +131,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(short value) {
+		public SafeArrayHandle Serialize(short value) {
 			Span<byte> bytes = stackalloc byte[sizeof(short)];
 			TypeSerializer.Serialize(value, bytes);
 
@@ -142,7 +142,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(ushort value) {
+		public SafeArrayHandle Serialize(ushort value) {
 			Span<byte> bytes = stackalloc byte[sizeof(ushort)];
 			TypeSerializer.Serialize(value, bytes);
 
@@ -153,7 +153,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(int value) {
+		public SafeArrayHandle Serialize(int value) {
 			Span<byte> bytes = stackalloc byte[sizeof(int)];
 			TypeSerializer.Serialize(value, bytes);
 
@@ -164,7 +164,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(uint value) {
+		public SafeArrayHandle Serialize(uint value) {
 			Span<byte> bytes = stackalloc byte[sizeof(uint)];
 			TypeSerializer.Serialize(value, bytes);
 
@@ -175,7 +175,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(long value) {
+		public SafeArrayHandle Serialize(long value) {
 			Span<byte> bytes = stackalloc byte[sizeof(long)];
 			TypeSerializer.Serialize(value, bytes);
 
@@ -186,7 +186,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(ulong value) {
+		public SafeArrayHandle Serialize(ulong value) {
 			Span<byte> bytes = stackalloc byte[sizeof(ulong)];
 			TypeSerializer.Serialize(value, bytes);
 
@@ -197,7 +197,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(Guid value) {
+		public SafeArrayHandle Serialize(Guid value) {
 			Span<byte> bytes = stackalloc byte[16];
 
 #if (NETSTANDARD2_0)
@@ -216,7 +216,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(DateTime value) {
+		public SafeArrayHandle Serialize(DateTime value) {
 			return this.Serialize(value.Ticks);
 		}
 
@@ -224,7 +224,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		public IByteArray Serialize(string value) {
+		public SafeArrayHandle Serialize(string value) {
 			return this.Encrypt(Encoding.UTF8.GetBytes(value));
 		}
 
@@ -232,21 +232,21 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			return this.ConvertToBase64(this.Serialize(value).Span);
 		}
 
-		private IByteArray Encrypt(in Span<byte> bytes) {
-			return AESFileEncryptor.Encrypt(bytes, this.secret, this.encryptorParameters);
+		private SafeArrayHandle Encrypt(in Span<byte> bytes) {
+			return AESFileEncryptor.Encrypt((ReadOnlySpan<byte>) bytes, this.secret, this.encryptorParameters);
 		}
 
-		private IByteArray Decrypt(in Span<byte> bytes) {
-			return AESFileEncryptor.Decrypt(bytes, this.secret, this.encryptorParameters);
+		private SafeArrayHandle Decrypt(in Span<byte> bytes) {
+			return AESFileEncryptor.Decrypt((ReadOnlySpan<byte>) bytes, this.secret, this.encryptorParameters);
 		}
 
 		public void Deserialize(in Span<byte> bytes, out byte value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-			value = result.Span[0];
+				value = result.Span[0];
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out byte value) {
@@ -255,11 +255,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out short value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-			TypeSerializer.Deserialize(result.Span, out value);
+				TypeSerializer.Deserialize(result.Span, out value);
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out short value) {
@@ -268,11 +268,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out ushort value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-			TypeSerializer.Deserialize(result.Span, out value);
+				TypeSerializer.Deserialize(result.Span, out value);
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out ushort value) {
@@ -281,11 +281,10 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out int value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-			TypeSerializer.Deserialize(result.Span, out value);
-
-			result.Return();
+				TypeSerializer.Deserialize(result.Span, out value);
+			}
 		}
 
 		public void DeserializeBase64(string base64, out int value) {
@@ -294,11 +293,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out uint value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-			TypeSerializer.Deserialize(result.Span, out value);
+				TypeSerializer.Deserialize(result.Span, out value);
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out uint value) {
@@ -307,11 +306,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out long value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-			TypeSerializer.Deserialize(result.Span, out value);
+				TypeSerializer.Deserialize(result.Span, out value);
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out long value) {
@@ -320,11 +319,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out ulong value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-			TypeSerializer.Deserialize(result.Span, out value);
+				TypeSerializer.Deserialize(result.Span, out value);
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out ulong value) {
@@ -333,17 +332,17 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out Guid value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
 #if (NETSTANDARD2_0)
-			value = new Guid(result.ToExactByteArray());
+			value = new Guid(result.Entry.ToExactByteArray());
 #elif (NETCOREAPP2_2)
-			value = new Guid(result.Span);
+				value = new Guid(result.Span);
 #else
 	throw new NotImplementedException();
 #endif
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out Guid value) {
@@ -363,17 +362,17 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public void Deserialize(in Span<byte> bytes, out string value) {
 
-			IByteArray result = this.Decrypt(bytes);
+			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
 #if (NETSTANDARD2_0)
-			value = Encoding.UTF8.GetString(result.ToExactByteArray());
+			value = Encoding.UTF8.GetString(result.Entry.ToExactByteArray());
 #elif (NETCOREAPP2_2)
-			value = Encoding.UTF8.GetString(result.Span);
+				value = Encoding.UTF8.GetString(result.Span);
 #else
 	throw new NotImplementedException();
 #endif
 
-			result.Return();
+			}
 		}
 
 		public void DeserializeBase64(string base64, out string value) {

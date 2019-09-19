@@ -5,26 +5,26 @@ using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Tools {
 	public static class BlockchainDoubleHasher {
-		public static bool VerifyGenesisHash(IGenesisBlock genesis, IByteArray data) {
+		public static bool VerifyGenesisHash(IGenesisBlock genesis, SafeArrayHandle data) {
 
-			(IByteArray sha2, IByteArray sha3) hashes = HashingUtils.ExtractCombinedDualHash(data);
+			(SafeArrayHandle sha2, SafeArrayHandle sha3) hashes = HashingUtils.ExtractCombinedDualHash(data);
 
 			return VerifyGenesisHash(genesis, hashes.sha2, hashes.sha3);
 		}
 
-		public static bool VerifyDigestHash(IBlockchainDigest digest, IByteArray data) {
+		public static bool VerifyDigestHash(IBlockchainDigest digest, SafeArrayHandle data) {
 
-			(IByteArray sha2, IByteArray sha3) hashes = HashingUtils.ExtractCombinedDualHash(data);
+			(SafeArrayHandle sha2, SafeArrayHandle sha3) hashes = HashingUtils.ExtractCombinedDualHash(data);
 
 			return VerifyDigestHash(digest, hashes.sha2, hashes.sha3);
 		}
 
-		public static bool VerifyGenesisHash(IGenesisBlock genesis, IByteArray sha2, IByteArray sha3) {
+		public static bool VerifyGenesisHash(IGenesisBlock genesis, SafeArrayHandle sha2, SafeArrayHandle sha3) {
 
 			return HashingUtils.VerifyCombinedHash(genesis.Hash, sha2, sha3);
 		}
 
-		public static bool VerifyDigestHash(IBlockchainDigest digest, IByteArray sha2, IByteArray sha3) {
+		public static bool VerifyDigestHash(IBlockchainDigest digest, SafeArrayHandle sha2, SafeArrayHandle sha3) {
 
 			return HashingUtils.VerifyCombinedHash(digest.Hash, sha2, sha3);
 		}

@@ -47,6 +47,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 
 		static UserWallet() {
 			LiteDBMappers.RegisterGuidDictionary<IWalletAccount>();
+			BsonMapper.Global.Entity<IUserWallet>().Id(x => x.Id);
+			BsonMapper.Global.Entity<UserWallet>().Id(x => x.Id);
 		}
 
 	#endregion

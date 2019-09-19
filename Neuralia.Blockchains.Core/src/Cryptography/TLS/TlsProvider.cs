@@ -42,15 +42,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 			this.ALGO = $"SHA{amount}WITHRSA";
 		}
 
-		public X509Certificate2 RebuildCertificate(IByteArray data) {
+		public X509Certificate2 RebuildCertificate(SafeArrayHandle data) {
 			return new X509Certificate2(data.ToExactByteArray());
 		}
 
-		public bool VerifyHash(IByteArray message, IByteArray signature, X509Certificate2 certificate) {
+		public bool VerifyHash(SafeArrayHandle message, SafeArrayHandle signature, X509Certificate2 certificate) {
 
 			Sha3_512Hasher hasher = new Sha3_512Hasher();
 
-			IByteArray hash = hasher.Hash(message);
+			SafeArrayHandle hash = hasher.Hash(message);
 
 			using(RSA csp = certificate.GetRSAPublicKey()) {
 				// verify the hash
@@ -63,7 +63,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 			}
 		}
 
-		public bool VerifyData(IByteArray message, IByteArray signature, X509Certificate2 certificate) {
+		public bool VerifyData(SafeArrayHandle message, SafeArrayHandle signature, X509Certificate2 certificate) {
 
 			using(RSA csp = certificate.GetRSAPublicKey()) {
 				bool result = csp.VerifyData(message.ToExactByteArray(), signature.ToExactByteArray(), HashAlgorithmName.SHA512, RSASignaturePadding.Pss);
@@ -72,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 			}
 		}
 
-		public IByteArray Encrypt(IByteArray message, X509Certificate2 certificate) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle message, X509Certificate2 certificate) {
 			using(RSA csp = certificate.GetRSAPublicKey()) {
 				// Sign the hash
 				return (ByteArray) csp.Encrypt(message.ToExactByteArray(), RSAEncryptionPadding.OaepSHA512);

@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 		public const McElieceHashModes DEFAULT_HASH_MODE = McElieceHashModes.Sha3_512;
 		public const McElieceCipherModes DEFAULT_CIPHER_MODE = McElieceCipherModes.KobaraImai;
 
-		public IByteArray Encrypt(IByteArray message, IByteArray publicKey, McElieceCipherModes cipherMode) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle message, SafeArrayHandle publicKey, McElieceCipherModes cipherMode) {
 
 			McElieceCCA2PublicKeyParameters pub = new McElieceCCA2PublicKeyParameters();
 			pub.Rehydrate(DataSerializationFactory.CreateRehydrator(publicKey));

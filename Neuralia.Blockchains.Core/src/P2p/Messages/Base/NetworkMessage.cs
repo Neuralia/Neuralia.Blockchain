@@ -8,7 +8,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
-	public interface INetworkMessage : ITreeHashable, IDisposable2 {
+	public interface INetworkMessage : ITreeHashable {
 
 		ComponentVersion<SimpleUShort> Version { get; }
 
@@ -73,32 +73,5 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
 		protected abstract short SetWorkflowType();
 		
-	#region disposable
-
-		public bool IsDisposed { get; private set; }
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		private void Dispose(bool disposing) {
-
-			if(disposing && !this.IsDisposed) {
-				this.DisposeAll();
-			}
-
-			this.IsDisposed = true;
-		}
-
-		~NetworkMessage() {
-			this.Dispose(false);
-		}
-
-		protected virtual void DisposeAll() {
-
-		}
-
-	#endregion
 	}
 }

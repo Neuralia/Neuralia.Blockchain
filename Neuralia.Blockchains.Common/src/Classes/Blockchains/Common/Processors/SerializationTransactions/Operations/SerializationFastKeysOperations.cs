@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		public byte Ordinal { get; set; }
 		public byte TreeHeight { get; set; }
 		public byte HashBits { get; set; }
-		public IByteArray Key { get; set; }
+		public SafeArrayHandle Key { get;  } = SafeArrayHandle.Create();
 
 		protected override void SetType() {
 			this.SerializationTransactionOperationType = SerializationTransactionOperationTypes.FastKeys;
@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			this.Ordinal = rehydrator.ReadByte();
 			this.TreeHeight = rehydrator.ReadByte();
 			this.HashBits = rehydrator.ReadByte();
-			this.Key = rehydrator.ReadNonNullableArray();
+			this.Key.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {

@@ -1,22 +1,24 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
+﻿using System;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events {
 	public interface IBlockchainEvent : ITreeHashable, IJsonSerializable {
-		//		void Rehydrate(IByteArray data, IRehydrationFactory rehydrationFactory);
+		//		void Rehydrate(ArrayWrapper data, IRehydrationFactory rehydrationFactory);
 		//		void Rehydrate(IDataRehydrator rehydrator, IRehydrationFactory rehydrationFactory);
 	}
 
 	public interface IBlockchainEvent<VERSION_TYPE> : IVersionable<VERSION_TYPE>, IBlockchainEvent
 		where VERSION_TYPE : SimpleUShort<VERSION_TYPE>, new() {
-		//		void Rehydrate(IByteArray data, IRehydrationFactory rehydrationFactory);
+		//		void Rehydrate(ArrayWrapper data, IRehydrationFactory rehydrationFactory);
 		//		void Rehydrate(IDataRehydrator rehydrator, IRehydrationFactory rehydrationFactory);
 	}
 
@@ -27,7 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events {
 
 		DEHYDRATED Dehydrate(BlockChannelUtils.BlockChannelTypes activeChannels);
 		void Rehydrate(DEHYDRATED data, REHYDRATION_FACTORY rehydrationFactory);
-		void Rehydrate(IByteArray data, REHYDRATION_FACTORY rehydrationFactory);
+		void Rehydrate(SafeArrayHandle data, REHYDRATION_FACTORY rehydrationFactory);
 		void Rehydrate(IDataRehydrator rehydrator, REHYDRATION_FACTORY rehydrationFactory);
 	}
 
@@ -49,10 +51,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events {
 
 		public abstract DEHYDRATED Dehydrate(BlockChannelUtils.BlockChannelTypes activeChannels);
 
-		public void Rehydrate(IByteArray data, REHYDRATION_FACTORY rehydrationFactory) {
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
+		public void Rehydrate(SafeArrayHandle data, REHYDRATION_FACTORY rehydrationFactory) {
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
 
-			this.Rehydrate(rehydrator, rehydrationFactory);
+				this.Rehydrate(rehydrator, rehydrationFactory);
+			}
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator, REHYDRATION_FACTORY rehydrationFactory) {

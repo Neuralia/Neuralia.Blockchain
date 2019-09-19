@@ -8,9 +8,9 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels {
 	public interface IDigestChannelValidator {
-		Dictionary<int, Dictionary<int, IByteArray>> HashChannel(int groupIndex);
+		Dictionary<int, Dictionary<int, SafeArrayHandle>> HashChannel(int groupIndex);
 
-		IByteArray GetFileBytes(int indexId, int bandId, uint partIndex, long offset, int length);
+		SafeArrayHandle GetFileBytes(int indexId, int bandId, uint partIndex, long offset, int length);
 	}
 
 	public interface IDigestChannel : IVersionable<DigestChannelType>, IDigestChannelValidator {
@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		void Initialize();
 
-		IByteArray DehydrateVersionInfo();
+		SafeArrayHandle DehydrateVersionInfo();
 	}
 
 	public abstract class DigestChannel<CHANEL_BANDS, CARD, KEY, INPUT_QUERY_KEY, QUERY_KEY> : Versionable<DigestChannelType>, IDigestChannel
@@ -49,7 +49,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public byte Major { get; protected set; }
 		public byte Minor { get; protected set; }
 
-		public IByteArray DehydrateVersionInfo() {
+		public SafeArrayHandle DehydrateVersionInfo() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Version.Dehydrate(dehydrator);
@@ -63,7 +63,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.BuildBandsIndices();
 		}
 
-		public Dictionary<int, Dictionary<int, IByteArray>> HashChannel(int groupIndex) {
+		public Dictionary<int, Dictionary<int, SafeArrayHandle>> HashChannel(int groupIndex) {
 			return this.channelBandIndexSet.HashIndexes(groupIndex);
 		}
 
@@ -71,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return this.channelBandIndexSet.GetFileTypes();
 		}
 
-		public IByteArray GetFileBytes(int indexId, int fileId, uint partIndex, long offset, int length) {
+		public SafeArrayHandle GetFileBytes(int indexId, int fileId, uint partIndex, long offset, int length) {
 			return this.channelBandIndexSet.BandIndices[indexId].GetFileBytes(fileId, partIndex, offset, length);
 		}
 

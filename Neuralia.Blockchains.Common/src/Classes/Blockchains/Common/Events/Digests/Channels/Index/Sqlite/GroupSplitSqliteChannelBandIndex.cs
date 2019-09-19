@@ -59,8 +59,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return this.EnsureFilesetExtracted(this.bandName, new object[] {index}, this.BandType).extractedName;
 		}
 
-		public override Dictionary<int, IByteArray> HashFiles(int groupIndex) {
-			var results = new Dictionary<int, IByteArray>();
+		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {
+			var results = new Dictionary<int, SafeArrayHandle>();
 
 			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.scopeFolder, new object[] {groupIndex}));
 
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return results;
 		}
 
-		public override IByteArray GetFileBytes(int fileId, uint partIndex, long offset, int length) {
+		public override SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length) {
 
 			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.scopeFolder, new object[] {partIndex}));
 

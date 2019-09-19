@@ -44,8 +44,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.L1IndexProvider = new SequentialChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>>(new GroupDigestChannelBandFileNamingProvider<uint>(), this.fileSystem);
 		}
 
-		public override Dictionary<int, IByteArray> HashFiles(int groupIndex) {
-			var results = new Dictionary<int, IByteArray>();
+		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {
+			var results = new Dictionary<int, SafeArrayHandle>();
 
 			foreach(CHANEL_BANDS band in this.EnabledBands) {
 				string archivedFilename = this.GetArchivedBandName(band, (uint) groupIndex);
@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return results;
 		}
 
-		public override IByteArray GetFileBytes(int fileId, uint partIndex, long offset, int length) {
+		public override SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length) {
 
 			string archivedFilename = "";
 
@@ -118,7 +118,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			// query L1
 			long fileOffset = L1_INDEX_ENTRY_SIZE * adjustedAccountId;
-			IByteArray data = this.L1IndexProvider.QueryCard((uint) fileOffset, L1_INDEX_ENTRY_SIZE);
+			SafeArrayHandle data = this.L1IndexProvider.QueryCard((uint) fileOffset, L1_INDEX_ENTRY_SIZE);
 
 			if(data.IsEmpty) {
 				return (0, 0);
@@ -139,7 +139,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public SingleKeySequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
 		}
 
-		public override DigestChannelBandEntries<IByteArray, CHANEL_BANDS> QueryCard(long keySet) {
+		public override DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS> QueryCard(long keySet) {
 			(uint adjustedAccountId, uint index) adjustedKey = this.AdjustAccountId(keySet);
 
 			var expanded = this.EnsureFilesetExtracted(adjustedKey.index);

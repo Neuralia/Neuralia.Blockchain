@@ -6,22 +6,22 @@ using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks {
 	public interface ISecretBlockNextAccountSignature : IBlockNextAccountSignature {
-		IByteArray NextKeyHashSha2 { get; set; }
-		IByteArray NextKeyHashSha3 { get; set; }
+		SafeArrayHandle NextKeyHashSha2 { get;  }
+		SafeArrayHandle NextKeyHashSha3 { get;  }
 		int NonceHash { get; set; }
 
 		QTESLASecurityCategory.SecurityCategories NextSecondSecurityCategory { get; set; }
-		IByteArray NextSecondPublicKey { get; set; }
+		SafeArrayHandle NextSecondPublicKey { get;  }
 	}
 
 	public class SecretBlockNextAccountSignature : BlockNextAccountSignature, ISecretBlockNextAccountSignature {
 
-		public IByteArray NextKeyHashSha2 { get; set; }
-		public IByteArray NextKeyHashSha3 { get; set; }
+		public SafeArrayHandle NextKeyHashSha2 { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle NextKeyHashSha3 { get;  } = SafeArrayHandle.Create();
 		public int NonceHash { get; set; }
 
 		public QTESLASecurityCategory.SecurityCategories NextSecondSecurityCategory { get; set; }
-		public IByteArray NextSecondPublicKey { get; set; }
+		public SafeArrayHandle NextSecondPublicKey { get;  } = SafeArrayHandle.Create();
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = base.GetStructuresArray();
@@ -50,12 +50,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
-			this.NextKeyHashSha2 = rehydrator.ReadNonNullableArray();
-			this.NextKeyHashSha3 = rehydrator.ReadNonNullableArray();
+			this.NextKeyHashSha2.Entry = rehydrator.ReadNonNullableArray();
+			this.NextKeyHashSha3.Entry = rehydrator.ReadNonNullableArray();
 			this.NonceHash = rehydrator.ReadInt();
 
 			this.NextSecondSecurityCategory = (QTESLASecurityCategory.SecurityCategories) rehydrator.ReadByte();
-			this.NextSecondPublicKey = rehydrator.ReadNonNullableArray();
+			this.NextSecondPublicKey.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

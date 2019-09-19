@@ -8,14 +8,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public interface IElectedChoice {
 		List<TransactionId> TransactionIds { get; set; }
 		Enums.ElectedPeerShareTypes PeerShareType { get; set; }
-		IByteArray ElectionHash { get; set; }
+		SafeArrayHandle ElectionHash { get; }
 		AccountId DelegateAccountId { get; set; }
 	}
 
 	public abstract class ElectedChoice : IElectedChoice {
 		public List<TransactionId> TransactionIds { get; set; }
 		public Enums.ElectedPeerShareTypes PeerShareType { get; set; }
-		public IByteArray ElectionHash { get; set; }
+		public SafeArrayHandle ElectionHash { get; } = SafeArrayHandle.Create();
 		public AccountId DelegateAccountId { get; set; }
 	}
 }

@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Core.Debugging {
 
 		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
 			if(value is byte[] bytes) {
-				writer.WriteValue(new ByteArray(bytes).ToBase58());
+				writer.WriteValue(ByteArray.Create(bytes).ToBase58());
 			} else {
 				if(value is ByteArray array) {
 					writer.WriteValue(array.ToBase58());

@@ -3,11 +3,11 @@
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Medium {
 	public class MediumMessageEntry : MessageEntry<MediumMessageHeader> {
 
-		public MediumMessageEntry(IByteArray message = null) : base(message) {
+		public MediumMessageEntry(SafeArrayHandle message = null) : base(message) {
 
 		}
 
-		public override void RebuildHeader(IByteArray buffer) {
+		public override void RebuildHeader(SafeArrayHandle buffer) {
 			this.HeaderT.Rehydrate(buffer);
 		}
 
@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Medium {
 			return new MediumMessageHeader();
 		}
 
-		protected override MediumMessageHeader CreateHeader(int messageLength, IByteArray message) {
+		protected override MediumMessageHeader CreateHeader(int messageLength, SafeArrayHandle message) {
 			return new MediumMessageHeader(messageLength, message);
 		}
 	}

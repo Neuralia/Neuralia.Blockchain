@@ -107,7 +107,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				FileSpecs L1FileSpecs = this.CreateL1FileSpec(blockIndex);
 
 				if(L1FileSpecs.FileSize != 0) {
-					IByteArray blockIdData = FileExtensions.ReadBytes(L1FileSpecs.FilePath, 0, BLOCK_INDEX_INTRO, this.fileSystem);
+					SafeArrayHandle blockIdData = FileExtensions.ReadBytes(L1FileSpecs.FilePath, 0, BLOCK_INDEX_INTRO, this.fileSystem);
 
 					if((blockIdData != null) && blockIdData.HasData) {
 						TypeSerializer.Deserialize(blockIdData.Span, out ushort indexType);
@@ -141,7 +141,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.Providers.Add(channelType, channelProvider);
 		}
 
-		public override void WriteEntry(ChannelsEntries<IByteArray> blockData) {
+		public override void WriteEntry(ChannelsEntries<SafeArrayHandle> blockData) {
 			base.WriteEntry(blockData);
 
 			// maintain our undo histories
@@ -305,7 +305,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				// insert the entry
 				L3WriteHistory.initialLength = this.L3_FileSpec.FileSize;
 				L3WriteHistory.file = this.L3_FileSpec;
-				IByteArray datax = dehydrator.ToRawArray();
+				SafeArrayHandle datax = dehydrator.ToRawArray();
 				this.L3_FileSpec.Append(datax);
 				L3WriteHistory.written = true;
 				datax.Return();
@@ -314,7 +314,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 				this.RunForEachChannelType(channel => {
 
-					IByteArray data = blockData[channel];
+					SafeArrayHandle data = blockData[channel];
 
 					// write only if we have data
 					if((data != null) && data.HasData) {
@@ -380,7 +380,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			var l1relativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
 
-			IByteArray bytes = null;
+			SafeArrayHandle bytes = null;
 
 			int offset = BLOCK_INDEX_INTRO + ((l1Index - 1) * this.L1_ENTRY_SIZE);
 
@@ -429,7 +429,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		protected (ushort l3relativeSize2, ChannelsEntries<uint> l2relativeSizes)? ReadL2Entry(int l1Index, int l2Index) {
 
 			var l2relativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
-			IByteArray bytes = null;
+			SafeArrayHandle bytes = null;
 
 			int offset = (l1Index * ((this.L1Interval / this.L2Interval) - 1) * this.L2_ENTRY_SIZE) + ((l2Index - 1) * this.L2_ENTRY_SIZE);
 
@@ -610,7 +610,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			if(index <= count) {
 
-				IByteArray bytes = null;
+				SafeArrayHandle bytes = null;
 
 				if(l3Length == 0) {
 					// we need to read, but the data size is 0
@@ -675,9 +675,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return entries;
 		}
 
-		public override ChannelsEntries<IByteArray> QueryBytes(uint adjustedBlockId) {
+		public override ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId) {
 
-			var results = new ChannelsEntries<IByteArray>(this.EssentialChannelTypes);
+			var results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
 
 			var indices = this.QueryIndex(adjustedBlockId);
 
@@ -691,10 +691,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return results;
 		}
 
-		public override ChannelsEntries<IByteArray> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
+		public override ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
 			var indices = this.QueryIndex(adjustedBlockId);
 
-			var results = new ChannelsEntries<IByteArray>(this.EssentialChannelTypes);
+			var results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
 
 			foreach(var provider in this.EssentialProviders) {
 				(long start, int end) index = indices[provider.Key];
@@ -710,7 +710,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return results;
 		}
 
-		public override IByteArray QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
+		public override SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
 			var indices = this.QueryIndex(adjustedBlockId);
 
 			if(!indices.Entries.Any()) {

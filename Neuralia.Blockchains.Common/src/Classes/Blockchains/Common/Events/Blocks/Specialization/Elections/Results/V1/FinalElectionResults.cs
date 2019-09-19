@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			adaptiveLong.Rehydrate(rehydrator);
 			uint count = (uint) adaptiveLong.Value;
 
-			IByteArray typeBytes = rehydrator.ReadArray((int) Math.Ceiling((double) (count * 4) / 8));
+			SafeArrayHandle typeBytes = rehydrator.ReadArray((int) Math.Ceiling((double) (count * 4) / 8));
 			SpecialIntegerSizeArray electorTypesArray = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, typeBytes, (int) count);
 
 			var sortedDelegateAccounts = this.DelegateAccounts.Keys.OrderBy(k => k).ToList();

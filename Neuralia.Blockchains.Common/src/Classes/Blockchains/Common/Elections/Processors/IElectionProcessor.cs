@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 		IElectionCandidacyMessage PrepareActiveElectionConfirmationMessage(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate);
 		IElectionCandidacyMessage PreparePassiveElectionConfirmationMessage(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate);
-		IByteArray DetermineIfElected(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount);
+		SafeArrayHandle DetermineIfElected(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount);
 
 		List<TransactionId> SelectTransactions(long blockId, BlockElectionDistillate blockElectionDistillate);
 	}

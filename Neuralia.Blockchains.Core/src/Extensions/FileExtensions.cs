@@ -18,24 +18,24 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		/// </summary>
 		/// <param name="filename"></param>
 		/// <param name="bytes"></param>
-		public static void OpenWrite(string filename, IByteArray bytes) {
+		public static void OpenWrite(string filename, SafeArrayHandle bytes) {
 			using(Stream fileStream = File.Open(filename, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) {
 				fileStream.Write(bytes.Bytes, bytes.Offset, bytes.Length);
 			}
 		}
 
-		public static void OpenWrite(string filename, IByteArray bytes, long offset, int length, IFileSystem fileSystem) {
+		public static void OpenWrite(string filename, SafeArrayHandle bytes, long offset, int length, IFileSystem fileSystem) {
 			using(Stream fileStream = fileSystem.File.Open(filename, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) {
 				fileStream.Seek(offset, SeekOrigin.Begin);
 				fileStream.Write(bytes.Bytes, bytes.Offset, length);
 			}
 		}
 
-		public static void OpenWrite(string filename, IByteArray bytes, IFileSystem fileSystem) {
+		public static void OpenWrite(string filename, SafeArrayHandle bytes, IFileSystem fileSystem) {
 			OpenWrite(filename, bytes, 0, bytes.Length, fileSystem);
 		}
 
-		public static void OpenWrite(string filename, IByteArray bytes, long offset, IFileSystem fileSystem) {
+		public static void OpenWrite(string filename, SafeArrayHandle bytes, long offset, IFileSystem fileSystem) {
 			OpenWrite(filename, bytes, offset, bytes.Length, fileSystem);
 		}
 
@@ -88,7 +88,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			fileSystem.File.WriteAllText(filename, text);
 		}
 
-		public static void WriteAllBytes(string filename, IByteArray data, IFileSystem fileSystem) {
+		public static void WriteAllBytes(string filename, SafeArrayHandle data, IFileSystem fileSystem) {
 
 			fileSystem.File.WriteAllBytes(filename, data.ToExactByteArray());
 		}
@@ -98,13 +98,13 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			fileSystem.File.WriteAllBytes(filename, data.ToArray());
 		}
 
-		public static void OpenAppend(string filename, IByteArray bytes) {
+		public static void OpenAppend(string filename, SafeArrayHandle bytes) {
 			using(Stream fileStream = File.Open(filename, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) {
 				fileStream.Write(bytes.Bytes, bytes.Offset, bytes.Length);
 			}
 		}
 
-		public static void OpenAppend(string filename, IByteArray bytes, IFileSystem fileSystem) {
+		public static void OpenAppend(string filename, SafeArrayHandle bytes, IFileSystem fileSystem) {
 			using(Stream fileStream = fileSystem.File.Open(filename, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) {
 				fileStream.Write(bytes.Bytes, bytes.Offset, bytes.Length);
 			}
@@ -152,7 +152,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			}
 		}
 
-		public static IByteArray ReadBytes(string filename, long start, int count, IFileSystem fileSystem) {
+		public static SafeArrayHandle ReadBytes(string filename, long start, int count, IFileSystem fileSystem) {
 			using(BinaryReader br = new BinaryReader(fileSystem.File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))) {
 				br.BaseStream.Seek(start, SeekOrigin.Begin);
 
@@ -160,7 +160,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			}
 		}
 
-		public static IByteArray ReadAllBytes(string filename, IFileSystem fileSystem) {
+		public static SafeArrayHandle ReadAllBytes(string filename, IFileSystem fileSystem) {
 			return (ByteArray) fileSystem.File.ReadAllBytes(filename);
 		}
 

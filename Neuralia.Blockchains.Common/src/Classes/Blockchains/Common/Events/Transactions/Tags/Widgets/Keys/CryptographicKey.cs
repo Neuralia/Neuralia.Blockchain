@@ -11,14 +11,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	public interface ICryptographicKey : ISerializableCombo, IDisposable2 {
 		byte Id { get; set; }
 		byte Version { get; }
-		IByteArray Key { get; set; }
+		SafeArrayHandle Key { get; }
 
 		Enums.KeyTypes Type { get; }
 		void Rehydrate(byte id, IDataRehydrator rehydrator);
 	}
 
 	public abstract class CryptographicKey : ICryptographicKey {
-		private IByteArray key;
 
 		public CryptographicKey() {
 			this.SetType();
@@ -31,10 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public byte Version { get; } = 1;
 		public byte Id { get; set; }
 
-		public IByteArray Key {
-			get => this.key;
-			set => this.key = value?.Clone();
-		}
+		public  SafeArrayHandle Key { get; } = SafeArrayHandle.Create();
 
 		public Enums.KeyTypes Type { get; protected set; } = Enums.KeyTypes.Unknown;
 
@@ -67,7 +63,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public virtual void Rehydrate(byte id, IDataRehydrator rehydrator) {
 			this.Id = id;
 
-			this.Key = rehydrator.ReadNonNullableArray();
+			this.Key.Entry = rehydrator.ReadNonNullableArray();
 
 		}
 

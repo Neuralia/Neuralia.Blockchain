@@ -6,12 +6,12 @@ using Neuralia.Blockchains.Tools.Data;
 namespace Neuralia.Blockchains.Core.Compression {
 
 	public interface ICompression {
-		IByteArray Compress(string text, CompressionLevelByte level);
-		IByteArray Compress(string text);
-		IByteArray Compress(IByteArray data, CompressionLevelByte level);
-		IByteArray Compress(IByteArray data);
-		IByteArray Decompress(IByteArray data);
-		IByteArray Decompress(Stream input);
+		SafeArrayHandle Compress(string text, CompressionLevelByte level);
+		SafeArrayHandle Compress(string text);
+		SafeArrayHandle Compress(SafeArrayHandle data, CompressionLevelByte level);
+		SafeArrayHandle Compress(SafeArrayHandle data);
+		SafeArrayHandle Decompress(SafeArrayHandle data);
+		SafeArrayHandle Decompress(Stream input);
 		void Decompress(Stream input, Stream output);
 	}
 
@@ -25,9 +25,9 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 		public static T Instance { get; } = new T();
 
-		public IByteArray Compress(string text, CompressionLevelByte level) {
-			IByteArray data = (ByteArray) Encoding.UTF8.GetBytes(text);
-			IByteArray result = null;
+		public SafeArrayHandle Compress(string text, CompressionLevelByte level) {
+			SafeArrayHandle data = (ByteArray) Encoding.UTF8.GetBytes(text);
+			SafeArrayHandle result = null;
 
 			lock(this.locker) {
 				result = this.CompressData(data, level);
@@ -38,9 +38,9 @@ namespace Neuralia.Blockchains.Core.Compression {
 			return result;
 		}
 
-		public IByteArray Compress(string text) {
-			IByteArray data = (ByteArray) Encoding.UTF8.GetBytes(text);
-			IByteArray result = null;
+		public SafeArrayHandle Compress(string text) {
+			SafeArrayHandle data = (ByteArray) Encoding.UTF8.GetBytes(text);
+			SafeArrayHandle result = null;
 
 			lock(this.locker) {
 				result = this.CompressData(data);
@@ -51,25 +51,25 @@ namespace Neuralia.Blockchains.Core.Compression {
 			return result;
 		}
 
-		public IByteArray Compress(IByteArray data, CompressionLevelByte level) {
+		public SafeArrayHandle Compress(SafeArrayHandle data, CompressionLevelByte level) {
 			lock(this.locker) {
 				return this.CompressData(data, level);
 			}
 		}
 
-		public IByteArray Compress(IByteArray data) {
+		public SafeArrayHandle Compress(SafeArrayHandle data) {
 			lock(this.locker) {
 				return this.CompressData(data);
 			}
 		}
 
-		public IByteArray Decompress(IByteArray data) {
+		public SafeArrayHandle Decompress(SafeArrayHandle data) {
 			lock(this.locker) {
 				return this.DecompressData(data);
 			}
 		}
 
-		public IByteArray Decompress(Stream input) {
+		public SafeArrayHandle Decompress(Stream input) {
 			lock(this.locker) {
 				return this.DecompressData(input);
 			}
@@ -81,8 +81,8 @@ namespace Neuralia.Blockchains.Core.Compression {
 			}
 		}
 
-		public string DecompressText(IByteArray data) {
-			IByteArray bytes = this.Decompress(data);
+		public string DecompressText(SafeArrayHandle data) {
+			SafeArrayHandle bytes = this.Decompress(data);
 			string result = Encoding.UTF8.GetString(bytes.ToExactByteArray());
 			bytes.Return();
 
@@ -90,18 +90,18 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		public string DecompressText(Stream input) {
-			IByteArray bytes = this.Decompress(input);
+			SafeArrayHandle bytes = this.Decompress(input);
 			string result = Encoding.UTF8.GetString(bytes.ToExactByteArray());
 			bytes.Return();
 
 			return result;
 		}
 
-		protected abstract IByteArray CompressData(IByteArray data, CompressionLevelByte level);
-		protected abstract IByteArray CompressData(IByteArray data);
+		protected abstract SafeArrayHandle CompressData(SafeArrayHandle data, CompressionLevelByte level);
+		protected abstract SafeArrayHandle CompressData(SafeArrayHandle data);
 
-		protected abstract IByteArray DecompressData(IByteArray data);
-		protected abstract IByteArray DecompressData(Stream input);
+		protected abstract SafeArrayHandle DecompressData(SafeArrayHandle data);
+		protected abstract SafeArrayHandle DecompressData(Stream input);
 		protected abstract void DecompressData(Stream input, Stream output);
 
 		protected CompressionLevelByte ConvertCompression(CompressionLevel level) {

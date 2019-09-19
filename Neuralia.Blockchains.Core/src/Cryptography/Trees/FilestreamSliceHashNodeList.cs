@@ -4,7 +4,6 @@ using System.IO;
 using System.IO.Abstractions;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
@@ -21,8 +20,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		private Stream fileStream;
 		
-		private readonly List<IByteArray> buffersSet = new List<IByteArray>();
-
 		public FileStreamSliceHashNodeList(string filename, IFileSystem fileSystem, int sizeSize = 64) {
 			this.filename = filename;
 			this.fileSystem = fileSystem;
@@ -41,7 +38,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			this.buffer = new byte[this.sizeSize];
 		}
 
-		public IByteArray this[int i] {
+		public SafeArrayHandle this[int i] {
 			get {
 				if(this.fileStream == null) {
 
@@ -68,10 +65,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 				this.fileStream.Read(localBuffer, 0, length);
 
-				var result = MemoryAllocators.Instance.allocator.Take(localBuffer.Length);
-				result.CopyFrom(localBuffer);
+				var result = ByteArray.Create(localBuffer.Length);
+				result.CopyFrom(localBuffer.AsSpan());
 				
-				this.buffersSet.Add(result);
 				return result;
 			}
 		}
@@ -88,17 +84,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		private void Dispose(bool disposing) {
-
+			
 			if(disposing && !this.IsDisposed) {
 				try {
 					this.fileStream?.Dispose();
 					this.fileStream = null;
 				} catch(Exception ex) {
 
-				}
-				
-				foreach(var entry in buffersSet) {
-					entry?.Dispose();
 				}
 			}
 
@@ -110,6 +102,5 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 	#endregion
-
 	}
 }

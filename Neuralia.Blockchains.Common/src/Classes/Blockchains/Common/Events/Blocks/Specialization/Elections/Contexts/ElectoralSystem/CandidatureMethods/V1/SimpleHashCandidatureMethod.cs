@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private static readonly Sha512Hasher hasher = new Sha512Hasher();
 
-		public IByteArray DetermineCandidacy(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
+		public SafeArrayHandle DetermineCandidacy(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
 			return hasher.HashTwo(blockElectionDistillate.blockHash, miningAccount.ToLongRepresentation());
 		}
 

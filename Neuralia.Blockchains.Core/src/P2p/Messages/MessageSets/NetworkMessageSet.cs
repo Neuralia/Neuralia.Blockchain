@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 
 		INetworkMessage BaseMessage2 { get; }
 
-		IByteArray Dehydrate();
+		SafeArrayHandle Dehydrate();
 	}
 
 	public interface INetworkMessageSet<R> : INetworkMessageSet
@@ -48,7 +48,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 
 	public static class NetworkMessageSet {
 		// extract the message
-		public static IByteArray ExtractMessageBytes(IDataRehydrator dr) {
+		public static SafeArrayHandle ExtractMessageBytes(IDataRehydrator dr) {
 			ResetAfterHeader(dr);
 
 			return dr.ReadNonNullableArray();
@@ -88,7 +88,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		///     Here we dehydrate everything and compress only the message
 		/// </summary>
 		/// <returns></returns>
-		public IByteArray Dehydrate() {
+		public SafeArrayHandle Dehydrate() {
 
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
@@ -149,11 +149,12 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		protected void RehydrateMessage(IDataRehydrator dr, R rehydrationFactory) {
 
 			var bytes = dr.ReadNonNullableArray();
-			IDataRehydrator subRehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 
-			this.BaseMessage.Rehydrate(subRehydrator, rehydrationFactory);
-			
-			bytes.Return();
+			using(IDataRehydrator subRehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
+				this.BaseMessage.Rehydrate(subRehydrator, rehydrationFactory);
+
+				bytes.Return();
+			}
 		}
 	}
 }

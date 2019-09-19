@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		///     Instantiate a new XMSS Private Key
 		/// </summary>
 		/// <param name="heigth">Height (number of levels - 1) of the tree</param>
-		public XMSSMTPrivateKey(int heigth, int layer, IByteArray publicSeed, IByteArray secretSeed, IByteArray secretPrf, XMSSMTNonceSet nonces, XMSSExecutionContext xmssExecutionContext, long index = 0, IByteArray root = null) {
+		public XMSSMTPrivateKey(int heigth, int layer, ByteArray publicSeed, ByteArray secretSeed, ByteArray secretPrf, XMSSMTNonceSet nonces, XMSSExecutionContext xmssExecutionContext, long index = 0, ByteArray root = null) {
 
 			this.Index = index;
 			this.Height = (byte) heigth;
@@ -61,10 +61,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		public XMSSMTNonceSet Nonces { get; } = new XMSSMTNonceSet();
 		public XMSSMTNodeCache NodeCache { get; }
 
-		public IByteArray PublicSeed { get; private set; }
-		public IByteArray SecretSeed { get; private set; }
-		public IByteArray Root { get; set; }
-		public IByteArray SecretPrf { get; private set; }
+		public ByteArray PublicSeed { get; private set; }
+		public ByteArray SecretSeed { get; private set; }
+		public ByteArray Root { get; set; }
+		public ByteArray SecretPrf { get; private set; }
 
 		protected override void DisposeAll() {
 			base.DisposeAll();

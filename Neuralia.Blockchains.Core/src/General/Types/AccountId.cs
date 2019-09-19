@@ -170,7 +170,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 				accountSequence = rawString.Substring(1, rawString.Length - 1);
 			}
 
-			IByteArray array = ByteArray.FromBase30(accountSequence);
+			SafeArrayHandle array = ByteArray.FromBase30(accountSequence);
 
 			Span<byte> fullArray = stackalloc byte[sizeof(long)];
 			array.Span.CopyTo(fullArray);
@@ -187,8 +187,8 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			// display accountId as a base30 string, divided in groups of 4 characters
 
 			// skip all high entries that are 0
-			ByteArray usefulBytes = bytes.TrimEnd().ToArray();
-			string base30 = usefulBytes.ToBase30();
+			ByteArray usefulSimpleBytes = bytes.TrimEnd().ToArray();
+			string base30 = usefulSimpleBytes.ToBase30();
 
 			var chars = base30.ToCharArray().ToArray();
 			string splitBase30 = string.Join(DIVIDER, Enumerable.Range(0, (int) Math.Ceiling((double) base30.Length / CHUNK_SIZE)).Select(i => new string(chars.Skip(i * CHUNK_SIZE).Take(CHUNK_SIZE).ToArray())));
@@ -210,7 +210,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			Span<byte> buffer = stackalloc byte[sizeof(long)];
 			TypeSerializer.Serialize(this.SequenceId, buffer);
 
-			return $"{this.GetAccountIdentifier()}{new ByteArray(buffer.TrimEnd().ToArray()).ToBase94()}";
+			return $"{this.GetAccountIdentifier()}{ByteArray.Create(buffer.TrimEnd().ToArray()).ToBase94()}";
 
 		}
 
@@ -239,9 +239,9 @@ namespace Neuralia.Blockchains.Core.General.Types {
 
 			accountSequence = compact.Substring(1, compact.Length - 1);
 
-			IByteArray buffer = ByteArray.FromBase94(accountSequence);
+			SafeArrayHandle buffer = ByteArray.FromBase94(accountSequence);
 			Span<byte> fullbuffer = stackalloc byte[sizeof(long)];
-			buffer.CopyTo(fullbuffer);
+			buffer.Entry.CopyTo(fullbuffer);
 
 			TypeSerializer.Deserialize(fullbuffer, out long resoultSequenceId);
 

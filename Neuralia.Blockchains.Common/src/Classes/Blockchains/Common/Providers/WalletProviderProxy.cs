@@ -209,16 +209,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.walletProvider.GetCachedSynthesizedBlocks(minimumBlockId);
 		}
 
-		public IXmssWalletKey CreateXmssKey(string name, float warningLevel, float changeLevel) {
-			return this.walletProvider.CreateXmssKey(name, warningLevel, changeLevel);
+		public IXmssWalletKey CreateXmssKey(string name, float warningLevel, float changeLevel, Action<int> progressCallback = null) {
+			return this.walletProvider.CreateXmssKey(name, warningLevel, changeLevel, progressCallback);
 		}
 
-		public IXmssWalletKey CreateXmssKey(string name, int treeHeight, int hashBits, WalletProvider.HashTypes HashType, float warningLevel, float changeLevel) {
-			return this.walletProvider.CreateXmssKey(name, treeHeight, hashBits, HashType, warningLevel, changeLevel);
+		public IXmssWalletKey CreateXmssKey(string name, int treeHeight, int hashBits, WalletProvider.HashTypes HashType, float warningLevel, float changeLevel, Action<int> progressCallback = null) {
+			return this.walletProvider.CreateXmssKey(name, treeHeight, hashBits, HashType, warningLevel, changeLevel, progressCallback);
 		}
 
-		public IXmssWalletKey CreateXmssKey(string name) {
-			return this.walletProvider.CreateXmssKey(name);
+		public IXmssWalletKey CreateXmssKey(string name, Action<int> progressCallback = null) {
+			return this.walletProvider.CreateXmssKey(name, progressCallback);
 		}
 
 		public IXmssMTWalletKey CreateXmssmtKey(string name, float warningLevel, float changeLevel) {
@@ -828,13 +828,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public IByteArray PerformCryptographicSignature(Guid accountUuid, string keyName, IByteArray message) {
+		public SafeArrayHandle PerformCryptographicSignature(Guid accountUuid, string keyName, SafeArrayHandle message) {
 			return this.ScheduleWrite(() => {
 				return this.walletProvider.PerformCryptographicSignature(accountUuid, keyName, message);
 			});
 		}
 
-		public IByteArray PerformCryptographicSignature(IWalletKey key, IByteArray message) {
+		public SafeArrayHandle PerformCryptographicSignature(IWalletKey key, SafeArrayHandle message) {
 			return this.ScheduleWrite(() => {
 				return this.walletProvider.PerformCryptographicSignature(key, message);
 			});
@@ -867,14 +867,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public IByteArray SignTransaction(IByteArray transactionHash, string keyName) {
+		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, string keyName) {
 			return this.ScheduleTransaction(t => this.walletProvider.SignTransaction(transactionHash, keyName), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 			});
 		}
 
-		public IByteArray SignTransactionXmss(IByteArray transactionHash, IXmssWalletKey key) {
+		public SafeArrayHandle SignTransactionXmss(SafeArrayHandle transactionHash, IXmssWalletKey key) {
 			return this.ScheduleTransaction(t => this.walletProvider.SignTransactionXmss(transactionHash, key), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
@@ -882,7 +882,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public IByteArray SignTransaction(IByteArray transactionHash, IWalletKey key) {
+		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, IWalletKey key) {
 			return this.ScheduleTransaction(t => this.walletProvider.SignTransaction(transactionHash, key), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
@@ -890,7 +890,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public IByteArray SignMessageXmss(Guid accountUuid, IByteArray message) {
+		public SafeArrayHandle SignMessageXmss(Guid accountUuid, SafeArrayHandle message) {
 
 			return this.ScheduleTransaction(t => this.walletProvider.SignMessageXmss(accountUuid, message), 20, () => {
 				// load wallet & key
@@ -899,7 +899,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public IByteArray SignMessageXmss(IByteArray messageHash, IXmssWalletKey key) {
+		public SafeArrayHandle SignMessageXmss(SafeArrayHandle messageHash, IXmssWalletKey key) {
 			return this.ScheduleTransaction(t => this.walletProvider.SignMessageXmss(messageHash, key), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
@@ -907,7 +907,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public IByteArray SignMessage(IByteArray messageHash, IWalletKey key) {
+		public SafeArrayHandle SignMessage(SafeArrayHandle messageHash, IWalletKey key) {
 			return this.ScheduleTransaction(t => this.walletProvider.SignMessage(messageHash, key), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();

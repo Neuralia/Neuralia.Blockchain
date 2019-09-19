@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Tools.Data;
+﻿using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols {
@@ -8,9 +9,9 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		bool IsComplete { get; }
 		byte Version { get; }
 
-		IByteArray Message { get; }
-		IByteArray Dehydrate();
-		void RebuildHeader(IByteArray buffer);
+		SafeArrayHandle Message { get; }
+		SafeArrayHandle Dehydrate();
+		void RebuildHeader(SafeArrayHandle buffer);
 		void SetMessageContent(IDataRehydrator bufferRehydrator);
 	}
 

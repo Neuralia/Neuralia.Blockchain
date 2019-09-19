@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 
 		protected override int MaxiumMessageSize => MAXIMUM_SIZE;
 
-		protected override IMessageHash CreateHash(IByteArray message = null) {
+		protected override IMessageHash CreateHash(SafeArrayHandle message = null) {
 			return new MessageHash64();
 		}
 

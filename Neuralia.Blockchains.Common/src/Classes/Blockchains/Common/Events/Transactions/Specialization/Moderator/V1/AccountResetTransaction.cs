@@ -12,8 +12,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		AccountId Account { get; set; }
 
-		IByteArray RecoverySecret { get; set; }
-		IByteArray NextRecoveryHash { get; set; }
+		SafeArrayHandle RecoverySecret { get;  }
+		SafeArrayHandle NextRecoveryHash { get;  }
 
 		XmssCryptographicKey TransactionCryptographicKey { get; }
 		XmssCryptographicKey MessageCryptographicKey { get; }
@@ -54,8 +54,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public AccountId Account { get; set; }
 
-		public IByteArray RecoverySecret { get; set; }
-		public IByteArray NextRecoveryHash { get; set; }
+		public SafeArrayHandle RecoverySecret { get; } = SafeArrayHandle.Create();
+		public SafeArrayHandle NextRecoveryHash { get;  } = SafeArrayHandle.Create();
 
 		public XmssCryptographicKey TransactionCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.TRANSACTION_KEY_ORDINAL_ID];
 		public XmssCryptographicKey MessageCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MESSAGE_KEY_ORDINAL_ID];
@@ -88,8 +88,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.RehydrateHeader(rehydrator);
 
 			this.Account.Rehydrate(rehydrator);
-			this.RecoverySecret = rehydrator.ReadNonNullableArray();
-			this.NextRecoveryHash = rehydrator.ReadNonNullableArray();
+			this.RecoverySecret.Entry = rehydrator.ReadNonNullableArray();
+			this.NextRecoveryHash.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		protected override void DehydrateHeader(IDataDehydrator dehydrator) {

@@ -468,7 +468,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		protected byte[] Dehydratekey(ICryptographicKey key) {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 			key.Dehydrate(dehydrator);
-			IByteArray bytes = dehydrator.ToArray();
+			SafeArrayHandle bytes = dehydrator.ToArray();
 			var result = bytes.ToExactByteArrayCopy();
 			bytes.Return();
 

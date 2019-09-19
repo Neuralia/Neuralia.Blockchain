@@ -54,7 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 					attribute.CertificateId = rehydrator.ReadInt();
 
-					IByteArray data = rehydrator.ReadNullEmptyArray();
+					SafeArrayHandle data = rehydrator.ReadNullEmptyArray();
 
 					if(data != null) {
 						attribute.Data = data.ToExactByteArray();

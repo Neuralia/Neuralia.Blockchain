@@ -4,7 +4,6 @@ using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
@@ -21,18 +20,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			this.XmssTreeSignature = new XMSSTreeSignature(xmssExecutionContext);
 		}
 
-		public XMSSSignature(IByteArray random, int index, XMSSTreeSignature xmssTreeSignature, XMSSExecutionContext xmssExecutionContext) : this(xmssExecutionContext) {
+		public XMSSSignature(ByteArray random, int index, XMSSTreeSignature xmssTreeSignature, XMSSExecutionContext xmssExecutionContext) : this(xmssExecutionContext) {
 			this.Random = random;
 			this.Index = index;
 			this.XmssTreeSignature = xmssTreeSignature;
 		}
 
-		public IByteArray Random { get; private set; }
+		public ByteArray Random { get; private set; }
 		public int Index { get; private set; }
 
 		public XMSSTreeSignature XmssTreeSignature { get; }
 
-		public void Load(IByteArray signature, WotsPlusEngine wotsPlusProvider, int height) {
+		public void Load(ByteArray signature, WotsPlusEngine wotsPlusProvider, int height) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature);
 
 			this.Rehydrate(rehydrator, wotsPlusProvider, height);
@@ -51,11 +50,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 			adaptiveLong.Rehydrate(rehydrator);
 			this.Index = (int) adaptiveLong.Value;
-
+			
 			this.Random = rehydrator.ReadArray(n);
 		}
 
-		public IByteArray Save() {
+		public ByteArray Save() {
 
 			int n = this.XmssExecutionContext.DigestSize;
 
@@ -65,7 +64,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 			this.XmssTreeSignature.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			return dehydrator.ToArray().Release();
 		}
 
 		protected virtual void Dehydrate(IDataDehydrator dehydrator) {
@@ -89,21 +88,21 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				this.xmssExecutionContext = xmssExecutionContext;
 			}
 
-			public XMSSTreeSignature(MemoryBlockDoubleArray otsSignature, MemoryBlockDoubleArray auth, XMSSExecutionContext xmssExecutionContext) : this(xmssExecutionContext) {
+			public XMSSTreeSignature(ByteArray[] otsSignature, ByteArray[] auth, XMSSExecutionContext xmssExecutionContext) : this(xmssExecutionContext) {
 				this.otsSignature = otsSignature;
 				this.Auth = auth;
 			}
 
-			public MemoryBlockDoubleArray otsSignature { get; private set; }
-			public MemoryBlockDoubleArray Auth { get; private set; }
+			public ByteArray[] otsSignature { get; private set; }
+			public ByteArray[] Auth { get; private set; }
 
 			public void Dehydrate(IDataDehydrator dehydrator) {
 
-				foreach(IByteArray sig in this.otsSignature) {
+				foreach(ByteArray sig in this.otsSignature) {
 					dehydrator.WriteRawArray(sig);
 				}
 
-				foreach(IByteArray auth in this.Auth) {
+				foreach(ByteArray auth in this.Auth) {
 					dehydrator.WriteRawArray(auth);
 				}
 			}
@@ -113,7 +112,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				int n = this.xmssExecutionContext.DigestSize;
 				int totalSigs = wotsPlusProvider.Len;
 
-				this.otsSignature = MemoryAllocators.Instance.doubleArrayCryptoAllocator.Take(totalSigs);
+				this.otsSignature = new ByteArray[totalSigs];
 
 				for(int i = 0; i < totalSigs; i++) {
 					this.otsSignature[i] = rehydrator.ReadArray(n);
@@ -121,7 +120,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 				int totalAuths = height;
 
-				this.Auth = MemoryAllocators.Instance.doubleArrayCryptoAllocator.Take(totalAuths);
+				this.Auth = new ByteArray[totalAuths];
 
 				for(int i = 0; i < totalAuths; i++) {
 					this.Auth[i] = rehydrator.ReadArray(n);
@@ -151,9 +150,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			}
 
 			protected virtual void DisposeAll() {
-				this.Auth?.Dispose();
+				DoubleArrayHelper.Dispose(this.Auth);
 				this.Auth = null;
-				this.otsSignature?.Dispose();
+				DoubleArrayHelper.Dispose(this.otsSignature);
 				this.otsSignature = null;
 			}
 

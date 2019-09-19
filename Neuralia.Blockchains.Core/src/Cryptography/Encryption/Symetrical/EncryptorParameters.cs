@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return hashNodeList;
 		}
 
-		public IByteArray Dehydrate() {
+		public SafeArrayHandle Dehydrate() {
 
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 			dehydrator.Write(this.iterations);
@@ -38,11 +38,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return dehydrator.ToArray();
 		}
 
-		public void Rehydrate(IByteArray data) {
+		public void Rehydrate(SafeArrayHandle data) {
 
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
 
-			this.Rehydrate(rehydrator);
+				this.Rehydrate(rehydrator);
+			}
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
@@ -50,13 +51,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			this.iterations = rehydrator.ReadInt();
 			this.cipher = (SymetricCiphers) rehydrator.ReadByte();
 			this.keyBitLength = rehydrator.ReadInt();
-			IByteArray saltArray = rehydrator.ReadNonNullableArray();
+			SafeArrayHandle saltArray = rehydrator.ReadNonNullableArray();
 
 			this.salt = saltArray.ToExactByteArrayCopy();
 			saltArray.Return();
 		}
 
-		public static EncryptorParameters RehydrateEncryptor(IByteArray data) {
+		public static EncryptorParameters RehydrateEncryptor(SafeArrayHandle data) {
 
 			EncryptorParameters parameters = new EncryptorParameters();
 

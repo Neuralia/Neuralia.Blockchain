@@ -11,7 +11,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Network.Protocols {
 	public class ProtocolFactory {
 
-		public delegate void CompressedMessageBytesReceived(IByteArray compressedMessageBytes, ISplitMessageEntry splitMessageEntry = null);
+		public delegate void CompressedMessageBytesReceived(SafeArrayHandle compressedMessageBytes, ISplitMessageEntry splitMessageEntry = null);
 
 		private const int REPORTED_UUID_SIZE = 16;
 		public const int HANDSHAKE_PROTOCOL_SIZE = 5 + REPORTED_UUID_SIZE;
@@ -80,19 +80,19 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		}
 
 		public ByteArray CreateHandshake() {
-			ByteArray handShakeBytes = new ByteArray(HANDSHAKE_PROTOCOL_SIZE);
-			handShakeBytes[0] = 13; // the magic start number
-			handShakeBytes[1] = MessageBuilder.ProtocolVersion.Version;
-			handShakeBytes[2] = MessageBuilder.ProtocolVersion.Revision;
+			ByteArray handShakeSimpleBytes = ByteArray.Create(HANDSHAKE_PROTOCOL_SIZE);
+			handShakeSimpleBytes[0] = 13; // the magic start number
+			handShakeSimpleBytes[1] = MessageBuilder.ProtocolVersion.Version;
+			handShakeSimpleBytes[2] = MessageBuilder.ProtocolVersion.Revision;
 
 			lock(this.locker) {
-				handShakeBytes[3] = (byte) this.sharedProtocolCompression.Type;
-				handShakeBytes[4] = (byte) this.sharedProtocolCompression.Level;
+				handShakeSimpleBytes[3] = (byte) this.sharedProtocolCompression.Type;
+				handShakeSimpleBytes[4] = (byte) this.sharedProtocolCompression.Level;
 			}
 
-			TypeSerializer.Serialize(PROTOCOL_UUID, handShakeBytes.Span.Slice(5, REPORTED_UUID_SIZE));
+			TypeSerializer.Serialize(PROTOCOL_UUID, handShakeSimpleBytes.Span.Slice(5, REPORTED_UUID_SIZE));
 
-			return handShakeBytes;
+			return handShakeSimpleBytes;
 		}
 
 		/// <summary>
@@ -156,7 +156,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			return (new ProtocolVersion(buffer[1], buffer[2]), new ProtocolCompression((ProtocolCompression.CompressionAlgorithm) buffer[3], (CompressionLevelByte) buffer[4]), reportedUuid);
 		}
 
-		public IMessageParser CreateMessageParser(IByteArray bytes) {
+		public IMessageParser CreateMessageParser(SafeArrayHandle bytes) {
 
 			// first, lets get the protocol version
 			byte protocolVersion = bytes[0];
@@ -177,7 +177,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		/// </summary>
 		/// <param name="bytes"></param>
 		/// <returns></returns>
-		private long HashRawMessage(IByteArray bytes) {
+		private long HashRawMessage(SafeArrayHandle bytes) {
 			lock(this.locker) {
 				return this.xxhasher.Hash(bytes);
 			}
@@ -188,7 +188,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		/// </summary>
 		/// <param name="bytes"></param>
 		/// <returns></returns>
-		private IByteArray CompressMessage(IByteArray bytes) {
+		private SafeArrayHandle CompressMessage(SafeArrayHandle bytes) {
 
 			if(this.sharedProtocolCompression.Level == CompressionLevelByte.NoCompression) {
 				return bytes; // its not compressed!
@@ -200,10 +200,10 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 		}
 
-		private IByteArray DecompressMessage(IByteArray compressedMessage) {
+		private SafeArrayHandle DecompressMessage(SafeArrayHandle compressedMessage) {
 
 			if(this.sharedProtocolCompression.Level == CompressionLevelByte.NoCompression) {
-				return compressedMessage.Clone(); // its not compressed! clone it because the original will get returned
+				return compressedMessage.Branch(); // its not compressed! clone it because the original will get returned
 			}
 
 			lock(this.locker) {
@@ -211,7 +211,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 		}
 
-		public MessageInstance WrapMessage(IByteArray bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
+		public MessageInstance WrapMessage(SafeArrayHandle bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
 
 			long messageHash = this.HashRawMessage(bytes);
 
@@ -220,9 +220,10 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			// message was not in the cache, so we compress it and cache it if possible
 			if(messageInstance == null) {
 
-				IByteArray compressedBytes = this.CompressMessage(bytes);
+				using(SafeArrayHandle compressedBytes = this.CompressMessage(bytes)) {
 
-				messageInstance = this.WrapCompressedMessage(compressedBytes, messageHash, protocolMessageFilters);
+					messageInstance = this.WrapCompressedMessage(compressedBytes, messageHash, protocolMessageFilters);
+				}
 			}
 
 			return messageInstance;
@@ -240,17 +241,17 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		/// <param name="messageHash"></param>
 		/// <param name="protocolMessageFilters"></param>
 		/// <returns></returns>
-		private MessageInstance WrapCompressedMessage(IByteArray compressedBytes, long messageHash, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
+		private MessageInstance WrapCompressedMessage(SafeArrayHandle compressedBytes, long messageHash, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
 
 			MessageInstance messageInstance = new MessageInstance();
 			messageInstance.Size = compressedBytes.Length; // carfull, this is the original message size, but not the pretocol message size. it will get larger with the dehydrator metadata.
 			messageInstance.Hash = messageHash;
 
 			lock(this.locker) {
-				messageInstance.MessageBytes = this.MessageFactory.CreateMessage(compressedBytes, protocolMessageFilters);
+				messageInstance.MessageBytes.Entry = this.MessageFactory.CreateMessage(compressedBytes, protocolMessageFilters).Entry;
 			}
 
-			if(messageInstance.MessageBytes == null) {
+			if(messageInstance.MessageBytes.IsEmpty) {
 
 				// was too big, its most probably a split message
 				lock(this.locker) {
@@ -270,13 +271,13 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			return messageInstance;
 		}
 
-		public ISplitMessageEntry WrapBigMessage(IByteArray bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
+		public ISplitMessageEntry WrapBigMessage(SafeArrayHandle bytes, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters) {
 			lock(this.locker) {
 				return this.MessageFactory.WrapBigMessage(bytes, protocolMessageFilters);
 			}
 		}
 
-		public void DeflateCompressionsage(IMessageEntry entry, TcpConnection.MessageBytesReceived callback, IProtocolTcpConnection connection) {
+		public void HandleCompetedMessage(IMessageEntry entry, TcpConnection.MessageBytesReceived callback, IProtocolTcpConnection connection) {
 
 			IMessageRouter router = null;
 
@@ -292,7 +293,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 
 			router.HandleCompletedMessage(entry, (compressedMessageBytes, splitMessageEntry) => {
-				IByteArray originalMessage = this.DecompressMessage(compressedMessageBytes);
+				SafeArrayHandle originalMessage = this.DecompressMessage(compressedMessageBytes);
 
 				if(splitMessageEntry != null) {
 					// well, its a split message entry its big, so we want to salvage it in case we will need to forward it too

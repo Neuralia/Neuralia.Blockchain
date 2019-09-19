@@ -5,7 +5,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpValidation {
 	public static class IpValidationFactory {
-		public static (byte version, IValidatorRequest request, IMinerResponse response) RehydrateRequest(IByteArray data) {
+		public static (byte version, IValidatorRequest request, IMinerResponse response) RehydrateRequest(SafeArrayHandle data) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 
 			// skip the optionsBase

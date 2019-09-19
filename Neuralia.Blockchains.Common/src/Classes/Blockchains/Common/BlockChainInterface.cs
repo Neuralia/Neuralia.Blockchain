@@ -65,7 +65,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<string> Test(string data);
 
 		TaskResult<bool> CreateNextXmssKey(Guid accountUuid, byte ordinal);
-		TaskResult<IByteArray> SignXmssMessage(Guid accountUuid, IByteArray message);
+		TaskResult<SafeArrayHandle> SignXmssMessage(Guid accountUuid, SafeArrayHandle message);
 		TaskResult<long> QueryBlockHeight();
 		TaskResult<object> QueryBlockChainInfo();
 		List<MiningHistory> QueryMiningHistory();
@@ -291,6 +291,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			// here we prepare the connection poller that will periodically check connections to ensure they are still active
 			this.eventsPoller = new Task<bool>(() => {
+
+				Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
 				while(this.poller_active) {
 
 					try {
@@ -382,7 +384,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		public TaskResult<IByteArray> SignXmssMessage(Guid accountUuid, IByteArray message) {
+		public TaskResult<SafeArrayHandle> SignXmssMessage(Guid accountUuid, SafeArrayHandle message) {
 			return this.RunTaskMethod(() => {
 
 				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(accountUuid, message);
@@ -570,14 +572,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				string json = service.LoadBlockJson(new BlockId(blockId));
 
 				GzipCompression compressor = new GzipCompression();
-				ByteArray bytes = Encoding.UTF8.GetBytes(json);
-				IByteArray compressed = compressor.Compress(bytes);
-				var result = compressed.ToExactByteArrayCopy();
-				compressed.Return();
-				bytes.Return();
 
-				return result;
+				using(ByteArray simpleBytes = Encoding.UTF8.GetBytes(json)) {
 
+					using(SafeArrayHandle compressed = compressor.Compress(simpleBytes)) {
+						return compressed.ToExactByteArrayCopy();
+					}
+
+				}
 			}, (results, taskRoutingContext) => {
 				if(results.Error) {
 					//TODO: what to do here?
@@ -601,9 +603,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 						IDataDehydrator rehydrator = DataSerializationFactory.CreateDehydrator();
 						dehydratedTransaction.Dehydrate(rehydrator);
 
-						IByteArray bytes = rehydrator.ToArray();
-
-						IByteArray compressed = compressor.Compress(bytes);
+						SafeArrayHandle bytes = rehydrator.ToArray();
+						SafeArrayHandle compressed = compressor.Compress(bytes);
+						
 						var data = compressed.ToExactByteArrayCopy();
 
 						compressed.Return();
@@ -713,16 +715,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				if(block is IElectionBlock electionBlock) {
 
 					GzipCompression compressor = new GzipCompression();
-					IByteArray compressed = compressor.Compress(electionBlock.DehydratedElectionContext);
 
-					object result = new {
-						Type = electionBlock.ElectionContext.Version.Type.Value.Value, ContextBytes = compressed.ToExactByteArrayCopy(), BlockId = blockId, MaturityId = blockId + electionBlock.ElectionContext.Maturity,
-						PublishId = blockId + electionBlock.ElectionContext.Maturity + electionBlock.ElectionContext.Publication
-					};
+					using(SafeArrayHandle compressed = compressor.Compress(electionBlock.DehydratedElectionContext)) {
 
-					compressed.Return();
-
-					return result;
+						object result = new {
+							Type = electionBlock.ElectionContext.Version.Type.Value.Value, ContextBytes = compressed.ToExactByteArrayCopy(), BlockId = blockId, MaturityId = blockId + electionBlock.ElectionContext.Maturity,
+							PublishId = blockId + electionBlock.ElectionContext.Maturity + electionBlock.ElectionContext.Publication
+						};
+						return result;
+					}
 				}
 
 				return (object) new {Type = 0};
@@ -1102,7 +1103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <param name="messageSet"></param>
 		/// <param name="data"></param>
 		/// <param name="connection"></param>
-		public void RouteNetworkMessage(IRoutingHeader header, IByteArray data, PeerConnection connection) {
+		public void RouteNetworkMessage(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection) {
 			this.centralCoordinator.RouteNetworkMessage(header, data, connection);
 		}
 

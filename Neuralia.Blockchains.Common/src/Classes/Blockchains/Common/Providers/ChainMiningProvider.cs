@@ -484,7 +484,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			using(IXmssWalletKey key = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(GlobalsService.MESSAGE_KEY_NAME)) {
 
 				// and sign the whole thing with our key
-				IByteArray password = new ByteArray(sizeof(long));
+				SafeArrayHandle password = ByteArray.Create(sizeof(long));
 				TypeSerializer.Serialize(registrationInfo.Password, password.Span);
 				var autograph = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(password, key);
 				registrationInfo.Autograph = autograph.ToExactByteArrayCopy();
@@ -695,7 +695,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			BlockElectionDistillate blockElectionDistillate = this.CreateBlockElectionContext();
 
 			blockElectionDistillate.currentBlockId = currentBlock.BlockId.Value;
-			blockElectionDistillate.blockHash = currentBlock.Hash;
+			blockElectionDistillate.blockHash.Entry = currentBlock.Hash.Entry;
 			blockElectionDistillate.blockType = currentBlock.Version;
 
 			foreach(IIntermediaryElectionResults entry in currentBlock.IntermediaryElectionResults) {
@@ -781,7 +781,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					throw new ApplicationException("Invalid block distillate");
 				}
 
-				blockElectionDistillate.blockHash = ByteArray.FromBase64(blockElectionDistillate.blockHash64);
+				blockElectionDistillate.blockHash.Entry = ByteArray.FromBase64(blockElectionDistillate.blockHash64).Entry;
 			}
 
 			if((blockElectionDistillate.blockType == (ComponentVersion<BlockType>) null) || blockElectionDistillate.blockType.IsNull) {

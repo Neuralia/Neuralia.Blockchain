@@ -5,7 +5,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Network.Protocols {
 	public class MessageHash32 : MessageHash<int> {
 
-		public MessageHash32(IByteArray message = null) : base(message) {
+		public MessageHash32(SafeArrayHandle message = null) : base(message) {
 
 		}
 

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Text;
 using Neuralia.Blockchains.Tools.Data;
+using SafeArrayHandle = Neuralia.Blockchains.Tools.Data.SafeArrayHandle;
 
 namespace Neuralia.Blockchains.Core.Extensions {
 	public static class SecureStringExtensions {
@@ -24,7 +25,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			}
 		}
 
-		public static IByteArray ConvertToUnsecureBytes(this SecureString securePassword) {
+		public static SafeArrayHandle ConvertToUnsecureBytes(this SecureString securePassword) {
 			return (ByteArray) Encoding.UTF8.GetBytes(securePassword.ConvertToUnsecureString());
 		}
 
@@ -44,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			return secure;
 		}
 
-		public static SecureString ConvertToSecureString(this IByteArray password) {
+		public static SecureString ConvertToSecureString(this SafeArrayHandle password) {
 			return Encoding.UTF8.GetString(password.ToExactByteArray()).ConvertToSecureString();
 		}
 

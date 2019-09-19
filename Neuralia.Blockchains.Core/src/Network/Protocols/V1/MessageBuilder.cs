@@ -17,34 +17,34 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 		public static readonly ProtocolVersion ProtocolVersion = new ProtocolVersion(1, 1);
 		public static readonly ProtocolCompression ProtocolCompression = new ProtocolCompression(ProtocolCompression.CompressionAlgorithm.Deflate, CompressionLevelByte.Fastest);
 
-		public IByteArray BuildTinyMessage(IByteArray bytes) {
+		public SafeArrayHandle BuildTinyMessage(SafeArrayHandle bytes) {
 
 			TinyMessageEntry messageEntry = new TinyMessageEntry(bytes);
 
 			return messageEntry.Dehydrate();
 		}
 
-		public IByteArray BuildSmallMessage(IByteArray bytes) {
+		public SafeArrayHandle BuildSmallMessage(SafeArrayHandle bytes) {
 
 			SmallMessageEntry messageEntry = new SmallMessageEntry(bytes);
 
 			return messageEntry.Dehydrate();
 		}
 
-		public IByteArray BuildMediumMessage(IByteArray bytes) {
+		public SafeArrayHandle BuildMediumMessage(SafeArrayHandle bytes) {
 
 			MediumMessageEntry messageEntry = new MediumMessageEntry(bytes);
 
 			return messageEntry.Dehydrate();
 		}
 
-		public IByteArray BuildLargeMessage(IByteArray bytes) {
+		public SafeArrayHandle BuildLargeMessage(SafeArrayHandle bytes) {
 			LargeMessageEntry messageEntry = new LargeMessageEntry(bytes);
 
 			return messageEntry.Dehydrate();
 		}
 
-		public ISplitMessageEntry BuildSplitMessage(IByteArray bytes) {
+		public ISplitMessageEntry BuildSplitMessage(SafeArrayHandle bytes) {
 			return new SplitMessageEntry(bytes);
 
 		}

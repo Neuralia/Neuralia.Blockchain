@@ -5,6 +5,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 	public class DataSliceSize : IBinarySerializable, ITreeHashable {
 
+		public DataSliceSize() {
+			
+		}
+		
+		public DataSliceSize(long length) {
+			this.Length = length;
+		}
+
 		public long Length { get; set; }
 
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {

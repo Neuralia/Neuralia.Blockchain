@@ -8,6 +8,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 		AccountId AccountId { get; set; }
 		ResponseType Response { get; set; }
 		void Rehydrate(IDataRehydrator rehydrator);
-		IByteArray Dehydrate();
+		SafeArrayHandle Dehydrate();
 	}
 }

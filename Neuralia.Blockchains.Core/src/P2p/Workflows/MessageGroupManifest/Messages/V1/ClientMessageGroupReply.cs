@@ -11,14 +11,14 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 	public class ClientMessageGroupReply<R> : NetworkMessage<R>
 		where R : IRehydrationFactory {
 
-		public List<IByteArray> gossipMessageSets = new List<IByteArray>();
+		public List<SafeArrayHandle> gossipMessageSets = new List<SafeArrayHandle>();
 		
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.gossipMessageSets.Count);
 
-			foreach(IByteArray messageSet in this.gossipMessageSets) {
+			foreach(SafeArrayHandle messageSet in this.gossipMessageSets) {
 				dehydrator.WriteNonNullable(messageSet);
 			}
 		}
@@ -39,14 +39,6 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 
 		protected override short SetWorkflowType() {
 			return WorkflowIDs.MESSAGE_GROUP_MANIFEST;
-		}
-
-		protected override void DisposeAll() {
-			base.DisposeAll();
-
-			foreach(var entry in gossipMessageSets) {
-				entry.Dispose();
-			}
 		}
 	}
 }

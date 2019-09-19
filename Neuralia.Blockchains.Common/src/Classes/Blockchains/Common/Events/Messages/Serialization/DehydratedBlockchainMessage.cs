@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+﻿using System;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -8,16 +9,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 	public interface IDehydratedBlockchainMessage : IDehydrateBlockchainEvent {
 		IBlockchainMessage RehydratedMessage { get; set; }
 
-		IByteArray Contents { get; set; }
+		SafeArrayHandle Contents { get; }
 		IBlockchainMessage RehydrateMessage(IBlockchainEventsRehydrationFactory rehydrationFactory);
 	}
 
 	public class DehydratedBlockchainMessage : IDehydratedBlockchainMessage {
 
-		public IByteArray Contents { get; set; }
+		public SafeArrayHandle Contents { get; } = SafeArrayHandle.Create();
 		public IBlockchainMessage RehydratedMessage { get; set; }
 
-		public IByteArray Dehydrate() {
+		public SafeArrayHandle Dehydrate() {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
@@ -30,15 +31,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			dehydrator.WriteRawArray(this.Contents);
 		}
 
-		public void Rehydrate(IByteArray data) {
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
+		public void Rehydrate(SafeArrayHandle data) {
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
 
-			this.Rehydrate(rehydrator);
+				this.Rehydrate(rehydrator);
+			}
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.Contents = rehydrator.ReadArrayToEnd();
+			this.Contents.Entry = rehydrator.ReadArrayToEnd();
 		}
 
 		public IBlockchainMessage RehydrateMessage(IBlockchainEventsRehydrationFactory rehydrationFactory) {
@@ -58,5 +60,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			return nodeList;
 		}
+		
+	#region Disposable
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+			if(this.IsDisposed) {
+				return;
+			}
+			
+			if(disposing) {
+				this.Contents?.Dispose();
+			}
+			this.IsDisposed = true;
+		}
+
+		~DehydratedBlockchainMessage() {
+			this.Dispose(false);
+		}
+		
+		public bool IsDisposed { get; private set; }
+
+	#endregion
 	}
 }

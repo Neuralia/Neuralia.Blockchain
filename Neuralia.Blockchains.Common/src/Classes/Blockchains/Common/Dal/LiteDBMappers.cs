@@ -24,8 +24,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => ulong.Parse(bson.RawValue.ToString()));
 
-			BsonMapper.Global.RegisterType<IByteArray>(uri => uri.ToExactByteArray(), bson => new ByteArray((byte[]) bson.RawValue));
-
+			BsonMapper.Global.RegisterType<SafeArrayHandle>(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle)ByteArray.Create((byte[]) bson.RawValue));
+			BsonMapper.Global.RegisterType<ByteArray>(uri => uri.ToExactByteArray(), bson => ByteArray.Create((byte[]) bson.RawValue));
+			
 			RegisterAmount();
 
 			RegisterAccountId();

@@ -10,15 +10,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 	public interface IChannelIndex {
 		List<BlockChannelUtils.BlockChannelTypes> ChannelTypes { get; }
-		void WriteEntry(ChannelsEntries<IByteArray> blockData);
+		void WriteEntry(ChannelsEntries<SafeArrayHandle> blockData);
 		void ResetFileSpecs(uint adjustedBlockId, (int index, long startingBlockId) blockIndex);
 		void EnsureFilesCreated();
 
 		ChannelsEntries<(long start, int end)> QueryIndex(uint adjustedBlockId);
-		ChannelsEntries<IByteArray> QueryBytes(uint adjustedBlockId);
+		ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId);
 
-		ChannelsEntries<IByteArray> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
-		IByteArray QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
+		ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
+		SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
 
 		ChannelsEntries<long> QueryProviderFileSizes();
 	}
@@ -46,7 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public List<BlockChannelUtils.BlockChannelTypes> ChannelTypes => this.Providers.Keys.ToList();
 
-		public virtual void WriteEntry(ChannelsEntries<IByteArray> blockData) {
+		public virtual void WriteEntry(ChannelsEntries<SafeArrayHandle> blockData) {
 			if(!this.adjustedBlockId.HasValue) {
 				throw new ApplicationException("block Value has not been set");
 			}
@@ -54,10 +54,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public abstract ChannelsEntries<(long start, int end)> QueryIndex(uint adjustedBlockId);
 
-		public abstract ChannelsEntries<IByteArray> QueryBytes(uint adjustedBlockId);
+		public abstract ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId);
 
-		public abstract ChannelsEntries<IByteArray> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
-		public abstract IByteArray QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
+		public abstract ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
+		public abstract SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
 
 		public abstract ChannelsEntries<long> QueryProviderFileSizes();
 

@@ -144,7 +144,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			throw new ApplicationException("Not a secret key");
 		}
 
-		public IByteArray ConvertToDehydratedKey() {
+		public SafeArrayHandle ConvertToDehydratedKey() {
 
 			if(((this.NextAccountSignatureType == BlockSignatureTypes.Genesis) || (this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential)) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature) {
 				return SignatureUtils.ConvertToDehydratedKey(this.ConvertToSecretKey());

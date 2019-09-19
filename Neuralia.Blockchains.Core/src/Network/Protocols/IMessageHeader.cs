@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Tools.Data;
+﻿using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols {
@@ -10,6 +11,6 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		byte Version { get; }
 		int GetMaximumHeaderSize();
 		void Dehydrate(IDataDehydrator dh);
-		void Rehydrate(IByteArray bytes);
+		void Rehydrate(SafeArrayHandle bytes);
 	}
 }

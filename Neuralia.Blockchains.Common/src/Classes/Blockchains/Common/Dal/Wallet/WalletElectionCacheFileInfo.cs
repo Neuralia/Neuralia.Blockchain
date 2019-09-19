@@ -193,12 +193,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
-		public void DeleteFile() {
-			if(this.FileExists) {
-				this.serialisationFal.TransactionalFileSystem.FileDelete(this.Filename);
-			}
-		}
-
 		public List<TransactionId> GetAllTransactions() {
 			return this.RunQueryDbOperation(litedbDal => {
 				if(litedbDal.CollectionExists<WalletElectionCache>()) {

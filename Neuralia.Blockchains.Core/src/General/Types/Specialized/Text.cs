@@ -22,11 +22,11 @@ namespace Neuralia.Blockchains.Core.General.Types.Specialized {
 
 			if(!nodeEmtpy) {
 				bool isCompressed = rehydrator.ReadBool();
-				IByteArray bytes = rehydrator.ReadNonNullableArray();
+				SafeArrayHandle bytes = rehydrator.ReadNonNullableArray();
 
 				if(isCompressed) {
 					DeflateCompression compressor = new DeflateCompression();
-					IByteArray bytesCopy = bytes;
+					SafeArrayHandle bytesCopy = bytes;
 					bytes = compressor.Decompress(bytesCopy);
 					bytesCopy.Return();
 				}
@@ -46,21 +46,21 @@ namespace Neuralia.Blockchains.Core.General.Types.Specialized {
 				// lets attempt to compress the note, see if the comrpessed version is more space efficient
 				DeflateCompression compressor = new DeflateCompression();
 
-				ByteArray bytes = Encoding.UTF8.GetBytes(this.Value);
-				IByteArray compressed = compressor.Compress(bytes);
+				ByteArray simpleBytes = Encoding.UTF8.GetBytes(this.Value);
+				SafeArrayHandle compressed = compressor.Compress(simpleBytes);
 
-				if(compressed.Length < bytes.Length) {
+				if(compressed.Length < simpleBytes.Length) {
 					// ok, saved the compressed version
 					dehydrator.Write(true);
 					dehydrator.WriteNonNullable(compressed);
 				} else {
 					// the original is smaller, save that
 					dehydrator.Write(false);
-					dehydrator.WriteNonNullable(bytes);
+					dehydrator.WriteNonNullable(simpleBytes);
 				}
 
 				compressed.Return();
-				bytes.Return();
+				simpleBytes.Return();
 			}
 		}
 

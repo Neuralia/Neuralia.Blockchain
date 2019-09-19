@@ -8,7 +8,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 	public class Slice : IDisposable2 {
 
 		public const int MAXIMUM_SIZE = LargeMessageHeader.MAXIMUM_SIZE;
-		public IByteArray bytes;
+		public readonly SafeArrayHandle bytes = SafeArrayHandle.Create();
 		public long hash;
 		public int index;
 		public int length;
@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 			this.hash = hash;
 		}
 
-		public Slice(int index, int startIndex, int length, IByteArray bytes) {
+		public Slice(int index, int startIndex, int length, SafeArrayHandle bytes) {
 			this.index = index;
 			this.startIndex = startIndex;
 			this.length = length;
@@ -32,9 +32,9 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 
 		public bool IsLoaded => this.bytes != null;
 
-		public static long ComputeSliceHash(IByteArray bytes) {
+		public static long ComputeSliceHash(SafeArrayHandle bytes) {
 
-			return HashingUtils.XxHasher64.Hash(bytes);
+			return HashingUtils.XxHash64(bytes);
 		}
 
 	#region Disposable

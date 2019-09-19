@@ -48,11 +48,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		IBlockchainDigest LoadDigestHeader(int digestId);
 
-		IByteArray LoadDigestHeaderArchiveData(int digestId, int offset, int length);
+		SafeArrayHandle LoadDigestHeaderArchiveData(int digestId, int offset, int length);
 
-		IByteArray LoadDigestHeaderArchiveData(int digestId);
+		SafeArrayHandle LoadDigestHeaderArchiveData(int digestId);
 
-		IByteArray LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length);
+		SafeArrayHandle LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length);
 
 		IBlock GetCachedBlock(long blockId);
 
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			where T : class, IBlock;
 
 		IKeyedTransaction LoadKeyedTransaction(KeyAddress keyAddress);
-		IByteArray LoadDigestKey(AccountId accountId, byte ordinal);
+		SafeArrayHandle LoadDigestKey(AccountId accountId, byte ordinal);
 
 		IAccountSnapshotDigestChannelCard LoadDigestAccount(long accountSequenceId, Enums.AccountTypes accountType);
 		IStandardAccountSnapshotDigestChannelCard LoadDigestStandardAccount(long accountId);
@@ -80,16 +80,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		List<IAccreditationCertificateDigestChannelCard> LoadDigestAccreditationCertificateCards();
 		IAccreditationCertificateDigestChannelCard LoadDigestAccreditationCertificateCard(int id);
 
-		ChannelsEntries<IByteArray> LoadBlockData(long blockId);
+		ChannelsEntries<SafeArrayHandle> LoadBlockData(long blockId);
 
 		IBlockHeader LoadBlockHeader(long blockId);
 
-		ChannelsEntries<IByteArray> LoadBlockPartialData(long blockId, ChannelsEntries<(int offset, int length)> offsets);
-		IByteArray LoadBlockPartialHighHeaderData(long blockId, int offset, int length);
-		IByteArray LoadBlockPartialContentsData(long blockId, int offset, int length);
+		ChannelsEntries<SafeArrayHandle> LoadBlockPartialData(long blockId, ChannelsEntries<(int offset, int length)> offsets);
+		SafeArrayHandle LoadBlockPartialHighHeaderData(long blockId, int offset, int length);
+		SafeArrayHandle LoadBlockPartialContentsData(long blockId, int offset, int length);
 
 		ChannelsEntries<int> LoadBlockSize(long blockId);
-		(ChannelsEntries<int> sizes, IByteArray hash)? LoadBlockSizeAndHash(long blockId, int hashOffset, int hashLength);
+		(ChannelsEntries<int> sizes, SafeArrayHandle hash)? LoadBlockSizeAndHash(long blockId, int hashOffset, int hashLength);
 
 		int? LoadBlockHighHeaderSize(long blockId);
 		int? LoadBlockLowHeaderSize(long blockId);
@@ -106,8 +106,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		(int index, long startingBlockId) FindBlockIndex(long blockId);
 
-		IByteArray LoadBlockPartialTransactionBytes(long blockId, int offset, int length);
-		(IByteArray keyBytes, byte treeheight, byte hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
+		SafeArrayHandle LoadBlockPartialTransactionBytes(long blockId, int offset, int length);
+		(SafeArrayHandle keyBytes, byte treeheight, byte hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
 		bool FastKeyEnabled(byte ordinal);
 		List<(IBlockEnvelope envelope, long xxHash)> GetCachedUnvalidatedBlockGossipMessage(long blockId);
 		bool GetUnvalidatedBlockGossipMessageCached(long blockId);
@@ -139,12 +139,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     a cache to store the latest blocks, for quick access since they may be requested often
 		/// </summary>
-		protected readonly ConcurrentDictionary<BlockId, (IBlock block, ChannelsEntries<IByteArray> channels, IDehydratedBlock dehydratedBlock)> blocksCache = new ConcurrentDictionary<BlockId, (IBlock block, ChannelsEntries<IByteArray> channels, IDehydratedBlock dehydratedBlock)>();
+		protected readonly ConcurrentDictionary<BlockId, (IBlock block, ChannelsEntries<SafeArrayHandle> channels, IDehydratedBlock dehydratedBlock)> blocksCache = new ConcurrentDictionary<BlockId, (IBlock block, ChannelsEntries<SafeArrayHandle> channels, IDehydratedBlock dehydratedBlock)>();
 
 		protected ChainDataLoadProvider(CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator) {
 		}
 
-		public IByteArray LoadDigestKey(AccountId accountId, byte ordinal) {
+		public SafeArrayHandle LoadDigestKey(AccountId accountId, byte ordinal) {
 			return this.BlockchainEventSerializationFal.LoadDigestStandardKey(accountId, ordinal);
 		}
 
@@ -172,7 +172,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.BlockchainEventSerializationFal.LoadDigestAccreditationCertificateCard(id);
 		}
 
-		public (IByteArray keyBytes, byte treeheight, byte hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
+		public (SafeArrayHandle keyBytes, byte treeheight, byte hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
 			return this.BlockchainEventSerializationFal.LoadAccountKeyFromIndex(accountId, ordinal);
 		}
 
@@ -197,20 +197,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(keyedTransaction == null) {
 				(int index, long startingBlockId) blockGroupIndex = this.FindBlockIndex(keyAddress.AnnouncementBlockId.Value);
 
-				IByteArray keyedBytes = this.BlockchainEventSerializationFal.LoadBlockPartialTransactionBytes(keyAddress, blockGroupIndex);
+				SafeArrayHandle keyedBytes = this.BlockchainEventSerializationFal.LoadBlockPartialTransactionBytes(keyAddress, blockGroupIndex);
 
 				if((keyedBytes != null) && keyedBytes.HasData) {
 					IBlockchainEventsRehydrationFactory rehydrationFactory = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase;
 
-					IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes);
+					using(IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes)) {
 
-					keyedRehydrator.ReadArraySize();
+						keyedRehydrator.ReadArraySize();
 
-					DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
-					dehydratedTransaction.Rehydrate(keyedRehydrator);
+						DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
+						dehydratedTransaction.Rehydrate(keyedRehydrator);
 
-					keyedTransaction = rehydrationFactory.CreateKeyedTransaction(dehydratedTransaction);
-					keyedTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
+						keyedTransaction = rehydrationFactory.CreateKeyedTransaction(dehydratedTransaction);
+						keyedTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
+					}
 				}
 			}
 
@@ -222,7 +223,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return keyedTransaction;
 		}
 
-		public IByteArray LoadBlockPartialTransactionBytes(long blockId, int offset, int length) {
+		public SafeArrayHandle LoadBlockPartialTransactionBytes(long blockId, int offset, int length) {
 			(int index, long startingBlockId) blockGroupIndex = this.FindBlockIndex(blockId);
 
 			return this.BlockchainEventSerializationFal.LoadBlockPartialHighHeaderBytes(blockId, blockGroupIndex, offset, length);
@@ -233,7 +234,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <returns></returns>
-		public ChannelsEntries<IByteArray> LoadBlockData(long blockId) {
+		public ChannelsEntries<SafeArrayHandle> LoadBlockData(long blockId) {
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(blockId)) {
 					return this.blocksCache[blockId].channels;
@@ -296,7 +297,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 			}
 
-			IByteArray result = this.LoadBlockHighHeaderData(blockId);
+			SafeArrayHandle result = this.LoadBlockHighHeaderData(blockId);
 
 			if(result == null) {
 				return null;
@@ -309,22 +310,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.LoadDigestHeader<IBlockchainDigest>(digestId);
 		}
 
-		public IByteArray LoadDigestHeaderArchiveData(int digestId) {
+		public SafeArrayHandle LoadDigestHeaderArchiveData(int digestId) {
 			return this.BlockchainEventSerializationFal.LoadDigestBytes(digestId, this.GetDigestsHeaderFilePath(digestId));
 		}
 
-		public IByteArray LoadDigestHeaderArchiveData(int digestId, int offset, int length) {
+		public SafeArrayHandle LoadDigestHeaderArchiveData(int digestId, int offset, int length) {
 			return this.BlockchainEventSerializationFal.LoadDigestBytes(digestId, offset, length, this.GetDigestsHeaderFilePath(digestId));
 		}
 
-		public IByteArray LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length) {
+		public SafeArrayHandle LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length) {
 			return this.BlockchainEventSerializationFal.LoadDigestFile(channelId, indexId, fileId, partIndex, offset, length);
 		}
 
 		public T LoadDigestHeader<T>(int digestId)
 			where T : class, IBlockchainDigest {
 
-			IByteArray result = this.LoadDigestData(digestId);
+			SafeArrayHandle result = this.LoadDigestData(digestId);
 
 			if(result == null) {
 				return null;
@@ -362,15 +363,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return blocks;
 		}
 
-		public ChannelsEntries<IByteArray> LoadBlockPartialData(long blockId, ChannelsEntries<(int offset, int length)> offsets) {
+		public ChannelsEntries<SafeArrayHandle> LoadBlockPartialData(long blockId, ChannelsEntries<(int offset, int length)> offsets) {
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(blockId)) {
 					var entry = this.blocksCache[blockId];
 
-					var results = new ChannelsEntries<IByteArray>();
+					var results = new ChannelsEntries<SafeArrayHandle>();
 
 					offsets.RunForAll((channel, channelOffsets) => {
-						results[channel] = entry.channels[channel].Slice(channelOffsets.offset, channelOffsets.length);
+						results[channel] = SafeArrayHandle.Create(entry.channels[channel].Entry.Slice(channelOffsets.offset, channelOffsets.length));
 					});
 
 					return results;
@@ -385,10 +386,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string GenesisFolderPath => this.BlockchainEventSerializationFal.GenesisFolderPath;
 		public string DigestHashesPath => this.GetDigestsHashesFolderPath();
 
-		public IByteArray LoadBlockPartialHighHeaderData(long blockId, int offset, int length) {
+		public SafeArrayHandle LoadBlockPartialHighHeaderData(long blockId, int offset, int length) {
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(blockId)) {
-					return this.blocksCache[blockId].channels.HighHeaderData.Slice(offset, length);
+					return SafeArrayHandle.Create(this.blocksCache[blockId].channels.HighHeaderData.Entry.Slice(offset, length));
 				}
 			}
 
@@ -397,10 +398,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.BlockchainEventSerializationFal.LoadBlockPartialHighHeaderBytes(blockId, blockGroupIndex, offset, length);
 		}
 
-		public IByteArray LoadBlockPartialContentsData(long blockId, int offset, int length) {
+		public SafeArrayHandle LoadBlockPartialContentsData(long blockId, int offset, int length) {
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(blockId)) {
-					return this.blocksCache[blockId].channels.ContentsData.Slice(offset, length);
+					return SafeArrayHandle.Create(this.blocksCache[blockId].channels.ContentsData.Entry.Slice(offset, length));
 				}
 			}
 
@@ -419,7 +420,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return null;
 		}
 
-		public (ChannelsEntries<int> sizes, IByteArray hash)? LoadBlockSizeAndHash(long blockId, int hashOffset, int hashLength) {
+		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? LoadBlockSizeAndHash(long blockId, int hashOffset, int hashLength) {
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(blockId)) {
 
@@ -593,7 +594,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     insert a block into our memory cache. keep only 10 entries
 		/// </summary>
 		/// <param name="block"></param>
-		protected void CacheBlock(IBlock block, ChannelsEntries<IByteArray> channels, IDehydratedBlock dehydratedBlock) {
+		protected void CacheBlock(IBlock block, ChannelsEntries<SafeArrayHandle> channels, IDehydratedBlock dehydratedBlock) {
 			lock(this.locker) {
 				if(!this.blocksCache.ContainsKey(block.BlockId)) {
 					this.blocksCache.AddSafe(block.BlockId, (block, channels, dehydratedBlock));
@@ -607,7 +608,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public IByteArray LoadBlockHighHeaderData(long blockId) {
+		public SafeArrayHandle LoadBlockHighHeaderData(long blockId) {
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(blockId)) {
 					return this.blocksCache[blockId].channels.HighHeaderData;
@@ -619,7 +620,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.BlockchainEventSerializationFal.LoadBlockHighHeaderData(blockId, blockGroupIndex);
 		}
 
-		public IByteArray LoadDigestData(int digestId) {
+		public SafeArrayHandle LoadDigestData(int digestId) {
 
 			return Compressors.DigestCompressor.Decompress(this.LoadDigestHeaderArchiveData(digestId));
 		}
@@ -656,7 +657,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					string completeFile = this.GetUnvalidatedBlockGossipMessageFullFileName(blockId, xxHash);
 
 					try {
-						IByteArray bytes = FileExtensions.ReadAllBytes(completeFile, this.centralCoordinator.FileSystem);
+						SafeArrayHandle bytes = FileExtensions.ReadAllBytes(completeFile, this.centralCoordinator.FileSystem);
 
 						IBlockEnvelope envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<IBlockEnvelope>(bytes);
 

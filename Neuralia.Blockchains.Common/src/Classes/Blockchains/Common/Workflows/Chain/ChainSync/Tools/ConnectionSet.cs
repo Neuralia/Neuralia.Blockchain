@@ -32,10 +32,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		//TODO: make this something like 5 or 10 minutes
 		protected const int REJECTED_TIMEOUT = 60 * 1;
 
+
+		public const int BAN_LIMIT = 3;
 		/// <summary>
 		///     And this one has peers that are permanently banned. no way back; we dont trust them at all.
 		/// </summary>
-		protected readonly List<RejectedConnection> bannedChainConnections = new List<RejectedConnection>();
+		protected readonly Dictionary<Guid, RejectedConnection> bannedChainConnections = new Dictionary<Guid, RejectedConnection>();
+		
+		protected readonly Dictionary<Guid, int> bannedStrikes = new Dictionary<Guid, int>();
 
 		protected readonly List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> connections = new List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>>();
 
@@ -47,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <summary>
 		///     THis list contains peers that are temporarily banned
 		/// </summary>
-		protected readonly List<RejectedConnection> rejectedChainConnections = new List<RejectedConnection>();
+		protected readonly Dictionary<Guid, RejectedConnection> rejectedChainConnections = new Dictionary<Guid, RejectedConnection>();
 
 		public ConnectionSet(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> other) {
 			this.Set(other);
@@ -72,10 +76,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			lock(this.locker) {
 				var temp = new ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>(this);
-
-				temp.rejectedChainConnections.AddRange(newConnections.rejectedChainConnections);
-				temp.bannedChainConnections.AddRange(newConnections.bannedChainConnections);
-
+				
+				
+				foreach(var entry in newConnections.rejectedChainConnections) {
+					temp.AddRejectedConnection(entry.Value.PeerConnection, entry.Value.rejectionReason);
+				}
+				foreach(var entry in newConnections.bannedChainConnections) {
+					
+					temp.AddBannedConnection(entry.Value.PeerConnection);
+				}
 				this.AddValidConnections(newConnections.connections);
 
 				this.Set(temp);
@@ -93,11 +102,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				this.connections.AddRange(other.connections.Distinct());
 
-				this.rejectedChainConnections.AddRange(other.rejectedChainConnections.Distinct());
-				this.bannedChainConnections.AddRange(other.bannedChainConnections.Distinct());
+				foreach(var entry in other.rejectedChainConnections) {
+					this.AddRejectedConnection(entry.Value.PeerConnection, entry.Value.rejectionReason);
+				}
+
+				foreach(var entry in other.bannedChainConnections) {
+					this.AddBannedConnection(entry.Value.PeerConnection);
+					
+				}
 			}
 		}
 
+		private void AddBannedStrike(Guid uuid) {
+			if(bannedStrikes.ContainsKey(uuid)) {
+				bannedStrikes[uuid]++;
+			} else {
+				bannedStrikes.Add(uuid, 1);
+			}
+		}
 		public void Set(List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> activeChainConnections) {
 			// ok, lets sync the two.  
 
@@ -127,28 +149,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
-		public void AddRejectedConnection(PeerConnection peerConnectionn, RejectedConnection.RejectionReason rejectionReason) {
+		public void AddRejectedConnection(PeerConnection peerConnectionn, RejectedConnection.RejectionReason rejectionReason = RejectedConnection.RejectionReason.None) {
 
 			ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> entry = null;
 
 			lock(this.locker) {
 				entry = this.connections.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
 
-				if(entry != null) {
-					entry.Syncing = false;
-					entry.Trigger = null;
-					entry.TriggerResponse = null;
-					entry.ReportedDiskBlockHeight = 0;
-					entry.ReportedDigestHeight = 0;
+				if(bannedChainConnections.ContainsKey(peerConnectionn.ClientUuid)) {
+					return;
 				}
 
-				if(this.rejectedChainConnections.All(p => p.PeerConnection.ClientUuid != peerConnectionn.ClientUuid) && this.bannedChainConnections.All(p => p.PeerConnection.ClientUuid != peerConnectionn.ClientUuid)) {
-					this.rejectedChainConnections.Add(new RejectedConnection(peerConnectionn, rejectionReason));
+				if(rejectedChainConnections.ContainsKey(peerConnectionn.ClientUuid)) {
+					if(rejectedChainConnections[peerConnectionn.ClientUuid].AddRejection()) {
+						// thats it, this one is gone
+						this.rejectedChainConnections.Remove(peerConnectionn.ClientUuid);
+
+						this.AddBannedConnection(peerConnectionn);
+					}
+					
+					return;
 				}
+				
+				this.rejectedChainConnections.Add(peerConnectionn.ClientUuid, new RejectedConnection(peerConnectionn, rejectionReason));
 			}
 		}
 
-		public void AddRejectedConnection(Guid clientUuid, RejectedConnection.RejectionReason rejectionReason) {
+		public void AddRejectedConnection(Guid clientUuid, RejectedConnection.RejectionReason rejectionReason = RejectedConnection.RejectionReason.None) {
 			lock(this.locker) {
 				this.AddRejectedConnection(this.connections.Single(c => c.PeerConnection.ClientUuid == clientUuid).PeerConnection, rejectionReason);
 			}
@@ -160,20 +187,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> entry = null;
 
 			lock(this.locker) {
-				entry = this.connections.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
-
-				if(entry != null) {
-					entry.Syncing = false;
-					entry.Trigger = null;
-					entry.TriggerResponse = null;
-					entry.ReportedDiskBlockHeight = 0;
-					entry.ReportedDigestHeight = 0;
+				this.AddBannedStrike(peerConnectionn.ClientUuid);
+				
+				if(rejectedChainConnections.ContainsKey(peerConnectionn.ClientUuid)) {
+					rejectedChainConnections.Remove(peerConnectionn.ClientUuid);
 				}
 
-				this.rejectedChainConnections.RemoveAll(p => p.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
+				if(!bannedChainConnections.ContainsKey(peerConnectionn.ClientUuid)) {
+					entry = this.connections.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
 
-				if(this.bannedChainConnections.All(p => p.PeerConnection.ClientUuid != peerConnectionn.ClientUuid)) {
-					this.bannedChainConnections.Add(new RejectedConnection(peerConnectionn, RejectedConnection.RejectionReason.Banned));
+					if(entry != null) {
+						entry.Syncing = false;
+						entry.Trigger = null;
+						entry.TriggerResponse = null;
+						entry.ReportedDiskBlockHeight = 0;
+						entry.ReportedDigestHeight = 0;
+					}
+					
+					bannedChainConnections.Add(peerConnectionn.ClientUuid, new RejectedConnection(peerConnectionn, RejectedConnection.RejectionReason.Banned));
 				}
 			}
 		}
@@ -181,27 +212,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public void FreeRejected() {
 			lock(this.locker) {
 				// first, we clear the rejected transactions that are done their jail time
-				this.rejectedChainConnections.RemoveAll(r => r.lastCheck.AddSeconds(REJECTED_TIMEOUT) < DateTime.Now);
+				foreach(var entry in this.rejectedChainConnections.ToArray()) {
+					entry.Value.ReleaseObsoleteRejections();
+
+					if(entry.Value.IsClear || entry.Value.lastCheck.AddSeconds(REJECTED_TIMEOUT) < DateTime.Now) {
+						this.rejectedChainConnections.Remove(entry.Key);
+					}
+				}
 			}
 		}
 
 		public void ClearRejected() {
 			lock(this.locker) {
-				// first, we clear the rejected transactions that are done their jail time
 				this.rejectedChainConnections.Clear();
 			}
 		}
 
-		public List<Guid> GetRejectedIds() {
+		public void ClearBanned() {
 			lock(this.locker) {
-				return this.GetRejectedConnections().Select(c => c.ClientUuid).ToList();
+				// first, we clear the banned transactions that are done their jail time and did not strike more than the acceptable limit
+				foreach(var banned in this.bannedChainConnections.Where(c => this.bannedStrikes[c.Key] < BAN_LIMIT).ToArray()) {
+					this.bannedChainConnections.Remove(banned.Key);
+					
+					var entry = this.connections.SingleOrDefault(c => c.PeerConnection.ClientUuid == banned.Key);
+
+					if(entry != null) {
+						entry.Syncing = true;
+					}
+				}
+			}
+		}
+		
+		public List<Guid> GetBannedIds() {
+			lock(this.locker) {
+				return this.GetBannedConnections().Select(c => c.ClientUuid).ToList();
 			}
 		}
 
-		public List<PeerConnection> GetRejectedConnections() {
+		public List<PeerConnection> GetBannedConnections() {
 			lock(this.locker) {
-				var rejectedIds = this.rejectedChainConnections.Select(r => r.PeerConnection).ToList();
-				rejectedIds.AddRange(this.bannedChainConnections.Select(r => r.PeerConnection));
+				var rejectedIds = this.bannedChainConnections.Values.Select(r => r.PeerConnection).ToList();
 
 				// this is our final rejected list
 				return rejectedIds.Distinct().Shuffle().ToList();
@@ -217,7 +267,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				var newConnections = new List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>>();
 
 				// this is our final rejected list
-				var rejectedIds = this.GetRejectedIds();
+				var rejectedIds = this.GetBannedIds();
 
 				// now our current connections valid for syncing
 				List<Guid> syncingIds;
@@ -255,7 +305,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> GetActiveConnections() {
 			lock(this.locker) {
 				// now clear all rejected adn keep only the good connections
-				var rejectedIds = this.GetRejectedIds();
+				var rejectedIds = this.GetBannedIds();
 
 				// clean our actives array, make sure we have no dirty connections in there by mistake	
 
@@ -265,7 +315,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> GetSyncingConnections() {
 			lock(this.locker) {
-				var rejectedIds = this.GetRejectedIds();
+				var rejectedIds = this.GetBannedIds();
 
 				// clean our actives array, make sure we have no dirty connections in there by mistake	
 
@@ -275,7 +325,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> GetNonSyncingConnections() {
 			lock(this.locker) {
-				var rejectedIds = this.GetRejectedIds();
+				var rejectedIds = this.GetBannedIds();
 
 				// clean our actives array, make sure we have no dirty connections in there by mistake	
 
@@ -325,26 +375,53 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public class RejectedConnection {
 
+			public static readonly TimeSpan RejectionTimeout = TimeSpan.FromSeconds(20);
+			public const int LIMIT = 3;
+			
+			public class RejectionSet {
+
+				public readonly DateTime Timestamp = DateTime.Now;
+			}
+
 			public enum RejectionReason {
 				NoNextBlock,
 				NoConnection,
 				InvalidResponse,
 				NoAnswer,
 				CannotHelp,
-				Banned
+				Banned,
+				None
 			}
 
 			public DateTime lastCheck;
 
-			public PeerConnection PeerConnection;
+			public readonly PeerConnection PeerConnection;
 			public RejectionReason rejectionReason;
 
 			public RejectedConnection(PeerConnection peerConnectionn, RejectionReason rejectionReason) {
 				this.PeerConnection = peerConnectionn;
 				this.lastCheck = DateTime.Now;
 				this.rejectionReason = rejectionReason;
+
+				this.AddRejection();
 			}
 
+			public bool AddRejection() {
+				this.ReleaseObsoleteRejections();
+				this.rejections.Add(new RejectionSet());
+
+				return this.IsFinished;
+			}
+
+			public readonly List<RejectionSet> rejections = new List<RejectionSet>();
+
+			public bool IsClear => !this.rejections.Any();
+			public bool IsFinished => this.rejections.Count >= LIMIT;
+			
+			public void ReleaseObsoleteRejections() {
+				this.rejections.RemoveAll(r => (r.Timestamp+RejectionTimeout)< DateTime.Now);
+			}
+			
 			public override bool Equals(object obj) {
 				if(obj is RejectedConnection rc) {
 					return rc.PeerConnection.ClientUuid == this.PeerConnection.ClientUuid;

@@ -165,14 +165,5 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			Log.Verbose(ex, $"Workflow of type '{this.GetType().Name}' ended in error");
 		}
 
-	#region Disposing
-
-		protected override void DisposeAll(bool disposing) {
-			base.DisposeAll(disposing);
-
-		}
-
-	#endregion
-
 	}
 }

@@ -79,7 +79,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		ConnectionStore.ConnectionTieResults BreakingConnectionTie(ITcpConnection contendedConnection, PeerConnection.Directions direction);
 
-		event Action<IByteArray, PeerConnection, IEnumerable<Type>> DataReceived;
+		event Action<SafeArrayHandle, PeerConnection, IEnumerable<Type>> DataReceived;
 		event Action<int> PeerConnectionsCountUpdated;
 		PeerConnection GetNewConnection(IPAddress address, int port, IPMode mode);
 		PeerConnection GetNewConnection(NetworkEndPoint endpoint);
@@ -344,7 +344,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			GC.SuppressFinalize(this);
 		}
 
-		public event Action<IByteArray, PeerConnection, IEnumerable<Type>> DataReceived;
+		public event Action<SafeArrayHandle, PeerConnection, IEnumerable<Type>> DataReceived;
 		public event Action<int> PeerConnectionsCountUpdated;
 
 		public PeerConnection GetNewConnection(IPAddress address, int port, IPMode mode) {
@@ -1267,7 +1267,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
-		protected void TriggerDataReceived(IByteArray data, PeerConnection peer, IEnumerable<Type> triggerTypes) {
+		protected void TriggerDataReceived(SafeArrayHandle data, PeerConnection peer, IEnumerable<Type> triggerTypes) {
 			this.DataReceived?.Invoke(data, peer, triggerTypes);
 		}
 

@@ -334,7 +334,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <param name="messageSet"></param>
 		/// <param name="data"></param>
 		/// <param name="connection"></param>
-		public void RouteNetworkMessage(IRoutingHeader header, IByteArray data, PeerConnection connection) {
+		public void RouteNetworkMessage(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection) {
 			MessageReceivedTask messageTask = new MessageReceivedTask(header, data, connection);
 			this.ColoredRoutedTaskReceiver.ReceiveTask(messageTask);
 		}
@@ -558,10 +558,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public class MessageReceivedTask : ColoredTask {
 			public readonly PeerConnection Connection;
-			public readonly IByteArray data;
+			public readonly SafeArrayHandle data = SafeArrayHandle.Create();
 			public readonly IRoutingHeader header;
 
-			public MessageReceivedTask(IRoutingHeader header, IByteArray data, PeerConnection connection) {
+			public MessageReceivedTask(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection) {
 				this.data = data;
 				this.Connection = connection;
 				this.header = header;

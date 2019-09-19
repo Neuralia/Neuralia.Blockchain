@@ -88,6 +88,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			Fast
 		}
 
+		/// <summary>
+		/// If true, we will use faster but larger memory buffers from the array pool. if false, we will use the regular exact sized buffer. slower but less ram
+		/// </summary>
+		public bool UseArrayPools { get; set; } = true;
+		
 		public string MothershipUrl { get; set; } = "https://www.neuralium.com";
 
 #if TESTNET

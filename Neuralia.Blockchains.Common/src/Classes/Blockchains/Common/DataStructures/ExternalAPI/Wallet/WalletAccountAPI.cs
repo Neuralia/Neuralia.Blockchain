@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string AccountId { get; set; }
 		public string FriendlyName { get; set; }
 		public bool IsActive { get; set; }
-		public Enums.PublicationStatus Status { get; set; }
+		public int Status { get; set; }
 	}
 
 	public struct WalletAccountDetailsAPI {
@@ -16,7 +16,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string AccountHash { get; set; }
 		public string FriendlyName { get; set; }
 		public bool IsActive { get; set; }
-		public Enums.PublicationStatus Status { get; set; }
+		public int Status { get; set; }
 		public long DeclarationBlockid { get; set; }
 		public bool KeysEncrypted { get; set; }
 		public int AccountType { get; set; }

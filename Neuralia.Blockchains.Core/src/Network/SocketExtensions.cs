@@ -135,22 +135,22 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// </summary>
 		/// <param name="s"></param>
 		/// <returns></returns>
-		public static bool IsReallyConnected(this Socket socket, TcpConnectionInformation connectionInfortmation) {
+		public static bool IsReallyConnected(this Socket socket) {
 
 			// first, check the active connections and simply check the state of the active connections
 			bool success = false;
 
-			if(connectionInfortmation != null) {
-				TcpState stateOfConnection = connectionInfortmation.State;
-
-				if(stateOfConnection == TcpState.Established) {
-					success = true;
-				}
-			}
-
-			if((connectionInfortmation != null) && !success) {
-				return false;
-			}
+			// if(connectionInfortmation != null) {
+			// 	TcpState stateOfConnection = connectionInfortmation.State;
+			//
+			// 	if(stateOfConnection == TcpState.Established) {
+			// 		success = true;
+			// 	}
+			// }
+			//
+			// if((connectionInfortmation != null) && !success) {
+			// 	return false;
+			// }
 
 			bool blockingState = false;
 

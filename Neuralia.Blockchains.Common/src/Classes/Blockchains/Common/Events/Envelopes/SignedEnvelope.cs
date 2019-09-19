@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 	public interface ISignedEnvelope : IEnvelope {
 
-		IByteArray Hash { get; set; }
+		SafeArrayHandle Hash { get; }
 		IEnvelopeSignature SignatureBase { get; }
 		bool IsSecretSignature { get; }
 	}
@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		where BLOCKCHAIN_EVENT_TYPE : class, IBinarySerializable, ITreeHashable
 		where SIGNATURE_TYPE : IEnvelopeSignature {
 
-		public IByteArray Hash { get; set; }
+		public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
 		public SIGNATURE_TYPE Signature { get; set; }
 		public IEnvelopeSignature SignatureBase => this.Signature;
 
@@ -44,7 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		}
 
 		protected override void Rehydrate(IDataRehydrator rh) {
-			this.Hash = rh.ReadNonNullableArray();
+			this.Hash.Entry = rh.ReadNonNullableArray();
 
 			this.Signature = (SIGNATURE_TYPE) EnvelopeSignatureFactory.Rehydrate(rh);
 		}

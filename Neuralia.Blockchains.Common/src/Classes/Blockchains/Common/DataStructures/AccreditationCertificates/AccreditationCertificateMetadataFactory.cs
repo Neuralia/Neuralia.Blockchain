@@ -8,7 +8,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.AccreditationCertificates {
 	public abstract class AccreditationCertificateMetadataFactory {
 
-		public AccreditationCertificateMetadata RehydrateMetadata(IByteArray data) {
+		public AccreditationCertificateMetadata RehydrateMetadata(SafeArrayHandle data) {
 
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 

@@ -6,11 +6,12 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts {
 
-	public interface IElectionContext : IVersionable<ElectionContextType>, IJsonSerializable {
+	public interface IElectionContext : IVersionable<ElectionContextType> {
 
 		byte Maturity { get; set; }
 		byte Publication { get; set; }

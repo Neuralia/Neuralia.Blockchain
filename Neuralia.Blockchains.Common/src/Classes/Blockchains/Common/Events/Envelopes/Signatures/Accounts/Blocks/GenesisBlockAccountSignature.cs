@@ -5,11 +5,11 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks {
 	public interface IGenesisBlockAccountSignature : IBlockAccountSignature {
-		IByteArray PublicKey { get; set; }
+		SafeArrayHandle PublicKey { get; }
 	}
 
 	public class GenesisBlockAccountSignature : BlockAccountSignature, IGenesisBlockAccountSignature {
-		public IByteArray PublicKey { get; set; }
+		public SafeArrayHandle PublicKey { get; } = SafeArrayHandle.Create();
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = base.GetStructuresArray();
@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			base.Rehydrate(rehydrator);
 
-			this.PublicKey = rehydrator.ReadNonNullableArray();
+			this.PublicKey.Entry = rehydrator.ReadNonNullableArray();
 		}
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

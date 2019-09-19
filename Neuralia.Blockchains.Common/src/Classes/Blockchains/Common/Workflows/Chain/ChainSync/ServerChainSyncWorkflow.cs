@@ -169,8 +169,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					return;
 				}
-
-				serverHandshake.Message.Dispose();
 				
 				// now we start waiting for block requests... one at a time.
 				while(true) {
@@ -207,12 +205,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								sendBlockInfoMessage.Message.HasBlockDetails = true;
 
-								sendBlockInfoMessage.Message.BlockHash = results.hash;
+								sendBlockInfoMessage.Message.BlockHash.Entry = results.hash.Entry;
 
 								sendBlockInfoMessage.Message.SlicesSize.FileId = 0;
 
 								foreach(var channel in results.sizes.Entries) {
-									sendBlockInfoMessage.Message.SlicesSize.SlicesInfo.Add(channel.Key, new DataSliceSize {Length = channel.Value});
+									sendBlockInfoMessage.Message.SlicesSize.SlicesInfo.Add(channel.Key, new DataSliceSize (channel.Value));
 								}
 							}
 						}
@@ -223,7 +221,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 						
-						sendBlockInfoMessage.BaseMessage.Dispose();
+						//sendBlockInfoMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_BLOCK blockRequestMessage) {
@@ -269,7 +267,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						foreach(var slice in blockSlices.blockSlice.Entries) {
 
-							sendBlockMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice {Offset = blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key].Offset, Length = blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key].Length, Data = slice.Value});
+							sendBlockMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice(blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key].Length, blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key].Offset, slice.Value));
 						}
 
 						sendBlockMessage.Message.HasNextInfo = blockRequestMessage.IncludeNextInfo;
@@ -278,10 +276,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							// if we do have the block, then we send it's connection, otherwise we ignore it
 							sendBlockMessage.Message.NextBlockHeight = nextBlockId;
-							sendBlockMessage.Message.NextBlockHash = blockSlices.nextBlockHash;
+							sendBlockMessage.Message.NextBlockHash.Entry = blockSlices.nextBlockHash.Entry;
 
 							foreach(var size in blockSlices.nextBlockSize.Entries) {
-								sendBlockMessage.Message.NextBlockChannelSizes.SlicesInfo.Add(size.Key, new DataSliceSize {Length = size.Value});
+								sendBlockMessage.Message.NextBlockChannelSizes.SlicesInfo.Add(size.Key, new DataSliceSize( size.Value));
 							}
 						}
 
@@ -291,7 +289,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 						
-						sendBlockMessage.BaseMessage.Dispose();
+						//sendBlockMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_BLOCK_SLICE_HASHES requestBlockSliceHashes) {
@@ -342,7 +340,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 						
-						sendBlockMessage.BaseMessage.Dispose();
+						//sendBlockMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST_INFO requestDigestInfo) {
@@ -369,7 +367,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 						
-						sendDigestInfoMessage.BaseMessage.Dispose();
+						//sendDigestInfoMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST requestDigest) {
@@ -385,7 +383,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						if(requestDigest.Id == digestId) {
 							sendDigestMessage.Message.Id = digestId;
 							sendDigestMessage.Message.Slices.FileId = requestDigest.SlicesInfo.FileId;
-							sendDigestMessage.Message.Slices.FileInfo.Data = this.FetchDigest(requestDigest.Id, (int) requestDigest.SlicesInfo.FileInfo.Offset, (int) requestDigest.SlicesInfo.FileInfo.Length);
+							sendDigestMessage.Message.Slices.FileInfo.Data.Entry = this.FetchDigest(requestDigest.Id, (int) requestDigest.SlicesInfo.FileInfo.Offset, (int) requestDigest.SlicesInfo.FileInfo.Length).Entry;
 
 							sendDigestMessage.Message.Slices.FileInfo.Offset = requestDigest.SlicesInfo.FileInfo.Offset;
 							sendDigestMessage.Message.Slices.FileInfo.Length = requestDigest.SlicesInfo.FileInfo.Length;
@@ -397,7 +395,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 						
-						sendDigestMessage.BaseMessage.Dispose();
+						//sendDigestMessage.BaseMessage.Dispose();
 					}
 
 					if(requestSet?.BaseMessage is REQUEST_DIGEST_FILE requestDigestFile) {
@@ -414,9 +412,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						foreach(var slice in requestDigestFile.SlicesInfo.SlicesInfo) {
 
-							IByteArray data = this.FetchDigestFile(slice.Key.ChannelId, slice.Key.IndexId, slice.Key.FileId, slice.Key.FilePart, (int) slice.Value.Offset, (int) slice.Value.Length);
+							SafeArrayHandle data = this.FetchDigestFile(slice.Key.ChannelId, slice.Key.IndexId, slice.Key.FileId, slice.Key.FilePart, (int) slice.Value.Offset, (int) slice.Value.Length);
 
-							sendDigestFileMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice {Offset = slice.Value.Offset, Length = slice.Value.Length, Data = data});
+							sendDigestFileMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice (slice.Value.Length, slice.Value.Offset, data));
 						}
 
 						if(!this.Send(sendDigestFileMessage)) {
@@ -425,10 +423,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 						
-						sendDigestFileMessage.BaseMessage.Dispose();
+						//sendDigestFileMessage.BaseMessage.Dispose();
 					}
 					
-					requestSet?.BaseMessage.Dispose();
+					//requestSet?.BaseMessage.Dispose();
 
 					// ok, this should be the end for this block. we loop and the client will tell us if they want more blocks, or if they are nice, to stop. worst case, we will timeout.
 				}
@@ -446,14 +444,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <param name="offset"></param>
 		/// <param name="length"></param>
 		/// <returns></returns>
-		protected virtual (ChannelsEntries<IByteArray> blockSlice, ChannelsEntries<int> nextBlockSize, IByteArray nextBlockHash) FetchBlockSlice(long Id, ChannelsEntries<(int offset, int length)> offsets, long nextBlockId) {
-			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<(ChannelsEntries<IByteArray> blockSlice, ChannelsEntries<int> nextBlockSize, IByteArray nextBlockHash)>();
+		protected virtual (ChannelsEntries<SafeArrayHandle> blockSlice, ChannelsEntries<int> nextBlockSize, SafeArrayHandle nextBlockHash) FetchBlockSlice(long Id, ChannelsEntries<(int offset, int length)> offsets, long nextBlockId) {
+			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<(ChannelsEntries<SafeArrayHandle> blockSlice, ChannelsEntries<int> nextBlockSize, SafeArrayHandle nextBlockHash)>();
 
 			serializationTask.SetAction((serializationService, taskRoutingContext) => {
 
 				var slices = serializationService.LoadBlockSlice(Id, offsets);
 
-				(ChannelsEntries<int> sizes, IByteArray hash)? nextBlock = null;
+				(ChannelsEntries<int> sizes, SafeArrayHandle hash)? nextBlock = null;
 
 				if(nextBlockId != 0) {
 					nextBlock = serializationService.GetBlockSizeAndHash(nextBlockId);
@@ -476,8 +474,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// </summary>
 		/// <param name="Id"></param>
 		/// <returns></returns>
-		protected virtual (ChannelsEntries<int> sizes, IByteArray hash) FetchBlockSize(long Id) {
-			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<(ChannelsEntries<int> sizes, IByteArray hash)>();
+		protected virtual (ChannelsEntries<int> sizes, SafeArrayHandle hash) FetchBlockSize(long Id) {
+			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<(ChannelsEntries<int> sizes, SafeArrayHandle hash)>();
 
 			serializationTask.SetAction((serializationService, taskRoutingContext) => {
 
@@ -524,8 +522,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return serializationTask.Results;
 		}
 
-		protected virtual IByteArray FetchDigest(int Id, int offset, int length) {
-			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<IByteArray>();
+		protected virtual SafeArrayHandle FetchDigest(int Id, int offset, int length) {
+			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<SafeArrayHandle>();
 
 			serializationTask.SetAction((serializationService, taskRoutingContext) => {
 
@@ -538,8 +536,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return serializationTask.Results;
 		}
 
-		protected virtual IByteArray FetchDigestFile(DigestChannelType channelId, int indexId, int fileId, uint filePart, long offset, int length) {
-			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<IByteArray>();
+		protected virtual SafeArrayHandle FetchDigestFile(DigestChannelType channelId, int indexId, int fileId, uint filePart, long offset, int length) {
+			var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<SafeArrayHandle>();
 
 			serializationTask.SetAction((serializationService, taskRoutingContext) => {
 

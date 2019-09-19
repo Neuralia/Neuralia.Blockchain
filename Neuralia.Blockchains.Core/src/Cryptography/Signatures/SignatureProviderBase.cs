@@ -2,7 +2,6 @@
 using System.Security.Cryptography;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Allocation;
 using Org.BouncyCastle.Security;
 using Serilog;
 
@@ -10,12 +9,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
 	public abstract class SignatureProviderBase : IDisposable2 {
 
 		public SignatureProviderBase() {
-		}
-
-		public SignatureProviderBase(IByteArray privateKey, IByteArray publicKey) {
-
-			// make copies
-
 		}
 
 		public bool IsDisposed { get; protected set; }
@@ -30,8 +23,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
 		/// </summary>
 		public static void ClearMemoryAllocators() {
 			Log.Warning("Recovering the memory allocators. This is very dangerous, use with EXTREME care!!");
-			MemoryAllocators.Instance.cryptoAllocator.RecoverLeakedMemory();
-			MemoryAllocators.Instance.doubleArrayCryptoAllocator.RecoverLeakedMemory();
+			ByteArray.RecoverLeakedMemory();
 			Log.Warning("----------------------------------------------------------------------------------");
 		}
 
@@ -47,7 +39,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
 			SecureRandom keyRandom = new SecureRandom();
 
 			using(RNGCryptoServiceProvider provider = new RNGCryptoServiceProvider()) {
-				using(ByteArray seed = new ByteArray(4096)) {
+				using(ByteArray seed = ByteArray.Create(4096)) {
 					provider.GetBytes(seed.Bytes, seed.Offset, seed.Length);
 
 					keyRandom.SetSeed(seed.ToExactByteArrayCopy());
@@ -57,7 +49,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
 			}
 		}
 
-		public abstract bool Verify(IByteArray message, IByteArray signature, IByteArray publicKey);
+		public abstract bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey);
 
 		private void Dispose(bool disposing) {
 

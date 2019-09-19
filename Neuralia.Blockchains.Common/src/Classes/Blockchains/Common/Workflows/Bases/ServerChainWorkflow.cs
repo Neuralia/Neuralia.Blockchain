@@ -26,8 +26,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 
 		protected override void DisposeAll(bool disposing) {
 			base.DisposeAll(disposing);
-			
-			this.triggerMessage?.Message?.Dispose();
 		}
 
 		public ServerChainWorkflow(CENTRAL_COORDINATOR centralCoordinator, BlockchainTriggerMessageSet<T> triggerMessage, PeerConnection peerConnectionn) : base(centralCoordinator) {
@@ -52,11 +50,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			return this.SendFinalMessage(this.PeerConnection, message);
 		}
 
-		private bool SendBytes(IByteArray data) {
+		private bool SendBytes(SafeArrayHandle data) {
 			return this.SendBytes(this.PeerConnection, data);
 		}
 
-		private bool SendFinalBytes(IByteArray data) {
+		private bool SendFinalBytes(SafeArrayHandle data) {
 			return this.SendFinalBytes(this.PeerConnection, data);
 		}
 	}

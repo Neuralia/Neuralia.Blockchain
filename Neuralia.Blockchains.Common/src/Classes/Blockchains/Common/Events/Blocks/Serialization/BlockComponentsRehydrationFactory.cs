@@ -8,7 +8,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public interface IElectionContextRehydrationFactory {
 
 		//		TransactionSerializationMap CreateTransactionDehydrationMap(byte type, byte major, byte minor, ByteArray keyLengths);
-		IElectionContext CreateElectionContext(IByteArray compressedContext);
+		IElectionContext CreateElectionContext(SafeArrayHandle compressedContext);
 		ITransactionSelectionMethodFactory CreateTransactionSelectionMethodFactory();
 
 		IElectionResultsRehydrator CreateElectionResultsRehydrator();
@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	}
 
 	public abstract class BlockComponentsRehydrationFactory : IBlockComponentsRehydrationFactory {
-		public abstract IElectionContext CreateElectionContext(IByteArray compressedContext);
+		public abstract IElectionContext CreateElectionContext(SafeArrayHandle compressedContext);
 		public abstract ITransactionSelectionMethodFactory CreateTransactionSelectionMethodFactory();
 		public abstract IElectionResultsRehydrator CreateElectionResultsRehydrator();
 	}
