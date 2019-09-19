@@ -16,7 +16,7 @@ The base Blockchain implementation
 #### The first step is to ensure that the dependencies have been built and copied into the local-source folder.
 
  - Neuralia.Blockchains.Tools
- - Neuralia.System.Data.HashFunction.xxHash
+ - Neuralia.Data.HashFunction.xxHash
  - Neuralia.STUN
  - Neuralia.BouncyCastle
 
