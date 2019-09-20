@@ -1,6 +1,9 @@
 using System;
+using MessagePack;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI.Wallet {
+	
+	[MessagePackObject(keyAsPropertyName: true)]
 	public class WalletTransactionHistoryHeaderAPI {
 		public string TransactionId { get; set; }
 
@@ -8,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string Recipient { get; set; }
 
 		public string Timestamp { get; set; }
-		public object Version { get; set; }
+		public VersionAPI Version { get; set; }
 		public byte Status { get; set; }
 		public string Note { get; set; }
 		public bool Local { get; set; }
@@ -18,6 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 	}
 
+	[MessagePackObject(keyAsPropertyName: true)]
 	public class WalletTransactionHistoryDetailsAPI {
 		public string TransactionId { get; set; }
 
@@ -26,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 		public string Timestamp { get; set; }
 		public string Contents { get; set; }
-		public object Version { get; set; }
+		public VersionAPI Version { get; set; }
 		public byte Status { get; set; }
 		public string Note { get; set; }
 		public bool Local { get; set; }

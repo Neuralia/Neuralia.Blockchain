@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -365,12 +366,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public bool CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
+		public bool CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
 			// this is a special case where we dont have a wallet, so no need to schedule anything. we will let the create make its own transactions
 			return this.walletProvider.CreateNewCompleteWallet(correlationContext, accountName, encryptWallet, encryptKey, encryptKeysIndividually, passphrases, accountCreatedCallback);
 		}
 
-		public bool CreateNewCompleteWallet(CorrelationContext correlationContext, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
+		public bool CreateNewCompleteWallet(CorrelationContext correlationContext, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
 			// this is a special case where we dont have a wallet, so no need to schedule anything. we will let the create make its own transactions
 
 			return this.walletProvider.CreateNewCompleteWallet(correlationContext, encryptWallet, encryptKey, encryptKeysIndividually, passphrases, accountCreatedCallback);
@@ -407,7 +408,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
+		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 			this.ScheduleWrite(() => {
 				this.walletProvider.ChangeWalletEncryption(correlationContext, encryptWallet, encryptKeys, encryptKeysIndividually, passphrases);
 			});
@@ -425,13 +426,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null) {
+		public bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null) {
 			return this.ScheduleWrite(() => {
 				return this.walletProvider.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases, walletCreationStepSet, accountCreatedCallback);
 			});
 		}
 
-		public bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
+		public bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 			return this.ScheduleWrite(() => {
 				return this.walletProvider.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases);
 			});
@@ -594,7 +595,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public void AddAccountKey<KEY>(Guid accountUuid, KEY key, Dictionary<int, string> passphrases)
+		public void AddAccountKey<KEY>(Guid accountUuid, KEY key, ImmutableDictionary<int, string> passphrases)
 			where KEY : IWalletKey {
 			this.ScheduleWrite(() => {
 				this.walletProvider.AddAccountKey(accountUuid, key, passphrases);

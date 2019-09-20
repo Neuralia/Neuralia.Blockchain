@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MessagePack;
 using Newtonsoft.Json;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
+	
 	public abstract class SynthesizedBlockAPI {
 
 		public long BlockId { get; set; }
@@ -17,9 +19,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public Dictionary<string, int> RejectedTransactions { get; set; } = new Dictionary<string, int>();
 
 		[JsonIgnore]
+		[IgnoreMember]
 		public abstract List<SynthesizedElectionResultAPI> FinalElectionResultsBase { get; }
 
 		[JsonIgnore]
+		[IgnoreMember]
 		public abstract SynthesizedGenesisBlockAPI SynthesizedGenesisBlockBase { get; }
 
 		public abstract class SynthesizedElectionResultAPI {
@@ -44,9 +48,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public GENESIS SynthesizedGenesisBlock { get; set; }
 
 		[JsonIgnore]
+		[IgnoreMember]
 		public override List<SynthesizedElectionResultAPI> FinalElectionResultsBase => this.FinalElectionResults.Cast<SynthesizedElectionResultAPI>().ToList();
 
 		[JsonIgnore]
+		[IgnoreMember]
 		public override SynthesizedGenesisBlockAPI SynthesizedGenesisBlockBase => this.SynthesizedGenesisBlock;
 	}
 }

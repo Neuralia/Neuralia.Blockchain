@@ -1,4 +1,8 @@
+using MessagePack;
+
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
+	
+	[MessagePackObject(keyAsPropertyName: true)]
 	public class TransactionStatusUpdate {
 		public enum Statuses {
 			Confirmed,

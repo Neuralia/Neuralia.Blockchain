@@ -46,6 +46,7 @@
     <PackageReference Include="Neuralia.Data.HashFunction.xxHash" Version="1.0.0" />
 
 
+    <PackageReference Include="MessagePack" Version="1.7.3.7" />
        <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.2.2" />
 
     <PackageReference Include="morelinq" Version="3.2.0" />

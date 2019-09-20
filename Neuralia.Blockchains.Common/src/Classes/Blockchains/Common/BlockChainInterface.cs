@@ -71,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		List<MiningHistory> QueryMiningHistory();
 
 		TaskResult<bool> IsWalletLoaded();
-		TaskResult<object> QueryChainStatus();
+		TaskResult<ChainStatusAPI> QueryChainStatus();
 
 		TaskResult<bool> IsBlockchainSynced();
 		TaskResult<bool> IsWalletSynced();
@@ -82,8 +82,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		TaskResult<bool> LoadWallet(CorrelationContext correlationContext);
 
-		TaskResult<bool> CreateNewWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, bool publishAccount);
-		TaskResult<bool> CreateAccount(CorrelationContext correlationContext, string accountName, bool publishAccount, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases);
+		TaskResult<bool> CreateNewWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, bool publishAccount);
+		TaskResult<bool> CreateAccount(CorrelationContext correlationContext, string accountName, bool publishAccount, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
 
 		TaskResult<bool> SetWalletPassphrase(int correlationId, int keyCorrelationCode, string passphrase);
 		TaskResult<bool> SetWalletKeyPassphrase(int correlationId, int keyCorrelationCode, string passphrase);
@@ -121,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		void DisableMining();
 
 		TaskResult<bool> QueryBlockchainSynced();
-		TaskResult<object> QueryElectionContext(long blockId);
+		TaskResult<ElectionContextAPI> QueryElectionContext(long blockId);
 		TaskResult<bool> QueryWalletSynced();
 
 		TaskResult<string> QueryBlock(long blockId);
@@ -131,7 +131,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		TaskResult<object> BackupWallet();
 
-		TaskResult<bool> CreateNewAccount(CorrelationContext correlationContext, string name, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases);
+		TaskResult<bool> CreateNewAccount(CorrelationContext correlationContext, string name, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
 		TaskResult<bool> SetActiveAccount(string name);
 		TaskResult<bool> SetActiveAccount(Guid accountUuid);
 	}
@@ -431,7 +431,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		///     Query various basic status variables about the chain and it's wallet
 		/// </summary>
 		/// <returns></returns>
-		public TaskResult<object> QueryChainStatus() {
+		public TaskResult<ChainStatusAPI> QueryChainStatus() {
 
 			return this.RunTaskMethod(() => {
 				IWalletProviderProxy walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
@@ -439,8 +439,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 				int minimumDispatchPeerCount = chainConfiguration.MinimumDispatchPeerCount;
 
-				return (object) new {
-					WalletExists = walletProvider.WalletFileExists, walletProvider.IsWalletLoaded, WalletEncrypted = walletProvider.IsWalletEncrypted, WalletPath = walletProvider.GetChainDirectoryPath(),
+				return new ChainStatusAPI(){
+					WalletExists = walletProvider.WalletFileExists, IsWalletLoaded = walletProvider.IsWalletLoaded, WalletEncrypted = walletProvider.IsWalletEncrypted, WalletPath = walletProvider.GetChainDirectoryPath(),
 					MinRequiredPeerCount = minimumDispatchPeerCount
 				};
 			});
@@ -508,12 +508,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		public TaskResult<bool> CreateNewWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, bool publishAccount) {
+		public TaskResult<bool> CreateNewWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, bool publishAccount) {
 
 			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(correlationContext, accountName, encryptWallet, encryptKey, encryptKeysIndividually, passphrases));
 		}
 
-		public TaskResult<bool> CreateAccount(CorrelationContext correlationContext, string accountName, bool publishAccount, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
+		public TaskResult<bool> CreateAccount(CorrelationContext correlationContext, string accountName, bool publishAccount, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
 			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases));
 
@@ -645,7 +645,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		public TaskResult<bool> CreateNewAccount(CorrelationContext correlationContext, string name, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
+		public TaskResult<bool> CreateNewAccount(CorrelationContext correlationContext, string name, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
 			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteAccount(correlationContext, name, encryptKeys, encryptKeysIndividually, passphrases, null));
 		}
@@ -687,7 +687,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			return this.RunTaskMethod(() => {
 				(string path, string passphrase, string salt, int iterations) results = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.BackupWallet();
 
-				return (object) new {Path = results.path, Passphrase = results.passphrase, Salt = results.salt, Iterations = results.iterations};
+				return (object) new WalletBackupAPI(){Path = results.path, Passphrase = results.passphrase, Salt = results.salt, Iterations = results.iterations};
 			});
 		}
 
@@ -707,7 +707,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		public TaskResult<object> QueryElectionContext(long blockId) {
+		public TaskResult<ElectionContextAPI> QueryElectionContext(long blockId) {
 			return this.RunSerializationTaskMethod((service, taskRoutingContext) => {
 
 				IBlock block = service.LoadBlock(blockId);
@@ -718,15 +718,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 					using(SafeArrayHandle compressed = compressor.Compress(electionBlock.DehydratedElectionContext)) {
 
-						object result = new {
+						return new ElectionContextAPI() {
 							Type = electionBlock.ElectionContext.Version.Type.Value.Value, ContextBytes = compressed.ToExactByteArrayCopy(), BlockId = blockId, MaturityId = blockId + electionBlock.ElectionContext.Maturity,
 							PublishId = blockId + electionBlock.ElectionContext.Maturity + electionBlock.ElectionContext.Publication
 						};
-						return result;
 					}
 				}
 
-				return (object) new {Type = 0};
+				return new ElectionContextAPI() {Type = 0};
 
 			}, (results, taskRoutingContext) => {
 				if(results.Error) {

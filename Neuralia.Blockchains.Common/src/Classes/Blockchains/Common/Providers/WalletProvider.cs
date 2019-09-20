@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -196,8 +197,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		bool SetActiveAccount(string name);
 		bool SetActiveAccount(Guid accountUuid);
 
-		bool CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null);
-		bool CreateNewCompleteWallet(CorrelationContext correlationContext, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null);
+		bool CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null);
+		bool CreateNewCompleteWallet(CorrelationContext correlationContext, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null);
 
 		void UpdateWalletSnapshotFromDigest(IAccountSnapshotDigestChannelCard accountCard);
 		void UpdateWalletSnapshotFromDigest(IStandardAccountSnapshotDigestChannelCard accountCard);
@@ -216,13 +217,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="encryptWallet"></param>
 		/// <param name="encryptKeys"></param>
-		void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases);
+		void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
 
 		void SaveWallet();
 
 		IWalletAccount CreateNewAccount(string name, bool encryptKeys, bool encryptKeysIndividually, CorrelationContext correlationContext, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, SystemEventGenerator.AccountCreationStepSet accountCreationStepSet, bool setactive = false);
-		bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null);
-		bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases);
+		bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null);
+		bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
 
 		void InsertKeyLogTransactionEntry(IWalletAccount account, TransactionIdExtended transactionId, byte keyOrdinalId);
 		void InsertKeyLogBlockEntry(IWalletAccount account, BlockId blockId, byte keyOrdinalId, KeyUseIndexSet keyUseIndex);
@@ -259,7 +260,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		void AddAccountKey<KEY>(Guid accountUuid, KEY key, Dictionary<int, string> passphrases)
+		void AddAccountKey<KEY>(Guid accountUuid, KEY key, ImmutableDictionary<int, string> passphrases)
 			where KEY : IWalletKey;
 
 		void SetNextKey(Guid accountUuid, IWalletKey nextKey);
@@ -765,7 +766,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		}
 
-		public virtual bool CreateNewCompleteWallet(CorrelationContext correlationContext, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
+		public virtual bool CreateNewCompleteWallet(CorrelationContext correlationContext, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
 			return this.CreateNewCompleteWallet(correlationContext, "", encryptWallet, encryptKey, encryptKeysIndividually, passphrases, accountCreatedCallback);
 		}
 
@@ -882,7 +883,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.WalletFileInfo.Accounts[accountUuid].WalletChainStatesInfo.ChainState.BlockSyncStatus = (int) blockSyncStatus;
 		}
 
-		public virtual bool CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, Dictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
+		public virtual bool CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, Action<IWalletAccount> accountCreatedCallback = null) {
 
 			try {
 				SystemEventGenerator.WalletCreationStepSet walletCreationStepSet = new SystemEventGenerator.WalletCreationStepSet();
@@ -918,7 +919,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		}
 
-		public virtual bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null) {
+		public virtual bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null) {
 
 			try {
 				SystemEventGenerator.AccountCreationStepSet accountCreationStepSet = new SystemEventGenerator.AccountCreationStepSet();
@@ -943,7 +944,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public virtual bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
+		public virtual bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
 			return this.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases, null);
 		}
@@ -1097,7 +1098,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="encryptWallet"></param>
 		/// <param name="encryptKeys"></param>
-		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
+		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
 			this.WalletFileInfo.LoadFileSecurityDetails();
 
@@ -1666,7 +1667,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			accountFileInfo.WalletElectionsHistoryInfo.CreateEmptyFile();
 		}
 
-		public bool CreateStandardAccountKeys(Guid accountUuid, Dictionary<int, string> passphrases, CorrelationContext correlationContext, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, SystemEventGenerator.AccountCreationStepSet accountCreationStepSet) {
+		public bool CreateStandardAccountKeys(Guid accountUuid, ImmutableDictionary<int, string> passphrases, CorrelationContext correlationContext, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, SystemEventGenerator.AccountCreationStepSet accountCreationStepSet) {
 
 			this.EnsureWalletIsLoaded();
 
@@ -2658,7 +2659,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public void AddAccountKey<KEY>(Guid accountUuid, KEY key, Dictionary<int, string> passphrases)
+		public void AddAccountKey<KEY>(Guid accountUuid, KEY key, ImmutableDictionary<int, string> passphrases)
 			where KEY : IWalletKey {
 			this.EnsureWalletIsLoaded();
 
@@ -3604,7 +3605,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				return new WalletTransactionHistoryHeaderAPI {
 					TransactionId = t.TransactionId, Sender = transactionId.Account.ToString(), Timestamp = t.Timestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture), Status = t.Status,
-					Version = new {transactionType = version.Type.Value, major = version.Major.Value, minor = version.Minor.Value}, Local = t.Local, Note = t.Note, Recipient = t.Recipient
+					Version = new VersionAPI() {TransactionType = version.Type.Value.Value, Major = version.Major.Value, Minor = version.Minor.Value}, Local = t.Local, Note = t.Note, Recipient = t.Recipient
 				};
 			}).OrderByDescending(t => t.Timestamp).ToList());
 
@@ -3625,7 +3626,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				return new WalletTransactionHistoryDetailsAPI {
 					TransactionId = t.TransactionId, Sender = new TransactionId(t.TransactionId).Account.ToString(), Timestamp = t.Timestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture), Status = t.Status,
-					Version = new {transactionType = version.Type.Value, major = version.Major.Value, minor = version.Minor.Value}, Recipient = t.Recipient, Contents = t.Contents, Local = t.Local,
+					Version = new VersionAPI(){TransactionType = version.Type.Value.Value, Major = version.Major.Value, Minor = version.Minor.Value}, Recipient = t.Recipient, Contents = t.Contents, Local = t.Local,
 					Note = t.Note
 				};
 			}).ToList());

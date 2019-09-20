@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using System.Security;
@@ -1454,7 +1455,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			resetEvent.WaitOne(TimeSpan.FromHours(5));
 		}
 
-		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, Dictionary<int, string> passphrases) {
+		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
 			this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
 				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ChangeWalletEncryption(correlationContext, encryptWallet, encryptKeys, encryptKeysIndividually, passphrases);
