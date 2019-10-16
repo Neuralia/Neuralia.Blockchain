@@ -15,6 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 	public abstract class RoutedTaskRoutingReceiver : RoutedTaskReceiver<IRoutedTask>, IRoutedTaskRoutingReceiver {
 
+		//TODO: this entire class may need a review, especially the executingTasks dictionary
 		public enum RouteMode {
 			ReceiverOnly,
 			Emiter
@@ -153,8 +154,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 			lock(this.locker) {
 				if(this.executingTasks.Any()) {
+
 					// now see if we have any parallel tasks that might finally be completed
-					targettedTask = this.executingTasks.FirstOrDefault(t => t.Value.threadTask?.IsCompleted ?? (true && (t.Key == taskId))).Value.routedTask;
+					targettedTask = this.executingTasks.FirstOrDefault(t => (t.Value.threadTask?.IsCompleted ?? true)).Value.routedTask;
 
 					if(targettedTask != null) {
 						if(this.executingTasks.ContainsKey(taskId)) {
@@ -355,7 +357,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 						continue;
 					}
 
-					if(absoluteTimeout < DateTime.Now) {
+					if(absoluteTimeout < DateTime.UtcNow) {
 						// time out, we stop here
 						return false;
 					}
@@ -373,7 +375,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 						Thread.Sleep(100);
 
 					}
-				} while((DateTime.Now < absoluteTimeout) && !found);
+				} while((DateTime.UtcNow < absoluteTimeout) && !found);
 
 				return found;
 			} finally {
@@ -458,7 +460,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			if(!this.IsInthreaded) {
 				lock(this.locker) {
 					// clear completed tasks
-					foreach(var completedTask in this.executingTasks.Where(t => t.Value.threadTask?.IsCompleted ?? (true && (!this.awaitingTaskId.HasValue || (t.Key != this.awaitingTaskId.Value)))).ToArray()) {
+					foreach(var completedTask in this.executingTasks.Where(t =>  t.Value.threadTask == null || t.Value.threadTask.IsCompleted && (!this.awaitingTaskId.HasValue || (t.Key != this.awaitingTaskId.Value))).ToArray()) {
 						this.executingTasks.Remove(completedTask.Key);
 					}
 				}
@@ -495,7 +497,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		}
 
 		private DateTime GetAbsoluteTimeout(TimeSpan timeout) {
-			return timeout == TimeSpan.MaxValue ? DateTime.MaxValue : DateTime.Now.Add(timeout);
+			return timeout == TimeSpan.MaxValue ? DateTime.MaxValue : DateTime.UtcNow.Add(timeout);
 		}
 
 		protected override bool ProcessTask(IRoutedTask task) {
@@ -506,12 +508,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 			if(this.IsInthreaded) {
 
-				lock(this.locker) {
-					this.executingTasks.Add(task.Id, (null, (InternalRoutedTask) task));
-				}
-
 				RoutedTaskProcessor.ProcessTask((InternalRoutedTask) task, this.Owner);
-
+				
 				return true;
 			}
 

@@ -1,5 +1,5 @@
 ﻿using System.IO;
-using System.IO.Compression;
+using Ionic.Zlib;
 using Microsoft.IO;
 using Neuralia.Blockchains.Tools.Data;
 
@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 			using(RecyclableMemoryStream output = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("compress")) {
 
-				using(GZipStream compressor = new GZipStream(output, this.ConvertCompression(level), true)) {
+				using(GZipStream compressor = new GZipStream(output, CompressionMode.Compress, this.ConvertCompression2(level), true)) {
 					compressor.Write(data.Bytes, data.Offset, data.Length);
 				}
 				return ByteArray.Create(output);
@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		protected override SafeArrayHandle CompressData(SafeArrayHandle data) {
-			return this.CompressData(data, CompressionLevelByte.Fastest);
+			return this.CompressData(data, CompressionLevelByte.Default);
 		}
 
 		protected override SafeArrayHandle DecompressData(SafeArrayHandle data) {

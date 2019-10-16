@@ -294,7 +294,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 						compressedBytes = Compressors.WalletCompressor.Compress(databaseBytes);
 
-						encryptedBytes = new FileEncryptor().Encrypt(compressedBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters);
+						encryptedBytes = FileEncryptor.Encrypt(compressedBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters);
 
 						if(wrapEncryptedBytes) {
 							// wrap the encrypted byes with the flag marker
@@ -359,7 +359,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						encryptedWalletFileBytes = this.TransactionalFileSystem.ReadAllBytes(filename);
 					}
 
-					using(SafeArrayHandle decryptedWalletBytes = new FileEncryptor().Decrypt(encryptedWalletFileBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters)) {
+					using(SafeArrayHandle decryptedWalletBytes = FileEncryptor.Decrypt(encryptedWalletFileBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters)) {
 
 						return Compressors.WalletCompressor.Decompress(decryptedWalletBytes);
 					}
@@ -409,7 +409,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			FileExtensions.EnsureDirectoryStructure(backupsPath, this.centralCoordinator.FileSystem);
 
 			string zipFile = Path.Combine(backupsPath, "temp.zip");
-			string resultsFile = Path.Combine(backupsPath, $"backup.{DateTime.Now:yyyy-dd-M--HH-mm-ss}.neuralia");
+			string resultsFile = Path.Combine(backupsPath, $"backup.{DateTime.UtcNow:yyyy-dd-M--HH-mm-ss}.neuralia");
 
 			if(this.centralCoordinator.FileSystem.File.Exists(zipFile)) {
 				this.centralCoordinator.FileSystem.File.Delete(zipFile);
@@ -421,7 +421,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 			ZipFile.CreateFromDirectory(walletPath, zipFile);
 
-			EncryptorParameters encryptionParameters = XChaChaFileEncryptor.GenerateEncryptionParameters(13);
+			XChachaEncryptorParameters encryptionParameters = XChaChaFileEncryptor.GenerateEncryptionParameters(13);
 
 			XChaChaFileEncryptor encryptor = new XChaChaFileEncryptor(encryptionParameters);
 
@@ -439,7 +439,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				this.centralCoordinator.FileSystem.File.Delete(zipFile);
 			}
 
-			return (resultsFile, ((ByteArray) encryptionParameters.salt).ToBase58(), encryptionParameters.iterations);
+			return (resultsFile, ((ByteArray) encryptionParameters.Salt).ToBase58(), encryptionParameters.Iterations);
 		}
 
 		public virtual string GetWalletAccountsContentsFolderPath(Guid AccountUuid) {

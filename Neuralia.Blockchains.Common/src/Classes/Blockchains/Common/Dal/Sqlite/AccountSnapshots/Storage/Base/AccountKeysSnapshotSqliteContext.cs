@@ -19,7 +19,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		protected override void OnModelCreating(ModelBuilder modelBuilder) {
 
 			modelBuilder.Entity<STANDARD_ACCOUNT_KEYS_SNAPSHOT>(eb => {
-				eb.HasKey(c => new Tuple<byte, long>(c.OrdinalId, c.AccountId));
+				eb.HasKey(c => c.CompositeKey);
+				
+				eb.HasIndex(c => c.AccountId);
+				eb.HasIndex(c => c.OrdinalId);
 				eb.ToTable("StandardAccountKeys");
 			});
 

@@ -21,11 +21,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			XCHACHA_40 = 2
 		}
 
-		protected readonly EncryptorParameters parameters;
+		protected readonly XChachaEncryptorParameters parameters;
 
 		protected readonly XChachaEngine xchachaCipher;
 
-		public XChaChaFileEncryptor(EncryptorParameters parameters) {
+		public XChaChaFileEncryptor(XChachaEncryptorParameters parameters) {
 
 			this.parameters = parameters;
 
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			cipher.Reset();
 
 			try {
-				using(Rfc2898DeriveBytes rfc2898DeriveBytes = new Rfc2898DeriveBytes(password.ToExactByteArrayCopy(), this.parameters.salt, this.parameters.iterations)) {
+				using(Rfc2898DeriveBytes rfc2898DeriveBytes = new Rfc2898DeriveBytes(password.ToExactByteArrayCopy(), this.parameters.Salt.ToExactByteArrayCopy(), this.parameters.Iterations)) {
 
 					ByteArray Key = rfc2898DeriveBytes.GetBytes(256 / 8);
 					ByteArray IV = rfc2898DeriveBytes.GetBytes(192 / 8);
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return macKey;
 		}
 
-		public static EncryptorParameters GenerateEncryptionParameters(int saltLength = 500, ChachaRounds rounds = ChachaRounds.XCHACHA_40) {
+		public static XChachaEncryptorParameters GenerateEncryptionParameters(int saltLength = 500, ChachaRounds rounds = ChachaRounds.XCHACHA_40) {
 
 			SecureRandom rnd = new SecureRandom();
 
@@ -84,7 +84,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 				cipherType = EncryptorParameters.SymetricCiphers.XCHACHA_20;
 			}
 
-			return new EncryptorParameters {cipher = cipherType, salt = salt.ToExactByteArrayCopy(), iterations = rnd.Next(1000, short.MaxValue), keyBitLength = 256};
+			return new XChachaEncryptorParameters() {cipher = cipherType, Salt = salt.ToExactByteArrayCopy(), Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
 		}
 
 		public SafeArrayHandle Encrypt(SafeArrayHandle plain, SecureString password) {

@@ -64,20 +64,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			return nodeList;
 		}
 
-		protected override void DisposeAll(bool disposing) {
-			base.DisposeAll(disposing);
+		protected override void DisposeAll() {
+			base.DisposeAll();
 
-			if(disposing) {
-				if(this.InitialPrivateKey != null) {
-					Array.Clear(this.InitialPrivateKey, 0, this.InitialPrivateKey.Length);
-					this.InitialPrivateKey = null;
-				}
-
-				// yes, its good to clear this. just in case
-				this.KeyUseIndex = 0;
-				this.MaximumHeight = 0;
+			if(this.InitialPrivateKey != null) {
+				Array.Clear(this.InitialPrivateKey, 0, this.InitialPrivateKey.Length);
+				this.InitialPrivateKey = null;
 			}
 
+			// yes, its good to clear this. just in case
+			this.KeyUseIndex = 0;
+			this.MaximumHeight = 0;
 		}
 	}
 }

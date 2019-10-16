@@ -8,9 +8,11 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Neuralia.Blockchains.Core</RootNamespace>
     <AssemblyName>Neuralia.Blockchains.Core</AssemblyName>
-    <TargetFrameworks>netstandard2.0;netcoreapp2.2</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netcoreapp3.0</TargetFrameworks>
     <PackageId>Neuralia.Blockchains.Core</PackageId>
     <VersionPrefix>1.0.0</VersionPrefix>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
 
     <!--<DefineConstants>DETERMINISTIC_DEBUG</DefineConstants> -->
     <!--    <DefineConstants>PARALLEL_1</DefineConstants>-->
@@ -27,19 +29,28 @@
     <PackageReference Include="Neuralia.STUN" Version="1.0.0" />
     <PackageReference Include="Neuralia.Data.HashFunction.xxHash" Version="1.0.0" />
 
+    <PackageReference Include="DotNetZip" Version="1.13.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="LiteDB" Version="4.1.4" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="3.0.0" />
     <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.2.2" />
     <PackageReference Include="morelinq" Version="3.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="RestSharp" Version="106.6.10" />
     <PackageReference Include="RT.Comb" Version="2.3.0" />
-    <PackageReference Include="Serilog" Version="2.8.0" />
-    <PackageReference Include="System.IO.Abstractions" Version="6.0.27" />
-    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="6.0.27" />
+    <PackageReference Include="Serilog" Version="2.9.0" />
+    <PackageReference Include="System.IO.Abstractions" Version="7.0.5" />
+    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="7.0.5" />
     <PackageReference Include="Pipelines.Sockets.Unofficial" Version="2.0.25" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.0' ">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="3.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="2.2.6" />
   </ItemGroup>
+
   <ItemGroup>
   </ItemGroup>
 

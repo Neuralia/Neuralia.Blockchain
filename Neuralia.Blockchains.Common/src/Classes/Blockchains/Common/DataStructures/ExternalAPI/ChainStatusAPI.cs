@@ -1,8 +1,6 @@
-using MessagePack;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
 	
-	[MessagePackObject(keyAsPropertyName: true)]
 	public class ChainStatusAPI {
 		public bool WalletExists { get; set; }
 		public bool IsWalletLoaded { get; set; }

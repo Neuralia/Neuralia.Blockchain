@@ -13,7 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 
 		public int CertificateId { get; set; }
 		public ComponentVersion CertificateVersion { get; set; }
-		public AccreditationCertificateType CertificateType { get; set; }
+		public int CertificateType { get; set; }
 		public Enums.CertificateApplicationTypes ApplicationType { get; set; }
 		public Enums.CertificateStates CertificateState { get; set; }
 		public DateTime EmissionDate { get; set; }

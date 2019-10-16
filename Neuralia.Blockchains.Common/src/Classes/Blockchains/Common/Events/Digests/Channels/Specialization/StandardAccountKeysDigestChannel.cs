@@ -57,6 +57,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			foreach(var result in results) {
 				ACCOUNT_KEYS_CARD card = this.CreateNewCardInstance();
 
+
 				card.Id = accountId;
 				card.OrdinalId = result.Key;
 				card.PublicKey = result.Value.Entries[AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys].ToExactByteArray();

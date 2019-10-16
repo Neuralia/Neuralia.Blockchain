@@ -53,6 +53,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return Directory.GetFiles(this.folderPath).Where(f => Path.GetFileName(f).StartsWith(this.GroupRoot)).ToList();
 		}
 
+		
 		protected int GetKeyGroup(long key) {
 			return this.FindIndex(key).index;
 		}

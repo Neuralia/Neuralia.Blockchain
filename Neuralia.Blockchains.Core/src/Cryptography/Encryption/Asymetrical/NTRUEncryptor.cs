@@ -58,13 +58,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				try {
-					this.parameters.Dispose();
-
-				} finally {
-					this.IsDisposed = true;
-				}
+				this.parameters.Dispose();
 			}
+			this.IsDisposed = true;
 		}
 
 		~NtruEncryptor() {

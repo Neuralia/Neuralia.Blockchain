@@ -139,13 +139,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	#region internal classes
 
 		public abstract class Hop : IDisposable2 {
-			public readonly SafeArrayHandle data;
+			public readonly SafeArrayHandle data = SafeArrayHandle.Create();
 			public bool IsHashed { get; set; }
 			public abstract SafeArrayHandle GetHopBytes(int level);
 
 
 			protected Hop(SafeArrayHandle entry) {
-				this.data = entry??new SafeArrayHandle();
+				if(entry != null) {
+					this.data.Entry = entry.Entry;
+				}
+
 				this.IsHashed = false;
 
 			}
@@ -166,11 +169,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					return;
 				}
 
-				this.DisposeAll(disposing);
+				if(disposing) {
+					this.DisposeAll();
+				}
+
 				this.IsDisposed = true;
 			}
 
-			protected virtual void DisposeAll(bool disposing) {
+			protected virtual void DisposeAll() {
 				this.data?.Dispose();
 			}
 
@@ -270,8 +276,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				}
 			}
 
-			protected override void DisposeAll(bool disposing) {
-				base.DisposeAll(disposing);
+			protected override void DisposeAll() {
+				base.DisposeAll();
 
 				foreach(var hop in this.ChainingHops) {
 					hop.Dispose();

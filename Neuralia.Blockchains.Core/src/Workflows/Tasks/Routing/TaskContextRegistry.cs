@@ -18,10 +18,6 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 
 		public static TaskContextRegistry Instance { get; } = new TaskContextRegistry();
 
-		public void RegisterActiveTaskContext(TaskRoutingContext taskRoutingContext) {
-			this.RegisterActiveTaskContext(taskRoutingContext, new CorrelationContext());
-		}
-
 		public void ClearActiveTaskRoutingContext() {
 			lock(this.locker) {
 				int threadId = Thread.CurrentThread.ManagedThreadId;
@@ -32,7 +28,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 			}
 		}
 
-		public void RegisterActiveTaskContext(TaskRoutingContext taskRoutingContext, CorrelationContext correlationContext) {
+		public void RegisterActiveTaskContext(TaskRoutingContext taskRoutingContext) {
 			lock(this.locker) {
 				int threadId = Thread.CurrentThread.ManagedThreadId;
 
@@ -40,7 +36,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 					this.registry.Add(threadId, null);
 				}
 
-				this.registry[threadId] = new TaskContext {TaskRoutingContext = taskRoutingContext, CorrelationContext = correlationContext};
+				this.registry[threadId] = new TaskContext {TaskRoutingContext = taskRoutingContext};
 			}
 		}
 
@@ -65,12 +61,11 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		public CorrelationContext GetTaskRoutingCorrelationContext() {
 			TaskContext context = this.GetTaskRoutingContext();
 
-			return context?.CorrelationContext ?? new CorrelationContext();
+			return context?.TaskRoutingContext.OwnerTask.CorrelationContext ?? new CorrelationContext();
 		}
 	}
 
 	public class TaskContext {
-		public CorrelationContext CorrelationContext;
 		public TaskRoutingContext TaskRoutingContext;
 	}
 }

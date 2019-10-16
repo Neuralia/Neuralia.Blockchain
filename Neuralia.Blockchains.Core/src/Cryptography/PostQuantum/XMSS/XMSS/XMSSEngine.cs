@@ -21,6 +21,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 	/// <remarks>this was built according to the XMSS RFC https://tools.ietf.org/html/rfc8391</remarks>
 	public class XMSSEngine : IDisposable2 {
 
+		/// <summary>
+		/// How many processing loops do we take before resting and sleeping the thread?
+		/// </summary>
+		private const int LOOP_REST_COUNT = 10;
+		
 		private readonly int digestLength;
 		private readonly int height;
 
@@ -381,6 +386,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				Thread.CurrentThread.Priority = ThreadPriority.BelowNormal;
 				ThreadContext threadContext = this.threadContexts[index];
 				NodeInfo workingNode = null;
+				int counter = 0;
 
 				while((!completed && (workingNode != null)) || this.readyNodes.TryDequeue(out workingNode) || !this.incompleteNodes.IsEmpty) {
 					// ok, lets process the node
@@ -459,6 +465,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 						} else {
 							workingNode = null;
 						}
+
+						if(counter >= LOOP_REST_COUNT) {
+							counter = 0;
+							// ok, we reached our counter limit, let's sleep a bit to be nice with the rest of the system
+							Thread.Sleep(10);
+						} else {
+							counter++;
+						}
 					} else {
 						// ok, we have nothing, let's see who is available
 						lock(this.locker) {
@@ -473,8 +487,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 						}
 
 						if(workingNode == null) {
-							// we found nothing, lets sleep a bit untl something becomes available
+							// we found nothing, lets sleep a bit until something becomes available
 							Thread.Sleep(10);
+							counter = 0;
 						}
 					}
 				}

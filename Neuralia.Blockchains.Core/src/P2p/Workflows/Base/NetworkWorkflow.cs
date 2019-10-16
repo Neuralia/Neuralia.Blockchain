@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 
 			this.messageFactory = this.CreateMessageFactory();
 
-			if(GlobalSettings.ApplicationSettings.P2pEnabled) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 				// this is our own workflow, we ensure the client is always 0. (no client, but rather us)
 				this.ClientId = this.GetClientId();
 

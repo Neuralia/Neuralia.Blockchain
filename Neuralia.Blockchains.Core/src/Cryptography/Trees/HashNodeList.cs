@@ -388,14 +388,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			
 
 			if(disposing && !this.IsDisposed) {
-
-				try {
-					foreach(var entry in this.nodes) {
-						entry?.Dispose();
-					}
-					
-				}  finally {
-					
+				
+				foreach(var entry in this.nodes) {
+					entry?.Dispose();
 				}
 			}
 			

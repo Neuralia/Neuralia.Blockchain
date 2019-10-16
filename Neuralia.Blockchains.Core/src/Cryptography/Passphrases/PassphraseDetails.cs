@@ -29,12 +29,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 		protected void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				try {
-					this.DisposeAll();
-				} finally {
-					this.IsDisposed = true;
-				}
+				this.DisposeAll();
 			}
+			this.IsDisposed = true;
 		}
 
 		protected virtual void DisposeAll() {

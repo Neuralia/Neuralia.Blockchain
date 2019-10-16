@@ -152,10 +152,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 
 			//TODO: do it with bouncycastle (DotNetUtilities.)
 			throw new NotImplementedException();
-#elif (NETCOREAPP2_2)
-			return x509.CopyWithPrivateKey(DotNetUtilitiesExtensions.ToRSA(rsaparams));
 #else
-	throw new NotImplementedException();
+			return x509.CopyWithPrivateKey(DotNetUtilitiesExtensions.ToRSA(rsaparams));
 #endif
 
 		}

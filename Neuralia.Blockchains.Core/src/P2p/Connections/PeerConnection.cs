@@ -51,7 +51,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.connection = connection;
 
 			this.direction = direction;
-			this.ConnectionTime = DateTime.Now;
+			this.ConnectionTime = DateTime.UtcNow;
 		}
 
 		public Guid ClientUuid => this.connection.ReportedUuid;
@@ -90,7 +90,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <summary>
 		///     if we have this IP whitelisted, then we dont remove it when culling connections
 		/// </summary>
-		public bool Locked => GlobalSettings.ApplicationSettings.Whitelist.Any(w => w.ip == this.Ip);
+		public bool Locked => GlobalSettings.ApplicationSettings.Whitelist.Any(w => w.Ip == this.Ip);
 
 		public bool NoSupportedChains => !this.ValidBlockchainVersions.Any();
 		public bool NoValidChainVersion => !this.ValidBlockchainVersions.Values.All(v => v);
@@ -175,10 +175,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				try {
 					this.connection.Close();
 				} finally {
-					this.IsDisposed = true;
 					this.TriggerDisposed();
 				}
 			}
+			this.IsDisposed = true;
 		}
 
 		~PeerConnection() {

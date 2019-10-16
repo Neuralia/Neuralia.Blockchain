@@ -49,6 +49,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			return generator;
 		}
+		
+		public static SystemEventGenerator WalletLoadingErrorEvent() {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.WalletLoadingError;
+
+			generator.Parameters = new object[] { };
+
+			return generator;
+		}
+		
 
 		public static SystemEventGenerator WalletCreationStartedEvent() {
 			SystemEventGenerator generator = new SystemEventGenerator();
@@ -342,10 +353,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionReceived;
 
 			generator.Parameters = new object[] {
-				new {
-					impactedLocalPublishedAccounts = impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), impactedLocalPublishedAccountsUuids = impactedLocalPublishedAccountsUuids.ToArray(), impactedLocalDispatchedAccounts = impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), impactedLocalDispatchedAccountsUuids = impactedLocalPublishedAccounts.ToArray(),
-					transactionId = transactionId.ToString()
-				}
+				transactionId.ToString(), /*transactionId*/
+				impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalPublishedAccounts*/
+				impactedLocalPublishedAccountsUuids.ToArray(), /*impactedLocalPublishedAccountsUuids*/
+				impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalDispatchedAccounts*/
+				impactedLocalPublishedAccounts.ToArray() /*impactedLocalDispatchedAccountsUuids*/
+
 			};
 
 			return generator;

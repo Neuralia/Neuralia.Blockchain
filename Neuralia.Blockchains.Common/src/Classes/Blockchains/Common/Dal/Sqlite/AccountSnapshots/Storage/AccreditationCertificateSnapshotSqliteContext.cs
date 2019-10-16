@@ -30,7 +30,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 				eb.Property(b => b.CertificateState).HasConversion(v => (byte) v, v => (Enums.CertificateStates) v);
 
-				eb.Property(e => e.CertificateType).HasConversion(v => (int) v.Value, v => (AccreditationCertificateType) v);
 				eb.Property(e => e.CertificateVersion).HasConversion(v => v.ToString(), v => new ComponentVersion(v));
 
 				eb.Property(b => b.CertificateAccountPermissionType).HasConversion(v => (int) v, v => (Enums.CertificateAccountPermissionTypes) v);

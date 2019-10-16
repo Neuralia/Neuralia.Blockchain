@@ -39,13 +39,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					return;
 				}
 
-				if(certificate.EmissionDate > DateTime.Now) {
+				if(certificate.EmissionDate > DateTime.UtcNow) {
 					Invalid?.Invoke();
 
 					return;
 				}
 
-				if(certificate.ValidUntil < DateTime.Now) {
+				if(certificate.ValidUntil < DateTime.UtcNow) {
 					Invalid?.Invoke();
 
 					return;

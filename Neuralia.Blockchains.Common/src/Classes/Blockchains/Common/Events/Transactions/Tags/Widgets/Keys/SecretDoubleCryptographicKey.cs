@@ -22,6 +22,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.SecondKey.Dehydrate(dehydrator);
 		}
 
+		public override bool IsEmpty => base.IsEmpty || (this.SecondKey?.IsEmpty??true);
+
 		public override void Rehydrate(byte id, IDataRehydrator rehydrator) {
 			base.Rehydrate(id, rehydrator);
 
@@ -46,12 +48,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.SecretDouble;
-		}
-		
-		protected override void DisposeAll(bool disposing) {
-			base.DisposeAll(disposing);
-			
-			this.SecondKey?.Dispose();
 		}
 	}
 }

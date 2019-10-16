@@ -31,6 +31,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		IRoutedTaskRoutingHandler Caller { get; set; }
 		ITaskRouter Router { get; }
 		TaskChildrenContext ParentContext { get; set; }
+		CorrelationContext CorrelationContext { get; set; }
 		bool HasChildren { get; }
 		int CallerThreadId { get; }
 		new string Destination { get; set; }
@@ -76,7 +77,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		private Action<T, TaskRoutingContext> action;
 		private IRoutedTaskRoutingHandler caller;
 		private TaskChildrenContext childrenContext;
-
+		
 		private Action<TaskExecutionResults, TaskRoutingContext> dispatchReturned;
 		private Action<TaskExecutionResults, TaskRoutingContext> stashCompleted;
 
@@ -108,6 +109,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		public RoutedTask.ExecutionMode Mode { get; set; } = RoutedTask.ExecutionMode.Async;
 		public TaskExecutionResults TaskExecutionResults { get; } = new TaskExecutionResults();
 
+		public CorrelationContext CorrelationContext { get; set; }
 		public string Destination { get; set; }
 		public string Name { get; set; }
 

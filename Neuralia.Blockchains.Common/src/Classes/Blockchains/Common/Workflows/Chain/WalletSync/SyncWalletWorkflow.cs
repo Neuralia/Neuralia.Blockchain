@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
@@ -43,11 +45,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		public bool? AllowGrowth { get; set; }
+		private bool IsBusy { get; set; } = false;
+		private bool shutdownRequest = false;
 
 		/// <summary>
 		///     The latest block that may have been received
 		/// </summary>
 		public Dictionary<BlockId, IBlock> LoadedBlocks { get; } = new Dictionary<BlockId, IBlock>();
+
+		protected virtual bool CheckShouldStop() {
+
+			return this.shutdownRequest || this.CheckCancelRequested();
+		}
 
 		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
 
@@ -74,6 +83,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			try {
 
+				this.centralCoordinator.ShutdownRequested += this.CentralCoordinatorOnShutdownRequested;
+
+				this.IsBusy = true;
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.WalletSyncStarted);
 				Log.Verbose("Wallet sync started");
 
@@ -111,7 +123,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// load the blocks one at a time
 				while(sequentialSync && (currentBlockHeight <= currentHeight)) {
 
-					this.CheckShouldCancel();
+					if(this.CheckShouldStop()) {
+						break;
+					}
 
 					currentSynthesizedBlock = nextSynthesizedBlock;
 
@@ -149,6 +163,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(GlobalSettings.ApplicationSettings.MobileMode) {
 
+					this.CheckShouldCancel();
+
 					currentBlockHeight = startBLockHeight;
 
 					// after we synced the baseline, in mobile we can increment by blocks
@@ -163,9 +179,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CleanSynthesizedBlockCache();
-			} finally {
-				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.WalletSyncEnded);
+
 				Log.Verbose("Wallet sync completed");
+			} catch(Exception ex) {
+				Log.Error(ex, "Wallet sync failed");
+
+				throw;
+			} finally {
+				this.IsBusy = false;
+
+				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.WalletSyncEnded);
+				this.centralCoordinator.ShutdownRequested -= this.CentralCoordinatorOnShutdownRequested;
 
 				try {
 					var synced = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
@@ -176,6 +200,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				} catch {
 
 				}
+			}
+		}
+
+		/// <summary>
+		///     Ensure that we dont stop during a sync step if a shutdown has been requested
+		/// </summary>
+		/// <param name="beacons"></param>
+		private void CentralCoordinatorOnShutdownRequested(ConcurrentBag<Task> beacons) {
+
+			this.shutdownRequest = true;
+
+			// ok, if this happens while we are syncing, we ask for a grace period until we are ready to clean exit
+			if(this.IsBusy) {
+				beacons.Add(new TaskFactory().StartNew(() => {
+
+					while(true) {
+						if(!this.IsBusy) {
+							// we are ready to go
+							break;
+						}
+
+						// we have to wait a little more
+						Thread.Sleep(500);
+					}
+				}));
 			}
 		}
 
@@ -209,6 +258,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// the update wallet block must be run before anything else is run. hence we run it independently first.
 				if(!allAccountsUpdatedWalletBlock) {
 
+					if(this.CheckShouldStop()) {
+						return;
+					}
 					Log.Verbose($"updating wallet blocks for block {synthesizedBlock.BlockId}...");
 
 					this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
@@ -226,7 +278,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					(allAccountsWalletKeyLogSet, allImmediateAccountsImpactsPerformed, allInterpretatonsCompleted) = CheckOthersStatus();
 
 					IndependentActionRunner.Run(() => {
-						this.CheckShouldCancel();
+						if(this.CheckShouldStop()) {
+							return;
+						}
 
 						Log.Verbose($"UpdateWalletKeyLogs  for block {synthesizedBlock.BlockId}...");
 
@@ -240,7 +294,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 						});
 					}, () => {
-						this.CheckShouldCancel();
+						if(this.CheckShouldStop()) {
+							return;
+						}
 
 						Log.Verbose($"ProcessBlockImmediateAccountsImpact for block {synthesizedBlock.BlockId}...");
 
@@ -251,7 +307,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 
 					}, () => {
-						this.CheckShouldCancel();
+						if(this.CheckShouldStop()) {
+							return;
+						}
 
 						Log.Verbose($"InterpretNewBlockLocalWallet for block {synthesizedBlock.BlockId}...");
 

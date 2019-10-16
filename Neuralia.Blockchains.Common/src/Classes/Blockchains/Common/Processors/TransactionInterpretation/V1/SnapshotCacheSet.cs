@@ -318,6 +318,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return null;
 			}
 
+			entry.CompositeKey = key.AccountId.ToString() + key.OrdinalId.ToString();
 			entry.AccountId = key.AccountId;
 			entry.OrdinalId = key.OrdinalId;
 

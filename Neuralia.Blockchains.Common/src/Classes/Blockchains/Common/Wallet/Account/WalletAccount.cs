@@ -58,19 +58,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		List<KeyInfo> Keys { get; set; }
 
-		EncryptorParameters KeyLogFileEncryptionParameters { get; set; }
+		IEncryptorParameters KeyLogFileEncryptionParameters { get; set; }
 
 		ByteArray KeyLogFileSecret { get; set; }
 
-		EncryptorParameters KeyHistoryFileEncryptionParameters { get; set; }
+		IEncryptorParameters KeyHistoryFileEncryptionParameters { get; set; }
 
 		ByteArray KeyHistoryFileSecret { get; set; }
 
-		EncryptorParameters ChainStateFileEncryptionParameters { get; set; }
+		IEncryptorParameters ChainStateFileEncryptionParameters { get; set; }
 
 		ByteArray ChainStateFileSecret { get; set; }
 
-		EncryptorParameters TransactionCacheFileEncryptionParameters { get; set; }
+		IEncryptorParameters TransactionCacheFileEncryptionParameters { get; set; }
 
 		ByteArray TransactionCacheFileSecret { get; set; }
 
@@ -94,7 +94,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <summary>
 		///     The ChainState file encryption parameters
 		/// </summary>
-		public EncryptorParameters ElectionCacheFileEncryptionParameters { get; set; }
+		public IEncryptorParameters ElectionCacheFileEncryptionParameters { get; set; }
 
 		/// <summary>
 		///     The ChainState file encryption key
@@ -109,7 +109,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <summary>
 		///     The Snapshot file encryption parameters
 		/// </summary>
-		public EncryptorParameters SnapshotFileEncryptionParameters { get; set; }
+		public IEncryptorParameters SnapshotFileEncryptionParameters { get; set; }
 
 		public Guid AccountUuid { get; set; }
 
@@ -203,20 +203,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <summary>
 		///     The keyLog file encryption parameters
 		/// </summary>
-		public EncryptorParameters KeyLogFileEncryptionParameters { get; set; }
+		public IEncryptorParameters KeyLogFileEncryptionParameters { get; set; }
 
 		/// <summary>
 		///     The keylog file encryption key
 		/// </summary>
 		public ByteArray KeyLogFileSecret { get; set; }
 
-		public EncryptorParameters KeyHistoryFileEncryptionParameters { get; set; }
+		public IEncryptorParameters KeyHistoryFileEncryptionParameters { get; set; }
 		public ByteArray KeyHistoryFileSecret { get; set; }
 
 		/// <summary>
 		///     The ChainState file encryption parameters
 		/// </summary>
-		public EncryptorParameters ChainStateFileEncryptionParameters { get; set; }
+		public IEncryptorParameters ChainStateFileEncryptionParameters { get; set; }
 
 		/// <summary>
 		///     The ChainState file encryption key
@@ -226,7 +226,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <summary>
 		///     The ChainState file encryption parameters
 		/// </summary>
-		public EncryptorParameters TransactionCacheFileEncryptionParameters { get; set; }
+		public IEncryptorParameters TransactionCacheFileEncryptionParameters { get; set; }
 
 		/// <summary>
 		///     The ChainState file encryption key

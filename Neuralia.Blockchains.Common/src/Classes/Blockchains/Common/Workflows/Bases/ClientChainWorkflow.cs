@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 
 			this.CorrelationId = GlobalRandom.GetNextUInt();
 
-			if(GlobalSettings.ApplicationSettings.P2pEnabled) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				// this is our own workflow, we ensure the client is always 0. (no client, but rather us)
 				this.ClientId = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid;

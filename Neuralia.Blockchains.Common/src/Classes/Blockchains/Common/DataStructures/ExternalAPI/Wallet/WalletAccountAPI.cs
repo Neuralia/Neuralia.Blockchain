@@ -1,11 +1,9 @@
 using System;
-using MessagePack;
 using Neuralia.Blockchains.Core;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI.Wallet {
 	
 
-	[MessagePackObject(keyAsPropertyName: true)]
 	public class WalletAccountAPI {
 		public Guid AccountUuid { get; set; }
 		public string AccountId { get; set; }
@@ -14,7 +12,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public int Status { get; set; }
 	}
 
-	[MessagePackObject(keyAsPropertyName: true)]
 	public struct WalletAccountDetailsAPI {
 		public Guid AccountUuid { get; set; }
 		public string AccountId { get; set; }

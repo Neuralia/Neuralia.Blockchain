@@ -147,7 +147,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public SafeArrayHandle ConvertToDehydratedKey() {
 
 			if(((this.NextAccountSignatureType == BlockSignatureTypes.Genesis) || (this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential)) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature) {
-				return SignatureUtils.ConvertToDehydratedKey(this.ConvertToSecretKey());
+				var key = this.ConvertToSecretKey();
+				return SignatureUtils.ConvertToDehydratedKey(key);
 			}
 
 			return null;

@@ -7,6 +7,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 	public abstract class AccountKeysSnapshotSqliteEntry : IAccountKeysSnapshotSqliteEntry {
 
+		public string CompositeKey { get; set; }
 		public byte OrdinalId { get; set; }
 		public long AccountId { get; set; }
 

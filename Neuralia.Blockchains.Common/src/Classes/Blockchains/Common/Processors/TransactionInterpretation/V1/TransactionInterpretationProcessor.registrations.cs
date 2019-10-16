@@ -306,7 +306,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 						certificate.CertificateState = Enums.CertificateStates.Active;
 					}
 
-					certificate.CertificateType = t.CertificateType;
+					certificate.CertificateType = t.CertificateType.Value;
 					certificate.CertificateVersion = t.CertificateVersion;
 
 					certificate.EmissionDate = t.EmissionDate;

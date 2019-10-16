@@ -13,6 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 	public abstract class StandardAccountKeysDigestChannelCard : IStandardAccountKeysDigestChannelCard {
 
+		public string CompositeKey { get; set; }
 		public byte OrdinalId { get; set; }
 
 		public long AccountId {

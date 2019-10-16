@@ -61,12 +61,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
 
-			jsonDeserializer.SetProperty("PromisedNonceCombo", this.NextKeyHashSha2);
-			jsonDeserializer.SetProperty("PromisedNonceSha2", this.NextKeyHashSha3);
+			jsonDeserializer.SetProperty("NextKeyHashSha2", this.NextKeyHashSha2);
+			jsonDeserializer.SetProperty("NextKeyHashSha3", this.NextKeyHashSha3);
 			jsonDeserializer.SetProperty("NonceHash", this.NonceHash);
 
-			jsonDeserializer.SetProperty("SecondSecurityCategory", this.NextSecondSecurityCategory);
-			jsonDeserializer.SetProperty("SecondPublicKey", this.NextSecondPublicKey);
+			jsonDeserializer.SetProperty("NextSecondSecurityCategory", this.NextSecondSecurityCategory);
+			jsonDeserializer.SetProperty("NextSecondPublicKey", this.NextSecondPublicKey);
 
 		}
 	}

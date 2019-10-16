@@ -87,14 +87,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			return this.xmss.Verify(signature, message, publicKey);
 		}
 
-		protected override void DisposeAll(bool disposing) {
-			base.DisposeAll(disposing);
+		protected override void DisposeAll() {
+			base.DisposeAll();
 
-			if(disposing) {
-				this.xmss?.Dispose();
-				this.excutionContext?.Dispose();
-			}
-
+			this.xmss?.Dispose();
+			this.excutionContext?.Dispose();
 		}
 
 		public override int GetMaxMessagePerKey() {

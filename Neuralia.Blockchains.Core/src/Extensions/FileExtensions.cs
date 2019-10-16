@@ -48,11 +48,9 @@ namespace Neuralia.Blockchains.Core.Extensions {
 #if (NETSTANDARD2_0)
 				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
 
-#elif (NETCOREAPP2_2)
-				fileStream.Write(bytes);
-
 #else
-	throw new NotImplementedException();
+				fileStream.Write(bytes);
+				
 #endif
 			}
 		}
@@ -62,11 +60,8 @@ namespace Neuralia.Blockchains.Core.Extensions {
 #if (NETSTANDARD2_0)
 				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
 
-#elif (NETCOREAPP2_2)
-				fileStream.Write(bytes);
-
 #else
-	throw new NotImplementedException();
+				fileStream.Write(bytes);
 #endif
 			}
 		}
@@ -115,11 +110,9 @@ namespace Neuralia.Blockchains.Core.Extensions {
 #if (NETSTANDARD2_0)
 				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
 
-#elif (NETCOREAPP2_2)
-				fileStream.Write(bytes);
-
 #else
-	throw new NotImplementedException();
+				fileStream.Write(bytes);
+				
 #endif
 
 			}
@@ -130,11 +123,9 @@ namespace Neuralia.Blockchains.Core.Extensions {
 #if (NETSTANDARD2_0)
 				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
 
-#elif (NETCOREAPP2_2)
-				fileStream.Write(bytes);
-
 #else
-	throw new NotImplementedException();
+				fileStream.Write(bytes);
+				
 #endif
 			}
 		}

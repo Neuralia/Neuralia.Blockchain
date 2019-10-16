@@ -1,3 +1,4 @@
+using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Tools.Data;
@@ -21,17 +22,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		}
 
 		public static SafeArrayHandle ConvertToDehydratedKey(ISecretBlockNextAccountSignature source, byte ordinalId) {
-			using(ISecretDoubleCryptographicKey secretKey = ConvertToSecretKey(source, ordinalId)) {
+			ISecretDoubleCryptographicKey secretKey = ConvertToSecretKey(source, ordinalId);
 
-				return ConvertToDehydratedKey(secretKey);
-			}
+			return ConvertToDehydratedKey(secretKey);
 		}
 
 		public static SafeArrayHandle ConvertToDehydratedKey(ISecretDoubleCryptographicKey secretKey) {
 
 			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
-				secretKey.Dehydrate(dehydrator);
+				if(!secretKey.NextKeyHashSha2.HasData || !secretKey.NextKeyHashSha3.HasData || !secretKey.SecondKey.Key.HasData) {
+					int fdsds = 0;
 
+					fdsds += 2;
+					
+					
+
+				}
+				secretKey.Dehydrate(dehydrator);
 				return dehydrator.ToArray();
 			}
 		}

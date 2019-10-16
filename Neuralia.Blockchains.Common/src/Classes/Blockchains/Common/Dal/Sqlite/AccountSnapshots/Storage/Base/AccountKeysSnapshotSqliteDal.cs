@@ -60,6 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			this.PerformOperation(db => {
 				STANDARD_ACCOUNT_KEYS_SNAPSHOT accountKey = new STANDARD_ACCOUNT_KEYS_SNAPSHOT();
 
+				accountKey.CompositeKey = accountId.ToLongRepresentation().ToString()+ ordinal.ToString();
 				accountKey.AccountId = accountId.ToLongRepresentation();
 				accountKey.OrdinalId = ordinal;
 
@@ -81,8 +82,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		}
 
 		public void InsertUpdateAccountKey(AccountId accountId, byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId, long inceptionBlockId) {
+
+			var accountIdLong = accountId.ToLongRepresentation();
+			
 			this.PerformOperation(db => {
-				STANDARD_ACCOUNT_KEYS_SNAPSHOT accountKey = db.StandardAccountkeysSnapshots.SingleOrDefault(e => (e.OrdinalId == ordinal) && (e.AccountId == accountId.ToLongRepresentation()));
+				STANDARD_ACCOUNT_KEYS_SNAPSHOT accountKey = db.StandardAccountkeysSnapshots.SingleOrDefault(e => (e.OrdinalId == ordinal) && (e.AccountId == accountIdLong));
 
 				if(accountKey == null) {
 					this.InsertNewAccountKey(accountId, ordinal, key, declarationTransactionId, inceptionBlockId);

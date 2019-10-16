@@ -120,7 +120,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}
 
 			// ensure we have at least 2 workflow spaces per peer and a little more for the rest
-			int maximumWorkflows = (GlobalSettings.ApplicationSettings.maxPeerCount * 7) + 10;
+			int maximumWorkflows = (GlobalSettings.ApplicationSettings.MaxPeerCount * 7) + 10;
 
 			var maximumThreadCounts = GlobalSettings.ApplicationSettings.GetChainConfiguration(chainId).MaxWorkflowParallelCount;
 
@@ -538,9 +538,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.ColoredRoutedTaskReceiver.CheckTasks();
 		}
 
-		protected override void DisposeAll(bool disposing) {
+		protected override void DisposeAll() {
 
-			this.Dispose(disposing);
+			this.Dispose();
 
 			this.Stop();
 

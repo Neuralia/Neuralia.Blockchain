@@ -99,10 +99,10 @@ namespace Neuralia.Blockchains.Core.Network {
 			// seems to be needed in case the listener is not completely disposed yet (on linux and MacOs)
 			//https://github.com/dotnet/corefx/issues/24562
 			//TODO: this is a bug fix, and maybe in the future we dont need the below anymore.
-			if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
-				this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-				this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
-			}
+			// if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
+			// 	this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+			// 	this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
+			// }
 		}
 
 		/// <summary>
@@ -188,12 +188,13 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				IPEndPoint endPoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
 
-				bool shouldDisconnect = connectionInstance.server.IsConnectionBlacklisted(endPoint.Address);
+				// first thing, ensure rate limiting
+				bool shouldDisconnect = connectionInstance.server.CheckShouldDisconnect(endPoint);
 
 				if(!shouldDisconnect) {
 
 					// check to make sure we allow this client. If an IP address is blacklisted, we kill it completely and rudely. we dont care, they are blacklisted.
-
+					shouldDisconnect = connectionInstance.server.IsConnectionBlacklisted(endPoint.Address);
 				}
 
 				// we kill this connection as quickly as we can here
@@ -233,6 +234,10 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		}
 
+		protected virtual bool CheckShouldDisconnect(IPEndPoint endPoint) {
+			return RateLimiter.Instance.CheckEntryCanConnect(endPoint.Address) == false;
+		}
+		
 		/// <summary>
 		///     if a connection is blacklisted, we reject it immediately, no niceness
 		/// </summary>
@@ -250,7 +255,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				return true;
 			}
 
-			if(GlobalSettings.ApplicationSettings.Blacklist.Any(e => e.ip == address.ToString())) {
+			if(GlobalSettings.ApplicationSettings.Blacklist.Any(e => e.Ip == address.ToString())) {
 				return true;
 			}
 
@@ -289,22 +294,21 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		private void Dispose(bool disposing) {
-			try {
-				if(disposing && !this.IsDisposed) {
 
-					foreach(ITcpConnection connection in this.connections.ToList()) {
-						connection.Close();
-					}
+			if(disposing && !this.IsDisposed) {
 
-					if(this.listener.Connected) {
-						this.listener.Shutdown(SocketShutdown.Both);
-					}
-
-					this.listener.Dispose();
+				foreach(ITcpConnection connection in this.connections.ToList()) {
+					connection.Close();
 				}
-			} finally {
-				this.IsDisposed = true;
+
+				if(this.listener.Connected) {
+					this.listener.Shutdown(SocketShutdown.Both);
+				}
+
+				this.listener.Dispose();
 			}
+
+			this.IsDisposed = true;
 		}
 
 		public class ConnectionInstance {

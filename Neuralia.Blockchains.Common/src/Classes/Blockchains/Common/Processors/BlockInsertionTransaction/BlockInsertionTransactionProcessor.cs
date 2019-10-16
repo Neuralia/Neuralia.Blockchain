@@ -11,6 +11,8 @@ using Neuralia.Blockchains.Tools.Data;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.BlockInsertionTransaction {
 
 	public interface IBlockInsertionTransactionProcessor : IDisposable2 {
+		
+		long PublicBlockHeight { get; set; }
 		long DiskBlockHeight { get; set; }
 		DateTime LastBlockTimestamp { get; set; }
 		ushort LastBlockLifespan { get; set; }
@@ -42,6 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 			this.CreateSnapshot();
 		}
 
+		public long PublicBlockHeight { get; set; }
 		public long DiskBlockHeight { get; set; }
 
 		public DateTime LastBlockTimestamp { get; set; }
@@ -60,6 +63,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 
 			IChainStateProvider chainStateProvider = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
+			this.PublicBlockHeight = chainStateProvider.PublicBlockHeight;
 			this.DiskBlockHeight = chainStateProvider.DiskBlockHeight;
 			this.LastBlockTimestamp = chainStateProvider.LastBlockTimestamp;
 			this.LastBlockLifespan = chainStateProvider.LastBlockLifespan;
@@ -84,8 +88,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 			if(!this.commited) {
 
 				IChainStateProvider chainStateProvider = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase;
-
+				
 				chainStateProvider.DiskBlockHeight = this.DiskBlockHeight;
+				chainStateProvider.PublicBlockHeight = this.PublicBlockHeight;
 				chainStateProvider.LastBlockTimestamp = this.LastBlockTimestamp;
 				chainStateProvider.LastBlockLifespan = this.LastBlockLifespan;
 				chainStateProvider.LastBlockHash = this.LastBlockHash.ToExactByteArrayCopy();
@@ -111,16 +116,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 		}
 
 		private void Dispose(bool disposing) {
-			if(!this.IsDisposed) {
-				try {
+			if(!this.IsDisposed && disposing) {
 
-					if(disposing) {
-						this.Rollback();
-					}
-				} finally {
-					this.IsDisposed = true;
-				}
+				this.Rollback();
 			}
+			this.IsDisposed = true;
 		}
 
 		~BlockInsertionTransactionProcessor() {

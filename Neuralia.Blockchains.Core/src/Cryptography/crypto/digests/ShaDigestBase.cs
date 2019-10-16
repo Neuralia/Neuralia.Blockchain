@@ -180,18 +180,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 			GC.SuppressFinalize(this);
 		}
 
-		protected virtual void Dispose(bool disposing) {
+		private void Dispose(bool disposing) {
 			if(disposing && !this.IsDisposed) {
-				try {
-					this.sha.Dispose();
+				this.sha.Dispose();
 
-					this.data?.Return();
-					this.data = null;
-
-				} finally {
-					this.IsDisposed = true;
-				}
+				this.data?.Return();
+				this.data = null;
 			}
+			this.IsDisposed = true;
 		}
 
 		~ShaDigestBase() {

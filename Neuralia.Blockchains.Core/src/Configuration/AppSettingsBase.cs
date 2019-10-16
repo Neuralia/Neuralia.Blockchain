@@ -110,12 +110,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public bool MobileMode { get; set; } = false;
 
-		public int logLevel { get; set; }
+		public int LogLevel { get; set; }
 
-		public int acceptableTimeRange { get; set; } = 5; // in minutes
+		public int AcceptableTimeRange { get; set; } = 5; // in minutes
 
-		public int port { get; set; } = GlobalsService.DEFAULT_PORT;
-		public int rpcPort { get; set; } = GlobalsService.DEFAULT_RPC_PORT;
+		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
+		public int RpcPort { get; set; } = GlobalsService.DEFAULT_RPC_PORT;
 
 		public List<FullNode> Nodes { get; set; } = new List<FullNode>();
 
@@ -148,9 +148,9 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public int MaximumIpCacheCount { get; set; } = 1000;
 
-		public int maxPeerCount { get; set; } = 10;
+		public int MaxPeerCount { get; set; } = 10;
 
-		public int averagePeerCount { get; set; } = 5;
+		public int AveragePeerCount { get; set; } = 5;
 
 		/// <summary>
 		///     how do we delete the files when doing wallet transctions? safe is slower but clears data much better
@@ -165,7 +165,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		///     here we can reject IPs from the same CIDR range as ours.
 		/// </summary>
-		public bool AllowConnectionsFromLocalCIDRRange { get; set; } = true;
+		public bool AllowConnectionsFromLocalCidrRange { get; set; } = true;
 
 		/// <summary>
 		///     how long to store a passphrase before it is forgotten. null or -1 is infinite.
@@ -193,7 +193,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public UndocumentedDebugConfigurations UndocumentedDebugConfigurations { get; set; } = new UndocumentedDebugConfigurations();
 
-		public bool UseSTUNServer { get; set; } = false;
+		public bool UseStunServer { get; set; } = false;
 
 		//TODO: set to proper value
 		/// <summary>
@@ -235,11 +235,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public abstract ChainConfigurations GetChainConfiguration(BlockchainType chaintype);
 
 		public class Node {
-			public string ip { get; set; }
+			public string Ip { get; set; }
 		}
 
 		public class FullNode : Node {
-			public int port { get; set; } = 33888;
+			public int Port { get; set; } = 33888;
 		}
 
 		public class WhitelistedNode : Node {
@@ -267,8 +267,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 	#region options
 
 		public bool DisableTimeServer { get; set; } = false;
-		public bool DisableP2p { get; set; } = false;
-		public bool P2pEnabled => !this.DisableP2p;
+		public bool DisableP2P { get; set; } = false;
+		public bool P2PEnabled => !this.DisableP2P;
 
 	#endregion
 
@@ -285,7 +285,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		[Flags]
 		public enum RegistrationMethods : byte {
-			Web = 1 << 0,
+			Web = 1,
 			Gossip = 1 << 1,
 			WebOrGossip = Web | Gossip
 		}
@@ -568,7 +568,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public bool DebugNetworkMode { get; set; } = false;
 
 		// if true, we expect to operate in locahost only and wont expect a network interface to be present
-		public bool localhostOnly { get; set; } = false;
+		public bool LocalhostOnly { get; set; } = false;
 
 		/// <summary>
 		///     a debug option to skip if a peer is a hub.. useful to test the hubs, but otherwise not healthy for peers

@@ -68,6 +68,27 @@ namespace Neuralia.Blockchains.Core.Services {
 		public const byte POW_MAX_SOLUTIONS = 3;
 
 		public static readonly ushort POW_DIFFICULTY = (ushort) HashDifficultyUtils.DEFAULT_256_DIFFICULTY;
+		
+		
+		/// <summary>
+		/// The delay in minutes after which we will update our mining registration
+		/// </summary>
+		public const int UPDATE_MINING_REGISTRATION_DELAY = 60;
+		
+		/// <summary>
+		/// The aboslute timeout of a mining registration since the last update
+		/// </summary>
+		public const int MINING_REGISTRATION_TIMEOUT = UPDATE_MINING_REGISTRATION_DELAY * 2;
+		
+		/// <summary>
+		/// The delay between each query for mining status
+		/// </summary>
+		public const int UPDATE_MINING_STATUS_DELAY = 10;
+		
+		/// <summary>
+		/// How long to wait before the first mining status query after registration
+		/// </summary>
+		public const int UPDATE_MINING_STATUS_START_DELAY = 3;
 
 		//http://www.philosophicalgeek.com/2015/02/06/announcing-microsoft-io-recycablememorystream/
 		public static readonly RecyclableMemoryStreamManager RecyclableMemoryStreamManager;

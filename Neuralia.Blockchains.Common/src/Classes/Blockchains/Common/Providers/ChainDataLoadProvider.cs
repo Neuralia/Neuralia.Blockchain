@@ -37,7 +37,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		string GenesisFolderPath { get; }
 		string DigestHashesPath { get; }
 		IBlock LoadBlock(long blockId);
-
+		IBlock LoadLatestBlock();
+		
 		(IBlock block, IDehydratedBlock dehydratedBlock) LoadBlockAndMetadata(long blockId);
 
 		T LoadBlock<T>(long blockId)
@@ -105,6 +106,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		int? GetMessagesFileCount(Guid uuid);
 
 		(int index, long startingBlockId) FindBlockIndex(long blockId);
+		bool TestFastKeysPath();
 
 		SafeArrayHandle LoadBlockPartialTransactionBytes(long blockId, int offset, int length);
 		(SafeArrayHandle keyBytes, byte treeheight, byte hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
@@ -282,6 +284,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public IBlock LoadBlock(long blockId) {
 			return this.LoadBlock<IBlock>(blockId);
+		}
+
+		public IBlock LoadLatestBlock() {
+			return this.LoadBlock(this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight);
 		}
 
 		public (IBlock block, IDehydratedBlock dehydratedBlock) LoadBlockAndMetadata(long blockId) {
@@ -562,6 +568,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return IndexCalculator.ComputeIndex(blockId, this.BlockGroupingConfig.GroupingCount);
 		}
 
+		public bool TestFastKeysPath() {
+			return this.BlockchainEventSerializationFal.TestFastKeysPath();
+		}
+		
+		
 		/// <summary>
 		///     Return the sizes of all the files inside the block index
 		/// </summary>

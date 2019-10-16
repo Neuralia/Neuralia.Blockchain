@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Core.General;
+using Neuralia.Blockchains.Core.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -55,6 +56,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			this.Root.Add(new JProperty(name, value != null ? this.DehydrateSerializable(value) : null));
 		}
 
+		public void SetProperty(string name, DateTime value) {
+			
+			this.Root.Add(new JProperty(name, TimeService.FormatDateTimeStandardUtc(value)));
+		}
+		
 		public void SetProperty(string name, object value) {
 
 			this.Root.Add(new JProperty(name, this.BuildToken(value)));

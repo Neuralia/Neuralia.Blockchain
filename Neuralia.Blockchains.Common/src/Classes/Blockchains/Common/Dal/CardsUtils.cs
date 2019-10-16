@@ -65,6 +65,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public virtual void Copy(IAccountKeysSnapshot source, IAccountKeysSnapshot destination) {
+			destination.CompositeKey = source.CompositeKey;
 			destination.OrdinalId = source.OrdinalId;
 			destination.AccountId = source.AccountId;
 			destination.PublicKey = source.PublicKey;

@@ -114,7 +114,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.explicitConnectionRequests.Add(requestConnectionsTask);
 
 				// lets act now!
-				this.nextAction = DateTime.Now;
+				this.nextAction = DateTime.UtcNow;
 			}
 		}
 
@@ -136,7 +136,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			// now we choose the ones that were either never contacted (probably received a connection from them) or the ones we contacted long ago, so we can bother them again
 			var availablePeers = matchedConnections.Where(m => {
-				return (m.ConnectionManagerActivityInfo != null) && ((DateTime.Now - m.ConnectionManagerActivityInfo.lastPeerListRequestAttempt) > TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_PEER_LIST_REQUEST));
+				return (m.ConnectionManagerActivityInfo != null) && ((DateTime.UtcNow - m.ConnectionManagerActivityInfo.lastPeerListRequestAttempt) > TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_PEER_LIST_REQUEST));
 			});
 
 			foreach(PeerJoinedInfo peer in availablePeers) {
@@ -145,7 +145,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// ok, contact the peer and ask for their connection
 
 				// yup, we are asking for it, so lets update our records
-				peer.ConnectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.Now; // set it just in case
+				peer.ConnectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.UtcNow; // set it just in case
 
 				// ask for the peers!
 				//TODO: create workflow here
@@ -161,7 +161,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						SimpleTask task = new SimpleTask();
 
 						task.Action += sender => {
-							peer.ConnectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.Now; // update it
+							peer.ConnectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.UtcNow; // update it
 						};
 
 						this.ReceiveTask(task);
@@ -195,7 +195,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				connectionManagerActivityInfo = new ConnectionManagerActivityInfo(nodeActivityInfo);
 
 				connectionManagerActivityInfo.lastConnectionAttempt = DateTime.MinValue;
-				connectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.Now; // since we get the list during the handshake
+				connectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.UtcNow; // since we get the list during the handshake
 
 				this.peerActivityInfo.Add(connectionManagerActivityInfo.ScoppedIp, connectionManagerActivityInfo);
 			}
@@ -211,7 +211,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				return;
 			}
 
-			connectionManagerActivityInfo.lastConnectionAttempt = DateTime.Now; // set it just in case
+			connectionManagerActivityInfo.lastConnectionAttempt = DateTime.UtcNow; // set it just in case
 			connectionManagerActivityInfo.connectionAttemptCounter++;
 			connectionManagerActivityInfo.inProcess = true;
 
@@ -231,7 +231,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					SimpleTask task = new SimpleTask();
 
 					task.Action += sender => {
-						connectionManagerActivityInfo.lastConnectionAttempt = DateTime.Now; // update it
+						connectionManagerActivityInfo.lastConnectionAttempt = DateTime.UtcNow; // update it
 						connectionManagerActivityInfo.inProcess = false;
 
 						if(success) {
@@ -295,7 +295,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 					if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
 						// its paused, we dont do anything, just return
-						this.nextAction = DateTime.Now.AddSeconds(secondsToWait);
+						this.nextAction = DateTime.UtcNow.AddSeconds(secondsToWait);
 
 						return;
 					}
@@ -309,8 +309,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						ConnectionManagerActivityInfo connectionManagerActivityInfo = new ConnectionManagerActivityInfo(newIncomingConnection.PeerConnection.NodeActivityInfo);
 
 						// we assume we just talked to them through the handshake
-						connectionManagerActivityInfo.lastConnectionAttempt = DateTime.Now;
-						connectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.Now;
+						connectionManagerActivityInfo.lastConnectionAttempt = DateTime.UtcNow;
+						connectionManagerActivityInfo.lastPeerListRequestAttempt = DateTime.UtcNow;
 
 						// and add them to our list
 						this.peerActivityInfo.Add(connectionManagerActivityInfo.ScoppedIp, connectionManagerActivityInfo);
@@ -330,12 +330,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					decimal CRITICAL_LOW_CONNECTION_PCT = 0.2M;
 					decimal LOW_CONNECTION_PCT = 0.4M;
 
-					decimal averagePerCount = GlobalSettings.ApplicationSettings.averagePeerCount;
+					decimal averagePerCount = GlobalSettings.ApplicationSettings.AveragePeerCount;
 
 					int criticalLowConnectionLevel = (int) Math.Ceiling(averagePerCount * CRITICAL_LOW_CONNECTION_PCT);
 					int lowConnectionLevel = (int) Math.Ceiling(averagePerCount * LOW_CONNECTION_PCT);
 
-					if((activeConnectionsCount < GlobalSettings.ApplicationSettings.maxPeerCount) || this.explicitConnectionRequests.Any()) {
+					if((activeConnectionsCount < GlobalSettings.ApplicationSettings.MaxPeerCount) || this.explicitConnectionRequests.Any()) {
 						// ok, in here, we will need to get more connections
 						this.CheckShouldCancel();
 
@@ -350,7 +350,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						// pick nodes not already connecting
 						availableNodes = availableNodes.Where(n => !this.peerActivityInfo.ContainsKey(n.ScoppedIp) || !this.peerActivityInfo[n.ScoppedIp].inProcess).ToList();
 
-						if(this.explicitConnectionRequests.Any() && (activeConnectionsCount >= Math.Max(GlobalSettings.ApplicationSettings.maxPeerCount - 2, 0))) {
+						if(this.explicitConnectionRequests.Any() && (activeConnectionsCount >= Math.Max(GlobalSettings.ApplicationSettings.MaxPeerCount - 2, 0))) {
 							// ok, no choice, we will have to cut loose some connections to make room for now ones
 							var expendableConnections = this.explicitConnectionRequests.SelectMany(c => c.ExpendableConnections).Distinct().ToList();
 
@@ -393,7 +393,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 								secondsToWait = 10;
 							} else {
-								if(activeConnectionsCount < GlobalSettings.ApplicationSettings.averagePeerCount) {
+								if(activeConnectionsCount < GlobalSettings.ApplicationSettings.AveragePeerCount) {
 									// ok, we still try to get more, but we can take it easy, we have a good average
 									var nodes = availableNodes.Take(1);
 
@@ -425,10 +425,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// Phase 3: Do some cleaning if we have too many connections. remove nodes that dont really serve any purpose.
 
 					// this is another scenario, if we have too many connections...
-					if(activeConnectionsCount > GlobalSettings.ApplicationSettings.maxPeerCount) {
+					if(activeConnectionsCount > GlobalSettings.ApplicationSettings.MaxPeerCount) {
 						this.CheckShouldCancel();
 
-						int amountToRemove = activeConnectionsCount - GlobalSettings.ApplicationSettings.maxPeerCount;
+						int amountToRemove = activeConnectionsCount - GlobalSettings.ApplicationSettings.MaxPeerCount;
 						var activeConnectionsCopy = activeConnections.Where(c => !c.Locked).ToList();
 
 						activeConnectionsCopy.Shuffle();
@@ -472,25 +472,25 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// done, lets sleep for a while
 
 					// lets act again in X seconds
-					this.nextAction = DateTime.Now.AddSeconds(secondsToWait);
+					this.nextAction = DateTime.UtcNow.AddSeconds(secondsToWait);
 				}
 			} catch(OperationCanceledException) {
 				throw;
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to process connections");
-				this.nextAction = DateTime.Now.AddSeconds(10);
+				this.nextAction = DateTime.UtcNow.AddSeconds(10);
 			}
 		}
 
 		protected virtual void ContactHubs() {
-			if(GlobalSettings.ApplicationSettings.EnableHubs && (this.nextHubContact < DateTime.Now)) {
+			if(GlobalSettings.ApplicationSettings.EnableHubs && (this.nextHubContact < DateTime.UtcNow)) {
 				try {
 					NodeAddressInfoList entries = this.connectionStore.GetHubNodes();
 
 					if((entries != null) && entries.Nodes.Any()) {
 						this.CreateConnectionAttempt(entries.Nodes.First());
 
-						this.nextHubContact = DateTime.Now.AddMinutes(3);
+						this.nextHubContact = DateTime.UtcNow.AddMinutes(3);
 					}
 				} catch(Exception ex) {
 					Log.Error(ex, "Failed to query neuralium hubs.");
@@ -554,11 +554,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 
 				// lets take a while before we attempt this again
-				this.nextUpdateNodeCountAction = DateTime.Now.AddSeconds(60);
+				this.nextUpdateNodeCountAction = DateTime.UtcNow.AddSeconds(60);
 			}
 
 			// get the list of connection attemps that are really too fresh to contact again. also, 
-			var tooFreshConnections = this.peerActivityInfo.Values.Where(a => ((a.lastConnectionSetAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT)) > DateTime.Now) || ((a.lastConnectionAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT)) > DateTime.Now)).Select(a => a.ScoppedIp).ToList();
+			var tooFreshConnections = this.peerActivityInfo.Values.Where(a => ((a.lastConnectionSetAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT)) > DateTime.UtcNow) || ((a.lastConnectionAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT)) > DateTime.UtcNow)).Select(a => a.ScoppedIp).ToList();
 
 			this.CheckShouldCancel();
 
@@ -571,7 +571,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					reducedAvailableNodes = this.GetAvailableNodesList(activeConnections, false);
 				} else {
 					// ok, this is bad, we tried them all and got nothing, we need to lower the limit
-					tooFreshConnections = this.peerActivityInfo.Values.Where(a => ((a.lastConnectionSetAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT_LIMITED)) > DateTime.Now) || ((a.lastConnectionAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT_LIMITED)) > DateTime.Now)).Select(a => a.ScoppedIp).ToList();
+					tooFreshConnections = this.peerActivityInfo.Values.Where(a => ((a.lastConnectionSetAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_SET_ATTEMPT_LIMITED)) > DateTime.UtcNow) || ((a.lastConnectionAttempt + TimeSpan.FromSeconds(MAX_SECONDS_BEFORE_NEXT_CONNECTION_ATTEMPT_LIMITED)) > DateTime.UtcNow)).Select(a => a.ScoppedIp).ToList();
 
 					this.CheckShouldCancel();
 
@@ -615,7 +615,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		protected override void Initialize() {
 
-			if(!NetworkInterface.GetIsNetworkAvailable() && !GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.localhostOnly) {
+			if(!NetworkInterface.GetIsNetworkAvailable() && !GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.LocalhostOnly) {
 				throw new NetworkInformationException();
 			}
 
@@ -639,14 +639,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}));
 
 			return tasks;
-		}
-
-		protected override void DisposeAll(bool disposing) {
-
-			if(disposing) {
-
-			}
-
 		}
 
 		private struct PeerJoinedInfo {

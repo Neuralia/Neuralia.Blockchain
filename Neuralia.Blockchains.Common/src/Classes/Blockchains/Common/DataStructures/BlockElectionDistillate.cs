@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public readonly SafeArrayHandle blockHash = SafeArrayHandle.Create();
 		public string blockHash64;
 
-		public List<string> BlockTransactionIds;
+		public readonly List<string> BlockTransactionIds = new List<string>();
 
 		public ComponentVersion<BlockType> blockType;
 		public string blockTypeString;
@@ -28,13 +28,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		[JsonIgnore] public IElectionContext electionContext;
 
-		public List<FinalElectionResultDistillate> FinalElectionResults = new List<FinalElectionResultDistillate>();
+		public readonly List<FinalElectionResultDistillate> FinalElectionResults = new List<FinalElectionResultDistillate>();
 
 		public bool HasActiveElection = false;
 
 		public AccountId MiningAccountId;
 
-		public List<IntermediaryElectionContextDistillate> IntermediaryElectionResults = new List<IntermediaryElectionContextDistillate>();
+		public readonly List<IntermediaryElectionContextDistillate> IntermediaryElectionResults = new List<IntermediaryElectionContextDistillate>();
 
 		public bool IsElectionContextLoaded => this.electionContext != null;
 
@@ -75,17 +75,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public PassiveElectionContextDistillate PassiveElectionContextDistillate;
 	}
 	
-	public abstract class PassiveElectionContextDistillate {
+	public abstract class ElectionContextDistillate {
+
+		public readonly List<string> TransactionIds = new List<string>();
+	}
+	
+	public abstract class PassiveElectionContextDistillate : ElectionContextDistillate {
 
 		public long electionBlockId;
-		public List<string> TransactionIds;
 	}
 
-	public abstract class FinalElectionResultDistillate {
+	public abstract class FinalElectionResultDistillate : ElectionContextDistillate {
 
 		public int BlockOffset;
 		public string DelegateAccountId;
-		public List<string> TransactionIds;
 	}
 
 	public abstract class ElectedCandidateResultDistillate {
@@ -101,7 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public int MaturityBlockHash;
 		public long MaturityBlockId;
 
-		public List<string> SelectedTransactionIds;
+		public readonly List<string> SelectedTransactionIds = new List<string>();
 	}
 
 	public abstract class ElectionQuestionDistillate {
@@ -109,7 +112,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 	}
 	
 	public class QuestionTransactionSectionDistillate : ElectionQuestionDistillate{
-		public BlockId BlockId { get; set; } 
+		public long BlockId { get; set; } 
 		public int? TransactionIndex { get; set; }
 
 		public byte SelectedTransactionSection{ get; set; }

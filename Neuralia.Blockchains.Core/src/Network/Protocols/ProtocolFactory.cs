@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 		private ProtocolVersion? sharedProtocolVersion;
 
-		private ICompression NetworkMessageCompressor { get; set; } = DeflateCompression.Instance;
+		private ICompression NetworkMessageCompressor { get; set; } = GzipCompression.Instance;
 
 		private IMessageFactory MessageFactory {
 			get {
@@ -133,6 +133,11 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 						break;
 
+					case ProtocolCompression.CompressionAlgorithm.Brotli:
+						this.NetworkMessageCompressor = new BrotliCompression();
+
+						break;
+					
 					default:
 
 						throw new ApplicationException("Invalid compression algorithm supplied");
@@ -190,7 +195,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		/// <returns></returns>
 		private SafeArrayHandle CompressMessage(SafeArrayHandle bytes) {
 
-			if(this.sharedProtocolCompression.Level == CompressionLevelByte.NoCompression) {
+			if(this.sharedProtocolCompression.Level == CompressionLevelByte.None) {
 				return bytes; // its not compressed!
 			}
 
@@ -202,7 +207,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 		private SafeArrayHandle DecompressMessage(SafeArrayHandle compressedMessage) {
 
-			if(this.sharedProtocolCompression.Level == CompressionLevelByte.NoCompression) {
+			if(this.sharedProtocolCompression.Level == CompressionLevelByte.None) {
 				return compressedMessage.Branch(); // its not compressed! clone it because the original will get returned
 			}
 

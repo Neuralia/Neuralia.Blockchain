@@ -420,7 +420,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
 
 			void Action() {
-				this.ChainDataWriteProvider.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal);
+				using(key) {
+					this.ChainDataWriteProvider.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal);
+				}
 			}
 
 			if(this.serializationTransactionProcessor != null) {

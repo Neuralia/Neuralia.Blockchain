@@ -1,3 +1,4 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
@@ -11,25 +12,28 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Block {
-	public class ServerSendBlockInfo : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncInfoResponse<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, long, BlockChannelUtils.BlockChannelTypes> {
+	public class ServerSendBlockInfo : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncInfoResponse<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes> {
 		public SafeArrayHandle BlockHash { get;} = SafeArrayHandle.Create();
 
 		/// <summary>
 		///     The last block we have in our chain. we send it every time, as this number changes as we sync locally
 		/// </summary>
-		public long ChainBlockHeight { get; set; }
+		public BlockId ChainBlockHeight { get; set; } = new BlockId();
+
+		public BlockId PublicBlockHeight { get; set; } = new BlockId();
 
 		public bool HasBlockDetails { get; set; }
-		public long Id { get; set; }
+		public BlockId Id { get; set; } = new BlockId();
 
 		public BlockChannelsInfoSet<DataSliceSize> SlicesSize { get; } = new BlockChannelsInfoSet<DataSliceSize>();
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.Id);
+			this.Id.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.ChainBlockHeight);
+			this.ChainBlockHeight.Dehydrate(dehydrator);
+			this.PublicBlockHeight.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.HasBlockDetails);
 
@@ -49,7 +53,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			nodesList.Add(this.Id);
 
 			nodesList.Add(this.ChainBlockHeight);
-
+			nodesList.Add(this.PublicBlockHeight);
+			
 			nodesList.Add(this.HasBlockDetails);
 
 			if(this.HasBlockDetails) {
@@ -64,9 +69,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public override void Rehydrate(IDataRehydrator rehydrator, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			base.Rehydrate(rehydrator, rehydrationFactory);
 
-			this.Id = rehydrator.ReadLong();
+			this.Id.Rehydrate(rehydrator);
 
-			this.ChainBlockHeight = rehydrator.ReadLong();
+			this.ChainBlockHeight.Rehydrate(rehydrator);
+			this.PublicBlockHeight.Rehydrate(rehydrator);
 
 			this.HasBlockDetails = rehydrator.ReadBool();
 

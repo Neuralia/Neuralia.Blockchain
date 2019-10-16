@@ -8,10 +8,11 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
-	public interface ICryptographicKey : ISerializableCombo, IDisposable2 {
+	public interface ICryptographicKey : ISerializableCombo {
 		byte Id { get; set; }
 		byte Version { get; }
 		SafeArrayHandle Key { get; }
+		bool IsEmpty { get; }
 
 		Enums.KeyTypes Type { get; }
 		void Rehydrate(byte id, IDataRehydrator rehydrator);
@@ -29,6 +30,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public byte Version { get; } = 1;
 		public byte Id { get; set; }
+
+		public virtual bool IsEmpty => this.Key == null || this.Key.IsEmpty || this.Key.IsZero;
 
 		public  SafeArrayHandle Key { get; } = SafeArrayHandle.Create();
 
@@ -88,38 +91,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		protected abstract void SetType();
-		
-	#region Disposable
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		private void Dispose(bool disposing) {
-
-			if(!this.IsDisposed) {
-				try {
-					this.DisposeAll(disposing);
-				} finally {
-						
-				}
-			}
-		}
-
-		protected virtual void DisposeAll(bool disposing) {
-			if(disposing) {
-				this.Key?.Dispose();
-			}
-		}
-
-		~CryptographicKey() {
-			this.Dispose(false);
-		}
-
-		public bool IsDisposed { get; private set; }
-
-	#endregion
 	}
 
 }

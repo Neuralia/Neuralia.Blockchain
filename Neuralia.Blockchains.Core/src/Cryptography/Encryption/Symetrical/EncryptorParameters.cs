@@ -1,44 +1,68 @@
-﻿using Neuralia.Blockchains.Core.Cryptography.Trees;
+﻿using System;
+using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
-namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
-	public class EncryptorParameters : ITreeHashable {
+namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
+
+	public interface IEncryptorParameters : ITreeHashable{
+		int Iterations { get; set; }
+		int KeyBitLength { get; set; }
+		ByteArray Salt { get; set; }
+		EncryptorParameters.SymetricCiphers cipher { get; set; }
+		SafeArrayHandle Dehydrate();
+		void Dehydrate(IDataDehydrator dehydrator);
+		void Rehydrate(SafeArrayHandle data);
+		void Rehydrate(IDataRehydrator rehydrator);
+		IEncryptorParameters Clone();
+	}
+
+	public abstract class EncryptorParameters : IEncryptorParameters {
 
 		public enum SymetricCiphers : byte {
-			AES_256 = 1,
-			XCHACHA_20 = 2,
-			XCHACHA_40 = 3
+			
+			XCHACHA_20 = 1,
+			XCHACHA_40 = 2,
+			AES_256 = 3,
+			AES_GCM_256 = 4
 		}
 
-		public byte[] salt { get; set; }
-		public int iterations { get; set; }
-		public int keyBitLength { get; set; }
+		public int Iterations { get; set; }
+		public int KeyBitLength { get; set; }
+		public ByteArray Salt { get; set; }
+		
 		public SymetricCiphers cipher { get; set; } = SymetricCiphers.XCHACHA_40;
 
-		public HashNodeList GetStructuresArray() {
+		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = new HashNodeList();
 
-			hashNodeList.Add(this.iterations);
 			hashNodeList.Add((byte) this.cipher);
-			hashNodeList.Add(this.keyBitLength);
-			hashNodeList.Add(this.salt);
+			hashNodeList.Add(this.Iterations);
+			hashNodeList.Add(this.KeyBitLength);
+			hashNodeList.Add(this.Salt);
 
 			return hashNodeList;
 		}
 
 		public SafeArrayHandle Dehydrate() {
 
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
-			dehydrator.Write(this.iterations);
-			dehydrator.Write((byte) this.cipher);
-			dehydrator.Write(this.keyBitLength);
-			dehydrator.WriteNonNullable(this.salt);
+			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
 
-			return dehydrator.ToArray();
+				this.Dehydrate(dehydrator);
+				
+				return dehydrator.ToArray();
+			}
+		}
+		
+		public virtual void Dehydrate(IDataDehydrator dehydrator) {
+			
+			dehydrator.Write((byte) this.cipher);
+			dehydrator.Write(this.Iterations);
+			dehydrator.Write(this.KeyBitLength);
+			dehydrator.WriteNonNullable(this.Salt);
 		}
 
-		public void Rehydrate(SafeArrayHandle data) {
+		public virtual void Rehydrate(SafeArrayHandle data) {
 
 			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
 
@@ -46,44 +70,121 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			}
 		}
 
-		public void Rehydrate(IDataRehydrator rehydrator) {
+		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.iterations = rehydrator.ReadInt();
 			this.cipher = (SymetricCiphers) rehydrator.ReadByte();
-			this.keyBitLength = rehydrator.ReadInt();
-			SafeArrayHandle saltArray = rehydrator.ReadNonNullableArray();
-
-			this.salt = saltArray.ToExactByteArrayCopy();
-			saltArray.Return();
+			this.Iterations = rehydrator.ReadInt();
+			this.KeyBitLength = rehydrator.ReadInt();
+			this.Salt = rehydrator.ReadNonNullableArray();
 		}
 
-		public static EncryptorParameters RehydrateEncryptor(SafeArrayHandle data) {
+		public static IEncryptorParameters RehydrateEncryptor(SafeArrayHandle data) {
 
-			EncryptorParameters parameters = new EncryptorParameters();
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
 
-			parameters.Rehydrate(data);
-
-			return parameters;
+				return RehydrateEncryptor(rehydrator);
+			}
 		}
 
-		public static EncryptorParameters RehydrateEncryptor(IDataRehydrator rehydrator) {
+		public static IEncryptorParameters RehydrateEncryptor(IDataRehydrator rehydrator) {
 
-			EncryptorParameters parameters = new EncryptorParameters();
+			SymetricCiphers cipher = SymetricCiphers.XCHACHA_40;
+			
+			rehydrator.RehydrateRewind((dr) => {
+				cipher = (SymetricCiphers) dr.ReadByte();
+			});
+
+			IEncryptorParameters parameters = null;
+			
+			if(cipher == SymetricCiphers.AES_256) {
+				parameters = new AesEncryptorParameters();
+			}
+			else if(cipher == SymetricCiphers.AES_GCM_256) {
+				parameters = new AesGcmEncryptorParameters();
+			}
+			else if(cipher == SymetricCiphers.XCHACHA_20) {
+				parameters = new XChachaEncryptorParameters();
+			}
+			else if(cipher == SymetricCiphers.XCHACHA_40) {
+				parameters = new XChachaEncryptorParameters();
+			} else {
+				throw new ArgumentException();
+			}
 
 			parameters.Rehydrate(rehydrator);
 
 			return parameters;
 		}
 
-		public EncryptorParameters Clone() {
-			EncryptorParameters clone = new EncryptorParameters();
+		public virtual IEncryptorParameters Clone() {
+			IEncryptorParameters clone = this.CreateEncryptorParameter();
 
-			clone.iterations = this.iterations;
+			clone.Iterations = this.Iterations;
 			clone.cipher = this.cipher;
-			clone.keyBitLength = this.keyBitLength;
-			clone.salt = this.salt;
+			clone.KeyBitLength = this.KeyBitLength;
+			clone.Salt = this.Salt.Clone();
 
 			return clone;
+		}
+
+		protected abstract IEncryptorParameters CreateEncryptorParameter();
+	}
+	
+	public class XChachaEncryptorParameters : EncryptorParameters {
+		
+	
+		protected override IEncryptorParameters CreateEncryptorParameter() {
+			return new XChachaEncryptorParameters();
+		}
+	}
+	
+	public class AesEncryptorParameters : EncryptorParameters {
+		
+		
+
+		protected override IEncryptorParameters CreateEncryptorParameter() {
+			return new AesEncryptorParameters();
+		}
+	}
+	
+	public class AesGcmEncryptorParameters : EncryptorParameters {
+		
+		public ByteArray Nonce { get; set; }
+		public ByteArray Tag { get; set; }
+		
+		public override HashNodeList GetStructuresArray() {
+			HashNodeList hashNodeList = base.GetStructuresArray();
+			
+			hashNodeList.Add(this.Nonce);
+
+			return hashNodeList;
+		}
+		
+		public override void Dehydrate(IDataDehydrator dehydrator) {
+
+			base.Dehydrate(dehydrator);
+
+			dehydrator.WriteNonNullable(this.Nonce);
+			dehydrator.WriteNonNullable(this.Tag);
+		}
+		
+		public override void Rehydrate(IDataRehydrator rehydrator) {
+			
+			this.Nonce = rehydrator.ReadNonNullableArray();
+			this.Tag = rehydrator.ReadNonNullableArray();
+		}
+
+		public override IEncryptorParameters Clone() {
+			AesGcmEncryptorParameters clone = (AesGcmEncryptorParameters)base.Clone();
+			
+			clone.Nonce = this.Nonce.Clone();
+			clone.Tag = this.Tag.Clone();
+			
+			return clone;
+		}
+
+		protected override IEncryptorParameters CreateEncryptorParameter() {
+			return new AesGcmEncryptorParameters();
 		}
 	}
 }

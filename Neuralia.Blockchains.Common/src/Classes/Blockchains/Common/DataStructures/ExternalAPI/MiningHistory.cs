@@ -1,11 +1,9 @@
 using System.Collections.Generic;
-using MessagePack;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
 	
-	[MessagePackObject(keyAsPropertyName: true)]
 	public class MiningHistory {
-		public readonly List<string> selectedTransactions = new List<string>();
+		public List<string> selectedTransactions  { get; set; } = new List<string>();
 		public long blockId { get; set; }
 
 		public override string ToString() {

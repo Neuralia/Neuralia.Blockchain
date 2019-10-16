@@ -217,8 +217,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 			// refresh our accounts list
-			if(chainStateProvider.DiskBlockHeight != blockId.Value) {
-				throw new ApplicationException($"Invalid block height value. Should be {blockId}.");
+			if(chainStateProvider.DiskBlockHeight < blockId.Value) {
+				throw new ApplicationException($"Invalid disk block height value. Should be at least {blockId}.");
 			}
 
 			if(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockInterpretationStatus.HasFlag(ChainStateEntryFields.BlockInterpretationStatuses.ImmediateImpactDone)) {
@@ -741,8 +741,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 			// refresh our accounts list
-			if(chainStateProvider.DiskBlockHeight != block.BlockId.Value) {
-				throw new ApplicationException($"Invalid block height value. Should be {block.BlockId}.");
+			if(chainStateProvider.DiskBlockHeight < block.BlockId.Value) {
+				throw new ApplicationException($"Invalid disk block height value. Should be at least {block.BlockId}.");
 			}
 
 			if(chainStateProvider.BlockInterpretationStatus.HasFlag(ChainStateEntryFields.BlockInterpretationStatuses.FullSnapshotInterpretationCompleted)) {
@@ -806,7 +806,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}, (results, taskRoutingContext) => {
 						//TODO: what do we do here?
 						if(results.Error) {
-							Log.Error(results.Exception, "Failed to serialize");
+							Log.Error(results.Exception, "Failed to perform serializations during block interpretation");
 						}
 					});
 

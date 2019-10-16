@@ -38,7 +38,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 				this.Awaken();
 			};
 
-			if(GlobalSettings.ApplicationSettings.P2pEnabled) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 				this.dataDispatcher = new DataDispatcher(centralCoordinator.BlockchainServiceSet.TimeService);
 			} else {
 				// no network

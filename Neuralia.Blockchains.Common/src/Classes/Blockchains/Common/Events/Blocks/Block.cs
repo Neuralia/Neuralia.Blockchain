@@ -23,6 +23,7 @@ using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Core.Serialization.OffsetCalculators;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -281,12 +282,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			jsonDeserializer.SetProperty("BlockId", this.BlockId);
 			jsonDeserializer.SetProperty("Hash", this.Hash);
 			jsonDeserializer.SetProperty("Timestamp", this.Timestamp);
-			jsonDeserializer.SetProperty("FullTimestamp", this.FullTimestamp.ToUniversalTime().ToString("o"));
+			jsonDeserializer.SetProperty("FullTimestamp", this.FullTimestamp);
 			jsonDeserializer.SetProperty("Lifespan", this.Lifespan);
 			jsonDeserializer.SetProperty("SignatureSet", this.SignatureSet);
 
 			jsonDeserializer.SetArray("ConfirmedKeyedTransactions", this.ConfirmedKeyedTransactions);
-
 		}
 		
 	#endregion

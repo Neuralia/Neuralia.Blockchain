@@ -29,19 +29,25 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		/// <param name="first"></param>
 		/// <param name="second"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void Xor(ByteArray result, ByteArray first, ByteArray second) {
+		public static unsafe void Xor(ByteArray result, ByteArray first, ByteArray second) {
 			int len = first.Length / sizeof(long);
 
-			var cFirst = first.CastedArray<long>();
-			var cSecond = second.CastedArray<long>();
-			var cResult = result.CastedArray<long>();
-
-			for(int i = 0; i < len; i += 4) {
-
-				cResult[i + 0] = cFirst[i + 0] ^ cSecond[i + 0];
-				cResult[i + 1] = cFirst[i + 1] ^ cSecond[i + 1];
-				cResult[i + 2] = cFirst[i + 2] ^ cSecond[i + 2];
-				cResult[i + 3] = cFirst[i + 3] ^ cSecond[i + 3];
+			fixed(byte* cFirst = first.Span) {
+				fixed(byte* cSecond = second.Span) {
+					fixed(byte* cResult = result.Span) {
+						
+						long* cFirstL = (long*)cFirst;
+						long* cSecondL = (long*)cSecond;
+						long* cResultL = (long*)cResult;
+						
+						for(int i = 0; i < len; i += 4) {
+							*(cResultL+(i + 0)) = *(cFirstL+(i + 0)) ^ *(cSecondL+(i + 0));
+							*(cResultL+(i + 1)) = *(cFirstL+(i + 1)) ^ *(cSecondL+(i + 1));
+							*(cResultL+(i + 2)) = *(cFirstL+(i + 2)) ^ *(cSecondL+(i + 2));
+							*(cResultL+(i + 3)) = *(cFirstL+(i + 3)) ^ *(cSecondL+(i + 3));
+						}
+					}
+				}
 			}
 		}
 
@@ -233,28 +239,46 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 			return Concatenate(a, b);
 		}
 
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="a"></param>
+		/// <param name="b"></param>
+		/// <remarks>must be a multiple of 4</remarks>
+		/// <returns></returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static bool EqualsConstantTime(ByteArray a, ByteArray b) {
+		public static unsafe bool EqualsConstantTime(ByteArray a, ByteArray b) {
 			int len = a.Length;
 
 			if(len != b.Length) {
 				return false;
 			}
 
-			len /= sizeof(long);
+			len >>= 3;
 
-			var cFirst = a.CastedArray<long>();
-			var cSecond = b.CastedArray<long>();
-
-			long difference = 0;
-
-			for(; len != 0; len -= 4) {
-				difference |= cFirst[len - 1] ^ cSecond[len - 1];
-				difference |= cFirst[len - 2] ^ cSecond[len - 2];
-				difference |= cFirst[len - 3] ^ cSecond[len - 3];
-				difference |= cFirst[len - 4] ^ cSecond[len - 4];
+			if((len & 0x3) != 0) {
+				void ThrowMustBeMultiple4Exception() {
+					throw new ArgumentException("Arrays size must be a multiple of 4.");
+				}
+				ThrowMustBeMultiple4Exception();
 			}
 
+			long difference = 0;
+			
+			fixed(byte* cFirst = a.Span) {
+				fixed(byte* cSecond = b.Span) {
+					
+					var cFirstL = (long*)cFirst;
+					var cSecondL = (long*)cSecond;
+					
+					for(; len != 0; len -= 4) {
+						difference |= *(cFirstL+(len - 1)) ^ *(cSecondL+(len - 1));
+						difference |= *(cFirstL+(len - 2)) ^ *(cSecondL+(len - 2));
+						difference |= *(cFirstL+(len - 3)) ^ *(cSecondL+(len - 3));
+						difference |= *(cFirstL+(len - 4)) ^ *(cSecondL+(len - 4));
+					}
+				}
+			}
 			return difference == 0;
 		}
 

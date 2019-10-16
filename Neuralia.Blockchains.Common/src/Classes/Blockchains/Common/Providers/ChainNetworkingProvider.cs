@@ -4,8 +4,10 @@ using System.Linq;
 using System.Net;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
+using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages;
@@ -16,6 +18,7 @@ using Neuralia.Blockchains.Core.Workflows.Tasks;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IChainNetworkingProvider {
 
+		event Action<int> PeerConnectionsCountUpdated;
 		bool IsPaused { get; }
 		ulong MyClientIdNonce { get; }
 		Guid MyclientUuid { get; }
@@ -24,10 +27,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		bool HasPeerConnections { get; }
 		bool NoPeerConnections { get; }
+		bool MinimumDispatchPeerCountAchieved { get; }
 
 		bool NetworkingStarted { get; }
 		bool NoNetworking { get; }
 		BlockchainNetworkingService.MiningRegistrationParameters MiningRegistrationParameters { get; }
+
+		List<string> AllIPCache { get; }
 
 		List<PeerConnection> AllConnectionsList { get; }
 		int SyncingConnectionsCount { get; }
@@ -55,6 +61,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void PauseNetwork();
 		void RestoreNetwork();
+
+		
 	}
 
 	public interface IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainNetworkingProvider
@@ -74,17 +82,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected readonly CENTRAL_COORDINATOR centralCoordinator;
 
 		public IBlockchainNetworkingService networkingService;
-
+		public event Action<int> PeerConnectionsCountUpdated;
+		
 		public ChainNetworkingProvider(IBlockchainNetworkingService networkingService, CENTRAL_COORDINATOR centralCoordinator) {
 			this.networkingService = networkingService;
 			this.centralCoordinator = centralCoordinator;
 
 			if(networkingService?.ConnectionStore != null) {
-				this.networkingService.ConnectionStore.IsConnectibleChange += (connectible) => {
+				this.networkingService.ConnectionStore.IsConnectableChange += (connectable) => {
 				
-					// alert that our connectible status has changed
-					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnecableChanged(connectible));
+					// alert that our connectable status has changed
+					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnecableChanged(connectable));
 				};
+
+				this.networkingService.ConnectionStore.PeerConnectionsCountUpdated += (c) => this.PeerConnectionsCountUpdated?.Invoke(c);
 			}
 		}
 
@@ -96,7 +107,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.networkingService.PostNewGossipMessage(gossipMessageSet);
 		}
-
+		
 		public bool IsPaused => this.networkingService?.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused;
 		public ulong MyClientIdNonce => this.networkingService.ConnectionStore.MyClientIdNonce;
 		public Guid MyclientUuid => this.networkingService.ConnectionStore.MyClientUuid;
@@ -122,6 +133,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public bool HasPeerConnections => this.CurrentPeerCount != 0;
 		public bool NoPeerConnections => !this.HasPeerConnections;
+		
+		/// <summary>
+		/// this property tells us if we have the minimum number of peers to send transactions
+		/// </summary>
+		public bool MinimumDispatchPeerCountAchieved  {
+			get {
+				BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+				return !(chainConfiguration.RegistrationMethod == ChainConfigurations.RegistrationMethods.Gossip && this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount < chainConfiguration.MinimumDispatchPeerCount);
+			}
+		}
 
 		public bool NetworkingStarted => this.networkingService?.IsStarted ?? false;
 		public bool NoNetworking => !this.NetworkingStarted;
@@ -193,6 +215,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 	#region Scopped connections
+
+		public List<string> AllIPCache => this.networkingService.ConnectionStore.AvailablePeerNodesCopy.Select(n => n.AdjustedIp).ToList();
 
 		public List<PeerConnection> AllConnectionsList => this.networkingService.ConnectionStore.AllConnectionsList.Where(this.FilterPeersPerChainVersion).ToList();
 

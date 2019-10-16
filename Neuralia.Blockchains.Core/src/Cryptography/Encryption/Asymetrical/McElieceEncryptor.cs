@@ -93,12 +93,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				try {
 
-				} finally {
-					this.IsDisposed = true;
-				}
 			}
+			this.IsDisposed = true;
 		}
 
 		~McElieceEncryptor() {

@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions.Validation;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Serilog;
 
@@ -82,7 +83,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-			if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount < chainConfiguration.MinimumDispatchPeerCount) {
+			if(!this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.MinimumDispatchPeerCountAchieved) {
 
 				if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.NoPeerConnections) {
 					throw new EventGenerationException("Failed to create transaction. We are not connected to any peers on the p2p network");

@@ -13,6 +13,7 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
 using Serilog;
 
@@ -33,6 +34,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void ClearCachedUnvalidatedBlockGossipMessage(long blockId);
 
 		void TruncateBlockFileSizes(long blockId, Dictionary<string, long> fileSizes);
+
+		void EnsureFastKeysIndex();
 	}
 
 	public interface IChainDataWriteProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataWriteProvider
@@ -153,6 +156,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
 			this.BlockchainEventSerializationFal.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal);
+		}
+
+		public void EnsureFastKeysIndex() {
+			if(this.FastKeyEnabled(GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || this.FastKeyEnabled(GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
+				this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
+			}
 		}
 
 		/// <summary>

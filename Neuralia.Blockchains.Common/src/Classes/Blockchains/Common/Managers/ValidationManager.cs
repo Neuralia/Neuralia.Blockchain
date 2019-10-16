@@ -30,6 +30,7 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -43,6 +44,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		IRoutedTask ValidateBlock(IBlock block, Action<ValidationResult> completedResultCallback);
 		IRoutedTask ValidateTransaction(ITransactionEnvelope transactionEnvelope, Action<ValidationResult> completedResultCallback);
 		IRoutedTask ValidateBlockchainMessage(IMessageEnvelope transactionEnvelope, Action<ValidationResult> completedResultCallback);
+		
+		ValidationResult ValidateTransactionFastKey(ITransactionEnvelope envelope, byte keyOrdinal);
+		ValidationResult ValidateBlockchainMessageFastKey(IMessageEnvelope envelope, byte keyOrdinal);
+		ValidationResult ValidateSignatureFastKey(AccountId accountId, ByteArray message, ByteArray autograph, byte keyOrdinal);
+		
 		ValidationResult ValidateDigest(IBlockchainDigest digest, bool verifyFiles);
 
 		IRoutedTask ValidateEnvelopedContent(IEnvelope envelope, Action<ValidationResult> completedResultCallback);
@@ -138,6 +144,121 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return null;
 		}
 
+		public (ValidationResult result, IXmssCryptographicKey xmssKey, bool usesEmbededKey)? RebuildXmssFastKey(IPublishedAccountSignature signature, byte keyOrdinal, Func<ValidationResult.ValidationResults, EventValidationErrorCode, ValidationResult> resultCreation) {
+
+			if(!this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.FastKeyEnabled(keyOrdinal)) {
+				return null;
+			}
+
+			bool usesEmbededKey = false;
+			// ok, we can take the fast route!
+			var keyBytes = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadAccountKeyFromIndex(signature.KeyAddress.AccountId, keyOrdinal);
+
+			if(keyBytes?.keyBytes != null && keyBytes.Value.keyBytes.HasData) {
+
+				IXmssCryptographicKey xmssKey = null;
+				
+				if((signature.PublicKey?.Key != null) && signature.PublicKey.Key.HasData) {
+					// ok, this message has an embeded public key. lets confirm its the same that we pulled up
+					if(!signature.PublicKey.Key.Equals(keyBytes.Value.keyBytes)) {
+						// ok, we have a discrepansy. they embeded a key that does not match the public record. 
+						//TODO: we should log the peer for bad acting here
+						return (resultCreation(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.ENVELOPE_EMBEDED_PUBLIC_KEY_INVALID), null, false);
+					}
+					
+					if(signature.PublicKey is IXmssCryptographicKey xmssPublicKey && (signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (signature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced) {
+
+						// ok, if we get here, the message uses a key we most probably dont have yet. this is a tricky case. lets copy the key it has and use it
+						xmssKey = new XmssCryptographicKey();
+
+						xmssKey.Id = xmssPublicKey.Id;
+						xmssKey.Key.Entry = xmssPublicKey.Key.Entry.Clone();
+						xmssKey.TreeHeight = xmssPublicKey.TreeHeight;
+						xmssKey.BitSize = xmssPublicKey.BitSize;
+						usesEmbededKey = true;
+					}
+				}
+
+				if(xmssKey == null){
+					xmssKey = new XmssCryptographicKey();
+
+					xmssKey.Id = signature.KeyAddress.OrdinalId;
+					xmssKey.Key.Entry = keyBytes.Value.keyBytes.Entry;
+					xmssKey.TreeHeight = keyBytes.Value.treeheight;
+					xmssKey.BitSize = keyBytes.Value.hashBits;
+				}
+
+				return (null, xmssKey, usesEmbededKey);
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Attempt to validate an envelope using the fast keys file
+		/// </summary>
+		/// <param name="messageEnvelope"></param>
+		/// <param name="keyOrdinal"></param>
+		/// <returns></returns>
+		public ValidationResult ValidateEnvelopeFastKey(IPublishedAccountSignature signature, byte keyOrdinal, Func<IXmssCryptographicKey, IPublishedAccountSignature, ValidationResult> validationCallback, Func<ValidationResult.ValidationResults, EventValidationErrorCode, ValidationResult> resultCreation) {
+			
+			// see if we can get a key
+			var keyResults = this.RebuildXmssFastKey(signature, keyOrdinal, resultCreation);
+
+			if(!keyResults.HasValue) {
+				return null;
+			}
+
+			if(keyResults.Value.result != null) {
+				return keyResults.Value.result;
+			}
+
+			if(keyResults.Value.xmssKey == null) {
+				return null;
+			}
+			
+			// ok we got a key, lets go forward
+			return validationCallback(keyResults.Value.xmssKey, signature);
+			
+		}
+
+		public ValidationResult ValidateBlockchainMessageFastKey(IMessageEnvelope envelope, byte keyOrdinal) {
+
+			return this.ValidateEnvelopeFastKey(envelope.Signature.AccountSignature, keyOrdinal, (key, signature) => this.ValidateBlockchainMessageSingleSignature(envelope.Hash, signature, key), this.CreateMessageValidationResult);
+		}
+		
+		public ValidationResult ValidateTransactionFastKey(ITransactionEnvelope envelope, byte keyOrdinal) {
+
+			if(envelope.Signature is IPublishedEnvelopeSignature publishedEnvelopeSignature) {
+				return this.ValidateEnvelopeFastKey(publishedEnvelopeSignature.AccountSignature, keyOrdinal, (key, signature) => this.ValidateTransationSingleSignature(envelope.Hash, signature, key), this.CreateTrasactionValidationResult);
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// validate an arbitrary message using fast keys
+		/// </summary>
+		/// <param name="accountId"></param>
+		/// <param name="message"></param>
+		/// <param name="autograph"></param>
+		/// <param name="keyOrdinal"></param>
+		/// <returns></returns>
+		public ValidationResult ValidateSignatureFastKey(AccountId accountId, ByteArray message, ByteArray autograph, byte keyOrdinal) {
+
+			IPublishedAccountSignature signature = new PublishedAccountSignature();
+			signature.Autograph.Entry = autograph;
+			signature.KeyAddress.OrdinalId = keyOrdinal;
+			signature.KeyAddress.AccountId = accountId;
+			
+			return this.ValidateEnvelopeFastKey(signature, keyOrdinal, (key, sig) => this.ValidateSingleSignature(message, sig, key), this.CreateTrasactionValidationResult);
+		}
+		
+		public (ValidationResult result, IXmssCryptographicKey xmssKey, bool usesEmbededKey)? RebuildTransactionXmssFastKey(IPublishedAccountSignature signature, byte keyOrdinal) {
+			
+			return this.RebuildXmssFastKey(signature, keyOrdinal, this.CreateTrasactionValidationResult);
+		}
+
 		public IRoutedTask ValidateBlockchainMessage(IMessageEnvelope messageEnvelope, Action<ValidationResult> completedResultCallback) {
 
 			// lets make sure its rehydrated, we need it fully now
@@ -210,38 +331,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				byte keyOrdinal = messageEnvelope.Signature.AccountSignature.KeyAddress.OrdinalId;
 
-				if(this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.FastKeyEnabled(keyOrdinal)) {
-					// ok, we can take the fast route!
-					var keyBytes = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadAccountKeyFromIndex(messageEnvelope.Signature.AccountSignature.KeyAddress.AccountId, keyOrdinal);
+				ValidationResult fastKeyResult = this.ValidateBlockchainMessageFastKey(messageEnvelope, keyOrdinal);
 
-					if(keyBytes.HasValue && (keyBytes.Value.keyBytes != null) && keyBytes.Value.keyBytes.HasData) {
+				if(fastKeyResult != null) {
+					completedResultCallback(fastKeyResult);
 
-						if((messageEnvelope.Signature.AccountSignature.PublicKey?.Key != null) && messageEnvelope.Signature.AccountSignature.PublicKey.Key.HasData) {
-							// ok, this message has an embeded public key. lets confirm its the same that we pulled up
-							if(!messageEnvelope.Signature.AccountSignature.PublicKey.Key.Equals(keyBytes.Value.keyBytes)) {
-								// ok, we have a discrepansy. they embeded a key that does not match the public record. 
-								//TODO: we should log the peer for bad acting here
-								completedResultCallback(this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.ENVELOPE_EMBEDED_PUBLIC_KEY_INVALID));
-
-								return null;
-							}
-						}
-
-						IXmssCryptographicKey xmssKey = new XmssCryptographicKey();
-
-						xmssKey.Id = keyOrdinal;
-						xmssKey.Key.Entry = keyBytes.Value.keyBytes.Entry;
-
-						xmssKey.TreeHeight = keyBytes.Value.treeheight;
-						xmssKey.BitSize = keyBytes.Value.hashBits;
-
-						// ok we got a key, lets go forward
-						ValidationResult result = this.ValidateBlockchainMessageSingleSignature(messageEnvelope.Hash, messageEnvelope.Signature.AccountSignature, xmssKey);
-
-						completedResultCallback(result);
-
-						return null;
-					}
+					return null;
 				}
 			}
 
@@ -267,6 +362,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					ValidationResult result = this.ValidateBlockchainMessageSingleSignature(messageEnvelope.Hash, messageEnvelope.Signature.AccountSignature, key);
 
 					completedResultCallback(result);
+					
 				} else {
 					completedResultCallback(this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED));
 
@@ -405,36 +501,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					// ok, we can take the fast route!
 					byte keyOrdinal = keyAddress.OrdinalId;
 
-					if(this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.FastKeyEnabled(keyOrdinal)) {
-						var keyBytes = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadAccountKeyFromIndex(transaction.TransactionId.Account, keyOrdinal);
+					ValidationResult fastKeyResult = this.ValidateTransactionFastKey(transactionEnvelope, keyOrdinal);
 
-						if((keyBytes?.keyBytes != null) && keyBytes.Value.keyBytes.HasData && transactionEnvelope.Signature is IPublishedEnvelopeSignature publishedEnvelopeSignature2) {
+					if(fastKeyResult != null) {
+						completedResultCallback(fastKeyResult);
 
-							if(publishedAccountSignature?.PublicKey?.Key != null) {
-								// ok, this message has an embeded public key. lets confirm its the same that we pulled up
-								if(!publishedAccountSignature.PublicKey.Key.Equals(keyBytes.Value.keyBytes)) {
-									// ok, we have a discrepansy. they embeded a key that does not match the public record. 
-									//TODO: we should log the peer for bad acting here
-									completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.ENVELOPE_EMBEDED_PUBLIC_KEY_INVALID));
-
-									return null;
-								}
-							}
-
-							IXmssCryptographicKey xmssKey = new XmssCryptographicKey();
-
-							xmssKey.Id = keyOrdinal;
-							xmssKey.Key.Entry = keyBytes.Value.keyBytes.Entry;
-							xmssKey.TreeHeight = keyBytes.Value.treeheight;
-							xmssKey.BitSize = keyBytes.Value.hashBits;
-
-							// ok we got a key, lets go forward
-							result = this.ValidateTransationSingleSignature(transactionEnvelope.Hash, publishedEnvelopeSignature2.AccountSignature, xmssKey);
-
-							completedResultCallback(result);
-
-							return null;
-						}
+						return null;
 					}
 				}
 
@@ -466,9 +538,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 							} else if(transactionEnvelope.Signature is IPublishedEnvelopeSignature publishedEnvelopeSignature2) {
 								result = this.ValidateTransationSingleSignature(transactionEnvelope.Hash, publishedEnvelopeSignature2.AccountSignature, key);
 							}
-						}
 
-						completedResultCallback(result);
+							completedResultCallback(result);
+						}
 					} else {
 						completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED));
 
@@ -492,54 +564,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						bool usesEmbededKey = false;
 
 						foreach(IPublishedAccountSignature signature in jointEnvelopeSignature.AccountSignatures) {
-							var keyBytes = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadAccountKeyFromIndex(signature.KeyAddress.AccountId, signature.KeyAddress.OrdinalId);
+							
+							// see if we can get a key
+							var keyResults = this.RebuildTransactionXmssFastKey(signature, signature.KeyAddress.OrdinalId);
 
-							if(keyBytes.HasValue && (keyBytes.Value.keyBytes != null) && keyBytes.Value.keyBytes.HasData) {
+							if(keyResults.HasValue) {
 
-								if((signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
-
-									// this doesnt work for us, we can't validate this
-									completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.IMPOSSIBLE_BLOCK_DECLARATION_ID));
-
+								usesEmbededKey = keyResults.Value.usesEmbededKey;
+								if(keyResults.Value.result != null) {
+									completedResultCallback(keyResults.Value.result);
+									
 									return null;
 								}
-
-								// if there is an embedded public key, wew can try using it
-								// if the key is ahead of where we are and we are still syncing, we can use the embeded key to make a summary validation, enough to forward a gossip message
-								if((signature.KeyAddress.AnnouncementBlockId.Value > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) && (signature.KeyAddress.AnnouncementBlockId.Value <= this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainDesynced) {
-
-									// ok, if we get here, the message uses a key we most probably dont have yet. this is a tricky case.
-									if(signature.PublicKey?.Key != null) {
-
-										usesEmbededKey = true;
-										keys.Add(signature.KeyAddress.DeclarationTransactionId.Account, signature.PublicKey);
-
-									}
-								} else {
-
-									IXmssCryptographicKey xmssKey = new XmssCryptographicKey();
-
-									xmssKey.Id = signature.KeyAddress.OrdinalId;
-									xmssKey.Key.Entry = keyBytes.Value.keyBytes.Entry;
-									xmssKey.TreeHeight = keyBytes.Value.treeheight;
-									xmssKey.BitSize = keyBytes.Value.hashBits;
-
-									keys.Add(signature.KeyAddress.DeclarationTransactionId.Account, xmssKey);
+								
+								if(keyResults.Value.xmssKey != null) {
+									keys.Add(signature.KeyAddress.DeclarationTransactionId.Account, keyResults.Value.xmssKey);
 								}
+								
+							}
+						}
+						
+						if(keys.Any()) {
+				
+							result = this.ValidateTransationMultipleSignatures(transactionEnvelope.Hash, jointEnvelopeSignature.AccountSignatures, keys);
+
+							// if we used any embeded key, we can not fully trust the results
+							if((result == ValidationResult.ValidationResults.Valid) && usesEmbededKey) {
+								result = this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.EmbededKeyValid);
 							}
 
-							if(keys.Any()) {
-								result = this.ValidateTransationMultipleSignatures(transactionEnvelope.Hash, jointEnvelopeSignature.AccountSignatures, keys);
+							completedResultCallback(result);
 
-								// if we used any embeded key, we can not fully trust the results
-								if((result == ValidationResult.ValidationResults.Valid) && usesEmbededKey) {
-									result = this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.EmbededKeyValid);
-								}
-
-								completedResultCallback(result);
-
-								return null;
-							}
+							return null;
 						}
 					}
 				}
@@ -572,6 +628,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						result = this.ValidateTransationMultipleSignatures(transactionEnvelope.Hash, jointEnvelopeSignature.AccountSignatures, keys);
 
 						completedResultCallback(result);
+	
 					} else {
 						completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED));
 
@@ -787,39 +844,66 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.INVALID_DIGEST_KEY);
 			}
 
+			BlockSignatureSet.BlockSignatureTypes signatureType = block.SignatureSet.AccountSignatureType;
+
 			// ok, check the signature
 			// first thing, get the key from our chain state
 			ICryptographicKey moderatorKey = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKey(block.SignatureSet.ModeratorKey);
-
-			if((moderatorKey.Key == null) || moderatorKey.Key.IsEmpty) {
-				throw new ApplicationException("Moderator key was not found in the chain state.");
-			}
-
-			BlockSignatureSet.BlockSignatureTypes signatureType = block.SignatureSet.AccountSignatureType;
-
-			ICryptographicKey key = null;
-
+			
 			if(signatureType == BlockSignatureSet.BlockSignatureTypes.XmssMT) {
 
 				// simply use it as is
-				key = moderatorKey;
+				if(moderatorKey.IsEmpty) {
+					//moderatorKey.Dispose();
+					//TODO: shjould we check for an invalid key here?  we could reload it form the block, but how to know which block udpated the key last?
+					throw new ApplicationException("invalid moderator key");
+				}
+				
 			} else if(signatureType == BlockSignatureSet.BlockSignatureTypes.SecretSequential) {
 				if(moderatorKey is SecretDoubleCryptographicKey secretDoubleCryptographicModeratorKey) {
 					// For blocks, we will transform the hash of the key into a secret key
 
-					key = secretDoubleCryptographicModeratorKey;
+					if(moderatorKey.IsEmpty) {
+						moderatorKey = this.ReloadModeratorSequentialKey();
+					}
+
 				} else {
 					throw new ApplicationException("Invalid block key.");
 				}
 			} else if(signatureType == BlockSignatureSet.BlockSignatureTypes.SuperSecret) {
 				// ok, here we used a super key
-				key = (SecretPentaCryptographicKey) moderatorKey;
+				if(moderatorKey.IsEmpty) {
+					//moderatorKey.Dispose();
+					//TODO: shjould we check for an invalid key here?  we could reload it form the block, but how to know which block udpated the key last?
+					throw new ApplicationException("invalid moderator key");
+				}
+
 			}
 
 			// thats it :)
-			return this.ValidateBlockSignature(hash, block, key);
+			return this.ValidateBlockSignature(hash, block, moderatorKey);
+
 		}
 
+		/// <summary>
+		/// if the key was corrupt in the chain state, for whatever reason, we try to get it again from the last saved block
+		/// </summary>
+		/// <returns></returns>
+		private ICryptographicKey ReloadModeratorSequentialKey() {
+
+			ICryptographicKey key = null;
+			Repeater.Repeat(() => {
+				var block = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadLatestBlock();
+
+				if(block == null) {
+					throw new ApplicationException("Failed to load previous block");
+				}
+				key = block.SignatureSet.ConvertToSecretKey();
+			});
+
+			return key;
+		}
+		
 		protected ValidationResult ValidateGenesisBlock(IGenesisBlock block, SafeArrayHandle hash) {
 
 			using(var newHash = BlockchainHashingUtils.GenerateGenesisBlockHash(block)) {
@@ -1270,12 +1354,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(key is SecretPentaCryptographicKey secretPentaCryptographicKey) {
 
 				if(block.SignatureSet.BlockAccountSignature is SuperSecretBlockAccountSignature secretAccountSignature) {
-
-					SecretPentaCryptographicKey moderatorKey = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKey<SecretPentaCryptographicKey>(secretAccountSignature.KeyAddress.OrdinalId);
-
+					
 					(SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) hashed = HashingUtils.HashSecretComboKey(secretAccountSignature.PromisedPublicKey.ToExactByteArray(), secretAccountSignature.PromisedNonce1, secretAccountSignature.PromisedNonce2);
 
-					if((hashed.nonceHash != moderatorKey.NonceHash) || !moderatorKey.NextKeyHashSha2.Equals(hashed.sha2) || !moderatorKey.NextKeyHashSha3.Equals(hashed.sha3)) {
+					if((hashed.nonceHash != secretPentaCryptographicKey.NonceHash) || !secretPentaCryptographicKey.NextKeyHashSha2.Equals(hashed.sha2) || !secretPentaCryptographicKey.NextKeyHashSha3.Equals(hashed.sha3)) {
 						return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED);
 					}
 
@@ -1283,7 +1365,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						SafeArrayHandle signature1 = autorgaphRehydrator.ReadNonNullableArray();
 
-						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecurityCategory)) {
+						using(SignatureProviderBase provider = new QTeslaProvider(secretPentaCryptographicKey.SecurityCategory)) {
 							provider.Initialize();
 
 							bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
@@ -1297,10 +1379,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						SafeArrayHandle signature2 = autorgaphRehydrator.ReadNonNullableArray();
 
-						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecondKey.SecurityCategory)) {
+						using(SignatureProviderBase provider = new QTeslaProvider(secretPentaCryptographicKey.SecondKey.SecurityCategory)) {
 							provider.Initialize();
 
-							bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
+							bool result = provider.Verify(hash, signature2, secretPentaCryptographicKey.SecondKey.Key);
 
 							signature2.Return();
 
@@ -1311,10 +1393,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						SafeArrayHandle signature3 = autorgaphRehydrator.ReadNonNullableArray();
 
-						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.ThirdKey.SecurityCategory)) {
+						using(SignatureProviderBase provider = new QTeslaProvider(secretPentaCryptographicKey.ThirdKey.SecurityCategory)) {
 							provider.Initialize();
 
-							bool result = provider.Verify(hash, signature3, moderatorKey.ThirdKey.Key);
+							bool result = provider.Verify(hash, signature3, secretPentaCryptographicKey.ThirdKey.Key);
 
 							signature3.Return();
 
@@ -1325,10 +1407,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						SafeArrayHandle signature4 = autorgaphRehydrator.ReadNonNullableArray();
 
-						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.FourthKey.SecurityCategory)) {
+						using(SignatureProviderBase provider = new QTeslaProvider(secretPentaCryptographicKey.FourthKey.SecurityCategory)) {
 							provider.Initialize();
 
-							bool result = provider.Verify(hash, signature4, moderatorKey.FourthKey.Key);
+							bool result = provider.Verify(hash, signature4, secretPentaCryptographicKey.FourthKey.Key);
 
 							signature4.Return();
 
@@ -1339,7 +1421,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						SafeArrayHandle signature5 = autorgaphRehydrator.ReadNonNullableArray();
 
-						using(XMSSMTProvider provider = new XMSSMTProvider((Enums.KeyHashBits) moderatorKey.FifthKey.BitSize, moderatorKey.FifthKey.TreeHeight, moderatorKey.FifthKey.TreeLayer)) {
+						using(XMSSMTProvider provider = new XMSSMTProvider((Enums.KeyHashBits) secretPentaCryptographicKey.FifthKey.BitSize, secretPentaCryptographicKey.FifthKey.TreeHeight, secretPentaCryptographicKey.FifthKey.TreeLayer)) {
 							provider.Initialize();
 
 							bool result = provider.Verify(hash, signature5, key.Key);
@@ -1372,12 +1454,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				SafeArrayHandle publicKey = null;
 
 				if(block.SignatureSet.BlockAccountSignature is SecretBlockAccountSignature secretAccountSignature) {
-
-					SecretDoubleCryptographicKey moderatorKey = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKey<SecretDoubleCryptographicKey>(GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID);
-
+					
 					(SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) hashed = HashingUtils.HashSecretComboKey(secretAccountSignature.PromisedPublicKey.ToExactByteArray(), secretAccountSignature.PromisedNonce1, secretAccountSignature.PromisedNonce2);
 
-					if((hashed.nonceHash != moderatorKey.NonceHash) || !moderatorKey.NextKeyHashSha2.Equals(hashed.sha2) || !moderatorKey.NextKeyHashSha3.Equals(hashed.sha3)) {
+					if((hashed.nonceHash != secretDoubleCryptographicKey.NonceHash) || !secretDoubleCryptographicKey.NextKeyHashSha2.Equals(hashed.sha2) || !secretDoubleCryptographicKey.NextKeyHashSha3.Equals(hashed.sha3)) {
 						return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED);
 					}
 
@@ -1385,7 +1465,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						SafeArrayHandle signature1 = autorgaphRehydrator.ReadNonNullableArray();
 
-						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecurityCategory)) {
+						using(SignatureProviderBase provider = new QTeslaProvider(secretDoubleCryptographicKey.SecurityCategory)) {
 							provider.Initialize();
 
 							bool result = provider.Verify(hash, signature1, secretAccountSignature.PromisedPublicKey);
@@ -1399,10 +1479,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						SafeArrayHandle signature2 = autorgaphRehydrator.ReadNonNullableArray();
 
-						using(SignatureProviderBase provider = new QTeslaProvider(moderatorKey.SecondKey.SecurityCategory)) {
+						using(SignatureProviderBase provider = new QTeslaProvider(secretDoubleCryptographicKey.SecondKey.SecurityCategory)) {
 							provider.Initialize();
 
-							bool result = provider.Verify(hash, signature2, moderatorKey.SecondKey.Key);
+							bool result = provider.Verify(hash, signature2, secretDoubleCryptographicKey.SecondKey.Key);
 
 							signature2.Return();
 

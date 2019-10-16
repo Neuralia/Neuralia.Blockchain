@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 		///     are the key files encrypted?
 		/// </summary>
 		/// <returns></returns>
-		public EncryptorParameters EncryptionParameters { get; set; }
+		public IEncryptorParameters EncryptionParameters { get; set; }
 
 		[BsonIgnore]
 		public bool KeyEncrypted => this.EncryptionParameters != null;

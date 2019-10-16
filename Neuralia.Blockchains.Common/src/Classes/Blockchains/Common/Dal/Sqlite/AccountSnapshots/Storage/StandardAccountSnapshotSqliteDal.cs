@@ -73,7 +73,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			this.PerformOperation(db => {
 				STANDARD_ACCOUNT_SNAPSHOT accountEntry = new STANDARD_ACCOUNT_SNAPSHOT();
-
+				
 				accountEntry.AccountId = accountId.ToLongRepresentation();
 				accountEntry.InceptionBlockId = inceptionBlockId;
 				accountEntry.CorrelationId = correlationId;

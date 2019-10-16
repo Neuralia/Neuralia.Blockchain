@@ -151,16 +151,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		}
 
 		private void Dispose(bool disposing) {
-			if(!this.IsDisposed) {
-				try {
-
-					if(disposing) {
-						this.Rollback();
-					}
-				} finally {
-					this.IsDisposed = true;
-				}
+			if(!this.IsDisposed && disposing) {
+				this.Rollback();
 			}
+			this.IsDisposed = true;
 		}
 
 		~SerializationTransactionProcessor() {

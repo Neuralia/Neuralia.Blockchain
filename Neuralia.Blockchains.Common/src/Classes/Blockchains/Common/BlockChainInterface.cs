@@ -56,9 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		void StartChain();
 
 		void StopChain();
-
-		void RunPeriodicTasks();
-
+		
 		void TriggerChainSynchronization();
 		void TriggerChainWalletSynchronization();
 
@@ -67,7 +65,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<bool> CreateNextXmssKey(Guid accountUuid, byte ordinal);
 		TaskResult<SafeArrayHandle> SignXmssMessage(Guid accountUuid, SafeArrayHandle message);
 		TaskResult<long> QueryBlockHeight();
-		TaskResult<object> QueryBlockChainInfo();
+		TaskResult<BlockchainInfo> QueryBlockChainInfo();
 		List<MiningHistory> QueryMiningHistory();
 
 		TaskResult<bool> IsWalletLoaded();
@@ -105,6 +103,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<bool> PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults);
 
 		ImmutableList<string> QueryPeersList();
+		ImmutableList<string> QueryIPsList();
+		
 		int QueryPeerCount();
 
 		void PrintChainDebug(string item);
@@ -161,11 +161,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		protected readonly SpecializedRoutedTaskRoutingReceiver<IRoutedTaskRoutingHandler> RoutedTaskReceiver;
 
 		private Task<bool> eventsPoller;
+		private Timer tasksPoller;
 		private bool poller_active = true;
 
 		private AutoResetEvent pollerResetEvent;
+		
+		private static readonly TimeSpan TASK_CHECK_SPAN = TimeSpan.FromSeconds(2);
 
-		protected BlockChainInterface(CENTRAL_COORDINATOR centralCoordinator) {
+		private readonly TimeSpan taskCheckSpan;
+
+		protected BlockChainInterface(CENTRAL_COORDINATOR centralCoordinator, TimeSpan? taskCheckSpan = null) {
+			
+			this.taskCheckSpan = taskCheckSpan??TASK_CHECK_SPAN;
+			
 			this.centralCoordinator = centralCoordinator;
 
 			this.RoutedTaskReceiver = new SpecializedRoutedTaskRoutingReceiver<IRoutedTaskRoutingHandler>(this.centralCoordinator, this);
@@ -186,7 +194,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public ICentralCoordinator CentralCoordinatorBase => this.centralCoordinator;
 
 		public void EnableMining(AccountId delegateAccountId = null) {
-			this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.EnableMining(this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetPublicAccountId(), delegateAccountId);
+
+			
+			this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.EnableMining(null, delegateAccountId);
 		}
 
 		public void DisableMining() {
@@ -216,7 +226,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				this.StartOtherChainComponents();
 
-				if(GlobalSettings.ApplicationSettings.P2pEnabled) {
+				if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 					// if p2p is enabled, then we register our chain
 
 					this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RegisterChain(this);
@@ -245,6 +255,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemovePIDLock();
 
 					this.poller_active = false;
+					this.tasksPoller?.Dispose();
+					
 					this.centralCoordinator.Stop();
 				} catch(Exception ex) {
 					Log.Error(ex, "Failed to stop controllers");
@@ -289,14 +301,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			this.pollerResetEvent = new AutoResetEvent(false);
 
-			// here we prepare the connection poller that will periodically check connections to ensure they are still active
+			// here we prepare the events poller that will check if we have events. This works better as a task than a timer.
 			this.eventsPoller = new Task<bool>(() => {
 
-				Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
+				//Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
 				while(this.poller_active) {
 
 					try {
 						this.ColoredRoutedTaskReceiver.CheckTasks();
+						
 					} catch(Exception ex) {
 						Log.Error(ex, "Failed to check for system events");
 					}
@@ -306,9 +319,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				return true;
 			});
-
+			
 			this.poller_active = true;
 			this.eventsPoller.Start();
+			
+			// perform a check for any message that has arrived and invoke the callbacks if there are any on the calling thread
+			this.tasksPoller = new Timer(state => {
+				this.CheckTasks();
+				
+			}, this, this.taskCheckSpan, this.taskCheckSpan);
+
 		}
 
 		protected virtual void StartOtherChainComponents() {
@@ -404,8 +424,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		public TaskResult<object> QueryBlockChainInfo() {
-			return this.RunBlockchainTaskMethod((service, taskRoutingContext) => (object) service.GetBlockchainInfo(), (results, taskRoutingContext) => {
+		public TaskResult<BlockchainInfo> QueryBlockChainInfo() {
+			return this.RunBlockchainTaskMethod((service, taskRoutingContext) => service.GetBlockchainInfo(), (results, taskRoutingContext) => {
 				if(results.Error) {
 					//TODO: what to do here?
 				}
@@ -425,6 +445,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public ImmutableList<string> QueryPeersList() {
 			return this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.AllConnectionsList.Select(c => c.ScoppedIp).ToImmutableList();
+		}
+
+		public ImmutableList<string> QueryIPsList() {
+			return this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.AllIPCache.ToImmutableList();
 		}
 
 		/// <summary>
@@ -500,7 +524,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			return this.RunTaskMethod(() => {
 
-				ILoadWalletWorkflow workflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateLoadWalletWorkflow();
+				ILoadWalletWorkflow workflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateLoadWalletWorkflow(correlationContext);
 
 				this.centralCoordinator.PostWorkflow(workflow);
 
@@ -575,7 +599,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				using(ByteArray simpleBytes = Encoding.UTF8.GetBytes(json)) {
 
-					using(SafeArrayHandle compressed = compressor.Compress(simpleBytes)) {
+					using(SafeArrayHandle compressed = compressor.Compress(simpleBytes, CompressionLevelByte.Optimal)) {
 						return compressed.ToExactByteArrayCopy();
 					}
 
@@ -604,7 +628,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 						dehydratedTransaction.Dehydrate(rehydrator);
 
 						SafeArrayHandle bytes = rehydrator.ToArray();
-						SafeArrayHandle compressed = compressor.Compress(bytes);
+						SafeArrayHandle compressed = compressor.Compress(bytes, CompressionLevelByte.Optimal);
 						
 						var data = compressed.ToExactByteArrayCopy();
 
@@ -716,7 +740,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 					GzipCompression compressor = new GzipCompression();
 
-					using(SafeArrayHandle compressed = compressor.Compress(electionBlock.DehydratedElectionContext)) {
+					using(SafeArrayHandle compressed = compressor.Compress(electionBlock.DehydratedElectionContext, CompressionLevelByte.Maximum)) {
 
 						return new ElectionContextAPI() {
 							Type = electionBlock.ElectionContext.Version.Type.Value.Value, ContextBytes = compressed.ToExactByteArrayCopy(), BlockId = blockId, MaturityId = blockId + electionBlock.ElectionContext.Maturity,
@@ -755,19 +779,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 	#endregion
 
 	#region System Methods
-
-		/// <summary>
-		///     perform a check for any message that has arrived and invoke the callbacks if there are any on the calling thread
-		/// </summary>
-		public void RunPeriodicTasks() {
-			try {
-				this.CheckTasks();
-
-			} catch(Exception ex) {
-				Log.Error(ex, "Failed to check for events");
-			}
-
-		}
 
 		//run a return Task transformation method asynchronously and return the results in the calling thread via the Task. Example, getting a transactioncount as an int:
 		private readonly ConcurrentDictionary<Guid, IRoutedTask> returnedQueries = new ConcurrentDictionary<Guid, IRoutedTask>();
@@ -952,20 +963,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		protected void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				try {
-					this.StopChain();
-				} finally {
-					this.IsDisposed = true;
-				}
 
-				try {
-					this.centralCoordinator.Dispose();
+				this.StopChain();
+				
+				this.centralCoordinator.Dispose();
 
-					this.DisposeOtherComponents();
-				} finally {
-					this.IsDisposed = true;
-				}
+				this.DisposeOtherComponents();
+
 			}
+			this.IsDisposed = true;
 		}
 
 		protected virtual void DisposeOtherComponents() {

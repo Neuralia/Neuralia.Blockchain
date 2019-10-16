@@ -28,7 +28,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public ComponentVersion CertificateVersion { get; set; } = new ComponentVersion();
 		public int CertificateId { get; set; }
-		public AccreditationCertificateType CertificateType { get; set; }
+		public int CertificateType { get; set; }
 		public Enums.CertificateApplicationTypes ApplicationType { get; set; }
 		public Enums.CertificateStates CertificateState { get; set; }
 
@@ -89,7 +89,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			dehydrator.Write((byte) this.CertificateState);
 			dehydrator.Write((int) this.ApplicationType);
-			dehydrator.Write(this.CertificateType.Value);
+			dehydrator.Write(this.CertificateType);
 
 			dehydrator.Write(this.CertificateId);
 			this.CertificateVersion.Dehydrate(dehydrator);

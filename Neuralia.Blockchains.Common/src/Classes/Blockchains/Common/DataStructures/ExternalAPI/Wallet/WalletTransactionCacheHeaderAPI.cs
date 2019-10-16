@@ -1,9 +1,7 @@
 using System;
-using MessagePack;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI.Wallet {
 	
-	[MessagePackObject(keyAsPropertyName: true)]
 	public class WalletTransactionHistoryHeaderAPI {
 		public string TransactionId { get; set; }
 
@@ -21,7 +19,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 	}
 
-	[MessagePackObject(keyAsPropertyName: true)]
 	public class WalletTransactionHistoryDetailsAPI {
 		public string TransactionId { get; set; }
 

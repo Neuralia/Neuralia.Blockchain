@@ -28,8 +28,8 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 
 			try {
 				this.PerformOperation(db => {
-
-					foreach(MessageEntrySqlite staleMessage in db.MessageEntries.Include(me => me.Peers).Where(me => ((this.timeService.CurrentRealTime - me.Received) > ExternalMessageLifetime) && (me.Local == false))) {
+					
+					foreach(MessageEntrySqlite staleMessage in db.MessageEntries.Include(me => me.Peers).Where(me => (me.Received.AddTicks(ExternalMessageLifetime.Ticks) < this.timeService.CurrentRealTime) && (me.Local == false))) {
 						foreach(MessagePeerSqlite peerEntry in staleMessage.Peers.ToArray()) {
 							staleMessage.Peers.Remove(peerEntry);
 						}
@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 						db.MessageEntries.Remove(staleMessage);
 					}
 
-					foreach(MessageEntrySqlite staleMessage in db.MessageEntries.Include(me => me.Peers).Where(me => ((this.timeService.CurrentRealTime - me.Received) > LocalMessageLifetime) && me.Local)) {
+					foreach(MessageEntrySqlite staleMessage in db.MessageEntries.Include(me => me.Peers).Where(me => (me.Received.AddTicks(LocalMessageLifetime.Ticks) < this.timeService.CurrentRealTime) && me.Local)) {
 						foreach(MessagePeerSqlite peerEntry in staleMessage.Peers.ToArray()) {
 							staleMessage.Peers.Remove(peerEntry);
 						}
@@ -126,7 +126,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 							// ok, we record this message as having been received from this peer
 							messagePeerSqlite = new MessagePeerSqlite();
 							messagePeerSqlite.PeerKey = peerKey; // it should exist since we queried it above
-							messagePeerSqlite.Received = DateTime.Now;
+							messagePeerSqlite.Received = DateTime.UtcNow;
 							messagePeerSqlite.Direction = MessagePeerSqlite.CommunicationDirection.Sent;
 
 							messageEntrySqlite.Peers.Add(messagePeerSqlite);
@@ -191,7 +191,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 						messagePeerSqlite.PeerKey = peerSqlite.PeerKey; // it should exist since we queried it above
 						messagePeerSqlite.Hash = messageEntrySqlite.Hash;
 
-						messagePeerSqlite.Received = DateTime.Now;
+						messagePeerSqlite.Received = DateTime.UtcNow;
 						messagePeerSqlite.Direction = MessagePeerSqlite.CommunicationDirection.Received;
 
 						messageEntrySqlite.Peers.Add(messagePeerSqlite);
@@ -316,7 +316,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 
 					cachedEntry.BlockId = blockId;
 					cachedEntry.Hash = xxHash;
-					cachedEntry.Received = DateTime.Now;
+					cachedEntry.Received = DateTime.UtcNow;
 
 					db.UnvalidatedBlockGossipMessageCacheEntries.Add(cachedEntry);
 

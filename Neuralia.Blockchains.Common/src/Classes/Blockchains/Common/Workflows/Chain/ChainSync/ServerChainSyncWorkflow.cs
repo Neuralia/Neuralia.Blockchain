@@ -51,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		///     How many seconds do we wait for a return message. for a server, we may have to wait longer since the peer may be
 		///     very busy downloading
 		/// </summary>
-		protected const int WAIT_NEXT_BLOCK_TIMEOUT = 60;
+		protected const int WAIT_NEXT_BLOCK_TIMEOUT = 700;
 
 		/// <summary>
 		///     Here we store the clients with which we have a sync workflow already. It helps ensure a peer will only have one
@@ -177,15 +177,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					ITargettedMessageSet<IBlockchainEventsRehydrationFactory> requestSet = null;
 
-					requestSet = this.WaitSingleNetworkMessage(new[] {typeof(CLOSE_CONNECTION), typeof(REQUEST_BLOCK_INFO), typeof(REQUEST_BLOCK_SLICE_HASHES), typeof(REQUEST_BLOCK), typeof(REQUEST_DIGEST_INFO), typeof(REQUEST_DIGEST), typeof(REQUEST_DIGEST_FILE)}, TimeSpan.FromSeconds(WAIT_NEXT_BLOCK_TIMEOUT));
+					try {
+						requestSet = this.WaitSingleNetworkMessage(new[] {typeof(CLOSE_CONNECTION), typeof(REQUEST_BLOCK_INFO), typeof(REQUEST_BLOCK_SLICE_HASHES), typeof(REQUEST_BLOCK), typeof(REQUEST_DIGEST_INFO), typeof(REQUEST_DIGEST), typeof(REQUEST_DIGEST_FILE)}, TimeSpan.FromSeconds(WAIT_NEXT_BLOCK_TIMEOUT));
 
-					this.CheckShouldCancel();
-
-					if(requestSet?.BaseMessage is CLOSE_CONNECTION) {
-						// this is the end, the other peer wants to stop this
+					} catch(WorkflowException wex) {
+						// nothing to do
+					}
+	
+					if(requestSet == null || requestSet.BaseMessage is CLOSE_CONNECTION) {
+						// this is the end, the other peer wants to stop this or we timed out
 
 						break;
 					}
+					
+					
+					this.CheckShouldCancel();
 
 					if(requestSet?.BaseMessage is REQUEST_BLOCK_INFO blockInfoRequestMessage) {
 						Log.Verbose($"Sending block id {blockInfoRequestMessage.Id} info to peer {this.PeerConnection.ScoppedAdjustedIp}.");
@@ -197,8 +203,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						if((blockInfoRequestMessage.Id > 0) && (blockInfoRequestMessage.Id <= this.ChainStateProvider.DiskBlockHeight)) {
 
 							sendBlockInfoMessage.Message.Id = blockInfoRequestMessage.Id;
-							sendBlockInfoMessage.Message.ChainBlockHeight = this.ChainStateProvider.PublicBlockHeight;
-
+							sendBlockInfoMessage.Message.ChainBlockHeight = this.ChainStateProvider.DiskBlockHeight;
+							sendBlockInfoMessage.Message.PublicBlockHeight = this.ChainStateProvider.PublicBlockHeight;
+							
 							if(blockInfoRequestMessage.IncludeBlockDetails) {
 								// set the block data
 								var results = this.FetchBlockSize(blockInfoRequestMessage.Id);

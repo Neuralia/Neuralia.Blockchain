@@ -97,9 +97,12 @@ namespace Neuralia.Blockchains.Core {
 
 		public readonly BlockchainSystemEventType WalletCreationStarted;
 		public readonly BlockchainSystemEventType WalletCreationStep;
+		
 		public readonly BlockchainSystemEventType WalletLoadingEnded;
-
 		public readonly BlockchainSystemEventType WalletLoadingStarted;
+		public readonly BlockchainSystemEventType WalletLoadingError;
+		
+		
 		public readonly BlockchainSystemEventType WalletSyncEnded;
 		public readonly BlockchainSystemEventType WalletSyncError;
 
@@ -113,6 +116,7 @@ namespace Neuralia.Blockchains.Core {
 
 			this.WalletLoadingStarted = this.CreateBaseConstant();
 			this.WalletLoadingEnded = this.CreateBaseConstant();
+			this.WalletLoadingError = this.CreateBaseConstant();
 			this.RequestWalletPassphrase = this.CreateBaseConstant();
 			this.RequestKeyPassphrase = this.CreateBaseConstant();
 

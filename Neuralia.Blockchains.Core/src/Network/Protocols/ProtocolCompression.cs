@@ -6,7 +6,8 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		public enum CompressionAlgorithm : byte {
 			None = 0,
 			Deflate = 1,
-			Gzip = 2
+			Gzip = 2,
+			Brotli = 3
 		}
 
 		public CompressionAlgorithm Type { get; }

@@ -1,8 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using MessagePack;
+
+#if (NETSTANDARD2_0)
 using Newtonsoft.Json;
+#else
+using System.Text.Json.Serialization;
+#endif
+
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
 	
@@ -14,16 +19,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string AccountId { get; set; }
 		public string AccountHash { get; set; }
 
-		public Dictionary<string, byte[]> ConfirmedGeneralTransactions { get; set; } = new Dictionary<string, byte[]>();
+		public Dictionary<string, byte[]> ConfirmedGeneralTransactions { get; set;} = new Dictionary<string, byte[]>();
 		public Dictionary<string, byte[]> ConfirmedTransactions { get; set; } = new Dictionary<string, byte[]>();
 		public Dictionary<string, int> RejectedTransactions { get; set; } = new Dictionary<string, int>();
 
 		[JsonIgnore]
-		[IgnoreMember]
 		public abstract List<SynthesizedElectionResultAPI> FinalElectionResultsBase { get; }
 
 		[JsonIgnore]
-		[IgnoreMember]
 		public abstract SynthesizedGenesisBlockAPI SynthesizedGenesisBlockBase { get; }
 
 		public abstract class SynthesizedElectionResultAPI {
@@ -48,11 +51,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public GENESIS SynthesizedGenesisBlock { get; set; }
 
 		[JsonIgnore]
-		[IgnoreMember]
 		public override List<SynthesizedElectionResultAPI> FinalElectionResultsBase => this.FinalElectionResults.Cast<SynthesizedElectionResultAPI>().ToList();
 
 		[JsonIgnore]
-		[IgnoreMember]
 		public override SynthesizedGenesisBlockAPI SynthesizedGenesisBlockBase => this.SynthesizedGenesisBlock;
 	}
 }

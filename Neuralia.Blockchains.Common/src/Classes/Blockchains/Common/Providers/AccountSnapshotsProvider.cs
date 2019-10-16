@@ -192,15 +192,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificate(db => {
 
-				var certificateTypeValues = certificateTypes.Select(c => c.Value).ToList();
+				var certificateTypeValues = certificateTypes.Select(c => (int)c.Value).ToList();
 
 				// the the account is valid in the certificate
-				if(!db.AccreditationCertificateAccounts.Any(c => (c.CertificateId == certificateId) && (c.AccountId == accountId.ToLongRepresentation()))) {
+				var longAccountId = accountId.ToLongRepresentation();
+				if(!db.AccreditationCertificateAccounts.Any(c => (c.CertificateId == certificateId) && (c.AccountId == longAccountId))) {
 					return null;
 				}
 
 				// ok, the account is in the certificate, lets select it itself
-				return db.AccreditationCertificates.SingleOrDefault(c => (c.CertificateId == certificateId) && certificateTypeValues.Contains(c.CertificateType.Value) && c.ApplicationType.HasFlag(applicationType));
+				return db.AccreditationCertificates.SingleOrDefault(c => (c.CertificateId == certificateId) && certificateTypeValues.Contains(c.CertificateType) && c.ApplicationType.HasFlag(applicationType));
 			}, certificateId);
 		}
 
@@ -212,15 +213,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates(db => {
 
-				var certificateTypeValues = certificateTypes.Select(c => c.Value).ToList();
+				var certificateTypeValues = certificateTypes.Select(c => (int)c.Value).ToList();
 
 				// the the account is valid in the certificate
-				if(!db.AccreditationCertificateAccounts.Any(c => certificateIds.Contains(c.CertificateId) && (c.AccountId == accountId.ToLongRepresentation()))) {
+				var longAccountId = accountId.ToLongRepresentation();
+				if(!db.AccreditationCertificateAccounts.Any(c => certificateIds.Contains(c.CertificateId) && (c.AccountId == longAccountId))) {
 					return null;
 				}
 
 				// ok, the account is in the certificate, lets select it itself
-				return db.AccreditationCertificates.Where(c => certificateIds.Contains(c.CertificateId) && certificateTypeValues.Contains(c.CertificateType.Value) && c.ApplicationType.HasFlag(applicationType)).ToList();
+				return db.AccreditationCertificates.Where(c => certificateIds.Contains(c.CertificateId) && certificateTypeValues.Contains(c.CertificateType) && c.ApplicationType.HasFlag(applicationType)).ToList();
 			}, certificateIds);
 		}
 
@@ -231,13 +233,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public List<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificates(AccountId accountId, AccreditationCertificateType[] certificateType, Enums.CertificateApplicationTypes applicationType) {
 
 			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates(db => {
-				var certificateTypeValues = certificateType.Select(c => c.Value).ToList();
+				var certificateTypeValues = certificateType.Select(c => (int)c.Value).ToList();
 
 				// the the account is valid in the certificate
 				var containsCertificates = db.AccreditationCertificateAccounts.Where(c => c.AccountId == accountId.ToLongRepresentation()).Select(c => c.CertificateId).ToList();
 
 				// ok, the account is in the certificate, lets select it itself
-				return db.AccreditationCertificates.Where(c => containsCertificates.Contains(c.CertificateId) && certificateTypeValues.Contains(c.CertificateType.Value) && c.ApplicationType.HasFlag(applicationType)).ToList();
+				return db.AccreditationCertificates.Where(c => containsCertificates.Contains(c.CertificateId) && certificateTypeValues.Contains(c.CertificateType) && c.ApplicationType.HasFlag(applicationType)).ToList();
 			});
 		}
 
@@ -247,10 +249,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public List<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificates(ImmutableList<AccountId> accountIds, AccreditationCertificateType[] certificateType, Enums.CertificateApplicationTypes applicationType) {
 
+			var longAccountIds = accountIds.Select(a => a.ToLongRepresentation()).ToList();
 			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates(db => {
-				var certificateTypeValues = certificateType.Select(c => c.Value).ToList();
-
-				return db.AccreditationCertificates.Where(c => (c.AssignedAccount != 0) && accountIds.Contains(c.AssignedAccount.ToAccountId()) && certificateTypeValues.Contains(c.CertificateType.Value) && c.ApplicationType.HasFlag(applicationType)).ToList();
+				var certificateTypeValues = certificateType.Select(c => (int)c.Value).ToList();
+				
+				return db.AccreditationCertificates.Where(c => (c.AssignedAccount != 0) && longAccountIds.Contains(c.AssignedAccount) && certificateTypeValues.Contains(c.CertificateType) && c.ApplicationType.HasFlag(applicationType)).ToList();
 			});
 		}
 
@@ -388,7 +391,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							ICryptographicKey cryptoKey = KeyFactory.RehydrateKey(DataSerializationFactory.CreateRehydrator(publicKey));
 
 							if(cryptoKey is XmssCryptographicKey xmssCryptographicKey) {
-								manager.SaveAccountKeyIndex(keyEntry.Key.accountId, xmssCryptographicKey.Key, xmssCryptographicKey.TreeHeight, xmssCryptographicKey.BitSize, keyEntry.Key.ordinal);
+								manager.SaveAccountKeyIndex(keyEntry.Key.accountId, xmssCryptographicKey.Key.Clone(), xmssCryptographicKey.TreeHeight, xmssCryptographicKey.BitSize, keyEntry.Key.ordinal);
 							}
 						});
 
@@ -411,9 +414,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public List<IAccountKeysSnapshot> LoadStandardAccountKeysSnapshots(List<(long accountId, byte ordinal)> keys) {
 
 			return this.AccountKeysSnapshotDal.LoadAccountKeys(db => {
-				var casted = keys.Select(s => new Tuple<long, byte>(s.accountId, s.ordinal)).ToList();
+				var casted = keys.Select(s => s.accountId.ToString() + s.ordinal.ToString()).ToList();
 
-				return db.StandardAccountkeysSnapshots.Where(s => casted.Contains(new Tuple<long, byte>(s.AccountId, s.OrdinalId))).ToList();
+				return db.StandardAccountkeysSnapshots.Where(s => casted.Contains(s.CompositeKey)).ToList();
 			}, keys).Cast<IAccountKeysSnapshot>().ToList();
 		}
 
@@ -975,6 +978,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		protected virtual STANDARD_ACCOUNT_KEY_SNAPSHOT PrepareDeleteAccountKeysSnapshots(STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT db, (long AccountId, byte OrdinalId) key) {
+			
 			STANDARD_ACCOUNT_KEY_SNAPSHOT snapshot = this.QueryDbSetEntityEntry(db.StandardAccountkeysSnapshots, a => (a.AccountId == key.AccountId) && (a.OrdinalId == key.OrdinalId));
 			db.StandardAccountkeysSnapshots.Remove(snapshot);
 

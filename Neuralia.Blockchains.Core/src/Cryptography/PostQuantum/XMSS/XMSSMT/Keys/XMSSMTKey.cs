@@ -40,13 +40,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 		private void Dispose(bool disposing) {
 
-			try {
-				if(disposing && !this.IsDisposed) {
-					this.DisposeAll();
-				}
-			} finally {
-				this.IsDisposed = true;
+	
+			if(disposing && !this.IsDisposed) {
+				this.DisposeAll();
 			}
+
+			this.IsDisposed = true;
 		}
 
 		protected virtual void DisposeAll() {

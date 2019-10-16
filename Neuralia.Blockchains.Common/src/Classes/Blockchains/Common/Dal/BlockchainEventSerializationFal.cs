@@ -53,7 +53,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		SafeArrayHandle LoadBlockPartialTransactionBytes(KeyAddress keyAddress, (int index, long startingBlockId) blockIndex);
 		(SafeArrayHandle keyBytes, byte treeheight, byte hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
+		bool TestFastKeysPath();
 		void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal);
+		void EnsureFastKeysIndex();
 		ChannelsEntries<int> LoadBlockSize(long blockId, (int index, long startingBlockId) blockIndex);
 		(ChannelsEntries<int> sizes, SafeArrayHandle hash)? LoadBlockSizeAndHash(long blockId, (int index, long startingBlockId) blockIndex, int hashOffset, int hashLength);
 		int? LoadBlockHighHeaderSize(long blockId, (int index, long startingBlockId) blockIndex);
@@ -429,8 +431,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			throw new InvalidOperationException($"Key ordinal ID must be either '{GlobalsService.TRANSACTION_KEY_ORDINAL_ID}' or '{GlobalsService.MESSAGE_KEY_ORDINAL_ID}'. Value '{ordinal}' provided.");
 		}
 
+		public bool TestFastKeysPath() {
+			return this.fastKeyProvider?.Test()??false;
+		}
+		
 		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
 			this.fastKeyProvider?.WriteKey(accountId, key, treeHeight, hashBits, ordinal);
+		}
+		
+		/// <summary>
+		/// ensure the base structure exists
+		/// </summary>
+		public void EnsureFastKeysIndex() {
+			this.fastKeyProvider?.EnsureBaseFileExists();
 		}
 
 		public SafeArrayHandle LoadBlockPartialHighHeaderBytes(long blockId, (int index, long startingBlockId) blockIndex, int offset, int length) {

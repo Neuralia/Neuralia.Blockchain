@@ -80,12 +80,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			return (int) (this.GetMaxMessagePerKey() * percentage);
 		}
 
-		protected override void DisposeAll(bool disposing) {
-			base.DisposeAll(disposing);
-
-			if(disposing) {
-
-			}
+		protected override void DisposeAll() {
+			base.DisposeAll();
+			
 		}
 
 		public abstract int GetMaxMessagePerKey();

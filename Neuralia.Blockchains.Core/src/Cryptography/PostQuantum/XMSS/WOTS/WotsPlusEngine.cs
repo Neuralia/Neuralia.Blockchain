@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -18,7 +19,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 	///     THE WOTS+ class
 	/// </summary>
 	/// <remarks>this was built according to the XMSS RFC https://tools.ietf.org/html/rfc8391</remarks>
-	public class WotsPlusEngine {
+	public unsafe class WotsPlusEngine {
 
 		private readonly int digestLength;
 		private readonly int logWinternitz;
@@ -39,6 +40,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 		private Action<int> processChainParallel;
 		private Action<int> processChainParallelGenerate;
 
+		private MemoryHandle msgMemoryHandle;
+		private readonly int* msgPtr;
+		
 		public WotsPlusEngine(XMSSOperationModes wotsOperationMode, Enums.ThreadMode threadMode, XMSSExecutionContext xmssExecutionContext, WinternitzParameter wParam = WinternitzParameter.Param16) {
 
 			this.winternitz = (int) wParam;
@@ -66,6 +70,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 			this.msg = ByteArray.Create<int>(this.Len);
 
+			this.msgMemoryHandle = this.msg.Memory.Pin();
+			this.msgPtr = (int*)this.msgMemoryHandle.Pointer;
 		}
 
 		public int Len { get; }
@@ -164,52 +170,49 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 		}
 
 		public ByteArray[] GeneratePublicKeyFromSignature(ByteArray message, ByteArray[] sig, ByteArray publicSeed, OtsHashAddress adrs) {
-			var msg = this.msg.CastedArray<int>();
 
-			ByteArray wArray = this.BaseW(message, this.Len1);
-			var baseW = wArray.CastedArray<int>();
-
-			baseW.CopyTo(msg);
-			wArray.Return();
-
+			using(ByteArray wArray = this.BaseW(message, this.Len1)) {
+				wArray.CopyTo(this.msg);
+			}
+			
 			int checksum = this.winternitz1 * this.Len1;
 
 			for(int i = 0; i < this.Len1; i += 32) {
 
 			#region unroll32
 
-				checksum -= msg[i + 0];
-				checksum -= msg[i + 1];
-				checksum -= msg[i + 2];
-				checksum -= msg[i + 3];
-				checksum -= msg[i + 4];
-				checksum -= msg[i + 5];
-				checksum -= msg[i + 6];
-				checksum -= msg[i + 7];
-				checksum -= msg[i + 8];
-				checksum -= msg[i + 9];
-				checksum -= msg[i + 10];
-				checksum -= msg[i + 11];
-				checksum -= msg[i + 12];
-				checksum -= msg[i + 13];
-				checksum -= msg[i + 14];
-				checksum -= msg[i + 15];
-				checksum -= msg[i + 16];
-				checksum -= msg[i + 17];
-				checksum -= msg[i + 18];
-				checksum -= msg[i + 19];
-				checksum -= msg[i + 20];
-				checksum -= msg[i + 21];
-				checksum -= msg[i + 22];
-				checksum -= msg[i + 23];
-				checksum -= msg[i + 24];
-				checksum -= msg[i + 25];
-				checksum -= msg[i + 26];
-				checksum -= msg[i + 27];
-				checksum -= msg[i + 28];
-				checksum -= msg[i + 29];
-				checksum -= msg[i + 30];
-				checksum -= msg[i + 31];
+				checksum -= *(this.msgPtr+(i + 0));
+				checksum -= *(this.msgPtr+(i + 1));
+				checksum -= *(this.msgPtr+(i + 2));
+				checksum -= *(this.msgPtr+(i + 3));
+				checksum -= *(this.msgPtr+(i + 4));
+				checksum -= *(this.msgPtr+(i + 5));
+				checksum -= *(this.msgPtr+(i + 6));
+				checksum -= *(this.msgPtr+(i + 7));
+				checksum -= *(this.msgPtr+(i + 8));
+				checksum -= *(this.msgPtr+(i + 9));
+				checksum -= *(this.msgPtr+(i + 10));
+				checksum -= *(this.msgPtr+(i + 11));
+				checksum -= *(this.msgPtr+(i + 12));
+				checksum -= *(this.msgPtr+(i + 13));
+				checksum -= *(this.msgPtr+(i + 14));
+				checksum -= *(this.msgPtr+(i + 15));
+				checksum -= *(this.msgPtr+(i + 16));
+				checksum -= *(this.msgPtr+(i + 17));
+				checksum -= *(this.msgPtr+(i + 18));
+				checksum -= *(this.msgPtr+(i + 19));
+				checksum -= *(this.msgPtr+(i + 20));
+				checksum -= *(this.msgPtr+(i + 21));
+				checksum -= *(this.msgPtr+(i + 22));
+				checksum -= *(this.msgPtr+(i + 23));
+				checksum -= *(this.msgPtr+(i + 24));
+				checksum -= *(this.msgPtr+(i + 25));
+				checksum -= *(this.msgPtr+(i + 26));
+				checksum -= *(this.msgPtr+(i + 27));
+				checksum -= *(this.msgPtr+(i + 28));
+				checksum -= *(this.msgPtr+(i + 29));
+				checksum -= *(this.msgPtr+(i + 30));
+				checksum -= *(this.msgPtr+(i + 31));
 
 			#endregion
 
@@ -217,16 +220,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 			checksum <<= 8 - ((this.Len2 * this.logWinternitz) % 8);
 			int len2Bytes = (int) Math.Ceiling((double) (this.Len2 * this.logWinternitz) / 8);
-
-			ByteArray bytes = CommonUtils.ToBytes(checksum, len2Bytes);
-			wArray = this.BaseW(bytes, this.Len2);
-			bytes.Return();
-
-			baseW = wArray.CastedArray<int>();
-
-			baseW.CopyTo(msg.Slice(this.Len1, this.Len2));
-			wArray.Return();
-
+			
+			using(ByteArray bytes = CommonUtils.ToBytes(checksum, len2Bytes)) {
+				using(var wArray = this.BaseW(bytes, this.Len2)) {
+					wArray.CopyTo(this.msg.Span.Slice(this.Len1*sizeof(int), this.Len2*sizeof(int)));
+				}
+			}
+			
 			ByteArray[] tmpPk = new ByteArray[this.Len];
 
 			this.threadState.publicKey = tmpPk;
@@ -244,7 +244,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 					threadContext.Initialize(this.threadState.signature[jstart]);
 
 					for(int j = jstart; j < (jstart + threadContext.count); j++) {
-						int msgValue = this.msg.ReadCasted<int>(j);
+						int msgValue = *(this.msgPtr+j);
 						threadContext.tmpAdrs1.ChainAddress = j;
 						threadContext.Initialize2();
 
@@ -288,14 +288,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 		public ByteArray[] GenerateSignature(ByteArray message, ByteArray privateSeed, ByteArray publicSeed, int nonce2, OtsHashAddress adrs) {
 
-			var msg = this.msg.CastedArray<int>();
-
-			ByteArray wArray = this.BaseW(message, this.Len1);
-			var baseW = wArray.CastedArray<int>();
-
-			baseW.CopyTo(msg);
-
-			wArray.Return();
+			using(ByteArray wArray = this.BaseW(message, this.Len1)) {
+				wArray.CopyTo(this.msg);
+			}
 
 			int checksum = this.winternitz1 * this.Len1;
 
@@ -303,38 +298,38 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 			#region unroll32
 
-				checksum -= msg[i + 0];
-				checksum -= msg[i + 1];
-				checksum -= msg[i + 2];
-				checksum -= msg[i + 3];
-				checksum -= msg[i + 4];
-				checksum -= msg[i + 5];
-				checksum -= msg[i + 6];
-				checksum -= msg[i + 7];
-				checksum -= msg[i + 8];
-				checksum -= msg[i + 9];
-				checksum -= msg[i + 10];
-				checksum -= msg[i + 11];
-				checksum -= msg[i + 12];
-				checksum -= msg[i + 13];
-				checksum -= msg[i + 14];
-				checksum -= msg[i + 15];
-				checksum -= msg[i + 16];
-				checksum -= msg[i + 17];
-				checksum -= msg[i + 18];
-				checksum -= msg[i + 19];
-				checksum -= msg[i + 20];
-				checksum -= msg[i + 21];
-				checksum -= msg[i + 22];
-				checksum -= msg[i + 23];
-				checksum -= msg[i + 24];
-				checksum -= msg[i + 25];
-				checksum -= msg[i + 26];
-				checksum -= msg[i + 27];
-				checksum -= msg[i + 28];
-				checksum -= msg[i + 29];
-				checksum -= msg[i + 30];
-				checksum -= msg[i + 31];
+				checksum -= *(this.msgPtr+(i + 0));
+				checksum -= *(this.msgPtr+(i + 1));
+				checksum -= *(this.msgPtr+(i + 2));
+				checksum -= *(this.msgPtr+(i + 3));
+				checksum -= *(this.msgPtr+(i + 4));
+				checksum -= *(this.msgPtr+(i + 5));
+				checksum -= *(this.msgPtr+(i + 6));
+				checksum -= *(this.msgPtr+(i + 7));
+				checksum -= *(this.msgPtr+(i + 8));
+				checksum -= *(this.msgPtr+(i + 9));
+				checksum -= *(this.msgPtr+(i + 10));
+				checksum -= *(this.msgPtr+(i + 11));
+				checksum -= *(this.msgPtr+(i + 12));
+				checksum -= *(this.msgPtr+(i + 13));
+				checksum -= *(this.msgPtr+(i + 14));
+				checksum -= *(this.msgPtr+(i + 15));
+				checksum -= *(this.msgPtr+(i + 16));
+				checksum -= *(this.msgPtr+(i + 17));
+				checksum -= *(this.msgPtr+(i + 18));
+				checksum -= *(this.msgPtr+(i + 19));
+				checksum -= *(this.msgPtr+(i + 20));
+				checksum -= *(this.msgPtr+(i + 21));
+				checksum -= *(this.msgPtr+(i + 22));
+				checksum -= *(this.msgPtr+(i + 23));
+				checksum -= *(this.msgPtr+(i + 24));
+				checksum -= *(this.msgPtr+(i + 25));
+				checksum -= *(this.msgPtr+(i + 26));
+				checksum -= *(this.msgPtr+(i + 27));
+				checksum -= *(this.msgPtr+(i + 28));
+				checksum -= *(this.msgPtr+(i + 29));
+				checksum -= *(this.msgPtr+(i + 30));
+				checksum -= *(this.msgPtr+(i + 31));
 
 			#endregion
 
@@ -342,15 +337,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 			checksum <<= 8 - ((this.Len2 * this.logWinternitz) % 8);
 			int len2Bytes = (int) Math.Ceiling((double) (this.Len2 * this.logWinternitz) / 8);
-
-			ByteArray bytes = CommonUtils.ToBytes(checksum, len2Bytes);
-			wArray = this.BaseW(bytes, this.Len2);
-			bytes.Return();
-			baseW = wArray.CastedArray<int>();
-
-			baseW.CopyTo(msg.Slice(this.Len1, this.Len2));
-
-			wArray.Return();
+			
+			using(ByteArray bytes = CommonUtils.ToBytes(checksum, len2Bytes)) {
+				using(var wArray = this.BaseW(bytes, this.Len2)) {
+					wArray.CopyTo(this.msg.Span.Slice(this.Len1*sizeof(int), this.Len2*sizeof(int)));
+				}
+			}
 
 			ByteArray[] sig = new ByteArray[this.Len];
 
@@ -367,7 +359,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 					int jstart = threadContext.start;
 
 					for(int j = jstart; j < (jstart + threadContext.count); j++) {
-						int msgValue = this.msg.ReadCasted<int>(j);
+						int msgValue = *(this.msgPtr+j);
 
 						threadContext.Initialize(this.threadState.otsHashAddress);
 						threadContext.tmpAdrs1.ChainAddress = j;
@@ -509,20 +501,24 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 			int len = buffer.Length;
 
 			ByteArray warray = ByteArray.Create<int>(outputLen);
-			var baseW = warray.CastedArray<int>();
 
-			for(int i = 0; i < outputLen; i++) {
-				if(bits == 0) {
-					total = buffer[inVal];
-					inVal++;
-					bits += 8;
+			fixed(byte* baseWB = warray.Span) {
+
+				var baseW = (int*) baseWB;
+				
+				for(int i = 0; i < outputLen; i++) {
+					if(bits == 0) {
+						total = buffer[inVal];
+						inVal++;
+						bits += 8;
+					}
+
+					bits -= this.logWinternitz;
+					*(baseW+outVal) = (int) (total >> bits) & this.winternitz1;
+					outVal++;
 				}
-
-				bits -= this.logWinternitz;
-				baseW[outVal] = (int) (total >> bits) & this.winternitz1;
-				outVal++;
 			}
-
+			
 			return warray;
 		}
 
@@ -634,7 +630,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 					entry.Dispose();
 				}
 
-				this.msg?.Dispose();
+				try {
+					this.msgMemoryHandle.Dispose();
+				} catch {
+				}
+				try {
+					this.msg.Dispose();
+				} catch {
+				}
 			}
 
 			this.IsDisposed = true;

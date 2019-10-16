@@ -9,8 +9,12 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Core.DataAccess {
-
-	public interface IEntityFrameworkContext : IDisposable2, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbQueryCache, IDbContextPoolable {
+#if (NETSTANDARD2_0)
+			public interface IEntityFrameworkContext : IDisposable2, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbQueryCache, IDbContextPoolable{
+#else
+	public interface IEntityFrameworkContext : IDisposable2, IAsyncDisposable, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbContextPoolable {
+			
+#endif
 
 		DbContext Context { get; }
 

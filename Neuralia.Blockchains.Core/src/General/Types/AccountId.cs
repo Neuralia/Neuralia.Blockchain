@@ -377,6 +377,8 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		public static bool operator >=(AccountId a, AccountId b) {
 			return (a == b) || (a > b);
 		}
+
+		public static AccountId LargestAddress => new AccountId(long.MaxValue & SEQUENCE_MASK, Enums.AccountTypes.Standard);
 	}
 
 	public static class AccountIdExtensions {

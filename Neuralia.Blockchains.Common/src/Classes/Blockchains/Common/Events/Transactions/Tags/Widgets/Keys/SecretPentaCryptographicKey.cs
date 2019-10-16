@@ -18,6 +18,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public QTeslaCryptographicKey FourthKey { get; set; } = new QTeslaCryptographicKey();
 		public XmssmtCryptographicKey FifthKey { get; set; } = new XmssmtCryptographicKey();
 
+		public override bool IsEmpty => base.IsEmpty || (this.ThirdKey?.IsEmpty??true) || (this.FourthKey?.IsEmpty??true) || (this.FifthKey?.IsEmpty??true);
+		
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
@@ -56,14 +58,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.SecretPenta;
-		}
-		
-		protected override void DisposeAll(bool disposing) {
-			base.DisposeAll(disposing);
-			
-			this.ThirdKey?.Dispose();
-			this.FourthKey?.Dispose();
-			this.FifthKey?.Dispose();
 		}
 	}
 }

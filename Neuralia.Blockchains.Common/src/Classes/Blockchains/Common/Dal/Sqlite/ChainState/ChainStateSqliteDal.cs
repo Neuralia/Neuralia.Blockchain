@@ -55,7 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		public CHAIN_STATE_SNAPSHOT LoadSimpleState(CHAIN_STATE_CONTEXT db) {
 
-			CHAIN_STATE_SNAPSHOT entry = db.ChainMetadatas.SingleOrDefault();
+			CHAIN_STATE_SNAPSHOT entry = db.ChainMetadatas.OrderBy(e => e.Id).Take(1).SingleOrDefault();
 
 			if(entry != null) {
 				return entry;

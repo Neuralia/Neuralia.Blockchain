@@ -29,9 +29,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 		long Hash { get; set; }
 
-		EncryptorParameters EncryptionParameters { get; set; }
-
-		byte[] Secret { get; set; }
 
 		Enums.KeyTypes KeyType { get; set; }
 
@@ -74,16 +71,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 		/// </summary>
 		public long Hash { get; set; }
 
-		/// <summary>
-		///     Encryption parameters used to encrypt data for this key. used in the chain state
-		/// </summary>
-		/// <returns></returns>
-		public EncryptorParameters EncryptionParameters { get; set; }
-
-		/// <summary>
-		///     The secret key for our encrypted publicly saved data
-		/// </summary>
-		public byte[] Secret { get; set; }
 
 		/// <summary>
 		///     are we using XMSS or XMSSMT
@@ -118,44 +105,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			nodeList.Add(this.KeyAddress);
 			nodeList.Add(this.ChangeTransactionId);
 			
-			nodeList.Add(this.EncryptionParameters.GetStructuresArray());
-
 			return nodeList;
 		}
 
 		private void Dispose(bool disposing) {
 
-			if(this.IsDisposed) {
+			if(!this.IsDisposed && disposing) {
 
-				try {
-
-					this.DisposeAll(disposing);
-
-				} finally {
-					try {
-						if(disposing) {
-							// make sure we wipe the private key from memory
-							if(this.PrivateKey != null) {
-								Array.Clear(this.PrivateKey, 0, this.PrivateKey.Length);
-								this.PrivateKey = null;
-							}
-
-							// clear the next key too, if applicable
-							if(this.NextKey?.PrivateKey != null) {
-								Array.Clear(this.NextKey.PrivateKey, 0, this.NextKey.PrivateKey.Length);
-								this.NextKey.PrivateKey = null;
-							}
-						}
-					} finally {
-						this.IsDisposed = true;
-					}
-				}
-
+				this.DisposeAll();
 			}
+			
+			this.IsDisposed = true;
 		}
 
-		protected virtual void DisposeAll(bool disposing) {
+		protected virtual void DisposeAll() {
+			// make sure we wipe the private key from memory
+			if(this.PrivateKey != null) {
+				Array.Clear(this.PrivateKey, 0, this.PrivateKey.Length);
+				this.PrivateKey = null;
+			}
 
+			// clear the next key too, if applicable
+			if(this.NextKey?.PrivateKey != null) {
+				Array.Clear(this.NextKey.PrivateKey, 0, this.NextKey.PrivateKey.Length);
+				this.NextKey.PrivateKey = null;
+			}
 		}
 
 		~WalletKey() {

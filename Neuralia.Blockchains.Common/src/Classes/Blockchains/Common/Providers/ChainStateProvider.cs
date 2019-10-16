@@ -10,6 +10,7 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -32,6 +33,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		bool BlockWithinDigest(long blockId);
 
 		string GetBlocksIdFilePath();
+
+		void ResetChainState();
 	}
 
 	public interface IChainStateProvider<CHAIN_STATE_DAL, CHAIN_STATE_CONTEXT> : IChainStateProvider
@@ -97,6 +100,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public string GetBlocksIdFilePath() {
 			return Path.Combine(this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlocksFolderPath(), BLOCKS_ID_FILE);
+		}
+
+		/// <summary>
+		/// make sure the chain state will be requeried.
+		/// </summary>
+		public void ResetChainState() {
+			this.chainStateEntry = null;
 		}
 
 		public DateTime ChainInception {
@@ -421,7 +431,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			DateTime syncDeadline = lastSync.AddSeconds(maxBlockInterval);
 			DateTime doubleSyncDeadline = lastSync.AddSeconds(maxBlockInterval * 2);
 
-			DateTime now = DateTime.Now;
+			DateTime now = DateTime.UtcNow;
 
 			if(now > doubleSyncDeadline) {
 				return Enums.ChainSyncState.Desynchronized;
@@ -556,9 +566,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateEntry.LastDigestTimestamp = DateTime.MinValue;
 			chainStateEntry.MaxBlockInterval = 0;
 
-			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 3).ToString();
-			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 3).ToString();
-			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 3).ToString();
+			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 4).ToString();
+			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 4).ToString();
+			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 4).ToString();
 
 			return chainStateEntry;
 		}
@@ -567,16 +577,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			lock(this.locker) {
 
-				this.ChainStateDal.PerformOperation(db => {
+				Repeater.Repeat(() => {
+					this.ChainStateDal.PerformOperation(db => {
 
-					// always refresh the entry from the database
-					this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
+						// always refresh the entry from the database
+						this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
 
-					action(db);
+						action(db);
 
-					db.SaveChanges();
+						db.SaveChanges();
+					});
 				});
-
 			}
 		}
 
@@ -585,9 +596,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// if we have no entry, we must update it from the DB
 				if((this.chainStateEntry == null) || this.BlockIdChanged()) {
-					this.ChainStateDal.PerformOperation(db => {
+					Repeater.Repeat(() => {
+						this.ChainStateDal.PerformOperation(db => {
 
-						this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
+							this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
+						});
 					});
 				}
 
@@ -599,16 +612,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			lock(this.locker) {
 
-				this.ChainStateDal.PerformOperation(db => {
+				Repeater.Repeat(() => {
+					this.ChainStateDal.PerformOperation(db => {
 
-					// always refresh the entry from the database
-					this.chainStateEntry = (this.ChainStateDal.LoadFullState(db), true);
+						// always refresh the entry from the database
+						this.chainStateEntry = (this.ChainStateDal.LoadFullState(db), true);
 
-					action(db);
+						action(db);
 
-					db.SaveChanges();
+						db.SaveChanges();
+					});
 				});
-
 			}
 		}
 
@@ -617,9 +631,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// if we have no entry, we must update it from the DB
 				if((this.chainStateEntry == null) || !this.chainStateEntry.Value.full) {
-					this.ChainStateDal.PerformOperation(db => {
+					Repeater.Repeat(() => {
+						this.ChainStateDal.PerformOperation(db => {
 
-						this.chainStateEntry = (this.ChainStateDal.LoadFullState(db), true);
+							this.chainStateEntry = (this.ChainStateDal.LoadFullState(db), true);
+						});
 					});
 				}
 

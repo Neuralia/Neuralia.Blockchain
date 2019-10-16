@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Tags;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -10,18 +11,18 @@ using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Block {
-	public class ServerRequestBlockSliceHashes : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncSliceHashesResponse<long> {
+	public class ServerRequestBlockSliceHashes : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncSliceHashesResponse<BlockId> {
 
 		public int SlicesHash { get; set; }
 
-		public long Id { get; set; }
+		public BlockId Id { get; set; } = new BlockId();
 
 		public List<int> SliceHashes { get; } = new List<int>();
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.Id);
+			this.Id.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.SlicesHash);
 			dehydrator.Write((ushort) this.SliceHashes.Count);
@@ -53,7 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public override void Rehydrate(IDataRehydrator rehydrator, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			base.Rehydrate(rehydrator, rehydrationFactory);
 
-			this.Id = rehydrator.ReadLong();
+			this.Id.Rehydrate(rehydrator);
 			this.SlicesHash = rehydrator.ReadInt();
 
 			int count = rehydrator.ReadUShort();

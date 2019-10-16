@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.Abstractions;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
@@ -51,6 +52,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			}
 		}
 
+		private string GetBasePath() {
+			long adjustedAccountId = this.AdjustAccountId(new AccountId(Constants.FIRST_PUBLIC_ACCOUNT_NUMBER, Enums.AccountTypes.Standard));
+			
+			int page = this.GetPage(adjustedAccountId);
+			
+			return this.GetKeyFileName(page);
+		}
+
+		public bool Test() {
+			
+			return this.fileSystem.File.Exists(this.GetBasePath());
+		}
+
+		public void EnsureBaseFileExists() {
+			string baseFileName = this.GetBasePath();
+			if(!this.fileSystem.File.Exists(baseFileName)) {
+
+				FileExtensions.EnsureFileExists(baseFileName, this.fileSystem);
+
+				// ok, write a raw file
+				using(Stream fs = this.fileSystem.File.Create(baseFileName)) {
+					
+				}
+			}
+		}
 		public (SafeArrayHandle keyBytes, byte treeheight, byte hashBits) LoadKeyFile(AccountId accountId, byte ordinal) {
 
 			this.TestKeyValidity(ordinal);
@@ -65,7 +91,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			string fileName = this.GetKeyFileName(page);
 
-			if(!this.fileSystem.File.Exists(fileName)) {
+			if(!this.fileSystem.File.Exists(fileName) || this.fileSystem.FileInfo.FromFileName(fileName).Length == 0) {
 				return default;
 			}
 

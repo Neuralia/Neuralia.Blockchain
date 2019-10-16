@@ -16,6 +16,10 @@ namespace Neuralia.Blockchains.Core.Tools {
 			//			ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
 			//#endif
 		}
+		
+		public RestUtility() {
+
+		}
 
 		public Task<IRestResponse> Put(string url, string action, Dictionary<string, object> parameters) {
 

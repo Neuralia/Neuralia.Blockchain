@@ -4,7 +4,7 @@
 dotnet restore --no-cache
 
 if dotnet build -c Release --no-incremental ; then
-    if  dotnet pack -c Release -o ../../ ; then
+    if  dotnet pack -c Release -o ./ ; then
 	dotnet clean ;
          echo "pack completed"
     else

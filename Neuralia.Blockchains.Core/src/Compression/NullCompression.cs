@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 	public class NullCompression : Compression<NullCompression> {
 
 		protected override SafeArrayHandle CompressData(SafeArrayHandle data, CompressionLevelByte level) {
-			return data.Branch();
+			return data.Clone();
 		}
 
 		protected override SafeArrayHandle CompressData(SafeArrayHandle data) {
@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 		protected override SafeArrayHandle DecompressData(SafeArrayHandle data) {
 
-			return data.Branch();
+			return data.Clone();
 		}
 
 		protected override SafeArrayHandle DecompressData(Stream stream) {

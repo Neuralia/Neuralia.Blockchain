@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public class EncryptionInfo {
 		public bool encrypt;
 
-		public EncryptorParameters encryptionParameters { get; set; }
+		public IEncryptorParameters encryptionParameters { get; set; }
 
 		public Func<SafeArrayHandle> Secret { get; set; }
 	}

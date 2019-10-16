@@ -126,13 +126,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			}
 
 			//TODO: is the datetime precision high enough here?
-			DateTime timeoutTime = DateTime.Now + timeout.Value;
+			DateTime timeoutTime = DateTime.UtcNow + timeout.Value;
 
 			var messages = new List<MESSAGE_SET>();
 
 			while(true) {
 				try {
-					this.CheckCancelRequested();
+					this.CheckShouldCancel();
 
 					var result = this.networkMessageReceiver.CheckMessages(ProcessSingle, ProcessBatch);
 
@@ -145,7 +145,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 						}
 					}
 
-					DateTime now = DateTime.Now;
+					DateTime now = DateTime.UtcNow;
 
 					if(now > timeoutTime) {
 						// we timed out
@@ -154,12 +154,12 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 					TimeSpan timeRemaining = timeoutTime - now;
 
-					// lets hibernate for a maximum of a second
-					int minTimeout = (int) Math.Min(timeRemaining.TotalMilliseconds, 1000);
+					// lets hibernate for a maximum of 3 second
+					int minTimeout = (int) Math.Min(timeRemaining.TotalMilliseconds, 1000*3);
 					this.Hibernate(TimeSpan.FromMilliseconds(minTimeout), autoEvent);
 
 				} catch(ThreadTimeoutException ex) {
-					Log.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
+					//Log.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
 
 					// we return what we have
 					return messages;
@@ -231,7 +231,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			var messages = this.WaitNetworkMessages(types, timeout, 1, autoEvent);
 
 			if(messages.Count == 0) {
-				throw new WorkflowException("We got no message, we were waiting for only one");
+				throw new MessageReceptionException("We got no message, we were waiting for only one");
 			}
 
 			if(messages.Count > 1) {

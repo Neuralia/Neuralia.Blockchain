@@ -185,13 +185,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			}
 
 			public T task { get; }
-			public DateTime timestamp { get; } = DateTime.Now;
-			public DateTime nexttry { get; private set; } = DateTime.Now;
+			public DateTime timestamp { get; } = DateTime.UtcNow;
+			public DateTime nexttry { get; private set; } = DateTime.UtcNow;
 			public int attempt { get; private set; }
 
 			public TimeSpan Delay { get; private set; }
 
-			public bool CanRun => this.nexttry < DateTime.Now;
+			public bool CanRun => this.nexttry < DateTime.UtcNow;
 
 			public void IncrementAttempt() {
 
@@ -203,7 +203,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 				}
 
 				// every try wait a little longer before we are reinserted.
-				this.nexttry = DateTime.Now + this.Delay;
+				this.nexttry = DateTime.UtcNow + this.Delay;
 
 				if(this.attempt == int.MaxValue) {
 					this.attempt = 0;

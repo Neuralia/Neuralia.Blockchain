@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		public BlockchainSystemEventType message;
 		public object[] parameters;
-		public DateTime timestamp = DateTime.Now;
+		public DateTime timestamp = DateTime.UtcNow;
 
 		public SystemMessageTask(BlockchainSystemEventType eventType) {
 			this.message = eventType;

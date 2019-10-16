@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 	///     A special utility class to serialize with encryption and hashes
 	/// </summary>
 	public class EncryptionSerializer {
-		private readonly EncryptorParameters encryptorParameters;
+		private readonly IEncryptorParameters encryptorParameters;
 
 		private readonly xxHasher64 hasher = new xxHasher64();
 
@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		private readonly SafeArrayHandle secret = SafeArrayHandle.Create();
 
-		public EncryptionSerializer(SafeArrayHandle secret, EncryptorParameters encryptorParameters, long nonce1, long nonce2) {
+		public EncryptionSerializer(SafeArrayHandle secret, IEncryptorParameters encryptorParameters, long nonce1, long nonce2) {
 			this.secret = secret;
 			this.encryptorParameters = encryptorParameters;
 
@@ -93,10 +93,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 #if (NETSTANDARD2_0)
 			Span<byte> guidBytes = value.ToByteArray();
 			guidBytes.CopyTo(bytes);
-#elif (NETCOREAPP2_2)
-			value.TryWriteBytes(bytes);
 #else
-	throw new NotImplementedException();
+			value.TryWriteBytes(bytes);
 #endif
 
 			return this.HashEntry(bytes);
@@ -120,10 +118,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 		private string ConvertToBase64(in Span<byte> bytes) {
 #if (NETSTANDARD2_0)
 			return Convert.ToBase64String(bytes.ToArray());
-#elif (NETCOREAPP2_2)
-			return Convert.ToBase64String(bytes);
 #else
-	throw new NotImplementedException();
+			return Convert.ToBase64String(bytes);
 #endif
 		}
 
@@ -203,10 +199,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 #if (NETSTANDARD2_0)
 			Span<byte> guidBytes = value.ToByteArray();
 			guidBytes.CopyTo(bytes);
-#elif (NETCOREAPP2_2)
-			value.TryWriteBytes(bytes);
 #else
-	throw new NotImplementedException();
+			value.TryWriteBytes(bytes);
 #endif
 
 			return this.Encrypt(bytes);
@@ -233,11 +227,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 		}
 
 		private SafeArrayHandle Encrypt(in Span<byte> bytes) {
-			return AESFileEncryptor.Encrypt((ReadOnlySpan<byte>) bytes, this.secret, this.encryptorParameters);
+			return FileEncryptor.Encrypt(bytes.ToArray(), this.secret, this.encryptorParameters);
 		}
 
 		private SafeArrayHandle Decrypt(in Span<byte> bytes) {
-			return AESFileEncryptor.Decrypt((ReadOnlySpan<byte>) bytes, this.secret, this.encryptorParameters);
+			return FileEncryptor.Decrypt(bytes.ToArray(), this.secret, this.encryptorParameters);
 		}
 
 		public void Deserialize(in Span<byte> bytes, out byte value) {
@@ -336,10 +330,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 #if (NETSTANDARD2_0)
 			value = new Guid(result.Entry.ToExactByteArray());
-#elif (NETCOREAPP2_2)
-				value = new Guid(result.Span);
 #else
-	throw new NotImplementedException();
+				value = new Guid(result.Span);
 #endif
 
 			}
@@ -366,10 +358,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 #if (NETSTANDARD2_0)
 			value = Encoding.UTF8.GetString(result.Entry.ToExactByteArray());
-#elif (NETCOREAPP2_2)
-				value = Encoding.UTF8.GetString(result.Span);
 #else
-	throw new NotImplementedException();
+				value = Encoding.UTF8.GetString(result.Span);
 #endif
 
 			}

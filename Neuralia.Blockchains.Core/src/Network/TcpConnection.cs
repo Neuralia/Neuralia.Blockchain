@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		[Flags]
 		public enum ProtocolMessageTypes : short {
 			None = 0,
-			Tiny = 1 << 0,
+			Tiny = 1,
 			Small = 1 << 1,
 			Medium = 1 << 2,
 			Large = 1 << 3,
@@ -406,7 +406,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				IAsyncResult result = counterSocket.BeginConnect(endpoint, null, null);
 
-				if(result.AsyncWaitHandle.WaitOne(1000 * 5, true)) {
+				if(result.AsyncWaitHandle.WaitOne(1000 * 3, true)) {
 
 					if(counterSocket.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length) {
 						return true;
@@ -416,10 +416,16 @@ namespace Neuralia.Blockchains.Core.Network {
 				// do nothing, we got our answer
 			} finally {
 				try {
+					counterSocket?.Disconnect(false);
+				} catch {
+					// do nothing, we got our answer
+				}
+				try {
 					counterSocket?.Dispose();
 				} catch {
 					// do nothing, we got our answer
 				}
+				
 			}
 
 			return false;
@@ -907,7 +913,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				if(!this.IsDisposed || disposingChanged) {
 
-					this.DisposeAll(disposing);
+					this.DisposeAll();
 				}
 			} finally {
 				this.IsDisposed = true;
@@ -915,42 +921,39 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 		}
 
-		protected virtual void DisposeAll(bool disposing) {
+		protected virtual void DisposeAll() {
 
 			// give it a chance to stop cleanly by cancellation
-			if(disposing) {
 
-				try {
-					this.tokenSource?.Cancel();
-				} catch {
+			try {
+				this.tokenSource?.Cancel();
+			} catch {
 
-				}
-
-				try {
-					this.dataReceptionTask?.Wait(5000);
-				} catch {
-
-				}
-
-				try {
-					this.tokenSource?.Dispose();
-					this.tokenSource = null;
-				} catch {
-
-				}
-
-				this.State = ConnectionState.NotConnected;
-
-				try {
-					this.DisposeSocket();
-
-					this.SocketClosed();
-				} finally {
-
-					this.InvokeDisconnected();
-				}
 			}
 
+			try {
+				this.dataReceptionTask?.Wait(5000);
+			} catch {
+
+			}
+
+			try {
+				this.tokenSource?.Dispose();
+				this.tokenSource = null;
+			} catch {
+
+			}
+
+			this.State = ConnectionState.NotConnected;
+
+			try {
+				this.DisposeSocket();
+
+				this.SocketClosed();
+			} finally {
+
+				this.InvokeDisconnected();
+			}
 		}
 
 		protected virtual void DisposeSocket() {

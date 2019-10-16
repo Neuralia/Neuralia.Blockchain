@@ -10,8 +10,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 	public interface IAccreditationCertificateSnapshot : ISnapshot, ITypedCollectionExposure<IAccreditationCertificateSnapshotAccount> {
 		int CertificateId { get; set; }
 		ComponentVersion CertificateVersion { get; set; }
-
-		AccreditationCertificateType CertificateType { get; set; }
+ 
+		//type: AccreditationCertificateTypes
+		int CertificateType { get; set; }
 		Enums.CertificateApplicationTypes ApplicationType { get; set; }
 		Enums.CertificateStates CertificateState { get; set; }
 

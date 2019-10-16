@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Tools;
@@ -147,6 +148,8 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				}
 
 				nonce += 1;
+				// play nice with other threads
+				Thread.Sleep(5);
 			}
 
 			scratchpad.Return();
@@ -496,13 +499,11 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			Span<byte> bytes = hash.ToByteArray();
 			SafeArrayHandle hashbytes = ByteArray.Create(bytes.Length);
 			bytes.CopyTo(hashbytes.Span);
-#elif (NETCOREAPP2_2)
+#else
 			int        byteCount = hash.GetByteCount();
 			SafeArrayHandle hashbytes = ByteArray.Create(byteCount);
 			hash.TryWriteBytes(hashbytes.Span, out int bytesWritten);
-
-#else
-	throw new NotImplementedException();
+			
 #endif
 
 			Span<byte> noncebytes = stackalloc byte[sizeof(int)];

@@ -44,7 +44,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			this.ClearExpiredTransactions();
 
 			this.PerformOperation(db => {
-				CHAIN_POOL_PUBLIC_TRANSACTIONS transactionEntry = db.PublicTransactions.SingleOrDefault(t => t.TransactionId == transactionId.ToCompactString());
+				string transactionString = transactionId.ToCompactString();
+				CHAIN_POOL_PUBLIC_TRANSACTIONS transactionEntry = db.PublicTransactions.SingleOrDefault(t => t.TransactionId == transactionString);
 
 				if(transactionEntry != null) {
 					db.PublicTransactions.Remove(transactionEntry);
@@ -59,7 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 			return this.PerformOperation(db => {
 
-				return db.PublicTransactions.Select(t => TransactionId.FromCompactString(t.TransactionId)).ToList();
+				return db.PublicTransactions.Select(t => t.TransactionId).ToList().Select(TransactionId.FromCompactString).ToList();
 			});
 		}
 
@@ -67,7 +68,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			try {
 				this.PerformOperation(db => {
 
-					db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => t.Expiration < DateTime.Now));
+					db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => t.Expiration < DateTime.UtcNow));
 
 					db.SaveChanges();
 				});
@@ -120,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		protected virtual void PrepareTransactionEntry(CHAIN_POOL_PUBLIC_TRANSACTIONS entry, ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
 			entry.TransactionId = transactionEnvelope.Contents.Uuid.SimpleTransactionId.ToCompactString();
-			entry.Timestamp = DateTime.Now;
+			entry.Timestamp = DateTime.UtcNow;
 			entry.Expiration = transactionEnvelope.GetExpirationTime(this.timeService, chainInception);
 		}
 	}

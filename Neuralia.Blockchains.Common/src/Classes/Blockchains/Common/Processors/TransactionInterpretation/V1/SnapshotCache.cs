@@ -247,7 +247,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		private void CreateEntry(KEY key, KEY subKey, T entry, SnapshotCache.EntryStatus status, LinkedList<EntryDetails> list) {
 			EntryDetails entryDetail = new EntryDetails {
 				key = key, subKey = subKey, entry = entry, status = status,
-				timestamp = DateTime.Now, TransactionState = this.isTransaction ? TransactionState.InProgress : TransactionState.Committed
+				timestamp = DateTime.UtcNow, TransactionState = this.isTransaction ? TransactionState.InProgress : TransactionState.Committed
 			};
 
 			var node = list.AddLast(entryDetail);

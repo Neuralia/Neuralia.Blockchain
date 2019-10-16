@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		[BsonId]
 		public Guid Id { get; set; } = Guid.NewGuid();
 
-		public long DecommissionedTime { get; set; } = DateTime.Now.Ticks;
+		public long DecommissionedTime { get; set; } = DateTime.UtcNow.Ticks;
 
 		public Guid AccountUuid { get; set; }
 		public int Ordinal { get; set; }

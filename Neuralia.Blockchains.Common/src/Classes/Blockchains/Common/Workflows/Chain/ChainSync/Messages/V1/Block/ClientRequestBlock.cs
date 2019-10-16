@@ -1,3 +1,4 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
@@ -10,14 +11,14 @@ using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Block {
-	public abstract class ClientRequestBlock : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncDataRequest<BlockChannelsInfoSet<DataSliceInfo>, DataSliceInfo, long, BlockChannelUtils.BlockChannelTypes> {
+	public abstract class ClientRequestBlock : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncDataRequest<BlockChannelsInfoSet<DataSliceInfo>, DataSliceInfo, BlockId, BlockChannelUtils.BlockChannelTypes> {
 
 		/// <summary>
 		///     Should the response also contain the data of the next block in line?
 		/// </summary>
 		public bool IncludeNextInfo { get; set; }
 
-		public long Id { get; set; }
+		public BlockId Id { get; set; } = new BlockId();
 
 		public BlockChannelsInfoSet<DataSliceInfo> SlicesInfo { get; } = new BlockChannelsInfoSet<DataSliceInfo>();
 
@@ -30,7 +31,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.Id);
+			this.Id.Dehydrate(dehydrator);
 			dehydrator.Write(this.IncludeNextInfo);
 			dehydrator.Write(this.RequestAttempt);
 
@@ -53,7 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public override void Rehydrate(IDataRehydrator rehydrator, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			base.Rehydrate(rehydrator, rehydrationFactory);
 
-			this.Id = rehydrator.ReadLong();
+			this.Id.Rehydrate(rehydrator);
 			this.IncludeNextInfo = rehydrator.ReadBool();
 			this.RequestAttempt = rehydrator.ReadByte();
 

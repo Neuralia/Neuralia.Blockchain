@@ -78,18 +78,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 		}
 
-		public Dictionary<string, object> PrepareActiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
+		public Dictionary<string, object> PrepareActiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, long password) {
 			if(blockElectionDistillate.electionContext is IActiveElectionContext activeElectionContext) {
 				
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
 				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
 
 				parameters.Add("matureBlockId", electedCandidateResultDistillate.BlockId);
-				parameters.Add("miningAccountId", blockElectionDistillate.MiningAccountId);
+				parameters.Add("miningAccountId", blockElectionDistillate.MiningAccountId.ToLongRepresentation());
 				parameters.Add("maturityBlockHash", electedCandidateResultDistillate.MaturityBlockHash);
+				parameters.Add("password", password);
 				
-				parameters.Add("simpleAnswer", electedCandidateResultDistillate.simpleAnswer);
-				parameters.Add("hardAnswer", electedCandidateResultDistillate.hardAnswer);
+				if(electedCandidateResultDistillate.simpleAnswer.HasValue && electedCandidateResultDistillate.simpleAnswer != 0) {
+					parameters.Add("simpleAnswer", electedCandidateResultDistillate.simpleAnswer);
+				}
+
+				if(electedCandidateResultDistillate.hardAnswer.HasValue && electedCandidateResultDistillate.hardAnswer != 0) {
+					parameters.Add("hardAnswer", electedCandidateResultDistillate.hardAnswer);
+				}
 
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
 					
@@ -98,10 +104,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 
 					dehydrator.Write(transactionsIds);
-					SafeArrayHandle data = dehydrator.ToArray();
-					
-					parameters.Add("selectedTransactions", data.ToExactByteArrayCopy());
-					data.Return();
+
+					using(SafeArrayHandle data = dehydrator.ToArray()) {
+
+						parameters.Add("selectedTransactions", data.Entry.ToBase64());
+					}
 				}
 
 				// now make sure that we apply correctly to any representative selection process.
@@ -112,10 +119,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 					var dehydrator = DataSerializationFactory.CreateDehydrator();
 					
 					dehydrator.Write(ballotingApplications);
-					SafeArrayHandle data = dehydrator.ToArray();
-					
-					parameters.Add("representativeBallotingApplications", data.ToExactByteArrayCopy());
-					data.Return();
+
+					using(SafeArrayHandle data = dehydrator.ToArray()) {
+
+						parameters.Add("representativeBallotingApplications", data.Entry.ToBase64());
+					}
 				}
 				
 				return parameters;
@@ -124,7 +132,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			throw new ApplicationException("Must be an active election!");
 		}
 
-		public Dictionary<string, object> PreparePassiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
+		public Dictionary<string, object> PreparePassiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, long password) {
 			if(blockElectionDistillate.electionContext is IPassiveElectionContext passiveElectionContext) {
 				Log.Information("We are elected in a passive election!...");
 
@@ -133,11 +141,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 
 				parameters.Add("matureBlockId", electedCandidateResultDistillate.BlockId);
-				parameters.Add("miningAccountId", blockElectionDistillate.MiningAccountId);
+				parameters.Add("miningAccountId", blockElectionDistillate.MiningAccountId.ToLongRepresentation());
 				parameters.Add("maturityBlockHash", electedCandidateResultDistillate.MaturityBlockHash);
+				parameters.Add("password", password);
 
-				parameters.Add("simpleAnswer", electedCandidateResultDistillate.simpleAnswer);
-				parameters.Add("hardAnswer", electedCandidateResultDistillate.hardAnswer);
+				if(electedCandidateResultDistillate.simpleAnswer.HasValue && electedCandidateResultDistillate.simpleAnswer != 0) {
+					parameters.Add("simpleAnswer", electedCandidateResultDistillate.simpleAnswer);
+				}
+
+				if(electedCandidateResultDistillate.hardAnswer.HasValue && electedCandidateResultDistillate.hardAnswer != 0) {
+					parameters.Add("hardAnswer", electedCandidateResultDistillate.hardAnswer);
+				}
 				
 				// note:  we send a message even if we have no transactions. we may not get transaction fees, but the bounty is still applicable for being present and elected.
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
@@ -147,10 +161,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 
 					dehydrator.Write(transactionsIds);
-					SafeArrayHandle data = dehydrator.ToArray();
-					
-					parameters.Add("selectedTransactions", data.ToExactByteArrayCopy());
-					data.Return();
+
+					using(SafeArrayHandle data = dehydrator.ToArray()) {
+
+						parameters.Add("selectedTransactions", data.Entry.ToBase64());
+					}
 				}
 
 				return parameters;
@@ -328,10 +343,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			SafeArrayHandle resultingBallot = candidacy;
 
 			resultingBallot = blockElectionDistillate.electionContext.PrimariesBallotingMethod.PerformBallot(resultingBallot, blockElectionDistillate, miningAccount);
-
-			if(resultingBallot == null) {
-				return null; // we are done, not elected :(
-			}
 
 			return resultingBallot; // we are simply not a candidate
 		}

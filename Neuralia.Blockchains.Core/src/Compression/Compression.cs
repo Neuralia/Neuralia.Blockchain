@@ -108,7 +108,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 			switch(level) {
 				case CompressionLevel.Optimal:
 
-					return CompressionLevelByte.Optimal;
+					return CompressionLevelByte.Level9;
 
 				case CompressionLevel.Fastest:
 
@@ -116,32 +116,45 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 				default:
 
-					return CompressionLevelByte.NoCompression;
+					return CompressionLevelByte.Default;
 			}
 		}
 
 		protected CompressionLevel ConvertCompression(CompressionLevelByte level) {
+			return (CompressionLevel) (int)level;
+		}
+		
+		protected Ionic.Zlib.CompressionLevel ConvertCompression2(CompressionLevelByte level) {
+			
 			switch(level) {
-				case CompressionLevelByte.Maximum:
-
-					return (CompressionLevel) 11;
-
-				case CompressionLevelByte.Nine:
-
-					return (CompressionLevel) 9;
-
-				case CompressionLevelByte.Optimal:
-
-					return CompressionLevel.Optimal;
-
-				case CompressionLevelByte.Fastest:
-
-					return CompressionLevel.Fastest;
-
-				default:
-
-					return CompressionLevel.NoCompression;
+				case CompressionLevelByte.None:
+					return Ionic.Zlib.CompressionLevel.Level0;
+				case CompressionLevelByte.Level1:
+					return Ionic.Zlib.CompressionLevel.Level1;
+				case CompressionLevelByte.Level2:
+					return Ionic.Zlib.CompressionLevel.Level2;
+				case CompressionLevelByte.Level3:
+					return Ionic.Zlib.CompressionLevel.Level3;
+				case CompressionLevelByte.Level4:
+					return Ionic.Zlib.CompressionLevel.Level4;
+				case CompressionLevelByte.Level5:
+					return Ionic.Zlib.CompressionLevel.Level5;
+				case CompressionLevelByte.Level6:
+					return Ionic.Zlib.CompressionLevel.Level6;
+				case CompressionLevelByte.Level7:
+					return Ionic.Zlib.CompressionLevel.Level7;
+				case CompressionLevelByte.Level8:
+					return Ionic.Zlib.CompressionLevel.Level8;
+				case CompressionLevelByte.Level9:
+					return Ionic.Zlib.CompressionLevel.Level9;
+				case CompressionLevelByte.Level10:
+					return Ionic.Zlib.CompressionLevel.Level9;
+				case CompressionLevelByte.Level11:
+					return Ionic.Zlib.CompressionLevel.Level9;
 			}
+			
+			
+			return ( Ionic.Zlib.CompressionLevel) (int)level;
 		}
 	}
 }

@@ -11,14 +11,14 @@ using Newtonsoft.Json;
 
 namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 	/// <summary>
-	///     a dynamic decimal that can take up to 8 bytes above the point and 8 bytes below the point. +one metadata byte. so
-	///     the maximum size it will take is 17 bytes.
+	///     a dynamic decimal that can take up to 8 bytes above the point and 8 bytes below the point. +one metadata byte and one possible extra byte if there are leading zeros either in the integral or the fraction.
+	/// . so the maximum size it will take is 18 bytes.
 	/// </summary>
 	public class AdaptiveDecimal : ITreeHashable, IBinarySerializable, IJsonSerializable, IEquatable<AdaptiveDecimal>, IComparable<decimal>, IComparable<AdaptiveDecimal> {
 
 		private const byte INTEGRAL_MASK = 0x7;
 		private const byte FRACTION_MASK = 0x38;
-		private const byte X_MASK = 0x40;
+		private const byte ZEROS_MASK = 0x40;
 		private const byte NEGATIVE_MASK = 0x80;
 		private decimal value;
 
@@ -67,7 +67,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.ReadData(rehydrator.ReadByte, (in Span<byte> longbytes, int start, int length) => rehydrator.ReadBytes(longbytes, start, length));
+			this.ReadData(rehydrator.ReadByte, rehydrator.ReadByte, (in Span<byte> longbytes, int srcOffset, int start, int length) => rehydrator.ReadBytes(longbytes, start, length));
 		}
 
 		public int CompareTo(AdaptiveDecimal other) {
@@ -205,21 +205,47 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			return (integral, fraction);
 		}
 
+		protected (ulong adjustedValue, byte zeros) GetZeroSet(ulong value) {
+			byte zeros = 0;
+
+			if(value != 0) {
+				int digit = 0;
+
+				do {
+					digit = this.GetFirstDigit(value);
+
+					if(digit == 0) {
+						value /= 10;
+						zeros += 1;
+					}
+				} while(digit == 0 && zeros < 15);
+			}
+
+			return (value, zeros);
+		}
+
 		protected byte[] BuildShrunkBytes(decimal value) {
 
 			(long integral, ulong fraction) = this.GetComponents(value);
-
+			
 			// take the sign
 			int sign = Math.Sign(integral);
 
 			// and now remove it
 			integral = Math.Abs(integral);
+			
+			(ulong adjustedIntegral, byte integralZeros) = this.GetZeroSet((ulong)integral);
+			(ulong adjustedfraction, byte fractionZeros) = this.GetZeroSet(fraction);
+			
+			// pack the zeros in a byte:
+			byte zeros = (byte)((integralZeros & 0xF) << 4 | (fractionZeros & 0xF));
+
 
 			int integralSerializationByteSize = 0;
 			int fractionSerializationByteSize = 0;
 
-			if(integral != 0) {
-				int integralBitSize = BitUtilities.GetValueBitSize((ulong) integral);
+			if(adjustedIntegral != 0) {
+				int integralBitSize = BitUtilities.GetValueBitSize((ulong) adjustedIntegral);
 
 				for(int i = 1; i <= 8; i++) {
 					if(integralBitSize <= (8 * i)) {
@@ -230,8 +256,8 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 				}
 			}
 
-			if(fraction != 0) {
-				int fractionBitSize = BitUtilities.GetValueBitSize(fraction);
+			if(adjustedfraction != 0) {
+				int fractionBitSize = BitUtilities.GetValueBitSize(adjustedfraction);
 
 				for(int i = 1; i <= 8; i++) {
 					if(fractionBitSize <= (8 * i)) {
@@ -244,17 +270,25 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 			// ensure the important type bits are set too
 
-			var shrunkBytes = new byte[1 + integralSerializationByteSize + fractionSerializationByteSize];
+			bool hasZeros = zeros != 0;
+			
+			var shrunkBytes = new byte[1 +(hasZeros?1:0) + integralSerializationByteSize + fractionSerializationByteSize];
 
 			// serialize the first byte, combination of 4 bits for the serialization type, and the firs 4 bits of our value
-			shrunkBytes[0] = (byte) (((byte) integralSerializationByteSize & INTEGRAL_MASK) | ((byte) (fractionSerializationByteSize << 3) & FRACTION_MASK) | (byte) (sign == -1 ? NEGATIVE_MASK : 0));
+			shrunkBytes[0] = (byte) (((byte) integralSerializationByteSize & INTEGRAL_MASK) | ((byte) (fractionSerializationByteSize << 3) & FRACTION_MASK) | (byte)(hasZeros?ZEROS_MASK : 0) | (byte) (sign == -1 ? NEGATIVE_MASK : 0));
+			int offset = 1;
 
+			if(hasZeros) {
+				shrunkBytes[1] = zeros;
+				offset++;
+			}
+			
 			if(integralSerializationByteSize != 0) {
-				TypeSerializer.SerializeBytes(((Span<byte>) shrunkBytes).Slice(1, integralSerializationByteSize), integral);
+				TypeSerializer.SerializeBytes(((Span<byte>) shrunkBytes).Slice(offset, integralSerializationByteSize), adjustedIntegral);
 			}
 
 			if(fractionSerializationByteSize != 0) {
-				TypeSerializer.SerializeBytes(((Span<byte>) shrunkBytes).Slice(1 + integralSerializationByteSize, fractionSerializationByteSize), fraction);
+				TypeSerializer.SerializeBytes(((Span<byte>) shrunkBytes).Slice(offset + integralSerializationByteSize, fractionSerializationByteSize), adjustedfraction);
 			}
 
 			return shrunkBytes;
@@ -268,16 +302,23 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 		public int ReadBytes(ITcpReadingContext readContext) {
 
-			return this.ReadData(() => readContext[0], (in Span<byte> longbytes, int start, int length) => readContext.CopyTo(longbytes, 1, start, length));
+			return this.ReadData(() => readContext[0], () => readContext[1], (in Span<byte> longbytes, int srcOffset, int start, int length) => readContext.CopyTo(longbytes, srcOffset, start, length));
 		}
 
-		private int ReadData(Func<byte> readFirstByte, CopyDataDelegate copyBytes) {
+		private int ReadData(Func<byte> readFirstByte, Func<byte> readZerosByte, CopyDataDelegate copyBytes) {
 			byte firstByte = readFirstByte();
 
 			int integralSerializationByteSize = firstByte & INTEGRAL_MASK;
 			int fractionSerializationByteSize = (firstByte & FRACTION_MASK) >> 3;
+			bool hasZeros = (firstByte & ZEROS_MASK) != 0;
 			int sign = (firstByte & NEGATIVE_MASK) != 0 ? -1 : 1;
 
+			int offset = 1;
+			byte zeros = 0;
+			if(hasZeros) {
+				zeros = readZerosByte();
+				offset++;
+			}
 			//			(int serializationByteSize, int adjustedSerializationByteExtraSize, int bitValues) specs = this.ReadByteSpecs(firstByte);
 
 			long integral = 0;
@@ -285,18 +326,30 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 			if(integralSerializationByteSize != 0) {
 				Span<byte> longbytes = stackalloc byte[8];
-				copyBytes(longbytes, 0, integralSerializationByteSize);
+				copyBytes(longbytes, offset, 0, integralSerializationByteSize);
 
 				TypeSerializer.DeserializeBytes(longbytes, out integral);
 			}
 
 			if(fractionSerializationByteSize != 0) {
 				Span<byte> longbytes = stackalloc byte[8];
-				copyBytes(longbytes, 0, fractionSerializationByteSize);
+				copyBytes(longbytes, offset, 0, fractionSerializationByteSize);
 
 				TypeSerializer.DeserializeBytes(longbytes, out fraction);
 			}
 
+			if(hasZeros) {
+				int integralZeros = (zeros >> 4) & 0xF;
+				int fractionZeros = zeros & 0xF;
+
+				if(integralZeros != 0) {
+					integral *= (long)Math.Pow(10, integralZeros);
+				}
+				if(fractionZeros != 0) {
+					fraction *= (ulong)Math.Pow(10, fractionZeros);
+				}
+			}
+			
 			// restore the sign
 			integral *= sign;
 
@@ -363,7 +416,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			return this.Value.ToString();
 		}
 
-		private delegate void CopyDataDelegate(in Span<byte> longbytes, int start, int length);
+		private delegate void CopyDataDelegate(in Span<byte> longbytes, int srcOffset, int start, int length);
 
 	#region Operator Overloads
 

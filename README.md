@@ -1,6 +1,6 @@
 # Neuralia.Blockchain
 
-##### Version:  Trial run III
+##### Version:  Trial run IV
 
 The essential blockchain components of the Neuralia Blockchain.
 
@@ -11,7 +11,7 @@ The base Blockchain implementation
 
 ## Build Instructions
 
-##### First, ensure dotnet core 2.2 SDK is installed
+##### First, ensure dotnet core 3.0 SDK is installed
 
 #### The first step is to ensure that the dependencies have been built and copied into the local-source folder.
 

@@ -60,10 +60,8 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 #if (NETSTANDARD2_0)
 			Span<byte> tempspan = transactionGuid.ToByteArray();
 			tempspan.CopyTo(guidSpan);
-#elif (NETCOREAPP2_2)
-			transactionGuid.TryWriteBytes(guidSpan);
 #else
-	throw new NotImplementedException();
+			transactionGuid.TryWriteBytes(guidSpan);
 #endif
 
 			Span<byte> span = stackalloc byte[8];
@@ -103,10 +101,8 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 #if (NETSTANDARD2_0)
 			return new Guid(guidSpan.ToArray());
-#elif (NETCOREAPP2_2)
-			return new Guid(guidSpan);
 #else
-	throw new NotImplementedException();
+			return new Guid(guidSpan);
 #endif
 
 		}

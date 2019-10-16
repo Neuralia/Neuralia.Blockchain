@@ -47,12 +47,9 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				try {
-					this.bytes?.Dispose();
-				} finally {
-					this.IsDisposed = true;
-				}
+				this.bytes?.Dispose();
 			}
+			this.IsDisposed = true;
 		}
 
 		~Slice() {

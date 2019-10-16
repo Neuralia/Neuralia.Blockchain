@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			handshakeTrigger.Message.localTime = this.timeService.CurrentRealTime;
 
 			// now we inform them of our listening port, in case its non standard. 0 means disabled
-			handshakeTrigger.Message.listeningPort = GlobalSettings.ApplicationSettings.port;
+			handshakeTrigger.Message.listeningPort = GlobalSettings.ApplicationSettings.Port;
 
 			// generate a random nonce
 			handshakeTrigger.Message.nonce = this.GenerateRandomHandshakeNonce();
@@ -277,8 +277,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					return null;
 				}
 
-				if(serverHandshake.Connectible.HasValue) {
-					this.networkingService.ConnectionStore.AddPeerReportedConnectible(serverHandshake.Connectible.Value, source);
+				if(serverHandshake.Connectable.HasValue) {
+					this.networkingService.ConnectionStore.AddPeerReportedConnectable(serverHandshake.Connectable.Value, source);
 				}
 
 				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(serverHandshake.PerceivedIP, source);

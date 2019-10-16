@@ -232,7 +232,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		///     check for long running workflows and promote them in their own queue. free some space
 		/// </summary>
 		private void CheckWorkflowPromotions() {
-			foreach(var promoted in this.executingWorkflows.ToArray().Where(w => w.Value.workflow.IsLongRunning || ((w.Value.starttime + this.WORKFLOW_PROMOTION_TIME) < DateTime.Now))) {
+			foreach(var promoted in this.executingWorkflows.ToArray().Where(w => w.Value.workflow.IsLongRunning || ((w.Value.starttime + this.WORKFLOW_PROMOTION_TIME) < DateTime.UtcNow))) {
 				this.executingWorkflows.RemoveSafe(promoted.Key);
 				this.promotedWorkflows.AddSafe(promoted.Key, promoted.Value.workflow);
 			}
@@ -255,7 +255,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		private void StartWorkflow(WORKFLOW workflow) {
 
 			if(!this.executingWorkflows.ContainsKey(workflow.Id)) {
-				this.executingWorkflows.AddSafe(workflow.Id, (workflow, DateTime.Now));
+				this.executingWorkflows.AddSafe(workflow.Id, (workflow, DateTime.UtcNow));
 
 				// make sure we are alerted when it completes in any way
 				workflow.Completed += this.WorkflowCompleted;
@@ -346,9 +346,8 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 				// wait for them to complete
 				Task.WaitAll(this.workflows.Values.Where(wf => wf.Task.IsCompleted == false).Select(wf => wf.Task).ToArray(), TimeSpan.FromSeconds(5));
-
-				this.IsDisposed = true;
 			}
+			this.IsDisposed = true;
 		}
 
 		~WorkflowCoordinator() {

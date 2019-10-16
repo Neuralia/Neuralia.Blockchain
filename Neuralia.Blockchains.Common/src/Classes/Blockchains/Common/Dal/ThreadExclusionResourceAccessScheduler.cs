@@ -351,6 +351,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			//Log.Verbose($"Requesting thread lock for thread id {Thread.CurrentThread.ManagedThreadId}");
 			try {
+				
+				// here we run the action inside a routed task so that we maintain the correlation context and any other useful context we want to carry over into the new thread.
+				var routedTask = new RoutedTask<IRoutedTaskRoutingHandler, bool> {CorrelationContext = TaskContextRegistry.Instance.GetTaskRoutingCorrelationContext()};
+				routedTask.Mode = RoutedTask.ExecutionMode.Sync;
+				routedTask.EnableSelfLoop = true;
+				routedTask.RoutingStatus = RoutedTask.RoutingStatuses.Returned;
+				routedTask.SetAction((service, ctx) => {
+					// run this outside a write so reads can be done too
+					action(walletProvider, source.Token);
+				});
+				
 				// run it in a sub task, to amke sure we can give it a timeout and it does not deadlock forever
 				Task task = new TaskFactory().StartNew(() => {
 					// make the current thread the exclusive access one
@@ -364,8 +375,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 						});
 
 						// run this outside a write so reads can be done too
-						action(walletProvider, source.Token);
-
+						routedTask.TriggerAction(null);
 					} finally {
 
 						if(!this.IsLocked) {
@@ -484,7 +494,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			public Ticket() {
 				this.ThreadId = Thread.CurrentThread.ManagedThreadId;
-				this.TimeStamp = DateTime.Now;
+				this.TimeStamp = DateTime.UtcNow;
 			}
 
 			public Guid Id { get; } = Guid.NewGuid();

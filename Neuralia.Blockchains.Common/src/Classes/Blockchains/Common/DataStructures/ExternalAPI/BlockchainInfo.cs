@@ -1,10 +1,10 @@
 using System;
-using MessagePack;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
 	
-	[MessagePackObject(keyAsPropertyName: true)]
 	public class BlockchainInfo {
+		public long DownloadBlockId { get; set; }
+		public long DiskBlockId { get; set; }
 		public long BlockId { get; set; }
 		public string BlockHash { get; set; }
 		public long PublicBlockId { get; set; }

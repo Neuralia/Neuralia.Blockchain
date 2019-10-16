@@ -154,7 +154,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public bool IsStarted { get; private set; }
 
 		public void Start() {
-			if(GlobalSettings.ApplicationSettings.P2pEnabled) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
 				this.connectionListener.Start();
@@ -286,7 +286,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		protected virtual void InitializeComponents() {
 
 			this.connectionStore = new ConnectionStore<R>(this.ServiceSet);
-			this.connectionListener = new ConnectionListener(GlobalSettings.ApplicationSettings.port, this.ServiceSet);
+			this.connectionListener = new ConnectionListener(GlobalSettings.ApplicationSettings.Port, this.ServiceSet);
 			this.workflowCoordinator = new WorkflowCoordinator<IWorkflow<R>, R>(this.ServiceSet);
 			this.messageFactory = new MainMessageFactory<R>(this.ServiceSet);
 		}
@@ -455,46 +455,44 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		protected virtual void Dispose(bool disposing) {
 			if(disposing && !this.IsDisposed) {
+			
 				try {
-					try {
-						this.Stop();
-					} catch(Exception ex) {
-						Log.Error(ex, "Failed to stop");
-					}
+					this.Stop();
+				} catch(Exception ex) {
+					Log.Error(ex, "Failed to stop");
+				}
 
-					try {
-						this.ConnectionsManager?.Dispose();
-					} catch(Exception ex) {
-						Log.Error(ex, "Failed to dispose of connections coordinator");
-					}
+				try {
+					this.ConnectionsManager?.Dispose();
+				} catch(Exception ex) {
+					Log.Error(ex, "Failed to dispose of connections coordinator");
+				}
 
-					try {
-						this.messagingManager?.Dispose();
-					} catch(Exception ex) {
-						Log.Error(ex, "Failed to dispose of connections coordinator");
-					}
+				try {
+					this.messagingManager?.Dispose();
+				} catch(Exception ex) {
+					Log.Error(ex, "Failed to dispose of connections coordinator");
+				}
 
-					try {
-						this.workflowCoordinator?.Dispose();
-					} catch(Exception ex) {
-						Log.Error(ex, "Failed to dispose of workflow coordinator");
-					}
+				try {
+					this.workflowCoordinator?.Dispose();
+				} catch(Exception ex) {
+					Log.Error(ex, "Failed to dispose of workflow coordinator");
+				}
 
-					try {
-						this.connectionListener?.Dispose();
-					} catch(Exception ex) {
-						Log.Error(ex, "Failed to dispose of connection listener");
-					}
+				try {
+					this.connectionListener?.Dispose();
+				} catch(Exception ex) {
+					Log.Error(ex, "Failed to dispose of connection listener");
+				}
 
-					try {
-						this.connectionStore?.Dispose();
-					} catch(Exception ex) {
-						Log.Error(ex, "Failed to dispose of connection manager");
-					}
-				} finally {
-					this.IsDisposed = true;
+				try {
+					this.connectionStore?.Dispose();
+				} catch(Exception ex) {
+					Log.Error(ex, "Failed to dispose of connection manager");
 				}
 			}
+			this.IsDisposed = true;
 		}
 
 		~NetworkingService() {

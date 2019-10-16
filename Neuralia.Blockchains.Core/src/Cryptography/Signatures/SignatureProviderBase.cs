@@ -53,21 +53,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
 
 		private void Dispose(bool disposing) {
 
-			if(!this.IsDisposed) {
-				try {
-					if(disposing) {
-					}
-
-					this.DisposeAll(disposing);
-
-				} finally {
-					this.IsDisposed = true;
-				}
+			if(!this.IsDisposed && disposing) {
+				this.DisposeAll();
 			}
-
+			this.IsDisposed = true;
 		}
 
-		protected virtual void DisposeAll(bool disposing) {
+		protected virtual void DisposeAll() {
 
 		}
 

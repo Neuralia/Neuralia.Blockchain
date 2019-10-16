@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Security;
 using System.Threading;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
@@ -110,6 +111,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		private IEventPoolProvider chainEventPoolProvider;
 
+		private int lastConnectionCount = 0;
+
 		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
 		
 		// the sync workflow we keep as a reference.
@@ -210,32 +213,134 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(entry.Status != (byte) WalletTransactionCache.TransactionStatuses.New) {
 				throw new ApplicationException("Impossible to dispatch a transaction that has already been sent");
 			}
+			
+			var chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-			BlockChainConfigurations chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
-
+			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Web);
+			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Gossip);
 			bool sent = false;
 
-			if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && (this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount)) {
-
-				IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipTransactionMessageSet(transactionEnvelope);
-
-				Repeater.Repeat(() => {
-					this.SendGossipTransaction(gossipMessageSet);
+			if(useWeb) {
+				try {
+ 
+					this.PerformWebTransactionRegistration(transactionEnvelope, correlationContext);
 					sent = true;
-				});
-
-				if(!sent) {
-					throw new ApplicationException("Failed to send transaction");
 				}
-
-				this.ConfirmTransactionSent(transactionEnvelope, correlationContext, gossipMessageSet.BaseHeader.Hash);
-
-			} else {
-				throw new ApplicationException("Failed to send transaction. Not enough peers available to send a gossip transactions.");
+				catch(Exception ex) {
+					Log.Error(ex, "Failed to register transaction through web");
+					// do nothing, we will sent it on chain
+					sent = false;
+				}
 			}
 
+			if(!sent && useGossip) {
+				if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount) {
+
+					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipTransactionMessageSet(transactionEnvelope);
+					
+					Repeater.Repeat(() => {
+						this.SendGossipTransaction(gossipMessageSet);
+						sent = true;
+					});
+
+					if(!sent) {
+						throw new ApplicationException("Failed to send transaction");
+					}
+
+					this.ConfirmTransactionSent(transactionEnvelope, correlationContext, gossipMessageSet.BaseHeader.Hash);
+
+				} else {
+					throw new ApplicationException("Failed to send transaction. Not enough peers available to send a gossip transactions.");
+				}
+			}
+			
 			if(!sent) {
 				throw new ApplicationException("Failed to send transaction");
+			}
+		}
+		
+		
+		/// <summary>
+		///     try to register through the public webapi interface
+		/// </summary>
+		protected void PerformWebTransactionRegistration(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext) {
+			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
+			var chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			
+			try {
+				Repeater.Repeat(() => {
+					
+					Dictionary<string, object> parameters = new Dictionary<string, object>();
+
+					var bytes = transactionEnvelope.DehydrateEnvelope();
+					parameters.Add("transactionEnvelope", bytes.Entry.ToBase64());
+					bytes.Return();
+
+					string url = chainConfiguration.WebRegistrationUrl;
+					string action = "registration/transaction";
+
+					var result = restUtility.Put(url, action, parameters);
+					result.Wait();
+
+					if(!result.IsFaulted) {
+
+						// ok, check the result
+						if(result.Result.StatusCode == HttpStatusCode.OK) {
+							// ok, all good
+							
+							
+							return;
+						}
+					}
+
+					throw new ApplicationException("Failed to register transaction through web");
+				});
+				
+				this.ConfirmTransactionSent(transactionEnvelope, correlationContext, 0);
+				
+			} catch {
+				throw;
+			}
+		}
+
+		/// <summary>
+		///     try to register through the public webapi interface
+		/// </summary>
+		protected void PerformWebMessageRegistration(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
+			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
+			var chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			try {
+				Repeater.Repeat(() => {
+
+					Dictionary<string, object> parameters = new Dictionary<string, object>();
+
+					var bytes = messageEnvelope.DehydrateEnvelope();
+					parameters.Add("transactionEnvelope", bytes.Entry.ToBase64());
+					bytes.Return();
+
+					string url = chainConfiguration.WebRegistrationUrl;
+					string action = "registration/message";
+
+					var result = restUtility.Put(url, action, parameters);
+					result.Wait();
+
+					if(!result.IsFaulted) {
+
+						// ok, check the result
+						if(result.Result.StatusCode == HttpStatusCode.OK) {
+							// ok, all good
+
+
+							return;
+						}
+					}
+
+					throw new ApplicationException("Failed to register message through web");
+				});
+				
+			} catch {
+				throw;
 			}
 		}
 
@@ -265,6 +370,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				// first and most important, add it to our archive
 				serializationService.SerializeBlock(dehydratedBlock);
+
+				// if fast keys are enabled, then we create the base directory and first file
+				serializationService.ChainDataWriteProvider.EnsureFastKeysIndex();
 			}, (results, taskRoutingContext) => {
 
 				if(results.Success) {
@@ -294,7 +402,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					if(genesisBlock.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
 						this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.InsertModeratorKey(new TransactionId(), genesisBlock.SignatureSet.NextModeratorKey, genesisBlock.SignatureSet.ConvertToDehydratedKey());
 					}
-
+					
 				} else {
 					Log.Fatal(results.Exception, "Failed to insert genesis blocks into our model.");
 
@@ -471,7 +579,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						long originalBlockId = chainStateProvider.BlockHeight;
 						(IBlock block, IDehydratedBlock dehydratedBlock) previousBlock = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockAndMetadata(originalBlockId);
 
-						if(!this.InterpretBlock(previousBlock.block, previousBlock.dehydratedBlock, syncWallet, serializationTransactionProcessor, allowWalletSyncGrowth) || (originalBlockId == chainStateProvider.BlockHeight)) {
+						if(!this.InterpretBlock(previousBlock.block, previousBlock.dehydratedBlock, syncWallet, serializationTransactionProcessor, allowWalletSyncGrowth) || ((originalBlockId == chainStateProvider.BlockHeight) && (chainStateProvider.BlockInterpretationStatus != ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted))) {
 							Log.Warning("We failed to catch up the missing blocks in interpretation.");
 						}
 					}
@@ -489,17 +597,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			// launch the interpretation of this block
 			void InterpretBlock(SerializationTransactionProcessor transactionalProcessor) {
 
-				// thats it, lets begin interpretation
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight = block.BlockId.Value;
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.Blank;
+				// thats it, lets begin interpretation only if ti was not already performed or completed
+				if(chainStateProvider.BlockHeight == block.BlockId.Value - 1) {
+					chainStateProvider.BlockHeight = block.BlockId.Value;
+					chainStateProvider.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.Blank;
+				}
+				else if(chainStateProvider.BlockHeight < block.BlockId.Value - 1) {
+					throw new ArgumentException("Block Id is too low for interpretation");
+				}
+
+				if(chainStateProvider.BlockInterpretationStatus == ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted) {
+					return;
+				}
 
 				this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateGeneralImpact(block, this, transactionalProcessor);
 
 				this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.InterpretNewBlockSnapshots(block, this, transactionalProcessor);
-
 			}
 
 			// if we are not already in a transaction, we make one
+			if(chainStateProvider.BlockHeight == block.BlockId.Value && chainStateProvider.BlockInterpretationStatus == ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted) {
+				// block has already been interpreted. go no further
+				return true;
+			}
+
 			if(serializationTransactionProcessor == null) {
 				string cachePath = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetGeneralCachePath();
 
@@ -511,13 +632,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} else {
 				InterpretBlock(serializationTransactionProcessor);
 			}
-
+			
 			if(chainStateProvider.BlockInterpretationStatus != ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted) {
 				throw new ApplicationException($"Failed to interpret block id {block.BlockId}.");
 			}
 
 			// thats it, we are at this block level now
 			chainStateProvider.BlockHeight = block.BlockId.Value;
+
+			Log.Verbose($"block {block.BlockId.Value} has been successfully interpreted.");
 
 			// now, alert the world of this new block newly interpreted!
 			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInterpreted(block.BlockId.Value, block.FullTimestamp, block.Hash.Entry.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
@@ -546,7 +669,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <returns></returns>
 		public virtual List<ElectedCandidateResultDistillate> PerformElectionComputation(BlockElectionDistillate blockElectionDistillate) {
 
-			return this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PerformElectionComputations(blockElectionDistillate, this.ChainEventPoolProvider);
+			return this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PerformElectionComputations(blockElectionDistillate, this.ChainEventPoolProvider, this);
 		}
 
 		/// <summary>
@@ -561,7 +684,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <returns></returns>
 		public virtual bool PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults) {
 
-			var messages = this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PrepareElectionCandidacyMessages(blockElectionDistillate, electionResults, this.ChainEventPoolProvider);
+			var messages = this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PrepareElectionCandidacyMessages(blockElectionDistillate, electionResults, this.ChainEventPoolProvider, this);
 
 			return this.DispatchElectionMessages(messages);
 		}
@@ -581,7 +704,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					// ok, we are mining, lets check this block
 
 					if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount != 0) {
-						var messages = this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PerformElection(block, this.ChainEventPoolProvider);
+						var messages = this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PerformElection(block, this.ChainEventPoolProvider, this);
 
 						if((messages != null) && messages.Any()) {
 							elected = true;
@@ -723,28 +846,45 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		public void DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
 
-			BlockChainConfigurations chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			var chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
+			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Web);
+			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Gossip);
 			bool sent = false;
 
-			if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && (this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount)) {
-
-				IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipBlockchainMessageMessageSet(messageEnvelope);
-
-				Repeater.Repeat(() => {
-					// ok, we are ready. lets send it out to the world!!  :)
-					this.SendGossipTransaction(gossipMessageSet);
+			if(useWeb) {
+				try {
+ 
+					this.PerformWebMessageRegistration(messageEnvelope, correlationContext);
 					sent = true;
-				});
-
-				if(!sent) {
-					throw new ApplicationException("Failed to send message");
 				}
-
-			} else {
-				throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
+				catch(Exception ex) {
+					Log.Error(ex, "Failed to register message through web");
+					// do nothing, we will sent it on chain
+					sent = false;
+				}
 			}
 
+			if(!sent && useGossip) {
+				if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount) {
+
+					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipBlockchainMessageMessageSet(messageEnvelope);
+					
+					Repeater.Repeat(() => {
+						// ok, we are ready. lets send it out to the world!!  :)
+						this.SendGossipTransaction(gossipMessageSet);
+						sent = true;
+					});
+
+					if(!sent) {
+						throw new ApplicationException("Failed to send message");
+					}
+					
+				} else {
+					throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
+				}
+			}
+			
 			if(!sent) {
 				throw new ApplicationException("Failed to send message");
 			}
@@ -966,7 +1106,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		protected void SendGossipTransaction(IBlockchainGossipMessageSet gossipMessageSet) {
-			if(GlobalSettings.ApplicationSettings.P2pEnabled) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.NoPeerConnections) {
 					Log.Warning("No peers available. Gossip message announcing new transaction is not sent");
@@ -1022,12 +1162,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				this.ChainEventPoolProvider.DeleteExpiredTransactions();
 
-				this.nextExpiredTransactionCheck = DateTime.Now.AddMinutes(30);
+				this.nextExpiredTransactionCheck = DateTime.UtcNow.AddMinutes(30);
 			}
 		}
 
 		protected override void Initialize(IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext) {
 			base.Initialize(workflow, taskRoutingContext);
+			
+			this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PeerConnectionsCountUpdated += ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated;
 
 			// make sure we check our status when starting
 			this.CheckBlockchainSynchronizationStatus();
@@ -1080,6 +1222,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.RoutedTaskRoutingReceiver.CheckTasks();
 		}
 
+		protected virtual void ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated(int count) {
+ 
+            int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
+            if(this.lastConnectionCount < minimumSyncPeerCount && count >= minimumSyncPeerCount) {
+            	// we just got enough peers to potentially first peer, let's sync
+            	this.SynchronizeBlockchain(true);
+            }
+            this.lastConnectionCount = count;
+		}
+
 	#region rpc methods
 
 		public long GetBlockHeight() {
@@ -1091,8 +1243,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			IChainStateProvider chainState = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 			return new BlockchainInfo {
-				BlockId = chainState.BlockHeight, BlockHash = ((ByteArray) chainState.LastBlockHash)?.ToBase58(), BlockTimestamp = chainState.LastBlockTimestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture), PublicBlockId = chainState.PublicBlockHeight,
-				DigestId = chainState.DigestHeight, DigestHash = ((ByteArray) chainState.LastDigestHash)?.ToBase58(), DigestBlockId = chainState.DigestBlockHeight, DigestTimestamp = chainState.LastDigestTimestamp.ToUniversalTime().ToString(CultureInfo.InvariantCulture),
+				DownloadBlockId = chainState.DownloadBlockHeight, DiskBlockId = chainState.DiskBlockHeight, BlockId = chainState.BlockHeight, BlockHash = ((ByteArray) chainState.LastBlockHash)?.ToBase58(), BlockTimestamp = TimeService.FormatDateTimeStandardUtc(chainState.LastBlockTimestamp), PublicBlockId = chainState.PublicBlockHeight,
+				DigestId = chainState.DigestHeight, DigestHash = ((ByteArray) chainState.LastDigestHash)?.ToBase58(), DigestBlockId = chainState.DigestBlockHeight, DigestTimestamp = TimeService.FormatDateTimeStandardUtc(chainState.LastDigestTimestamp),
 				PublicDigestId = chainState.PublicDigestHeight
 			};
 		}
@@ -1115,17 +1267,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return;
 			}
 
-			if(!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableSync && GlobalSettings.ApplicationSettings.P2pEnabled) {
+			if(!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableSync && GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				this.SynchronizeBlockchain(false);
 
 				// lets check again in X seconds
 				if(this.hasBlockchainSyncedOnce) {
 					// ok, now we can wait the regular intervals
-					this.nextBlockchainSynchCheck = DateTime.Now.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
+					this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
 				} else {
 					// we never synced, we need to check more often to be ready to do so
-					this.nextBlockchainSynchCheck = DateTime.Now.AddSeconds(2);
+					this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(2);
 				}
 			} else {
 				this.nextBlockchainSynchCheck = DateTime.MaxValue;
@@ -1136,14 +1288,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		///     Perform a blockchain sync
 		/// </summary>
 		public void SynchronizeBlockchain(bool force) {
-			if(!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableSync && GlobalSettings.ApplicationSettings.P2pEnabled) {
+			if(!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableSync && GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				if(force) {
 					// let's for ce a sync by setting the chain as desynced
 					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = DateTime.MinValue;
 				}
 
-				if(!this.NetworkPaused && !this.BlockchainSyncing && !this.BlockchainSynced) {
+				if(!this.NetworkPaused && !this.BlockchainSyncing && !this.BlockchainSynced && this.CheckNetworkSyncable()) {
 
 					IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
@@ -1163,10 +1315,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 									lock(this.locker) {
 
 										if(success && this.BlockchainSynced) {
-											this.nextBlockchainSynchCheck = DateTime.Now.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
+											this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
 										} else {
 											// we never synced, we need to check more often to be ready to do so
-											this.nextBlockchainSynchCheck = DateTime.Now.AddSeconds(5);
+											this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(5);
 										}
 
 										this.chainSynchWorkflow = null;
@@ -1179,6 +1331,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// Return the state of the network and if it is syncable for us.
+		/// </summary>
+		/// <returns></returns>
+		protected virtual bool CheckNetworkSyncable() {
+			var networkingProvider = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase;
+			int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
+
+			return networkingProvider.HasPeerConnections && networkingProvider.CurrentPeerCount >= minimumSyncPeerCount;
 		}
 
 		/// <summary>
@@ -1228,13 +1391,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// lets check again in X seconds
 				if(this.hasWalletSyncedOnce) {
 					// ok, now we can wait the regular intervals
-					this.nextWalletSynchCheck = DateTime.Now.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
+					this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
 				} else {
 					// we never synced, we need to check more often to be ready to do so
-					this.nextWalletSynchCheck = DateTime.Now.AddSeconds(2);
+					this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(2);
 				}
 			} else {
-				this.nextWalletSynchCheck = DateTime.Now.AddSeconds(5);
+				this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(5);
 			}
 		}
 
@@ -1262,7 +1425,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(!walletSynced.HasValue) {
 				// we could not verify, try again later
-				this.nextWalletSynchCheck = DateTime.Now.AddSeconds(1);
+				this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(1);
 
 				return;
 			}
@@ -1288,9 +1451,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 								// ok, now we can wait the regular intervals
 								if((success && this.WalletSynced) || this.BlockchainSyncing) {
-									this.nextWalletSynchCheck = this.nextWalletSynchCheck = DateTime.Now.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
+									this.nextWalletSynchCheck = this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
 								} else {
-									this.nextWalletSynchCheck = DateTime.Now.AddSeconds(5);
+									this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(5);
 								}
 
 								this.synchWalletWorkflow = null;

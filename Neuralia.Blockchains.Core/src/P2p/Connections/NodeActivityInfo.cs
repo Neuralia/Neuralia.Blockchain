@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public NodeAddressInfo Node { get; }
 		public bool Shareable { get; }
-		public DateTime Timestamp { get; } = DateTime.Now;
+		public DateTime Timestamp { get; } = DateTime.UtcNow;
 		
 
 		private Queue<NodeActivityEvent> Events { get; } = new Queue<NodeActivityEvent>();
@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			public NodeActivityEvent(NodeActivityEventTypes type) : this() {
 				this.Type = type;
-				this.Timestamp = DateTime.Now;
+				this.Timestamp = DateTime.UtcNow;
 			}
 
 			public DateTime Timestamp { get; }
@@ -73,8 +73,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public IgnoreNodeActivityInfo(NodeAddressInfo node, bool shareable) : base(node, shareable) {
 		}
 
-		public DateTime IgnoreTimestamp { get; } = DateTime.Now;
+		public DateTime IgnoreTimestamp { get; } = DateTime.UtcNow;
 		public int IgnoreCounts { get; set; } = 1;
-		public bool MaxReached => (this.IgnoreCounts >= 3) || (this.IgnoreTimestamp < DateTime.Now.AddMinutes(30));
+		public bool MaxReached => (this.IgnoreCounts >= 3) || (this.IgnoreTimestamp < DateTime.UtcNow.AddMinutes(30));
 	}
 }

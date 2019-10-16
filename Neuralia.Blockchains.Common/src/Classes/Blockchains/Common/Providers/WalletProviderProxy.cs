@@ -97,6 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.walletProvider.GetSystemFilesDirectoryPath();
 		}
 
+		
 		public SynthesizedBlockAPI DeserializeSynthesizedBlockAPI(string synthesizedBlock) {
 			return this.walletProvider.DeserializeSynthesizedBlockAPI(synthesizedBlock);
 		}
@@ -162,6 +163,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleRead(() => this.walletProvider.GetAccountUuidHash());
 		}
 
+		public bool IsDefaultAccountPublished => this.ScheduleRead(() => this.walletProvider.IsDefaultAccountPublished);
+
+		public bool IsAccountPublished(Guid accountUuid) {
+			return this.ScheduleRead(() => this.walletProvider.IsAccountPublished(accountUuid));
+		}
+		
 		public IWalletAccount GetActiveAccount() {
 			return this.ScheduleRead(() => this.walletProvider.GetActiveAccount());
 		}
@@ -1300,12 +1307,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		private void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				try {
-					this.resourceAccessScheduler.Stop();
-				} finally {
-					this.IsDisposed = true;
-				}
+				this.resourceAccessScheduler.Stop();
 			}
+			this.IsDisposed = true;
 		}
 
 		~WalletProviderProxy() {

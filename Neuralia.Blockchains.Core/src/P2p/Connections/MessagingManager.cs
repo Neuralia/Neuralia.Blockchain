@@ -444,7 +444,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// done, lets sleep for a while
 
 					// lets act again in X seconds
-					this.nextDatabaseClean = DateTime.Now.AddSeconds(secondsToWait);
+					this.nextDatabaseClean = DateTime.UtcNow.AddSeconds(secondsToWait);
 				}
 			} catch(OperationCanceledException) {
 				throw;
@@ -468,7 +468,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected override void Initialize() {
 			base.Initialize();
 
-			if(!NetworkInterface.GetIsNetworkAvailable() && !GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.localhostOnly) {
+			if(!NetworkInterface.GetIsNetworkAvailable() && !GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.LocalhostOnly) {
 				throw new NetworkInformationException();
 			}
 		}

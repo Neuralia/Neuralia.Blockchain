@@ -99,9 +99,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				} finally {
 					this.tcpServer = null;
-					this.IsDisposed = true;
 				}
 			}
+			this.IsDisposed = true;
 		}
 
 		~ConnectionListener() {

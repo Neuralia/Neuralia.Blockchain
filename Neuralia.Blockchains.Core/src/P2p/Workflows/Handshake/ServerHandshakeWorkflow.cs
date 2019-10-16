@@ -259,7 +259,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.ClientConnection.NodeAddressInfoInfo.RealPort = this.triggerMessage.Message.listeningPort;
 
 			// and check if their connection port is true and available
-			serverHandshake.Message.Connectible = this.PerformCounterConnection();
+			serverHandshake.Message.Connectable = this.PerformCounterConnection();
 
 			this.networkingService.ConnectionStore.AddPeerReportedPublicIp(this.triggerMessage.Message.PerceivedIP, ConnectionStore.PublicIpSource.Peer);
 
@@ -302,7 +302,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 		protected virtual bool CheckStaturatedConnections(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
 
-			AppSettingsBase.WhitelistedNode whiteList = GlobalSettings.ApplicationSettings.Whitelist.SingleOrDefault(e => e.ip == this.ClientConnection.Ip);
+			AppSettingsBase.WhitelistedNode whiteList = GlobalSettings.ApplicationSettings.Whitelist.SingleOrDefault(e => e.Ip == this.ClientConnection.Ip);
 
 			if(this.networkingService.ConnectionStore.ConnectionsSaturated) {
 

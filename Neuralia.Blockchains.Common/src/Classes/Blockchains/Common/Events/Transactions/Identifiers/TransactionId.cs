@@ -157,6 +157,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			return new Tuple<long, long, byte>(this.Account.ToLongRepresentation(), this.Timestamp.Value, this.Scope);
 		}
 
+		public string ToCompositeKey() {
+			return this.Account.ToLongRepresentation().ToString() + "_" +  this.Timestamp.ToString() + "_" + this.Scope.ToString();
+		}
+		
 		protected virtual void DehydrateTail(IDataDehydrator dehydrator) {
 			dehydrator.Write(this.Scope);
 		}

@@ -35,6 +35,10 @@ namespace Neuralia.Blockchains.Core.Services {
 		private DateTime networkDateTime;
 		private TimeSpan timeDelta;
 
+		public static string FormatDateTimeStandardUtc(DateTime dateTime) {
+			return dateTime.ToUniversalTime().ToString("o");
+		}
+		
 		public void InitTime() {
 			//default Windows time server
 			var ntpServers = new List<string>();
@@ -123,7 +127,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			//**UTC** time
 			this.networkDateTime = new DateTime(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds((long) milliseconds);
 
-			this.timeDelta = this.networkDateTime.Subtract(DateTime.Now.ToUniversalTime());
+			this.timeDelta = this.networkDateTime.Subtract(DateTime.UtcNow);
 		}
 
 		/// <summary>
@@ -132,26 +136,25 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <param name="timestamp"></param>
 		/// <returns></returns>
 		public bool WithinAcceptableRange(DateTime timestamp) {
-			if(((this.CurrentRealTime - this.GetAcceptableRange) < timestamp) && (timestamp < (this.CurrentRealTime + this.GetAcceptableRange))) {
-				return true;
-			}
+			DateTime utcTimestamp = timestamp.ToUniversalTime();
+			
+			return ((this.CurrentRealTime - this.GetAcceptableRange) < utcTimestamp) && (utcTimestamp < (this.CurrentRealTime + this.GetAcceptableRange));
 
-			return false;
 		}
 
-		public TimeSpan GetAcceptableRange => TimeSpan.FromMinutes(GlobalSettings.ApplicationSettings.acceptableTimeRange);
+		public TimeSpan GetAcceptableRange => TimeSpan.FromMinutes(GlobalSettings.ApplicationSettings.AcceptableTimeRange);
 
 		public bool WithinAcceptableRange(long timestamp, DateTime chainInception) {
 
 			return this.WithinAcceptableRange(this.GetTimestampDateTime(timestamp, chainInception));
 		}
 
-		public DateTime CurrentRealTime => DateTime.Now.ToUniversalTime().Add(this.timeDelta);
+		public DateTime CurrentRealTime => DateTime.UtcNow.Add(this.timeDelta);
 
 		public long CurrentRealTimeTicks => this.CurrentRealTime.Ticks;
 
 		public DateTime GetDateTime(long ticks) {
-			return new DateTime(ticks);
+			return new DateTime(ticks, DateTimeKind.Utc);
 		}
 
 		/// <summary>
@@ -185,13 +188,16 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			this.ValidateChainInception(chainInception);
 
+			if(chainInception.Kind != DateTimeKind.Utc) {
+				throw new ApplicationException("Chain inception should always be in UTC");
+			}
 			return chainInception + TimeSpan.FromSeconds(timestamp);
 		}
 
 		public TimeSpan GetTimeDifference(long timestamp, DateTime time, DateTime chainInception) {
 			DateTime rebuiltTime = this.GetTimestampDateTime(timestamp, chainInception);
 
-			return time - rebuiltTime;
+			return time.ToUniversalTime() - rebuiltTime;
 		}
 
 		protected void ValidateChainInception(DateTime chainInception) {

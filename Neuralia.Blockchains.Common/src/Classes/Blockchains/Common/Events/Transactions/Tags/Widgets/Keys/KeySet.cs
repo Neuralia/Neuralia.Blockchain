@@ -9,7 +9,7 @@ using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
-	public class KeySet : ITreeHashable, IBinarySerializable, IJsonSerializable, IDisposable2 {
+	public class KeySet : ITreeHashable, IBinarySerializable, IJsonSerializable {
 		public Dictionary<byte, ICryptographicKey> Keys { get; } = new Dictionary<byte, ICryptographicKey>();
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
@@ -146,34 +146,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			return this.Keys[id].Key != null;
 		}
 		
-				
-	#region Disposable
-		
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		private void Dispose(bool disposing) {
-			if(this.IsDisposed) {
-				return;
-			}
-			
-			if(disposing) {
-				foreach(var key in this.Keys) {
-					key.Value?.Dispose();
-				}
-			}
-			this.IsDisposed = true;
-		}
-
-		~KeySet() {
-			this.Dispose(false);
-		}
-		
-		public bool IsDisposed { get; private set; }
-
-	#endregion
 	}
 }
