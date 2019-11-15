@@ -46,6 +46,7 @@ using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
+using Org.BouncyCastle.Security;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
@@ -96,7 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		protected override void ProcessLoop(IGossipManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext) {
 			base.ProcessLoop(workflow, taskRoutingContext);
-			
+
 			// lets keep our database clean
 			this.ColoredRoutedTaskReceiver.CheckTasks();
 		}
@@ -146,143 +147,143 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				}
 
 				// ok, the first step is to ensure the message is valid. otherwise we do not handle it any further
-				var validationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateValidationTask<bool>();
 
 				ValidationResult valid = new ValidationResult();
 
-				validationTask.SetAction((validationService, taskRoutingContext) => {
-					IRoutedTask validateEnvelopeContentTask = validationService.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, result => {
-						valid = result;
-					});
-
-					taskRoutingContext.AddChild(validateEnvelopeContentTask);
-				}, (result, taskRoutingContext) => {
-					if(result.Success) {
-						// ok, if we can't validate a message, we are most probably out of sync. if we are not already syncing, let's request one.
-						if(valid == ValidationResult.ValidationResults.CantValidate) {
-							// we have a condition when we may be out of sync and if we are not already syncing, we should do it
-							var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
-
-							blockchainTask.SetAction((blockchainService, taskRoutingContext2) => {
-								blockchainService.SynchronizeBlockchain(true);
-							});
-
-							// no need to wait, this can totally be async
-							this.DispatchTaskAsync(blockchainTask);
-						}
-
-						long xxHash = blockchainGossipMessageSet.BaseHeader.Hash;
-
-						var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
-
-						serializationTask.SetAction((serializationService, taskRoutingContext2) => {
-
-							//check if we have already received it, and if we did, we update the validation status, since we just did so.
-							bool isInCache = serializationService.CheckRegistryMessageInCache(xxHash, valid.Valid);
-
-							// see if we should cache the message if it's a block
-							if((valid == ValidationResult.ValidationResults.CantValidate) && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope unvalidatedBlockEnvelope) {
-
-								// ok, its a block message. we can't validate it yet. If it is close enough from our chain height, we will cache it, so we can use it later.
-								long currentBlockHeight = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
-								int blockGossipCacheProximityLevel = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
-
-								if((unvalidatedBlockEnvelope.BlockId > currentBlockHeight) && (unvalidatedBlockEnvelope.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel))) {
-									try {
-										serializationService.CacheUnvalidatedBlockGossipMessage(unvalidatedBlockEnvelope, xxHash);
-									} catch(Exception ex) {
-										//just eat the exception if anything here, it's not so important
-										Log.Error(ex, $"Failed to cache gossip block message for block Id {unvalidatedBlockEnvelope.BlockId}");
-									}
-								}
-							}
-						}, (result2, taskRoutingContext2) => {
-							if(result2.Success) {
-								if(valid.Result == ValidationResult.ValidationResults.Invalid) {
-
-									// this is the end, we go no further with an invalid message
-
-									//TODO: what should we do here? perhaps we should log it about the peer
-									Log.Error($"Gossip message received by peer {connection.ScoppedAdjustedIp} was invalid.");
-								} else if(valid == ValidationResult.ValidationResults.CantValidate) {
-									// seems we could do nothing with it. we just let it go
-									Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} but could not be validated. the message will be ignored.");
-								} else if(valid == ValidationResult.ValidationResults.EmbededKeyValid) {
-									// seems we could do nothing with it. we just let it go
-									Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} could not be validated, but the embeded public key was valid.");
-
-									// ok, in this case, we can at least forward it on the gossip network
-									this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.ForwardValidGossipMessage(blockchainGossipMessageSet, connection);
-
-								} else if(valid.Valid) {
-
-									// and since this is good or possibly valid, now we ensure it will get forwarded to our peers
-									this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.ForwardValidGossipMessage(blockchainGossipMessageSet, connection);
-
-									// ok, if we get here, this message is fully valid!  first step, we instantiate the workflow for this gossip transaction
-									var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
-
-									if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage) {
-
-										Action<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, TaskRoutingContext> action = null;
-
-										if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.TRANSACTION_RECEIVED)) {
-
-											action = (blockchainService, taskRoutingContext3) => {
-												try {
-													blockchainService.InsertGossipTransaction((ITransactionEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope);
-												} catch(Exception ex) {
-													Log.Error(ex, "Failed to insert transaction from a received gossip message.");
-												}
-											};
-										} else if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED)) {
-
-											IBlockEnvelope blockEnvelope = (IBlockEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
-
-											action = (blockchainService, taskRoutingContext3) => {
-												try {
-													blockchainService.InsertInterpretBlock(blockEnvelope.Contents.RehydratedBlock, blockEnvelope.Contents, true);
-												} catch(Exception ex) {
-													Log.Error(ex, "Failed to install block from a received gossip message.");
-												}
-											};
-										} else if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.MESSAGE_RECEIVED)) {
-											IMessageEnvelope messageEnvelope = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
-
-											action = (blockchainService, taskRoutingContext3) => {
-												try {
-													blockchainService.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedMessage, messageEnvelope.Contents);
-												} catch(Exception ex) {
-													Log.Error(ex, "Failed to handle message from a received gossip message.");
-												}
-											};
-										} else {
-											throw new ArgumentOutOfRangeException("Invalid gossip message type");
-										}
-
-										blockchainTask.SetAction(action, (result3, executionContext3) => {
-											
-											// clean up when we are done
-											//blockchainGossipMessageSet.BaseMessage.Dispose();
-										});
-
-										this.DispatchTaskNoReturnAsync(blockchainTask);
-
-										// ok , we are done. good job :)
-										Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} was valid and was processed properly.");
-									}
-								}
-							}
-						});
-
-						this.DispatchTaskAsync(serializationTask);
-					}
+				this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, result => {
+					valid = result;
 				});
 
-				this.DispatchTaskAsync(validationTask);
+				// ok, if we can't validate a message, we are most probably out of sync. if we are not already syncing, let's request one.
+				if(valid == ValidationResult.ValidationResults.CantValidate) {
+					// we have a condition when we may be out of sync and if we are not already syncing, we should do it
+					var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+					blockchainTask.SetAction((blockchainService, taskRoutingContext2) => {
+						blockchainService.SynchronizeBlockchain(true);
+					});
+
+					// no need to wait, this can totally be async
+					this.DispatchTaskAsync(blockchainTask);
+				}
+
+				long xxHash = blockchainGossipMessageSet.BaseHeader.Hash;
+
+				//check if we have already received it, and if we did, we update the validation status, since we just did so.
+				bool isInCache = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.CheckRegistryMessageInCache(xxHash, valid.Valid);
+
+				// see if we should cache the message if it's a block
+				if((valid == ValidationResult.ValidationResults.CantValidate) && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope unvalidatedBlockEnvelope) {
+
+					// ok, its a block message. we can't validate it yet. If it is close enough from our chain height, we will cache it, so we can use it later.
+					long currentBlockHeight = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
+					int blockGossipCacheProximityLevel = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
+
+					if((unvalidatedBlockEnvelope.BlockId > currentBlockHeight) && (unvalidatedBlockEnvelope.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel))) {
+						try {
+							this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.CacheUnvalidatedBlockGossipMessage(unvalidatedBlockEnvelope, xxHash);
+						} catch(Exception ex) {
+							//just eat the exception if anything here, it's not so important
+							Log.Error(ex, $"Failed to cache gossip block message for block Id {unvalidatedBlockEnvelope.BlockId}");
+						}
+					}
+				}
+
+				if(valid.Result == ValidationResult.ValidationResults.Invalid) {
+
+					// this is the end, we go no further with an invalid message
+
+					//TODO: what should we do here? perhaps we should log it about the peer
+					Log.Error($"Gossip message received by peer {connection.ScoppedAdjustedIp} was invalid.");
+					this.RequestSync();
+
+				} else if(valid == ValidationResult.ValidationResults.CantValidate) {
+					// seems we could do nothing with it. we just let it go
+					Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} but could not be validated. the message will be ignored.");
+
+					this.RequestSync();
+				} else if(valid == ValidationResult.ValidationResults.EmbededKeyValid) {
+					// seems we could do nothing with it. we just let it go
+					Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} could not be validated, but the embeded public key was valid.");
+
+					// ok, in this case, we can at least forward it on the gossip network
+					this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.ForwardValidGossipMessage(blockchainGossipMessageSet, connection);
+
+				} else if(valid.Valid) {
+
+					// and since this is good or possibly valid, now we ensure it will get forwarded to our peers
+					this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.ForwardValidGossipMessage(blockchainGossipMessageSet, connection);
+
+					// ok, if we get here, this message is fully valid!  first step, we instantiate the workflow for this gossip transaction
+					var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+					if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage) {
+
+						Action<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, TaskRoutingContext> action = null;
+
+						if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.TRANSACTION_RECEIVED)) {
+
+							action = (blockchainService, taskRoutingContext3) => {
+								try {
+									blockchainService.InsertGossipTransaction((ITransactionEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope);
+								} catch(Exception ex) {
+									Log.Error(ex, "Failed to insert transaction from a received gossip message.");
+								}
+							};
+						} else if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED)) {
+
+							IBlockEnvelope blockEnvelope = (IBlockEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
+
+							action = (blockchainService, taskRoutingContext3) => {
+								try {
+									blockchainService.InsertInterpretBlock(blockEnvelope.Contents.RehydratedBlock, blockEnvelope.Contents, true);
+								} catch(Exception ex) {
+									Log.Error(ex, "Failed to install block from a received gossip message.");
+								}
+							};
+						} else if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.MESSAGE_RECEIVED)) {
+							IMessageEnvelope messageEnvelope = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
+
+							action = (blockchainService, taskRoutingContext3) => {
+								try {
+									blockchainService.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedMessage, messageEnvelope.Contents);
+								} catch(Exception ex) {
+									Log.Error(ex, "Failed to handle message from a received gossip message.");
+								}
+							};
+						} else {
+							throw new ArgumentOutOfRangeException("Invalid gossip message type");
+						}
+
+						blockchainTask.SetAction(action, (result3, executionContext3) => {
+
+							// clean up when we are done
+							//blockchainGossipMessageSet.BaseMessage.Dispose();
+						});
+
+						this.DispatchTaskNoReturnAsync(blockchainTask);
+
+						// ok , we are done. good job :)
+						Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} was valid and was processed properly.");
+					}
+				}
+
 			} catch(Exception ex) {
+
 				Log.Error(ex, "Failed to process gossip message.");
+
 			}
+
+		}
+
+		private void RequestSync() {
+			var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+			blockchainTask.SetAction((service, taskRoutingContext2) => {
+				service.SynchronizeBlockchain(true);
+			});
+
+			this.DispatchTaskNoReturnAsync(blockchainTask);
 		}
 
 		public class GossipMessageReceivedTask : ColoredTask {
@@ -294,5 +295,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				this.Connection = connection;
 			}
 		}
+
 	}
 }

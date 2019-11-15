@@ -2,6 +2,7 @@
 using Ionic.Zlib;
 using Microsoft.IO;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Compression {
 	public class GzipCompression : Compression<GzipCompression> {

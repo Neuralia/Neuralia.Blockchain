@@ -1,4 +1,5 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures {
@@ -21,17 +22,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public uint FilePart { get; set; }
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
-			this.ChannelId = rehydrator.ReadUShort();
-			this.IndexId = rehydrator.ReadInt();
-			this.FileId = rehydrator.ReadInt();
-			this.FilePart = rehydrator.ReadUInt();
+			
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
+			adaptiveSet.Rehydrate(rehydrator);
+			this.ChannelId = (DigestChannelType)(ushort)adaptiveSet.Value;
+			
+			adaptiveSet.Rehydrate(rehydrator);
+			this.IndexId = (int)adaptiveSet.Value;
+			
+			adaptiveSet.Rehydrate(rehydrator);
+			this.FileId = (int)adaptiveSet.Value;
+			
+			adaptiveSet.Rehydrate(rehydrator);
+			this.FilePart = (uint)adaptiveSet.Value;
 		}
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
-			dehydrator.Write(this.ChannelId.Value);
-			dehydrator.Write(this.IndexId);
-			dehydrator.Write(this.FileId);
-			dehydrator.Write(this.FilePart);
+
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9(this.ChannelId.Value);
+			adaptiveSet.Dehydrate(dehydrator);
+
+			adaptiveSet.Value = this.IndexId;
+			adaptiveSet.Dehydrate(dehydrator);
+
+			adaptiveSet.Value = this.FileId;
+			adaptiveSet.Dehydrate(dehydrator);
+
+			adaptiveSet.Value = this.FilePart;
+			adaptiveSet.Dehydrate(dehydrator);
 		}
 
 		public static implicit operator ChannelFileSetKey((DigestChannelType channelId, int indexId, int fileId, uint filePart) d) {
@@ -55,10 +73,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				if(ReferenceEquals(this, null)) {
-					return false;
-				}
-
-				if(ReferenceEquals(other, null)) {
 					return false;
 				}
 

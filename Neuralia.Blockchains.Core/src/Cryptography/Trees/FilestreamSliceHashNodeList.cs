@@ -4,13 +4,14 @@ using System.IO;
 using System.IO.Abstractions;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 	/// <summary>
 	///     A special hash node list that will split a file into slices and expose them as nodes to hash
 	/// </summary>
-	public class FileStreamSliceHashNodeList : IHashNodeList, IDisposable2 {
+	public class FileStreamSliceHashNodeList : IHashNodeList, IDisposableExtended {
 		private readonly byte[] buffer;
 
 		private readonly string filename;
@@ -40,6 +41,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		public SafeArrayHandle this[int i] {
 			get {
+
 				if(this.fileStream == null) {
 
 					this.fileStream = this.fileSystem.FileStream.Create(this.filename, FileMode.Open, FileAccess.Read);

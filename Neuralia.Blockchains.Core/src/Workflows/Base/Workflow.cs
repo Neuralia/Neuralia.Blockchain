@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
@@ -9,7 +10,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 	public interface IWorkflow : IThreadBase {
 
-		string Id { get; }
+		WorkflowId Id { get; }
 		uint WorkflowId { get; }
 
 		bool TestingMode { get; set; }
@@ -76,6 +77,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			this.serviceSet = serviceSet;
 
 			this.WorkflowId = GlobalRandom.GetNextUInt();
+			
+			this.Id = new WorkflowId(this.WorkflowId);
 
 			// how long do we wait for an operation until we declare this workflow as dead?
 			// this can happen if the peers on the other side stop responding and go mute.
@@ -93,7 +96,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// <summary>
 		///     Unique Id of the workflow
 		/// </summary>
-		public virtual string Id => this.WorkflowId.ToString();
+		public virtual WorkflowId Id { get; }
 
 		/// <summary>
 		/// </summary>
@@ -154,6 +157,11 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		public override int GetHashCode() {
 			return (int) this.WorkflowId;
 		}
+
+		/// <summary>
+		/// Workflows are usually much shorter
+		/// </summary>
+		protected override TaskCreationOptions TaskCreationOptions => TaskCreationOptions.None;
 
 		protected override void TriggerError(Exception ex) {
 			base.TriggerError(ex);

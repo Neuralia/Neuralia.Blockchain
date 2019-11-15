@@ -2,6 +2,7 @@
 using System.IO;
 using System.IO.Abstractions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Extensions {
 
@@ -144,15 +145,15 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		}
 
 		public static SafeArrayHandle ReadBytes(string filename, long start, int count, IFileSystem fileSystem) {
-			using(BinaryReader br = new BinaryReader(fileSystem.File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))) {
+			using(BinaryReader br = new BinaryReader(fileSystem.File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.Read))) {
 				br.BaseStream.Seek(start, SeekOrigin.Begin);
 
-				return (ByteArray) br.ReadBytes(count);
+				return ByteArray.WrapAndOwn(br.ReadBytes(count));
 			}
 		}
 
 		public static SafeArrayHandle ReadAllBytes(string filename, IFileSystem fileSystem) {
-			return (ByteArray) fileSystem.File.ReadAllBytes(filename);
+			return ByteArray.WrapAndOwn(fileSystem.File.ReadAllBytes(filename));
 		}
 
 		public static string ReadAllText(string filename, IFileSystem fileSystem) {

@@ -2,10 +2,11 @@
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
-	public abstract class CommonAddress : IDisposable2 {
+	public abstract class CommonAddress : IDisposableExtended {
 
 		private readonly ByteArray bytes;
 		private int keyAndMask;

@@ -9,8 +9,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		
 		IGossipManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> gossipManager { get; set; }
 		IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainManager { get; set; }
-		ISerializationManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> serializationManager { get; set; }
-		IValidationManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> validationManager { get; set; }
 		IBlockChainInterface<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainInterface { get; set; }
 	}
 
@@ -22,8 +20,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 
 		public IGossipManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> gossipManager { get; set; }
 		public IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainManager { get; set; }
-		public ISerializationManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> serializationManager { get; set; }
-		public IValidationManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> validationManager { get; set; }
 
 		public IBlockChainInterface<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainInterface { get; set; }
 	}

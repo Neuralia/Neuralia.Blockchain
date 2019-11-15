@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.IO;
@@ -79,6 +80,11 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// The aboslute timeout of a mining registration since the last update
 		/// </summary>
 		public const int MINING_REGISTRATION_TIMEOUT = UPDATE_MINING_REGISTRATION_DELAY * 2;
+		
+		/// <summary>
+		/// the timespan delay before a miner times out
+		/// </summary>
+		public static readonly TimeSpan TimeoutMinerDelay = TimeSpan.FromMinutes(GlobalsService.MINING_REGISTRATION_TIMEOUT);
 		
 		/// <summary>
 		/// The delay between each query for mining status

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
@@ -18,7 +19,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 		public static readonly Dictionary<BlockchainType, IRehydrationFactory> ChainRehydrationFactories = new Dictionary<BlockchainType, IRehydrationFactory>();
 	}
 
-	public class ServerMessageGroupManifestWorkflow<R> : ServerWorkflow<MessageGroupManifestTrigger<R>, MessageGroupManifestMessageFactory<R>, R>
+	public class ServerMessageGroupManifestWorkflow<R> : OneToManyServerWorkflow<MessageGroupManifestTrigger<R>, MessageGroupManifestMessageFactory<R>, R>
 		where R : IRehydrationFactory {
 
 		private readonly IDataAccessService dataAccessService;
@@ -28,11 +29,6 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 		public ServerMessageGroupManifestWorkflow(TriggerMessageSet<MessageGroupManifestTrigger<R>, R> triggerMessage, PeerConnection clientConnection, ServiceSet<R> serviceSet) : base(triggerMessage, clientConnection, serviceSet) {
 			this.globalsService = serviceSet.GlobalsService;
 			this.dataAccessService = serviceSet.DataAccessService;
-
-			// allow only one per peer at a time
-			this.ExecutionMode = Workflow.ExecutingMode.Single;
-
-			this.PeerUnique = true;
 
 			// very high priority
 			this.Priority = Workflow.Priority.High;
@@ -45,8 +41,6 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			
 			var reply = this.MessageFactory.CreateServerMessageGroupManifestSet(this.triggerMessage.Header);
 			
-			reply.Message.sessionId = this.triggerMessage.Message.sessionId;
-			
 			Log.Verbose($"Received {this.triggerMessage.Message.messageInfos.Count} gossip message hashes from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// here we check which messages in the group we have already received, and which ones are new
@@ -58,8 +52,16 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 			reply.Message.messageApprovals.AddRange(messageReceived);
 
-			if(!this.Send(reply)) {
-				Log.Verbose($"Connection with peer  {this.ClientConnection.ScoppedAdjustedIp} was terminated");
+			try {
+
+				Repeater.Repeat(() => {
+					if(!this.Send(reply)) {
+						throw new ApplicationException();
+					}
+
+				});
+			} catch(Exception ex) {
+				Log.Verbose($"Connection with peer {this.ClientConnection.ScoppedAdjustedIp} was terminated");
 
 				return;
 			}
@@ -69,14 +71,16 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				return;
 			}
 
-			var serverMessageGroupManifest = this.WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>();
+
+			var	serverMessageGroupManifest = this.WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>(TimeSpan.FromSeconds(10));
+
 
 			Log.Verbose($"We received {serverMessageGroupManifest.Message.gossipMessageSets.Count} gossip messages from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// ok, these are really messages, lets handle them as such
 			foreach(SafeArrayHandle message in serverMessageGroupManifest.Message.gossipMessageSets) // thats it, we formally receive the messages and send them to our message manager.
 			{
-				this.networkingService.PostNetworkMessage(message, this.ClientConnection);
+				this.networkingService.PostNetworkMessage(message, this.ClientConnection); 
 				message.Dispose();
 			}
 		}
@@ -112,7 +116,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 		protected override bool CompareOtherPeerId(IWorkflow other) {
 			if(other is ServerMessageGroupManifestWorkflow<R> otherWorkflow) {
-				return this.triggerMessage.Header.originatorId == otherWorkflow.triggerMessage.Header.originatorId;
+				return this.triggerMessage.Header.OriginatorId == otherWorkflow.triggerMessage.Header.OriginatorId;
 			}
 
 			return base.CompareOtherPeerId(other);

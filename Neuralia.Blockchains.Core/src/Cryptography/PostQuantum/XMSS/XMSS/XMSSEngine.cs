@@ -13,13 +13,14 @@ using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 	// <summary>
 	/// THE XMSS class
 	/// </summary>
 	/// <remarks>this was built according to the XMSS RFC https://tools.ietf.org/html/rfc8391</remarks>
-	public class XMSSEngine : IDisposable2 {
+	public class XMSSEngine : IDisposableExtended {
 
 		/// <summary>
 		/// How many processing loops do we take before resting and sleeping the thread?
@@ -382,8 +383,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			bool completed = false;
 
 			int Callback(int index) {
-
 				Thread.CurrentThread.Priority = ThreadPriority.BelowNormal;
+				
 				ThreadContext threadContext = this.threadContexts[index];
 				NodeInfo workingNode = null;
 				int counter = 0;
@@ -505,10 +506,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				this.threadContexts[i].HashTreeAddress.Initialize(adrs);
 
 				int index = i;
-
-				var task = new Task<int>(() => Callback(index));
-				task.Start();
-				tasks[i] = task;
+				
+				tasks[i] = Task.Run(() => Callback(index));
 			}
 
 			int lastPercentage = 0;
@@ -753,7 +752,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			adrs.Reset();
 
 			ByteArray temp2 = CommonUtils.ToBytes(signatureIndex, this.digestLength);
-			ByteArray random = ByteArray.Create(CommonUtils.PRF(xmssSecretKey.SecretPrf, temp2, this.xmssExecutionContext));
+			ByteArray random = CommonUtils.PRF(xmssSecretKey.SecretPrf, temp2, this.xmssExecutionContext);
 			ByteArray temp = xmssSecretKey.Root;
 
 			ByteArray concatenated = CommonUtils.Concatenate(random, temp, temp2);
@@ -891,7 +890,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		private readonly ConcurrentDictionary<XMSSNodeId, MergedNodeInfo> incompleteNodes = new ConcurrentDictionary<XMSSNodeId, MergedNodeInfo>();
 		private readonly ConcurrentQueue<NodeInfo> readyNodes = new ConcurrentQueue<NodeInfo>();
 
-		public class ThreadContext : IDisposable2 {
+		public class ThreadContext : IDisposableExtended {
 
 			public readonly HashTreeAddress HashTreeAddress;
 			public readonly LTreeAddress LTreeAddress;

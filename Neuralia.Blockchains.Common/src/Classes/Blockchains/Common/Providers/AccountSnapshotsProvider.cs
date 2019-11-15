@@ -23,6 +23,7 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
@@ -61,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		IChainOptionsSnapshot CreateNewChainOptionsSnapshots();
 
 		void ProcessSnapshotImpacts(ISnapshotHistoryStackSet snapshotsModificationHistoryStack);
-		List<Action<ISerializationManager, TaskRoutingContext>> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys);
+		List<Action> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys);
 	}
 
 	public interface IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IAccountSnapshotsProvider
@@ -372,8 +373,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="snapshotsModificationHistoryStack"></param>
 		/// <returns></returns>
-		public List<Action<ISerializationManager, TaskRoutingContext>> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys) {
-			var serializationActions = new List<Action<ISerializationManager, TaskRoutingContext>>();
+		public List<Action> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys) {
+			var serializationActions = new List<Action>();
 
 			BlockChainConfigurations configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
@@ -384,14 +385,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				foreach(var keyEntry in fastKeys) {
 					if((keyEntry.Key.accountId.SequenceId >= Constants.FIRST_PUBLIC_ACCOUNT_NUMBER) && (((keyEntry.Key.ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) && hasTransactions) || ((keyEntry.Key.ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) && hasMessages))) {
 
-						serializationActions.Add((manager, taskContext) => {
+						serializationActions.Add(() => {
 
-							ByteArray publicKey = keyEntry.Value;
+							ByteArray publicKey = ByteArray.Wrap(keyEntry.Value);
 
 							ICryptographicKey cryptoKey = KeyFactory.RehydrateKey(DataSerializationFactory.CreateRehydrator(publicKey));
 
 							if(cryptoKey is XmssCryptographicKey xmssCryptographicKey) {
-								manager.SaveAccountKeyIndex(keyEntry.Key.accountId, xmssCryptographicKey.Key.Clone(), xmssCryptographicKey.TreeHeight, xmssCryptographicKey.BitSize, keyEntry.Key.ordinal);
+								this.centralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveAccountKeyIndex(keyEntry.Key.accountId, xmssCryptographicKey.Key.Clone(), xmssCryptographicKey.TreeHeight, xmssCryptographicKey.BitSize, keyEntry.Key.ordinal);
 							}
 						});
 

@@ -151,21 +151,58 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return generator;
 		}
 
+		public static SystemEventGenerator BlockchainSyncStarted(long blockId, long publicBlockHeight) {
+			SystemEventGenerator generator = new SystemEventGenerator();
 
+			generator.EventType = BlockchainSystemEventTypes.Instance.BlockchainSyncStarted;
+			generator.Parameters = new object[] {blockId, publicBlockHeight,  (publicBlockHeight==0?0:((decimal)blockId) / publicBlockHeight)};
+
+			return generator;
+		}
+		
+		public static SystemEventGenerator BlockchainSyncEnded(long blockId, long publicBlockHeight) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.BlockchainSyncEnded;
+			generator.Parameters = new object[] {blockId, publicBlockHeight, (publicBlockHeight==0?0:((decimal)blockId) / publicBlockHeight)};
+
+			return generator;
+		}
+		
+		
 		public static SystemEventGenerator BlockchainSyncUpdate(long blockId, long publicBlockHeight, string estimatedTimeRemaining) {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.BlockchainSyncUpdate;
-			generator.Parameters = new object[] {blockId, publicBlockHeight, (decimal) blockId / publicBlockHeight, estimatedTimeRemaining};
+			generator.Parameters = new object[] {blockId, publicBlockHeight,  (publicBlockHeight==0?0:((decimal)blockId) / publicBlockHeight), estimatedTimeRemaining};
 
 			return generator;
 		}
 
-		public static SystemEventGenerator WalletSyncStepEvent(long blockId, long blockHeight) {
+		public static SystemEventGenerator WalletSyncStarted(long blockId, long blockHeight) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.WalletSyncStarted;
+			generator.Parameters = new object[] {blockId, blockHeight, (decimal) blockId / Math.Max(blockHeight, 1)};
+
+			return generator;
+		}
+		
+		public static SystemEventGenerator WalletSyncEnded(long blockId, long blockHeight) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.WalletSyncEnded;
+			generator.Parameters = new object[] {blockId, blockHeight, (decimal) blockId / Math.Max(blockHeight, 1)};
+
+			return generator;
+		}
+		
+		
+		public static SystemEventGenerator WalletSyncStepEvent(long blockId, long blockHeight, string estimatedTimeRemaining) {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.WalletSyncUpdate;
-			generator.Parameters = new object[] {blockId, blockHeight, (decimal) blockId / Math.Max(blockHeight, 1)};
+			generator.Parameters = new object[] {blockId, blockHeight, (decimal) blockId / Math.Max(blockHeight, 1), estimatedTimeRemaining};
 
 			return generator;
 		}
@@ -174,7 +211,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.MiningElected;
-			generator.Parameters = new object[] {new {blockId}};
+			generator.Parameters = new object[] {blockId};
 
 			return generator;
 		}
@@ -183,11 +220,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.MiningPrimeElected;
-			generator.Parameters = new object[] {new {blockId}};
+			generator.Parameters = new object[] {blockId};
 
 			return generator;
 		}
 
+		public static SystemEventGenerator MiningStatusChanged(bool mining) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.MiningStatusChanged;
+			generator.Parameters = new object[] {mining};
+
+			return generator;
+		}
+		
 		public static SystemEventGenerator BlockInserted(long blockId, DateTime timestamp, string hash, long publicBlockId, int lifespan) {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
@@ -224,7 +270,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return generator;
 		}
 		
-		public static SystemEventGenerator ConnecableChanged(bool connectable) {
+		public static SystemEventGenerator ConnectableChanged(bool connectable) {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.ConnectableStatusChanged;

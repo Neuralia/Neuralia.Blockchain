@@ -4,10 +4,11 @@ using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
-	public class XMSSSignature : IDisposable2 {
+	public class XMSSSignature : IDisposableExtended {
 
 		// versioning information
 		public readonly byte Major = 1;
@@ -80,7 +81,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			dehydrator.WriteRawArray(this.Random);
 		}
 
-		public class XMSSTreeSignature : IDisposable2 {
+		public class XMSSTreeSignature : IDisposableExtended {
 
 			private readonly XMSSExecutionContext xmssExecutionContext;
 

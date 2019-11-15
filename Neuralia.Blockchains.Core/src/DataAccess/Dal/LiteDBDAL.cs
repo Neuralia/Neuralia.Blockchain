@@ -5,6 +5,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using LiteDB;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 	public class LiteDBDAL {

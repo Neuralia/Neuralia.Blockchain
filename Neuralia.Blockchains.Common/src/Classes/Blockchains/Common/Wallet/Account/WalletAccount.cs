@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
 
@@ -80,7 +81,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		void InitializeNew(string name, BlockchainServiceSet serviceSet, Enums.AccountTypes accountType);
 
 		void ClearEncryptionParameters();
-		void InitializeNewEncryptionParameters(BlockchainServiceSet serviceSet);
+		void InitializeNewEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration);
 
 		AccountId GetAccountId();
 	}
@@ -184,14 +185,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			this.ClearKeyHistoryEncryptionParameters();
 		}
 
-		public virtual void InitializeNewEncryptionParameters(BlockchainServiceSet serviceSet) {
-			this.InitializeNewKeyLogEncryptionParameters(serviceSet);
-			this.InitializeNewKeyHistoryEncryptionParameters(serviceSet);
-			this.InitializeNewChainStateEncryptionParameters(serviceSet);
-			this.InitializeNewTransactionCacheEncryptionParameters(serviceSet);
-			this.InitializeNewElectionCacheEncryptionParameters(serviceSet);
-			this.InitializeNewSnapshotEncryptionParameters(serviceSet);
-			this.InitializeNewKeyHistoryEncryptionParameters(serviceSet);
+		public virtual void InitializeNewEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration) {
+			this.InitializeNewKeyLogEncryptionParameters(serviceSet, chainConfiguration);
+			this.InitializeNewKeyHistoryEncryptionParameters(serviceSet, chainConfiguration);
+			this.InitializeNewChainStateEncryptionParameters(serviceSet, chainConfiguration);
+			this.InitializeNewTransactionCacheEncryptionParameters(serviceSet, chainConfiguration);
+			this.InitializeNewElectionCacheEncryptionParameters(serviceSet, chainConfiguration);
+			this.InitializeNewSnapshotEncryptionParameters(serviceSet, chainConfiguration);
+			this.InitializeNewKeyHistoryEncryptionParameters(serviceSet, chainConfiguration);
 		}
 
 		/// <summary>
@@ -271,63 +272,63 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			this.SnapshotFileSecret = null;
 		}
 
-		private void InitializeNewKeyLogEncryptionParameters(BlockchainServiceSet serviceSet) {
+		private void InitializeNewKeyLogEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration) {
 			// create those no matter what
 			if(this.KeyLogFileEncryptionParameters == null) {
-				this.KeyLogFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(GlobalSettings.ApplicationSettings);
+				this.KeyLogFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
 				var secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
-				this.KeyLogFileSecret = secretKey;
+				this.KeyLogFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
 		}
 
-		private void InitializeNewKeyHistoryEncryptionParameters(BlockchainServiceSet serviceSet) {
+		private void InitializeNewKeyHistoryEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration) {
 			// create those no matter what
 			if(this.KeyHistoryFileEncryptionParameters == null) {
-				this.KeyHistoryFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(GlobalSettings.ApplicationSettings);
+				this.KeyHistoryFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
 				var secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
-				this.KeyHistoryFileSecret = secretKey;
+				this.KeyHistoryFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
 		}
 
-		private void InitializeNewChainStateEncryptionParameters(BlockchainServiceSet serviceSet) {
+		private void InitializeNewChainStateEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration) {
 			// create those no matter what
 			if(this.ChainStateFileEncryptionParameters == null) {
-				this.ChainStateFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(GlobalSettings.ApplicationSettings);
+				this.ChainStateFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
 				var secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
-				this.ChainStateFileSecret = secretKey;
+				this.ChainStateFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
 		}
 
-		private void InitializeNewTransactionCacheEncryptionParameters(BlockchainServiceSet serviceSet) {
+		private void InitializeNewTransactionCacheEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration) {
 			// create those no matter what
 			if(this.TransactionCacheFileEncryptionParameters == null) {
-				this.TransactionCacheFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(GlobalSettings.ApplicationSettings);
+				this.TransactionCacheFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
 				var secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
-				this.TransactionCacheFileSecret = secretKey;
+				this.TransactionCacheFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
 		}
 
-		private void InitializeNewElectionCacheEncryptionParameters(BlockchainServiceSet serviceSet) {
+		private void InitializeNewElectionCacheEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration) {
 			// create those no matter what
 			if(this.ElectionCacheFileEncryptionParameters == null) {
-				this.ElectionCacheFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(GlobalSettings.ApplicationSettings);
+				this.ElectionCacheFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
 				var secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
-				this.ElectionCacheFileSecret = secretKey;
+				this.ElectionCacheFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
 		}
 
-		private void InitializeNewSnapshotEncryptionParameters(BlockchainServiceSet serviceSet) {
+		private void InitializeNewSnapshotEncryptionParameters(BlockchainServiceSet serviceSet, ChainConfigurations chainConfiguration) {
 			// create those no matter what
 			if(this.SnapshotFileEncryptionParameters == null) {
-				this.SnapshotFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(GlobalSettings.ApplicationSettings);
+				this.SnapshotFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
 				var secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
-				this.SnapshotFileSecret = secretKey;
+				this.SnapshotFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
 		}
 	}

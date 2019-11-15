@@ -33,6 +33,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 
 				// we give ourselves the same ID as the other side.
 				this.CorrelationId = this.triggerMessage.Header.WorkflowCorrelationId;
+				
+				this.SessionId = this.triggerMessage.Header.WorkflowSessionId;
 
 				// we need this also, to scope this workflow as a response to a certain client
 				this.ClientId = peerConnectionn.ClientUuid;

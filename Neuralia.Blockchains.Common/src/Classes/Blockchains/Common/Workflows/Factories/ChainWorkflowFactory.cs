@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 
 		ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateSendElectionsCandidateRegistrationMessageWorkflow(AccountId candidateAccountId, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, ChainConfigurations.RegistrationMethods registrationMethod, CorrelationContext correlationContext);
 
-		ILoadWalletWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateLoadWalletWorkflow(CorrelationContext correlationContext);
+		ILoadWalletWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateLoadWalletWorkflow(CorrelationContext correlationContext, string passphrase = null);
 	}
 
 	public abstract class ChainWorkflowFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : WorkflowFactory<IBlockchainEventsRehydrationFactory>, IChainWorkflowFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -41,6 +41,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 
 		// message workflows
 		public abstract ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateSendElectionsCandidateRegistrationMessageWorkflow(AccountId candidateAccountId, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, ChainConfigurations.RegistrationMethods registrationMethod, CorrelationContext correlationContext);
-		public abstract ILoadWalletWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateLoadWalletWorkflow(CorrelationContext correlationContext);
+		public abstract ILoadWalletWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateLoadWalletWorkflow(CorrelationContext correlationContext, string passphrase = null);
 	}
 }

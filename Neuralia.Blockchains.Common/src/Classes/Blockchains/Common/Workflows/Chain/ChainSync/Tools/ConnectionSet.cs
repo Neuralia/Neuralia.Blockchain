@@ -130,6 +130,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return this.PeerConnection.ClientUuid.GetHashCode();
 			}
 		}
+		
+		public class SleepingConnection {
+
+			public DateTime Timestamp { get; }
+			
+			public DateTime EndStamp { get; }
+
+			public readonly PeerConnection PeerConnection;
+			public readonly TimeSpan TimeSpan;
+
+			public SleepingConnection(PeerConnection peerConnectionn, TimeSpan timeSpan) {
+				this.PeerConnection = peerConnectionn;
+				this.Timestamp = DateTime.UtcNow;
+				this.TimeSpan = timeSpan;
+
+				this.EndStamp = this.Timestamp + this.TimeSpan;
+			}
+
+			public bool IsSleeping => this.EndStamp > DateTime.UtcNow;
+			
+			public override bool Equals(object obj) {
+				if(obj is SleepingConnection rc) {
+					return rc.PeerConnection.ClientUuid == this.PeerConnection.ClientUuid;
+				}
+
+				return base.Equals(obj);
+			}
+
+			public override int GetHashCode() {
+				return this.PeerConnection.ClientUuid.GetHashCode();
+			}
+		}
 	}
 
 	/// <summary>
@@ -138,7 +170,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 	/// TODO: we keep all connections and veil them as rejected or banned. it can be slow to rebuild the veil every request. maybe its better to copy accross various state arrays instead?
 	/// <typeparam name="CHAIN_SYNC_TRIGGER"></typeparam>
 	/// <typeparam name="SERVER_TRIGGER_REPLY"></typeparam>
-	public class ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> : IConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>, IDisposable2
+	public class ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> : IConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>, IDisposableExtended
 		where CHAIN_SYNC_TRIGGER : ChainSyncTrigger
 		where SERVER_TRIGGER_REPLY : ServerTriggerReply {
 
@@ -147,6 +179,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public const int BAN_LIMIT = 3;
 
+		/// <summary>
+		/// connections that are temporarily sleeping (and thus excluded)
+		/// </summary>
+		protected readonly Dictionary<Guid, ConnectionSet.SleepingConnection> sleeping = new Dictionary<Guid, ConnectionSet.SleepingConnection>();
+		
+		
 		/// <summary>
 		/// connections that are removed from the sync set. may be permanent or temporary
 		/// </summary>
@@ -205,6 +243,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					temp.AddBannedConnection(entry.Value.PeerConnection, entry.Value.Reason);
 				}
 
+				foreach(var entry in newConnections.sleeping) {
+					this.SleepActiveConnection(entry.Value.PeerConnection, entry.Value);
+				}
+				
 				this.AddValidConnections(newConnections.connections);
 
 				this.Set(temp);
@@ -219,7 +261,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				this.strikes.Clear();
 				this.banned.Clear();
-
+				this.sleeping.Clear();
+				
 				this.connections.AddRange(other.connections.Distinct());
 
 				foreach(var entry in other.strikes) {
@@ -228,7 +271,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				foreach(var entry in other.banned) {
 					this.AddBannedConnection(entry.Value.PeerConnection, entry.Value.Reason);
-
+				}
+				
+				foreach(var entry in other.sleeping) {
+					this.SleepActiveConnection(entry.Value.PeerConnection, entry.Value);
 				}
 			}
 		}
@@ -241,7 +287,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				this.strikes.Clear();
 				this.banned.Clear();
-
+				this.sleeping.Clear();
+				
 				this.connections.AddRange(activeChainConnections);
 			}
 		}
@@ -347,6 +394,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
+		private void ClearSleeping() {
+			foreach(var entry in this.sleeping.Where(s => !s.Value.IsSleeping)) {
+				this.sleeping.Remove(entry.Key);
+			}
+		}
+		public void SleepActiveConnection(PeerConnection peerConnectionn, TimeSpan timeSpan) {
+
+			this.SleepActiveConnection(peerConnectionn, new ConnectionSet.SleepingConnection(peerConnectionn, timeSpan));
+		}
+		
+		public void SleepActiveConnection(PeerConnection peerConnectionn, ConnectionSet.SleepingConnection sleepingConnection) {
+
+			this.ClearSleeping();
+			
+			if(!this.sleeping.ContainsKey(peerConnectionn.ClientUuid)) {
+				this.sleeping.Add(peerConnectionn.ClientUuid, sleepingConnection);
+			}
+			
+			var entry = this.connections.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
+
+			if(entry != null) {
+				entry.Syncing = false;
+
+				// lets remove it
+				this.ConnectionOnDisconnected(entry.PeerConnection.connection, null);
+			}
+		}
+
 		public void FreeLowLevelBans() {
 			lock(this.locker) {
 				// first, we clear the banned transactions that are done their jail time and did not strike more than the acceptable limit
@@ -386,10 +461,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return this.GetBannedConnections().Select(c => c.ClientUuid).ToList();
 			}
 		}
+		
+		public List<Guid> GetSleepingIds() {
+			lock(this.locker) {
+				return this.GetSleepingConnections().Select(c => c.ClientUuid).ToList();
+			}
+		}
+		
 
 		public List<PeerConnection> GetBannedConnections() {
 			lock(this.locker) {
 				var rejectedIds = this.banned.Values.Select(r => r.PeerConnection).ToList();
+
+				// this is our final rejected list
+				return rejectedIds.Distinct().Shuffle().ToList();
+			}
+		}
+		
+		public List<PeerConnection> GetSleepingConnections() {
+			lock(this.locker) {
+				this.ClearSleeping();
+				var rejectedIds = this.sleeping.Where(c => c.Value.IsSleeping).Select(r => r.Value.PeerConnection).ToList();
 
 				// this is our final rejected list
 				return rejectedIds.Distinct().Shuffle().ToList();
@@ -407,20 +499,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// this is our final rejected list
 				var rejectedIds = this.GetBannedIds();
 
+				var sleepIds = this.GetSleepingIds();
+				
 				// now our current connections valid for syncing
 
 				var syncingIds = this.connections.Where(c => c.Syncing).Select(c => c.PeerConnection.ClientUuid).ToList();
 
-				// get the list of connections that support our chain, are not already syncing and are not rejected right now
-				var newPeers = chainNetworkingProvider.SyncingConnectionsList.Where(p => !rejectedIds.Contains(p.ClientUuid) && !syncingIds.Contains(p.ClientUuid)).ToList();
+				// get the list of connections that support our chain, are not already syncing, are not sleeping and are not rejected right now
+				var newPeers = chainNetworkingProvider.SyncingConnectionsList.Where(p => !rejectedIds.Contains(p.ClientUuid) && !sleepIds.Contains(p.ClientUuid) && !syncingIds.Contains(p.ClientUuid)).ToList();
 
 				foreach(PeerConnection peer in newPeers.ToList()) {
 					if(this.connections.All(c => c.PeerConnection.ClientUuid != peer.ClientUuid)) {
 						// ok, its a new connection, lets add it to our list
 						peer.connection.Disconnected += this.ConnectionOnDisconnected;
-						
-						newConnections.Add(new ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> {PeerConnection = peer, Syncing = false, LastCheck = DateTime.UtcNow});
 					}
+					newConnections.Add(new ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> {PeerConnection = peer, Syncing = false, LastCheck = DateTime.UtcNow});
 				}
 
 				return newConnections;
@@ -451,14 +544,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
+		public void RemoveActiveConnection(ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connection) {
+
+			var cn = this.connections.SingleOrDefault(c => c.PeerConnection.ClientUuid == connection.PeerConnection.ClientUuid);
+
+			if(cn != null) {
+				this.connections.Remove(cn);
+			}
+		}
+
 		public List<ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> GetActiveConnections() {
 			lock(this.locker) {
 				// now clear all rejected adn keep only the good connections
 				var rejectedIds = this.GetBannedIds();
 
+				var sleepIds = this.GetSleepingIds();
+				
 				// clean our actives array, make sure we have no dirty connections in there by mistake	
 
-				return this.connections.Where(c => !rejectedIds.Contains(c.PeerConnection.ClientUuid)).ToList();
+				return this.connections.Where(c => !rejectedIds.Contains(c.PeerConnection.ClientUuid) && !sleepIds.Contains(c.PeerConnection.ClientUuid)).ToList();
 			}
 		}
 
@@ -466,9 +570,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			lock(this.locker) {
 				var rejectedIds = this.GetBannedIds();
 
+				var sleepIds = this.GetSleepingIds();
+				
 				// clean our actives array, make sure we have no dirty connections in there by mistake	
 
-				return this.connections.Where(c => !rejectedIds.Contains(c.PeerConnection.ClientUuid) && c.Syncing).ToList();
+				return this.connections.Where(c => !rejectedIds.Contains(c.PeerConnection.ClientUuid) && !sleepIds.Contains(c.PeerConnection.ClientUuid)  && c.Syncing).ToList();
 			}
 		}
 
@@ -476,9 +582,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			lock(this.locker) {
 				var rejectedIds = this.GetBannedIds();
 
+				var sleepIds = this.GetSleepingIds();
+				
 				// clean our actives array, make sure we have no dirty connections in there by mistake	
 
-				return this.connections.Where(c => !rejectedIds.Contains(c.PeerConnection.ClientUuid) && !c.Syncing).ToList();
+				return this.connections.Where(c => !rejectedIds.Contains(c.PeerConnection.ClientUuid) && !sleepIds.Contains(c.PeerConnection.ClientUuid) && !c.Syncing).ToList();
 			}
 		}
 

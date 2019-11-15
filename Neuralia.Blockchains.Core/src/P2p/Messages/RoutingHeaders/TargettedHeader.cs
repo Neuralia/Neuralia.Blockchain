@@ -19,22 +19,26 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders {
 		/// <summary>
 		///     the client id of the creator of the workflow. Allows us to know if we created it, or if the client did.
 		/// </summary>
-		public Guid originatorId;
+		public Guid OriginatorId { get; set; }
 
-		public uint WorkflowCorrelationId;
+		public uint WorkflowCorrelationId { get; set; }
+
+		public uint? WorkflowSessionId { get; set; }
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.WorkflowCorrelationId);
-			dehydrator.Write(this.originatorId);
+			dehydrator.Write(this.WorkflowSessionId);
+			dehydrator.Write(this.OriginatorId);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
 			this.WorkflowCorrelationId = rehydrator.ReadUInt();
-			this.originatorId = rehydrator.ReadGuid();
+			this.WorkflowSessionId = rehydrator.ReadNullableUInt();
+			this.OriginatorId = rehydrator.ReadGuid();
 		}
 
 		protected override ComponentVersion<SimpleUShort> SetIdentity() {
@@ -56,7 +60,8 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders {
 			nodeList.Add(base.GetStructuresArray());
 
 			nodeList.Add(this.WorkflowCorrelationId);
-			nodeList.Add(this.originatorId);
+			nodeList.Add(this.WorkflowSessionId);
+			nodeList.Add(this.OriginatorId);
 
 			return nodeList;
 		}

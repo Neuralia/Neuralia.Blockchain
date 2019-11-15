@@ -1,0 +1,207 @@
+using System;
+using System.Collections.Generic;
+using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace Neuralia.Blockchains.Core.General {
+	public static class JsonUtilsOld {
+
+		public static string Serialize(object value) {
+			JsonSerializerSettings settings = CreateNoNamesSerializerSettings();
+			
+			return JsonConvert.SerializeObject(value, settings);
+		}
+
+		public static T Deserialize<T>(string value) {
+			JsonSerializerSettings settings = CreateNoNamesSerializerSettings();
+
+			return JsonConvert.DeserializeObject<T>(value, settings);
+		}
+		
+		public static string SerializeManifest(object value, JsonConverter[] converters) {
+			JsonSerializerSettings settings = CreateSerializerSettings();
+			settings.Formatting = Formatting.Indented;
+			settings.TypeNameHandling = TypeNameHandling.None;
+			settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
+
+			foreach(var cvt in converters) {
+				settings.Converters.Add(cvt);
+			}
+			
+			return JsonConvert.SerializeObject(value, settings);
+		}
+
+		public static T DeserializeManifest<T>(string value, JsonConverter[] converters) {
+			JsonSerializerSettings settings = CreateSerializerSettings();
+			settings.Formatting = Formatting.Indented;
+			settings.TypeNameHandling = TypeNameHandling.None;
+			settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
+			
+			foreach(var cvt in converters) {
+				settings.Converters.Add(cvt);
+			}
+
+			return JsonConvert.DeserializeObject<T>(value, settings);
+		}
+		
+		
+		public static JsonSerializer CreateSerializer() {
+			return JsonSerializer.Create(CreateBlockSerializerSettings());
+		}
+
+		public static JsonSerializerSettings CreateSerializerSettings() {
+			JsonSerializerSettings settings = new JsonSerializerSettings();
+			settings.Formatting = Formatting.None;
+			settings.PreserveReferencesHandling = PreserveReferencesHandling.All;
+			settings.TypeNameHandling = TypeNameHandling.Objects;
+			settings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
+			settings.NullValueHandling = NullValueHandling.Include;
+			settings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
+			settings.MissingMemberHandling = MissingMemberHandling.Ignore;
+			settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
+			settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+			
+			settings.Converters.Add(new ByteArrayBaseConverterOld());
+			settings.Converters.Add(new DecimalConverterOld());
+			
+			return settings;
+		}
+
+		public static JsonSerializerSettings CreateCompactSerializerSettings() {
+			JsonSerializerSettings settings = CreateSerializerSettings();
+
+			settings.Formatting = Formatting.None;
+
+			return settings;
+		}
+
+		public static JsonSerializerSettings CreateNoNamesSerializerSettings() {
+			JsonSerializerSettings settings = CreateCompactSerializerSettings();
+
+			settings.PreserveReferencesHandling = PreserveReferencesHandling.All;
+			settings.TypeNameHandling = TypeNameHandling.None;
+			settings.NullValueHandling = NullValueHandling.Ignore;
+			settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
+
+			return settings;
+		}
+
+		public static JsonSerializerSettings CreatePrettySerializerSettings() {
+			JsonSerializerSettings settings = CreateSerializerSettings();
+
+			settings.Formatting = Formatting.Indented;
+
+			return settings;
+		}
+
+		public static JsonSerializerSettings CreateBlockSerializerSettings() {
+			JsonSerializerSettings settings = CreateNoNamesSerializerSettings();
+
+			settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+
+			return settings;
+		}
+
+		public static string SerializeJsonSerializable(IJsonSerializable jsonSerializable) {
+			
+			return JsonDeserializer.Serialize(jsonSerializable);
+		}
+	}
+
+	public class ByteArrayBaseConverterOld : JsonConverter {
+		public enum BaseModes {
+			Base58,
+			Base64
+		}
+
+		private readonly BaseModes mode;
+
+		public ByteArrayBaseConverterOld(BaseModes mode = BaseModes.Base58) {
+			this.mode = mode;
+
+		}
+
+		public override bool CanRead => false;
+
+		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
+			if(value is SafeArrayHandle arrayWrapper) {
+
+				if(arrayWrapper.IsEmpty) {
+					new JValue("").WriteTo(writer);
+				} else {
+					if(this.mode == BaseModes.Base58) {
+						new JValue(arrayWrapper.Entry.ToBase58()).WriteTo(writer);
+					} else if(this.mode == BaseModes.Base64) {
+						new JValue(arrayWrapper.Entry.ToBase64()).WriteTo(writer);
+					}
+				}
+			}
+			else if(value is ByteArray byteArray) {
+
+				if(this.mode == BaseModes.Base58) {
+					new JValue(byteArray.ToBase58()).WriteTo(writer);
+				} else if(this.mode == BaseModes.Base64) {
+					new JValue(byteArray.ToBase64()).WriteTo(writer);
+				}
+			}
+		}
+
+		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
+
+			throw new NotImplementedException();
+
+			// if(reader.Value == null) {
+			// 	return null;
+			// }
+			//
+			// string basevalue = reader.Value.ToString();
+			//
+			// if(this.mode == BaseModes.Base58) {
+			// 	return ByteArray.FromBase58(basevalue);
+			// }
+			//
+			// if(this.mode == BaseModes.Base64) {
+			// 	return ByteArray.FromBase64(basevalue);
+			// }
+			//
+			// return null;
+		}
+
+		public override bool CanConvert(Type objectType) {
+			return typeof(SafeArrayHandle).IsAssignableFrom(objectType);
+		}
+	}
+
+	internal class DecimalConverterOld : JsonConverter {
+		public override bool CanConvert(Type objectType) {
+			return (objectType == typeof(decimal)) || (objectType == typeof(decimal?));
+		}
+
+		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
+			JToken neuralium = JToken.Load(reader);
+
+			if((neuralium.Type == JTokenType.Float) || (neuralium.Type == JTokenType.Integer)) {
+				return neuralium.ToObject<decimal>();
+			}
+
+			if(neuralium.Type == JTokenType.String) {
+				// customize this to suit your needs
+				return decimal.Parse(neuralium.ToString());
+			}
+
+			if((neuralium.Type == JTokenType.Null) && (objectType == typeof(decimal?))) {
+				return null;
+			}
+
+			throw new JsonSerializationException("Unexpected neuralium type: " + neuralium.Type);
+		}
+
+		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
+			writer.WriteValue(value.ToString());
+
+		}
+	}
+}

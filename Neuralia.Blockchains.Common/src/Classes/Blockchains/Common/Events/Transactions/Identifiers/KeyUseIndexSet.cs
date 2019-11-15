@@ -6,7 +6,8 @@ using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers {
 	/// <summary>

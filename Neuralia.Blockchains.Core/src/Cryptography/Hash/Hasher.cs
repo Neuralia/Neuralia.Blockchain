@@ -1,6 +1,7 @@
 ﻿using System;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Org.BouncyCastle.Crypto;
 

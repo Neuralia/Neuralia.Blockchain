@@ -7,10 +7,11 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.BlockInsertionTransaction {
 
-	public interface IBlockInsertionTransactionProcessor : IDisposable2 {
+	public interface IBlockInsertionTransactionProcessor : IDisposableExtended {
 		
 		long PublicBlockHeight { get; set; }
 		long DiskBlockHeight { get; set; }
@@ -67,7 +68,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 			this.DiskBlockHeight = chainStateProvider.DiskBlockHeight;
 			this.LastBlockTimestamp = chainStateProvider.LastBlockTimestamp;
 			this.LastBlockLifespan = chainStateProvider.LastBlockLifespan;
-			this.LastBlockHash.Entry =  chainStateProvider.LastBlockHash;
+			this.LastBlockHash.Entry =  ByteArray.Wrap(chainStateProvider.LastBlockHash);
 			this.BlockInsertionStatus = (int) chainStateProvider.BlockInterpretationStatus;
 
 			if(this.moderatorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {

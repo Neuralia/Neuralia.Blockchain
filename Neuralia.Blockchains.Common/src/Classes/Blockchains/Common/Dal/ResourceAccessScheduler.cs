@@ -6,6 +6,8 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
@@ -28,22 +30,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		/// <summary>
 		///     sicne reads are threads safe, we can run them in parallel
 		/// </summary>
-		private readonly List<Task> activeReadTasks = new List<Task>();
+		private readonly ConcurrentDictionary<ReadTicket, bool> activeReadTasks = new ConcurrentDictionary<ReadTicket, bool>();
 
 		private readonly TaskFactory factory = new TaskFactory();
 
 		/// <summary>
 		///     This is the list of read requests that are differred (waiting) for a read request to happen
 		/// </summary>
-		public readonly ConcurrentQueue<Ticket> requestedReads = new ConcurrentQueue<Ticket>();
+		public readonly ConcurrentQueue<ReadTicket> requestedReads = new ConcurrentQueue<ReadTicket>();
 
 		/// <summary>
 		///     These are the write requests awaiting to occur or are happening.
 		/// </summary>
 		public readonly ConcurrentQueue<Ticket> requestedWrites = new ConcurrentQueue<Ticket>();
 
-		private readonly AutoResetEvent resetEvent = new AutoResetEvent(false);
+		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
+		private readonly object mainCollectionsLocker = new object();
 		public ResourceAccessScheduler(T fileProvider, IFileSystem fileSystem) : base(10) {
 			this.FileProvider = fileProvider;
 		}
@@ -51,7 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public T FileProvider { get; }
 
 		public void ScheduleRead(Action<T> action) {
-			this.ScheduleEvent(action, ticket => {
+			this.ScheduleReadEvent(action, ticket => {
 				this.requestedReads.Enqueue(ticket);
 			});
 		}
@@ -64,43 +67,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		protected override void ProcessLoop() {
 
-			// clear the completed tasks
-			foreach(Task task in this.activeReadTasks.Where(t => t.IsCompleted).ToArray()) {
-				this.activeReadTasks.Remove(task);
-			}
+			
+			try {
+				// clear the completed tasks
 
-			// we can only start writes when all the active reads are done
-			if(this.activeReadTasks.Count == 0) {
-				// this is simple, we always give priority to writes. lets see if there are any
-				while(this.requestedWrites.TryDequeue(out Ticket ticket)) {
+				// we can only start writes when all the active reads are done
+				if(!this.activeReadTasks.Any()) {
+					// this is simple, we always give priority to writes. lets see if there are any
+					while(this.requestedWrites.TryDequeue(out Ticket ticket)) {
 
-					try {
-						Repeater.Repeat(() => {
-							ticket.action(this.FileProvider);
-						});
-					} catch(Exception ex) {
-						ticket.exception = ExceptionDispatchInfo.Capture(ex);
-
-						//TODO: what to do here?
-						Log.Error(ex, "failed to access blockchain files");
-					} finally {
-						ticket.Complete();
-					}
-
-				}
-			}
-
-			// run the reads in parallel while there are no write requests
-			if(this.requestedWrites.Count == 0) {
-				while((this.requestedWrites.Count == 0) && this.requestedReads.TryDequeue(out Ticket ticket)) {
-
-					Ticket ticket1 = ticket;
-
-					// run the read in parallel. it is thread safe with other reads
-					Task t = this.factory.StartNew(() => {
 						try {
+							Ticket ticket1 = ticket;
+
+							if(ticket1.IsDispose) {
+								continue;
+							}
+
 							Repeater.Repeat(() => {
-								ticket.action(this.FileProvider);
+								ticket1.action(this.FileProvider);
 							});
 						} catch(Exception ex) {
 							ticket.exception = ExceptionDispatchInfo.Capture(ex);
@@ -108,77 +92,179 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 							//TODO: what to do here?
 							Log.Error(ex, "failed to access blockchain files");
 						} finally {
-							//warn the calling thread that the query is over, and it can continue on it's way.
 							ticket.Complete();
 						}
-					});
 
-					this.activeReadTasks.Add(t);
+					}
 				}
 
-				// if there is nothing, we sleep to save resources until more requests come in
-				if((this.requestedWrites.Count == 0) && (this.requestedReads.Count == 0)) {
-					this.resetEvent.WaitOne(TimeSpan.FromSeconds(5));
+				// run the reads in parallel while there are no write requests
+				if(this.requestedWrites.IsEmpty) {
+					List<Ticket> tickets = new List<Ticket>();
+					while((this.requestedWrites.IsEmpty) && this.requestedReads.TryDequeue(out ReadTicket ticket)) {
+						
+						// run the read in parallel. it is thread safe with other reads
+						ReadTicket ticket2 = ticket;
+						
+						if(ticket2.IsDispose) {
+							continue;
+						}
+
+						ticket.Completed += () => {
+							this.activeReadTasks.RemoveSafe(ticket);
+						};
+						
+						this.activeReadTasks.AddSafe(ticket, true);
+						
+						ticket.Activate();
+
+						
+					}
+
+					// if there is nothing, we sleep to save resources until more requests come in
+					bool empty = true;
+
+					lock(this.mainCollectionsLocker) {
+						empty = (this.requestedWrites.IsEmpty) && (this.requestedReads.IsEmpty);
+					}
+
+					if(empty) {
+						if(this.resetEvent.Wait(TimeSpan.FromSeconds(1))) {
+							this.resetEvent.Reset();
+						}
+					}
 				}
+			} catch(Exception ex) {
+				Log.Error(ex, "error occured while accessing a scheduled resource.");
 			}
 		}
 
 		public K ScheduleRead<K>(Func<T, K> action) {
-			return this.ScheduleEvent(action, ticket => {
-				this.requestedReads.Enqueue(ticket);
+			return this.ScheduleReadEvent(action, ticket => {
+				lock(this.mainCollectionsLocker) {
+					this.requestedReads.Enqueue(ticket);
+				}
 			});
 		}
 
 		public K ScheduleWrite<K>(Func<T, K> action) {
 			return this.ScheduleEvent(action, ticket => {
-				this.requestedWrites.Enqueue(ticket);
+				lock(this.mainCollectionsLocker) {
+					this.requestedWrites.Enqueue(ticket);
+				}
 			});
 		}
 
 		private void ScheduleEvent(Action<T> action, Action<Ticket> enqueueAction) {
-			Ticket ticket = new Ticket();
-			ticket.action = action;
+			using(Ticket ticket = new Ticket()) {
+				ticket.action = action;
 
-			enqueueAction(ticket);
+				enqueueAction(ticket);
 
-			// wake up the wait if it is sleeping
-			this.resetEvent.Set();
+				// wake up the wait if it is sleeping
+				this.resetEvent.Set();
 
-			ticket.WaitCompletion();
+				ticket.WaitCompletion();
 
-			if(ticket.Error) {
-				//TODO: is this the proper behavior??
-				ticket.exception.Throw();
+				if(ticket.Error) {
+					//TODO: is this the proper behavior??
+					ticket.exception.Throw();
+				}
 			}
 		}
 
 		private K ScheduleEvent<K>(Func<T, K> action, Action<Ticket> enqueueAction) {
-			Ticket ticket = new Ticket();
-			K result = default;
+			using(Ticket ticket = new Ticket()) {
+				K result = default;
 
-			ticket.action = entry => {
+				ticket.action = entry => {
 
-				result = action(entry);
-			};
+					result = action(entry);
+				};
 
-			enqueueAction(ticket);
+				enqueueAction(ticket);
 
-			// wake up the wait if it is sleeping
-			this.resetEvent.Set();
+				// wake up the wait if it is sleeping
+				this.resetEvent.Set();
 
-			ticket.WaitCompletion();
+				ticket.WaitCompletion();
 
-			if(ticket.Error) {
-				//TODO: is this the proper behavior??
-				ticket.exception.Throw();
+				if(ticket.Error) {
+					//TODO: is this the proper behavior??
+					ticket.exception.Throw();
+				}
+
+				return result;
 			}
+		}
+		
+		private void ScheduleReadEvent(Action<T> action, Action<ReadTicket> enqueueAction) {
+			using(ReadTicket ticket = new ReadTicket()) {
+				ticket.action = action;
 
-			return result;
+				enqueueAction(ticket);
+
+				// wake up the wait if it is sleeping
+				this.resetEvent.Set();
+
+				ticket.WaitTurn();
+
+				try {
+					ticket.action(this.FileProvider);
+				} finally {
+					ticket.Complete();
+				}
+				
+				if(ticket.Error) {
+					//TODO: is this the proper behavior??
+					ticket.exception.Throw();
+				}
+			}
+		}
+		
+		private K ScheduleReadEvent<K>(Func<T, K> action, Action<ReadTicket> enqueueAction) {
+			using(ReadTicket ticket = new ReadTicket()) {
+				K result = default;
+
+				ticket.action = entry => {
+
+					result = action(entry);
+				};
+
+				enqueueAction(ticket);
+
+				// wake up the wait if it is sleeping
+				this.resetEvent.Set();
+
+				ticket.WaitTurn();
+
+				try {
+					ticket.action(this.FileProvider);
+				} finally {
+					ticket.Complete();
+				}
+
+				if(ticket.Error) {
+					//TODO: is this the proper behavior??
+					ticket.exception.Throw();
+				}
+
+				return result;
+			}
 		}
 
-		public class Ticket {
+		public class Ticket : IDisposable {
 
-			private readonly AutoResetEvent resetEvent = new AutoResetEvent(false);
+			public bool IsDispose { get; private set; }
+
+			public void Dispose() {
+				if(!this.IsDispose) {
+					this.IsDispose = true;
+					this.resetEvent?.Dispose();
+				}
+			}
+
+			private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 			public Action<T> action;
 			public ExceptionDispatchInfo exception;
 
@@ -187,10 +273,42 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			public void WaitCompletion() {
 
-				this.resetEvent.WaitOne();
+				this.resetEvent.Wait();
 			}
 
 			public void Complete() {
+				this.resetEvent.Set();
+			}
+		}
+		
+		public class ReadTicket : IDisposable {
+
+			public bool IsDispose { get; private set; }
+
+			public void Dispose() {
+				if(!this.IsDispose) {
+					this.IsDispose = true;
+					this.resetEvent?.Dispose();
+				}
+			}
+
+			private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			public Action<T> action;
+			public ExceptionDispatchInfo exception;
+			public event Action Completed;
+
+			public bool Success => this.exception == null;
+			public bool Error => !this.Success;
+
+			public void WaitTurn() {
+
+				this.resetEvent.Wait();
+			}
+
+			public void Complete() {
+				this.Completed?.Invoke();
+			}
+			public void Activate() {
 				this.resetEvent.Set();
 			}
 		}

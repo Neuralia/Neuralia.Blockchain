@@ -13,7 +13,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		where R : IRehydrationFactory {
 	}
 
-	public interface ITargettedMessageSet<T, R> : INetworkMessageSet<T, TargettedHeader, R>, ITargettedMessageSet<R>
+	public interface ITargettedMessageSet<out T, R> : INetworkMessageSet<T, TargettedHeader, R>, ITargettedMessageSet<R>
 		where T : class, INetworkMessage<R>
 		where R : IRehydrationFactory {
 		new TargettedHeader Header { get; set; }

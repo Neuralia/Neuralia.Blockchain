@@ -1,34 +1,27 @@
 using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.General.Json.Converters {
 
 	public class TransactionIdExtendedJsonConverter : JsonConverter<TransactionIdExtended> {
 
-		public override bool CanRead => true;
+		public override TransactionIdExtended Read(ref Utf8JsonReader reader, 
+		                              Type typeToConvert,
+		                              JsonSerializerOptions options)
+		{
+			var name = reader.GetString();
 
-		public override void WriteJson(JsonWriter writer, TransactionIdExtended value, JsonSerializer serializer) {
-			writer.WriteValue(value.ToExtendedString());
+			return new TransactionIdExtended((string) name);
 		}
 
-		public override TransactionIdExtended ReadJson(JsonReader reader, Type objectType, TransactionIdExtended existingValue, bool hasExistingValue, JsonSerializer serializer) {
-
-			TransactionIdExtended entry = new TransactionIdExtended();
-
-			if(reader.TokenType != JsonToken.Null) {
-				JValue jValue = new JValue(reader.Value);
-
-				switch(reader.TokenType) {
-					case JsonToken.String:
-						entry = new TransactionIdExtended((string) jValue);
-
-						break;
-				}
-			}
-
-			return entry;
+		public override void Write(Utf8JsonWriter writer,
+		                           TransactionIdExtended value,
+		                           JsonSerializerOptions options)
+		{
+			writer.WriteStringValue(value.ToExtendedString());
 		}
 	}
 }

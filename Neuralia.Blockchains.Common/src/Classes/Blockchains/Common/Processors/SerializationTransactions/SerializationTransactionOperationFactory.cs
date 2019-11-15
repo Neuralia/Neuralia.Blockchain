@@ -7,7 +7,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions {
 	public static class SerializationTransactionOperationFactory {
 
-		public static SerializationTransactionOperation Rehydrate(IDataRehydrator rehydrator, ISerializationManager serializationManager, IChainDataWriteProvider chainDataWriteProvider) {
+		public static SerializationTransactionOperation Rehydrate(IDataRehydrator rehydrator, IChainDataWriteProvider chainDataWriteProvider) {
 
 			SerializationTransactionOperationTypes type = (SerializationTransactionOperationTypes) rehydrator.ReadInt();
 
@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 
 			switch(type) {
 				case SerializationTransactionOperationTypes.FastKeys:
-					entry = new SerializationFastKeysOperations(serializationManager, chainDataWriteProvider);
+					entry = new SerializationFastKeysOperations( chainDataWriteProvider);
 
 					break;
 				default:

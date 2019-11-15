@@ -140,9 +140,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 				// let's restore the actual time of the block
 				if(block is IGenesisBlock genesis) {
 					block.FullTimestamp = genesis.Inception;
-				} else {
+				} else if(this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight != 0){
 					block.FullTimestamp = this.centralCoordinator.BlockchainServiceSet.BlockchainTimeService.GetTransactionDateTime(block.Timestamp, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
-
 				}
 			}
 		}

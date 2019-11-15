@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {

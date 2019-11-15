@@ -49,8 +49,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			jsonDeserializer.SetArray("Keys", this.Keys.OrderBy(k => k.Key), (deserializer, serializable) => {
 
-				deserializer.SetProperty("id", serializable.Key);
-				deserializer.SetProperty("key", serializable.Value);
+				deserializer.WriteObject((s) => {
+					s.SetProperty("id", serializable.Key);
+					s.SetProperty("key", serializable.Value);
+				});
 			});
 
 		}

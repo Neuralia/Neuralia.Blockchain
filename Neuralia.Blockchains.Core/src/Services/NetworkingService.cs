@@ -20,7 +20,7 @@ using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Services {
-	public interface INetworkingService : IDisposable2 {
+	public interface INetworkingService : IDisposableExtended {
 
 		NetworkingService.NetworkingStatuses NetworkingStatus { get; set; }
 		bool IsStarted { get; }
@@ -33,6 +33,8 @@ namespace Neuralia.Blockchains.Core.Services {
 		IConnectionsManager ConnectionsManagerBase { get; }
 
 		int CurrentPeerCount { get; }
+
+		GeneralSettings GeneralSettings { get; }
 
 		Dictionary<BlockchainType, ChainSettings> ChainSettings { get; }
 
@@ -98,6 +100,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		protected readonly ITimeService timeService;
 
+		public GeneralSettings GeneralSettings { get; private set; }
+
 		public NetworkingService.NetworkingStatuses NetworkingStatus { get; set; } = NetworkingService.NetworkingStatuses.Stoped;
 
 		public NetworkingService(IGuidService guidService, IHttpService httpService, IFileFetchService fileFetchService, IDataAccessService dataAccessService, IInstantiationService<R> instantiationService, IGlobalsService globalsService, ITimeService timeService) {
@@ -149,8 +153,25 @@ namespace Neuralia.Blockchains.Core.Services {
 				NodeAddressInfo nodeAddressInfo = ConnectionStore<R>.GetEndpointInfoNode(connection.EndPoint, Enums.PeerTypes.Unknown);
 				this.connectionStore.SetConnectionUuidExistsCheck(connection, nodeAddressInfo);
 			};
+
+			this.PrepareGeneralSettings();
+
 		}
 
+		protected virtual void PrepareGeneralSettings() {
+			this.GeneralSettings = new GeneralSettings();
+
+			// set the public chain settingsBase
+			this.GeneralSettings.GossipEnabled = true;
+
+			if(GlobalSettings.ApplicationSettings.MobileMode) {
+				
+				//TODO: double check that
+				this.GeneralSettings.GossipEnabled = GlobalSettings.Instance.PeerType == Enums.PeerTypes.PowerMobile;
+			}
+		}
+
+		
 		public bool IsStarted { get; private set; }
 
 		public void Start() {
@@ -210,6 +231,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			MessagingManager<R>.PostNewGossipMessageTask forwardTask = new MessagingManager<R>.PostNewGossipMessageTask(gossipMessageSet);
 			this.messagingManager.ReceiveTask(forwardTask);
 		}
+		
 
 		/// <summary>
 		///     Register a new available transactionchain for the networking and routing purposes

@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections {
 
 		public IElectionProcessor InstantiateProcessor(BlockElectionDistillate blockElectionDistillate, CENTRAL_COORDINATOR centralCoordinator, IEventPoolProvider chainEventPoolProvider) {
 
-			return this.InstantiateProcessor(blockElectionDistillate.blockType, blockElectionDistillate.electionContext.Version, centralCoordinator, chainEventPoolProvider);
+			return this.InstantiateProcessor(blockElectionDistillate.blockType, blockElectionDistillate.ElectionContext.Version, centralCoordinator, chainEventPoolProvider);
 		}
 
 		public IElectionProcessor InstantiateProcessor(ElectedCandidateResultDistillate electedCandidateResultDistillate, CENTRAL_COORDINATOR centralCoordinator, IEventPoolProvider chainEventPoolProvider) {

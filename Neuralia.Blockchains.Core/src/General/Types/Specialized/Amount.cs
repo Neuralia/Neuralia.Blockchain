@@ -2,7 +2,8 @@ using System;
 using System.Runtime.CompilerServices;
 using LiteDB;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Types.Specialized {
 	/// <summary>

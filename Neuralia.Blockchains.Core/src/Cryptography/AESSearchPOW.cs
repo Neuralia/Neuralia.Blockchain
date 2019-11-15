@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
@@ -292,14 +293,9 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			for(int i = 0; i < totalThreads; i++) {
 				int index = i;
 
-				tasks[i] = new Task(() => {
+				tasks[i] = Task.Run(() => {
 					this.Sha512Filler(nonce, mainBuffer, index, totalThreads, hashWorkSpace);
 				});
-			}
-
-			//start them all
-			for(int i = 0; i < totalThreads; i++) {
-				tasks[i].Start();
 			}
 
 			//wait for it all to finish
@@ -312,12 +308,9 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			for(int i = 0; i < totalThreads; i++) {
 				int index = i;
 
-				aesTasks[i] = new Task<List<(long, uint)>>(() => this.AesSearch(mainBuffer, index, totalThreads));
+				aesTasks[i] = Task.Run(() => this.AesSearch(mainBuffer, index, totalThreads));
 			}
-
-			for(int i = 0; i < totalThreads; i++) {
-				aesTasks[i].Start();
-			}
+			
 
 			Task.WaitAll(aesTasks.Cast<Task>().ToArray());
 
@@ -467,7 +460,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			using(SHA512 sha512 = new SHA512Managed()) {
 				var hash = sha512.ComputeHash(message.ToExactByteArray());
 
-				return ByteArray.Create(ref hash);
+				return ByteArray.Wrap(hash);
 			}
 		}
 

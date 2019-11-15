@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snap
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Specialized;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 	/// <summary>

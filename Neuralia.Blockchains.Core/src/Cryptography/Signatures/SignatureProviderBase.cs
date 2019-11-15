@@ -2,11 +2,12 @@
 using System.Security.Cryptography;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Security;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
-	public abstract class SignatureProviderBase : IDisposable2 {
+	public abstract class SignatureProviderBase : IDisposableExtended {
 
 		public SignatureProviderBase() {
 		}

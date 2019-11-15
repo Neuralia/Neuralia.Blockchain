@@ -25,7 +25,7 @@ using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
-	public interface IConnectionStore : IDisposable2 {
+	public interface IConnectionStore : IDisposableExtended {
 		ulong MyClientIdNonce { get; }
 		Guid MyClientUuid { get; }
 
@@ -1336,7 +1336,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				connection.connection.Disconnected += (sender, resultArgs) => {
 					lock(this.locker) {
-						this.RemoveConnection(connection);
+						this.InvalidatedConnection(connection);
 					}
 				};
 
@@ -1352,7 +1352,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		private void InvalidatedConnection(PeerConnection connection) {
-			this.RemoveConnection(connection);
+			lock(this.locker) {
+				this.RemoveConnection(connection);
+			}
 		}
 
 		/// <summary>

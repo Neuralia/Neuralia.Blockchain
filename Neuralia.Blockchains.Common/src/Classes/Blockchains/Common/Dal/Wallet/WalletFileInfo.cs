@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
@@ -12,9 +13,9 @@ using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public class EncryptionInfo {
-		public bool encrypt;
+		public bool Encrypt { get; set; }
 
-		public IEncryptorParameters encryptionParameters { get; set; }
+		public IEncryptorParameters EncryptionParameters { get; set; }
 
 		public Func<SafeArrayHandle> Secret { get; set; }
 	}
@@ -60,13 +61,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		private int? fileCacheTimeout;
 		private int lastFileHash;
-
-		public WalletFileInfo(string filename, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails, int? fileCacheTimeout = null) {
+		protected readonly ChainConfigurations chainConfiguration;
+		
+		public WalletFileInfo(string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails, int? fileCacheTimeout = null) {
 			this.serialisationFal = serialisationFal;
 			this.Filename = filename;
 			this.WalletSecurityDetails = walletSecurityDetails;
 			this.FileCacheTimeout = fileCacheTimeout;
 			this.serviceSet = serviceSet;
+			this.chainConfiguration = chainConfiguration;
 		}
 
 		protected EncryptionInfo EncryptionInfo { get; set; }

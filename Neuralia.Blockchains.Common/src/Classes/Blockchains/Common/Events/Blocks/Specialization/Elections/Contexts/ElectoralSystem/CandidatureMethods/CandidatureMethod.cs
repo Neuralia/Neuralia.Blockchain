@@ -1,10 +1,11 @@
 using System;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.CandidatureMethods {
-	public interface ICandidatureMethod : IVersionable<CandidatureMethodType>, IJsonSerializable {
+	public interface ICandidatureMethod : IVersionable<CandidatureMethodType> {
 	}
 
 	/// <summary>
@@ -15,5 +16,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			throw new NotSupportedException();
 		}
+
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+		}
+		
+		
 	}
 }

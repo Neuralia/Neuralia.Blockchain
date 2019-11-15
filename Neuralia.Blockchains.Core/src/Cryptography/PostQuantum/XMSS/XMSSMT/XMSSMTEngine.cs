@@ -10,6 +10,7 @@ using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
@@ -17,7 +18,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 	/// THE XMSS^MT class
 	/// </summary>
 	/// <remarks>this was built according to the XMSS RFC https://tools.ietf.org/html/rfc8391</remarks>
-	public class XMSSMTEngine : IDisposable2 {
+	public class XMSSMTEngine : IDisposableExtended {
 		private readonly int digestLength;
 		private readonly int height;
 		private readonly int layers;

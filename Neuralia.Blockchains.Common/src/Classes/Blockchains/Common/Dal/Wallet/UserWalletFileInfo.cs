@@ -10,6 +10,7 @@ using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
@@ -49,7 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		private ENTRY_TYPE wallet;
 
-		public UserWalletFileInfo(string filename, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails) : base(filename, serviceSet, serialisationFal, walletSecurityDetails) {
+		public UserWalletFileInfo(string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails) : base(filename, chainConfiguration, serviceSet, serialisationFal, walletSecurityDetails) {
 
 			this.walletCryptoFile = this.serialisationFal.GetWalletCryptoFilePath();
 		}
@@ -121,7 +122,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						// ltes delete the crypto file
 						this.serialisationFal.TransactionalFileSystem.FileDelete(this.walletCryptoFile);
 					} else {
-						SafeArrayHandle edata = this.EncryptionInfo.encryptionParameters.Dehydrate();
+						SafeArrayHandle edata = this.EncryptionInfo.EncryptionParameters.Dehydrate();
 						this.serialisationFal.TransactionalFileSystem.OpenWrite(this.walletCryptoFile, edata);
 					}
 
@@ -138,7 +139,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			lock(this.locker) {
 				this.CreateSecurityDetails();
 
-				if(this.EncryptionInfo.encrypt) {
+				if(this.EncryptionInfo.Encrypt) {
 					bool walletCryptoFileExists = this.serialisationFal.TransactionalFileSystem.FileExists(this.walletCryptoFile);
 
 					if(walletCryptoFileExists) {
@@ -148,10 +149,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				base.CreateEmptyFile(entry);
 
-				if(this.EncryptionInfo.encrypt) {
+				if(this.EncryptionInfo.Encrypt) {
 
 					// no need to overwrite this every time. write only if it does not exist
-					SafeArrayHandle data = this.EncryptionInfo.encryptionParameters.Dehydrate();
+					SafeArrayHandle data = this.EncryptionInfo.EncryptionParameters.Dehydrate();
 
 					// write this unencrypted
 					this.serialisationFal.TransactionalFileSystem.OpenWrite(this.walletCryptoFile, data);
@@ -253,7 +254,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				if(this.WalletSecurityDetails.EncryptWallet) {
 
-					this.EncryptionInfo.encrypt = true;
+					this.EncryptionInfo.Encrypt = true;
 
 					if(!this.serialisationFal.TransactionalFileSystem.FileExists(this.walletCryptoFile)) {
 						throw new ApplicationException("The wallet crypto file does not exist. Impossible to load encrypted wallet.");
@@ -261,8 +262,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					this.EncryptionInfo.Secret = () => this.WalletSecurityDetails.WalletPassphraseBytes;
 
-					ByteArray cryptoParameterSimpleBytes = this.serialisationFal.TransactionalFileSystem.ReadAllBytes(this.walletCryptoFile);
-					this.EncryptionInfo.encryptionParameters = EncryptorParameters.RehydrateEncryptor(cryptoParameterSimpleBytes);
+					ByteArray cryptoParameterSimpleBytes = ByteArray.WrapAndOwn(this.serialisationFal.TransactionalFileSystem.ReadAllBytes(this.walletCryptoFile));
+					this.EncryptionInfo.EncryptionParameters = EncryptorParameters.RehydrateEncryptor(cryptoParameterSimpleBytes);
 				}
 			}
 		}
@@ -271,16 +272,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			lock(this.locker) {
 				this.EncryptionInfo = new EncryptionInfo();
 
-				this.EncryptionInfo.encrypt = this.WalletSecurityDetails.EncryptWallet;
+				this.EncryptionInfo.Encrypt = this.WalletSecurityDetails.EncryptWallet;
 
-				if(this.EncryptionInfo.encrypt) {
+				if(this.EncryptionInfo.Encrypt) {
 					if(!this.WalletSecurityDetails.WalletPassphraseValid) {
 						throw new ApplicationException("Encrypted wallet does not have a valid passphrase");
 					}
 
 					this.EncryptionInfo.Secret = () => this.WalletSecurityDetails.WalletPassphraseBytes;
 
-					this.EncryptionInfo.encryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(GlobalSettings.ApplicationSettings);
+					this.EncryptionInfo.EncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(this.chainConfiguration);
 				}
 			}
 

@@ -1,6 +1,7 @@
 using System;
 
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Data.HashFunction.xxHash;
 
@@ -18,7 +19,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry) {
-			return (ByteArray) hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length).Hash;
+			return ByteArray.WrapAndOwn( hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length).Hash);
 		}
 
 		public uint HashUInt(IHashNodeList nodeList) {

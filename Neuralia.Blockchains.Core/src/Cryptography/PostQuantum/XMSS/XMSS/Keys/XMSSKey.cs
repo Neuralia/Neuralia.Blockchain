@@ -1,10 +1,11 @@
 using System;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys {
-	public abstract class XMSSKey : IDisposable2 {
+	public abstract class XMSSKey : IDisposableExtended {
 
 		public virtual void LoadKey(ByteArray keyBytes) {
 			if(keyBytes == null) {

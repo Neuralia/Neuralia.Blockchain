@@ -56,6 +56,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			jsonDeserializer.SetProperty("Amount", this.Amount);
 		}
 
-		public ISerializableCombo BaseVersion => this.Version;
+		public IBinarySerializable BaseVersion => this.Version;
 	}
 }

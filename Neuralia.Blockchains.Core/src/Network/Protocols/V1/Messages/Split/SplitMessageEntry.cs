@@ -4,6 +4,7 @@ using System.Linq;
 using Neuralia.Blockchains.Core.Network.Protocols.SplitMessages;
 using Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {

@@ -7,7 +7,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core {
 	public class Delegates : DelegatesBase {
 
-		public delegate Task<object> ChainEventDelegate(CorrelationContext correlationContext, BlockchainSystemEventType eventType, BlockchainType chainType, params object[] parameters);
+		public delegate Task ChainEventDelegate(CorrelationContext? correlationContext, BlockchainSystemEventType eventType, BlockchainType chainType, params object[] parameters);
 
 		/// <summary>
 		///     a Contravariant action delegate. allows for casting of sub types

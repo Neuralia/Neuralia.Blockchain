@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		protected readonly int maxParallelTasks;
 
-		private readonly AutoResetEvent resetEvent = new AutoResetEvent(false);
+		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
 		protected readonly RouteMode routeMode;
 
@@ -393,10 +393,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		public void Wait(TimeSpan timeout) {
 			if(timeout == TimeSpan.MaxValue) {
-				this.resetEvent.WaitOne();
+				this.resetEvent.Wait();
 			} else {
-				this.resetEvent.WaitOne(timeout);
+				this.resetEvent.Wait(timeout);
 			}
+			this.resetEvent.Reset();
 		}
 
 		public override void ReceiveTask(IRoutedTask task) {
@@ -514,7 +515,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			}
 
 			// this is multi threaded.
-			Task processingTask = new Task(() => {
+			Task processingTask = Task.Factory.StartNew(() => {
 				try {
 					RoutedTaskProcessor.ProcessTask((InternalRoutedTask) task, this.Owner);
 				} catch(NotReadyForProcessingException nrex) {
@@ -524,8 +525,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 				// lets set it to wake up the parent, in case it is waiting
 				this.resetEvent.Set();
 			});
-
-			processingTask.Start();
 
 			lock(this.locker) {
 				this.executingTasks.Add(task.Id, (processingTask, (InternalRoutedTask) task));

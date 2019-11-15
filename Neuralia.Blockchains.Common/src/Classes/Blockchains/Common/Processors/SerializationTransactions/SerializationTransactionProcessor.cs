@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 	///     This processor gives us the ability to stack undo operations to filesystem operations which we can then use to
 	///     ensure transactional commits
 	/// </summary>
-	public class SerializationTransactionProcessor : IDisposable2 {
+	public class SerializationTransactionProcessor : IDisposableExtended {
 
 		private const string UNDO_FILE_NAME = "SerializationTransaction.undo";
 
@@ -50,7 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 
 			this.SerializeUndoOperations();
 
-			foreach(Action action in this.Operations.Where(a => a != null)) {
+			foreach(Action action in this.Operations.ToArray().Where(a => a != null)) {
 				action();
 			}
 
@@ -87,7 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			bytes.Return();
 		}
 
-		public void LoadUndoOperations(ISerializationManager serializationManager, IChainDataWriteProvider chainDataWriteProvider) {
+		public void LoadUndoOperations(IChainDataWriteProvider chainDataWriteProvider) {
 			string filename = this.GetUndoFilePath();
 
 			if(this.fileSystem.File.Exists(filename)) {
@@ -102,7 +102,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 				var loadedOperations = new List<SerializationTransactionOperation>();
 
 				for(int i = 0; i < count; i++) {
-					loadedOperations.Add(SerializationTransactionOperationFactory.Rehydrate(rehydrator, serializationManager, chainDataWriteProvider));
+					loadedOperations.Add(SerializationTransactionOperationFactory.Rehydrate(rehydrator, chainDataWriteProvider));
 				}
 
 				// its a stack, so lets reverse it all

@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Threading;
+using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 	public interface IThreadExclusionResourceAccessScheduler : ILoopThread<ThreadExclusionResourceAccessScheduler> {
@@ -26,6 +27,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 	public class ThreadExclusionResourceAccessScheduler : LoopThread<ThreadExclusionResourceAccessScheduler>, IThreadExclusionResourceAccessScheduler {
 		private readonly HashSet<int> friendlyThreads = new HashSet<int>();
 
+		public override void Stop() {
+
+			this.timeoutActive = false;
+			this.timeoutTimerResetEvent.Set();
+
+			base.Stop();
+		}
+
 		private readonly Stack<int> lockThreadStack = new Stack<int>();
 
 		/// <summary>
@@ -35,20 +44,58 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public readonly ConcurrentDictionary<Guid, Ticket> requestedWrites = new ConcurrentDictionary<Guid, Ticket>();
 
-		private readonly AutoResetEvent resetEvent = new AutoResetEvent(false);
-		private readonly AutoResetEvent writeResetEvent = new AutoResetEvent(false);
+		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+		private readonly ManualResetEventSlim writeResetEvent = new ManualResetEventSlim(false);
+		private readonly object mainCollectionsLocker = new object();
+
 		private int activeReadTasks;
 
 		private int currentActiveThread;
 		private bool isWriting;
 		private CancellationToken? token;
 
+		/// <summary>
+		/// The timeout timer used to ensure we can timeout properly
+		/// </summary>
+		private readonly Task timetoutTimer;
+
+		private readonly ManualResetEventSlim timeoutTimerResetEvent = new ManualResetEventSlim(false);
+		protected override void DisposeAll() {
+			try {
+				this.timeoutTimerResetEvent?.Dispose();
+			} catch {
+				
+			}
+			base.DisposeAll();
+		}
+
+		private int inLock = 0;
+
+		private static readonly TimeSpan timeoutLocked = TimeSpan.FromSeconds(1);
+		private static readonly TimeSpan timeoutNotLocked = TimeSpan.FromSeconds(5);
+		private bool timeoutActive = true;
+		private CancellationTokenSource timeoutCancellationSource;
+		private DateTime? lockExpiration;
+
 		public ThreadExclusionResourceAccessScheduler() : base(30) {
 
+			this.timetoutTimer = new Task(this.ThreadLockTimeoutAction, this.CancelNeuralium, TaskCreationOptions.LongRunning);
+			this.timetoutTimer.Start();
 		}
 
 		public CancellationToken? Token => this.token;
-		public CancellationToken ActiveToken => this.token.Value;
+		public CancellationToken ActiveToken {
+			get {
+				var cancellationToken = this.token;
+
+				if(cancellationToken != null) {
+					return cancellationToken.Value;
+				}
+				throw new ArgumentNullException();
+			}
+		}
+
+		public bool HasActiveToken => this.Token.HasValue;
 
 		private int ActiveReadTasks {
 			get {
@@ -119,43 +166,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public bool ScheduleRead(IWalletProvider walletProvider, Action<IWalletProvider> action, bool allowWait = true) {
-			Ticket ticket = new Ticket();
+			using(Ticket ticket = new Ticket()) {
 
-			if(this.CanRead) {
+				if(this.CanRead) {
+					this.PerformRead(walletProvider, action, ticket);
+
+					return true;
+				}
+
+				if(!allowWait) {
+					return false;
+				}
+
+				// ok, if we get here, its locked. no choice but to wait
+				lock(this.mainCollectionsLocker) {
+					this.requestedReads.AddSafe(ticket.Id, ticket);
+				}
+
+				this.resetEvent.Set();
+
+				ticket.WaitForTurn();
+
 				this.PerformRead(walletProvider, action, ticket);
 
 				return true;
 			}
-
-			if(!allowWait) {
-				return false;
-			}
-
-			// ok, if we get here, its locked. no choice but to wait
-			this.requestedReads.AddSafe(ticket.Id, ticket);
-
-			this.resetEvent.Set();
-
-			ticket.WaitForTurn();
-
-			this.PerformRead(walletProvider, action, ticket);
-
-			return true;
 		}
 
 		public void ScheduleWrite(IWalletProvider walletProvider, Action<IWalletProvider> action) {
-			Ticket ticket = new Ticket();
+			using(Ticket ticket = new Ticket()) {
 
-			this.requestedWrites.AddSafe(ticket.Id, ticket);
+				lock(this.mainCollectionsLocker) {
+					this.requestedWrites.AddSafe(ticket.Id, ticket);
+				}
 
-			this.resetEvent.Set();
+				this.resetEvent.Set();
 
-			ticket.WaitForTurn();
+				ticket.WaitForTurn();
 
-			try {
-				action(walletProvider);
-			} finally {
-				ticket.Completed();
+				try {
+					action(walletProvider);
+				} finally {
+					ticket.Completed();
+				}
 			}
 		}
 
@@ -252,8 +305,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				// if there is nothing, we sleep to save resources until more requests come in
 				if(hasWritesRequested) {
 					loop = true;
-				} else if(!hasWritesRequested && this.requestedReads.IsEmpty) {
-					this.resetEvent.WaitOne(TimeSpan.FromSeconds(5));
+				} else {
+
+					bool empty = true;
+
+					lock(this.mainCollectionsLocker) {
+						empty = this.requestedReads.IsEmpty && this.requestedWrites.IsEmpty;
+					}
+
+					if(empty) {
+						this.resetEvent.Wait(TimeSpan.FromSeconds(1));
+						this.resetEvent.Reset();
+					}
 				}
 
 			} while(loop);
@@ -273,30 +336,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				ticket.Start();
 
 				// for writes, we completely free until it is completed
-				this.writeResetEvent.WaitOne();
+				if(this.TheadAllowed && this.HasActiveToken) {
+					this.writeResetEvent.Wait(this.ActiveToken);
+				} else {
+					this.writeResetEvent.Wait();
+				}
+				this.writeResetEvent.Reset();
 			}
 		}
 
 		public (K result, bool completed) ScheduleRead<K>(IWalletProvider walletProvider, Func<IWalletProvider, K> action, bool allowWait = true) {
 
-			Ticket ticket = new Ticket();
+			using(Ticket ticket = new Ticket()) {
 
-			if(this.CanRead) {
+				if(this.CanRead) {
+					return (this.PerformRead(walletProvider, action, ticket), true);
+				}
+
+				if(!allowWait) {
+					return (default, false);
+				}
+
+				// ok, if we get here, its locked. no choice but to wait
+				lock(this.mainCollectionsLocker) {
+					this.requestedReads.AddSafe(ticket.Id, ticket);
+				}
+
+				this.resetEvent.Set();
+
+				ticket.WaitForTurn();
+
 				return (this.PerformRead(walletProvider, action, ticket), true);
 			}
-
-			if(!allowWait) {
-				return (default, false);
-			}
-
-			// ok, if we get here, its locked. no choice but to wait
-			this.requestedReads.AddSafe(ticket.Id, ticket);
-
-			this.resetEvent.Set();
-
-			ticket.WaitForTurn();
-
-			return (this.PerformRead(walletProvider, action, ticket), true);
 		}
 
 		private K PerformRead<K>(IWalletProvider walletProvider, Func<IWalletProvider, K> action, Ticket ticket) {
@@ -326,60 +397,70 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public K ScheduleWrite<K>(IWalletProvider walletProvider, Func<IWalletProvider, K> action) {
-			Ticket ticket = new Ticket();
+			using(Ticket ticket = new Ticket()) {
 
-			this.requestedWrites.AddSafe(ticket.Id, ticket);
+				lock(this.mainCollectionsLocker) {
+					this.requestedWrites.AddSafe(ticket.Id, ticket);
+				}
 
-			this.resetEvent.Set();
+				this.resetEvent.Set();
 
-			ticket.WaitForTurn();
+				ticket.WaitForTurn();
 
-			K result;
+				K result;
 
-			try {
-				result = action(walletProvider);
-			} finally {
-				ticket.Completed();
+				try {
+					result = action(walletProvider);
+				} finally {
+					ticket.Completed();
+				}
+
+				return result;
 			}
+		}
 
-			return result;
+		private void ThreadLockTimeoutAction() {
+
+			while(this.timeoutActive) {
+				bool locked = Interlocked.CompareExchange(ref this.inLock, 0, 0) != 0;
+
+				if(locked) {
+
+					if(this.lockExpiration.HasValue && DateTime.UtcNow > this.lockExpiration.Value) {
+						// ok, this is a timeout. lets call the task cancellation
+						this.timeoutCancellationSource?.Cancel();
+						this.lockExpiration = null;
+					}
+				}
+
+				this.timeoutTimerResetEvent.Wait(locked ? timeoutLocked : timeoutNotLocked);
+				this.timeoutTimerResetEvent.Reset();
+			}
 		}
 
 		public void PerformThreadLock(IWalletProvider walletProvider, Action<IWalletProvider, CancellationToken> action, int timeout = 60) {
 
-			CancellationTokenSource source = new CancellationTokenSource();
+			using(CancellationTokenSource source = new CancellationTokenSource()) {
 
-			//Log.Verbose($"Requesting thread lock for thread id {Thread.CurrentThread.ManagedThreadId}");
-			try {
-				
-				// here we run the action inside a routed task so that we maintain the correlation context and any other useful context we want to carry over into the new thread.
-				var routedTask = new RoutedTask<IRoutedTaskRoutingHandler, bool> {CorrelationContext = TaskContextRegistry.Instance.GetTaskRoutingCorrelationContext()};
-				routedTask.Mode = RoutedTask.ExecutionMode.Sync;
-				routedTask.EnableSelfLoop = true;
-				routedTask.RoutingStatus = RoutedTask.RoutingStatuses.Returned;
-				routedTask.SetAction((service, ctx) => {
-					// run this outside a write so reads can be done too
-					action(walletProvider, source.Token);
-				});
-				
-				// run it in a sub task, to amke sure we can give it a timeout and it does not deadlock forever
-				Task task = new TaskFactory().StartNew(() => {
-					// make the current thread the exclusive access one
+				try {
+					this.timeoutCancellationSource = source;
+					this.lockExpiration = DateTime.UtcNow + TimeSpan.FromSeconds(timeout);
+
+					Interlocked.Increment(ref this.inLock);
+
+					this.timeoutTimerResetEvent.Set();
 
 					try {
 						this.ScheduleWrite(walletProvider, prov => {
-							//Log.Verbose($"Starting thread lock for thread id {Thread.CurrentThread.ManagedThreadId}");
 							this.CurrentActiveThread = Thread.CurrentThread.ManagedThreadId;
 							this.lockThreadStack.Push(this.CurrentActiveThread);
 							this.token = source.Token;
 						});
 
-						// run this outside a write so reads can be done too
-						routedTask.TriggerAction(null);
-					} finally {
+						action(walletProvider, source.Token);
 
+					} finally {
 						if(!this.IsLocked) {
-							//Log.Verbose($"Disposing thread lock for thread id {Thread.CurrentThread.ManagedThreadId}");
 
 							// should be it, but just in case we set it explicitely so we can close it all off
 							lock(this.locker) {
@@ -402,32 +483,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 							}
 						}
 					}
-				}, source.Token);
 
-				// give it a certain amount of time, after that we time out and kill it as a deadlock
-				if(task.Wait(TimeSpan.FromSeconds(timeout)) == false) {
-					source.Cancel();
-
-					// wait a bit more for the cancel to complete
-					task.Wait(TimeSpan.FromSeconds(3));
-
-					// now we force a clear of the lock, this is bad
-					if(!this.IsLocked) {
-						lock(this.locker) {
-							this.CurrentActiveThread = 0;
-							this.lockThreadStack.Clear();
-							this.token = null;
-						}
-					}
-
-					throw new TimeoutException("Thread Exclusion operation has timed out. Force disposed of the lock!");
+				} catch(OperationCanceledException opex) {
+					Log.Error(opex, "Thread Exclusion operation has timed out. Force disposed of the lock!");
+				} finally {
+					this.timeoutCancellationSource = null;
+					this.lockExpiration = null;
+					
+					Interlocked.Decrement(ref this.inLock);
 				}
-
-				if(task.IsFaulted && (task.Exception != null)) {
-					throw task.Exception;
-				}
-			} finally {
-				source.Dispose();
 			}
 
 		}
@@ -488,9 +552,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			}
 		}
 
-		public class Ticket {
+		public class Ticket : IDisposable {
+			public bool IsDispose { get; private set; }
 
-			private readonly AutoResetEvent resetEvent = new AutoResetEvent(false);
+			public void Dispose() {
+				if(!this.IsDispose) {
+					this.IsDispose = true;
+					this.resetEvent?.Dispose();
+				}
+			}
+
+			private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
 			public Ticket() {
 				this.ThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -503,7 +575,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			public void WaitForTurn() {
 
-				if(!this.resetEvent.WaitOne(TimeSpan.FromSeconds(60))) {
+				if(!this.resetEvent.Wait(TimeSpan.FromSeconds(60))) {
 					// ok, seems we timeout, we will simply signify we are not ready
 					throw new NotReadyForProcessingException();
 				}

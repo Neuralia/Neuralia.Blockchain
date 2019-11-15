@@ -1,6 +1,7 @@
 ﻿using System;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
@@ -31,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 		public int KeyBitLength { get; set; }
 		public ByteArray Salt { get; set; }
 		
-		public SymetricCiphers cipher { get; set; } = SymetricCiphers.XCHACHA_40;
+		public SymetricCiphers cipher { get; set; }
 
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = new HashNodeList();
@@ -103,10 +104,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 				parameters = new AesGcmEncryptorParameters();
 			}
 			else if(cipher == SymetricCiphers.XCHACHA_20) {
-				parameters = new XChachaEncryptorParameters();
+				parameters = new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_20);
 			}
 			else if(cipher == SymetricCiphers.XCHACHA_40) {
-				parameters = new XChachaEncryptorParameters();
+				parameters = new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_40);
 			} else {
 				throw new ArgumentException();
 			}
@@ -131,16 +132,24 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 	}
 	
 	public class XChachaEncryptorParameters : EncryptorParameters {
-		
-	
+
+		public XChachaEncryptorParameters(SymetricCiphers symetricCiphers = SymetricCiphers.XCHACHA_40) {
+			if(!(symetricCiphers == SymetricCiphers.XCHACHA_20 || symetricCiphers == SymetricCiphers.XCHACHA_40)) {
+				throw new ArgumentException("Invalid cypher type");
+			}
+			this.cipher = symetricCiphers;
+		}
+
 		protected override IEncryptorParameters CreateEncryptorParameter() {
-			return new XChachaEncryptorParameters();
+			return new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_40);
 		}
 	}
 	
 	public class AesEncryptorParameters : EncryptorParameters {
 		
-		
+		public AesEncryptorParameters() {
+			this.cipher = SymetricCiphers.AES_256;
+		}
 
 		protected override IEncryptorParameters CreateEncryptorParameter() {
 			return new AesEncryptorParameters();
@@ -151,6 +160,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 		
 		public ByteArray Nonce { get; set; }
 		public ByteArray Tag { get; set; }
+		
+		public AesGcmEncryptorParameters() {
+			this.cipher = SymetricCiphers.AES_GCM_256;
+		}
 		
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = base.GetStructuresArray();
@@ -169,6 +182,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 		}
 		
 		public override void Rehydrate(IDataRehydrator rehydrator) {
+			
+			base.Rehydrate(rehydrator);
 			
 			this.Nonce = rehydrator.ReadNonNullableArray();
 			this.Tag = rehydrator.ReadNonNullableArray();

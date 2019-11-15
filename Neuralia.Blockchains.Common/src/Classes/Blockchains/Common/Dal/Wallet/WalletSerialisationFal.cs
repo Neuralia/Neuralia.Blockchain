@@ -16,6 +16,7 @@ using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
@@ -286,15 +287,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				SafeArrayHandle encryptedBytes = null;
 
 				try {
-					if(encryptionInfo.encrypt) {
+					if(encryptionInfo.Encrypt) {
 
-						if(encryptionInfo.encryptionParameters == null) {
+						if(encryptionInfo.EncryptionParameters == null) {
 							throw new ApplicationException("Encryption parameters were null. can not encrypt");
 						}
 
 						compressedBytes = Compressors.WalletCompressor.Compress(databaseBytes);
 
-						encryptedBytes = FileEncryptor.Encrypt(compressedBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters);
+						encryptedBytes = FileEncryptor.Encrypt(compressedBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters);
 
 						if(wrapEncryptedBytes) {
 							// wrap the encrypted byes with the flag marker
@@ -345,9 +346,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					this.TransactionalFileSystem.CreateDirectory(directory);
 				}
 
-				if(encryptionInfo.encrypt) {
+				if(encryptionInfo.Encrypt) {
 
-					if(encryptionInfo.encryptionParameters == null) {
+					if(encryptionInfo.EncryptionParameters == null) {
 						throw new ApplicationException("Encryption parameters were null. can not encrypt");
 					}
 
@@ -356,16 +357,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(wrappedEncryptedBytes) {
 						encryptedWalletFileBytes = this.GetEncryptedWalletFileBytes(filename);
 					} else {
-						encryptedWalletFileBytes = this.TransactionalFileSystem.ReadAllBytes(filename);
+						encryptedWalletFileBytes = ByteArray.WrapAndOwn(this.TransactionalFileSystem.ReadAllBytes(filename));
 					}
 
-					using(SafeArrayHandle decryptedWalletBytes = FileEncryptor.Decrypt(encryptedWalletFileBytes, encryptionInfo.Secret(), encryptionInfo.encryptionParameters)) {
+					using(SafeArrayHandle decryptedWalletBytes = FileEncryptor.Decrypt(encryptedWalletFileBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters)) {
 
 						return Compressors.WalletCompressor.Decompress(decryptedWalletBytes);
 					}
 				}
 
-				using(ByteArray walletSimpleBytes = this.TransactionalFileSystem.ReadAllBytes(filename)) {
+				using(ByteArray walletSimpleBytes = ByteArray.WrapAndOwn(this.TransactionalFileSystem.ReadAllBytes(filename))) {
 
 					return Compressors.WalletCompressor.Decompress(walletSimpleBytes);
 				}
@@ -425,7 +426,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 			XChaChaFileEncryptor encryptor = new XChaChaFileEncryptor(encryptionParameters);
 
-			SafeArrayHandle passwordBytes = (ByteArray) Encoding.UTF8.GetBytes(passphrase.ToUpper());
+			SafeArrayHandle passwordBytes = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(passphrase.ToUpper()));
 			SafeArrayHandle fileBytes = FileExtensions.ReadAllBytes(zipFile, this.centralCoordinator.FileSystem);
 			SafeArrayHandle encrypted = encryptor.Encrypt(fileBytes, passwordBytes);
 
@@ -525,21 +526,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		public WalletKeyFileInfo CreateWalletKeysFileInfo<KEY_TYPE>(IWalletAccount account, string keyName, byte ordinalId, WalletPassphraseDetails walletPassphraseDetails, AccountPassphraseDetails accountPassphraseDetails)
 			where KEY_TYPE : IWalletKey {
 
-			return new WalletKeyFileInfo(account, keyName, ordinalId, typeof(KEY_TYPE), this.GetWalletKeysFilePath(account.AccountUuid, keyName), this.centralCoordinator.BlockchainServiceSet, this, accountPassphraseDetails, walletPassphraseDetails);
+			return new WalletKeyFileInfo(account, keyName, ordinalId, typeof(KEY_TYPE), this.GetWalletKeysFilePath(account.AccountUuid, keyName), this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.BlockchainServiceSet, this, accountPassphraseDetails, walletPassphraseDetails);
 		}
 
 		public WalletKeyLogFileInfo CreateWalletKeyLogFileInfo(IWalletAccount account, WalletPassphraseDetails walletPassphraseDetails) {
 
-			return new WalletKeyLogFileInfo(account, this.GetWalletKeyLogPath(account.AccountUuid), this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
+			return new WalletKeyLogFileInfo(account, this.GetWalletKeyLogPath(account.AccountUuid), this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
 		}
 
 		public WalletKeyHistoryFileInfo CreateWalletKeyHistoryFileInfo(IWalletAccount account, WalletPassphraseDetails walletPassphraseDetails) {
-			return new WalletKeyHistoryFileInfo(account, this.GetWalletKeyHistoryPath(account.AccountUuid), this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
+			return new WalletKeyHistoryFileInfo(account, this.GetWalletKeyHistoryPath(account.AccountUuid), this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
 		}
 
 		public WalletChainStateFileInfo CreateWalletChainStateFileInfo(IWalletAccount account, WalletPassphraseDetails walletPassphraseDetails) {
 
-			return new WalletChainStateFileInfo(account, this.GetWalletChainStatePath(account.AccountUuid), this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
+			return new WalletChainStateFileInfo(account, this.GetWalletChainStatePath(account.AccountUuid), this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
 		}
 
 		public abstract IWalletTransactionCacheFileInfo CreateWalletTransactionCacheFileInfo(IWalletAccount account, WalletPassphraseDetails walletPassphraseDetails);
@@ -548,7 +549,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		public virtual WalletElectionCacheFileInfo CreateWalletElectionCacheFileInfo(IWalletAccount account, WalletPassphraseDetails walletPassphraseDetails) {
 
-			return new WalletElectionCacheFileInfo(account, this.GetWalletElectionCachePath(account.AccountUuid), this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
+			return new WalletElectionCacheFileInfo(account, this.GetWalletElectionCachePath(account.AccountUuid), this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.BlockchainServiceSet, this, walletPassphraseDetails);
 
 		}
 

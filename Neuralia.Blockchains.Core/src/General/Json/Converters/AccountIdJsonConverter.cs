@@ -1,34 +1,26 @@
 using System;
 using Neuralia.Blockchains.Core.General.Types;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Json.Converters {
 
 	public class AccountIdJsonConverter : JsonConverter<AccountId> {
 
-		public override bool CanRead => true;
+		public override AccountId Read(ref Utf8JsonReader reader, 
+		                              Type typeToConvert,
+		                              JsonSerializerOptions options)
+		{
+			var name = reader.GetString();
 
-		public override void WriteJson(JsonWriter writer, AccountId value, JsonSerializer serializer) {
-			writer.WriteValue(value.ToString());
+			return AccountId.FromString((string) name);
 		}
 
-		public override AccountId ReadJson(JsonReader reader, Type objectType, AccountId existingValue, bool hasExistingValue, JsonSerializer serializer) {
-
-			AccountId entry = new AccountId();
-
-			if(reader.TokenType != JsonToken.Null) {
-				JValue jValue = new JValue(reader.Value);
-
-				switch(reader.TokenType) {
-					case JsonToken.String:
-						entry = AccountId.FromString((string) jValue);
-
-						break;
-				}
-			}
-
-			return entry;
+		public override void Write(Utf8JsonWriter writer,
+		                           AccountId value,
+		                           JsonSerializerOptions options)
+		{
+			writer.WriteStringValue(value.ToString());
 		}
 	}
 }

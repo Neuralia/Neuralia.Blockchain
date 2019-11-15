@@ -5,7 +5,7 @@ using Neuralia.Blockchains.Tools.Cryptography;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Transactions {
 
-	public interface IWalletSerializationTransaction : IDisposable2 {
+	public interface IWalletSerializationTransaction : IDisposableExtended {
 		long SessionId { get; }
 
 		void ValidateSessionContext(long sessionId);

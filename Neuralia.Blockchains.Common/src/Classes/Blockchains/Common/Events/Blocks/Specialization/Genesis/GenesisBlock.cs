@@ -9,6 +9,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		DateTime Inception { get; set; }
 		string Name { get; set; }
 		string Moto { get; set; }
+		string Banner { get; set; }
 	}
 
 	public abstract class GenesisBlock : Block, IGenesisBlock {
@@ -16,6 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public DateTime Inception { get; set; }
 		public string Name { get; set; }
 		public string Moto { get; set; }
+		public string Banner { get; set; }
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
@@ -23,6 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			jsonDeserializer.SetProperty("Name", this.Name);
 			jsonDeserializer.SetProperty("Inception", this.Inception);
 			jsonDeserializer.SetProperty("Moto", this.Moto);
+			jsonDeserializer.SetProperty("Banner", this.Banner);
 		}
 
 		protected override ComponentVersion<BlockType> SetIdentity() {
@@ -33,6 +36,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.Inception = rehydratorBody.ReadDateTime();
 			this.Name = rehydratorBody.ReadString();
 			this.Moto = rehydratorBody.ReadString();
+			this.Banner = rehydratorBody.ReadString();
 		}
 	}
 }

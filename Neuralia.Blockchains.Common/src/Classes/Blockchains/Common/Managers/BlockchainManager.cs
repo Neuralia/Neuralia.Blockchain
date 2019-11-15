@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Security;
 using System.Threading;
@@ -42,6 +43,7 @@ using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
@@ -82,7 +84,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		void DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext);
 		void DispatchLocalTransactionAsync(TransactionId transactionId, CorrelationContext correlationContext);
 
-		bool PerformElection(IBlock block);
+		void PerformElection(IBlock block);
 		List<ElectedCandidateResultDistillate> PerformElectionComputation(BlockElectionDistillate blockElectionDistillate);
 		bool PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults);
 
@@ -114,7 +116,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		private int lastConnectionCount = 0;
 
 		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
-		
+
 		// the sync workflow we keep as a reference.
 		private IClientChainSyncWorkflow chainSynchWorkflow;
 		private DateTime? nextBlockchainSynchCheck;
@@ -213,7 +215,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(entry.Status != (byte) WalletTransactionCache.TransactionStatuses.New) {
 				throw new ApplicationException("Impossible to dispatch a transaction that has already been sent");
 			}
-			
+
 			var chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Web);
@@ -222,12 +224,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(useWeb) {
 				try {
- 
+
 					this.PerformWebTransactionRegistration(transactionEnvelope, correlationContext);
 					sent = true;
-				}
-				catch(Exception ex) {
+				} catch(Exception ex) {
 					Log.Error(ex, "Failed to register transaction through web");
+
 					// do nothing, we will sent it on chain
 					sent = false;
 				}
@@ -237,7 +239,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount) {
 
 					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipTransactionMessageSet(transactionEnvelope);
-					
+
 					Repeater.Repeat(() => {
 						this.SendGossipTransaction(gossipMessageSet);
 						sent = true;
@@ -253,23 +255,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					throw new ApplicationException("Failed to send transaction. Not enough peers available to send a gossip transactions.");
 				}
 			}
-			
+
 			if(!sent) {
 				throw new ApplicationException("Failed to send transaction");
 			}
 		}
-		
-		
+
 		/// <summary>
 		///     try to register through the public webapi interface
 		/// </summary>
 		protected void PerformWebTransactionRegistration(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext) {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
 			var chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
-			
+
 			try {
 				Repeater.Repeat(() => {
-					
+
 					Dictionary<string, object> parameters = new Dictionary<string, object>();
 
 					var bytes = transactionEnvelope.DehydrateEnvelope();
@@ -287,17 +288,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						// ok, check the result
 						if(result.Result.StatusCode == HttpStatusCode.OK) {
 							// ok, all good
-							
-							
+
 							return;
 						}
 					}
 
 					throw new ApplicationException("Failed to register transaction through web");
 				});
-				
+
 				this.ConfirmTransactionSent(transactionEnvelope, correlationContext, 0);
-				
+
 			} catch {
 				throw;
 			}
@@ -331,14 +331,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						if(result.Result.StatusCode == HttpStatusCode.OK) {
 							// ok, all good
 
-
 							return;
 						}
 					}
 
 					throw new ApplicationException("Failed to register message through web");
 				});
-				
+
 			} catch {
 				throw;
 			}
@@ -364,55 +363,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			Log.Information($"Installing genesis block with Id {genesisBlock.BlockId} and Timestamp {genesisBlock.FullTimestamp}.");
 
-			var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
-
-			serializationTask.SetAction((serializationService, taskRoutingContext) => {
-
+			try {
 				// first and most important, add it to our archive
-				serializationService.SerializeBlock(dehydratedBlock);
+				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SerializeBlock(dehydratedBlock);
 
 				// if fast keys are enabled, then we create the base directory and first file
-				serializationService.ChainDataWriteProvider.EnsureFastKeysIndex();
-			}, (results, taskRoutingContext) => {
+				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.EnsureFastKeysIndex();
 
-				if(results.Success) {
-					// thats it really. now we have our block, lets update our chain stats.
+				// thats it really. now we have our block, lets update our chain stats.
 
-					// ready to move to the next step
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted;
+				// ready to move to the next step
+				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted;
 
-					// we got our first block!
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight = 1;
+				// we got our first block!
+				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight = 1;
 
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockTimestamp = genesisBlock.FullTimestamp;
+				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockTimestamp = genesisBlock.FullTimestamp;
 
-					// infinite
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockLifespan = 0;
+				// infinite
+				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockLifespan = 0;
 
-					// lets set the timestamp, thats our inception. its very important to remove milliseconds, keep it very simple.
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = genesisBlock.Inception.TrimMilliseconds();
+				// lets set the timestamp, thats our inception. its very important to remove milliseconds, keep it very simple.
+				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = genesisBlock.Inception.TrimMilliseconds();
 
-					// lets store the block hash
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockHash = genesisBlock.Hash.ToExactByteArrayCopy();
+				// lets store the block hash
+				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockHash = genesisBlock.Hash.ToExactByteArrayCopy();
 
-					// keep it too, its too nice :)
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GenesisBlockHash = genesisBlock.Hash.ToExactByteArrayCopy();
+				// keep it too, its too nice :)
+				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GenesisBlockHash = genesisBlock.Hash.ToExactByteArrayCopy();
 
-					// store the promised next signature if it is secret
-					if(genesisBlock.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-						this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.InsertModeratorKey(new TransactionId(), genesisBlock.SignatureSet.NextModeratorKey, genesisBlock.SignatureSet.ConvertToDehydratedKey());
-					}
-					
-				} else {
-					Log.Fatal(results.Exception, "Failed to insert genesis blocks into our model.");
-
-					// this is very critical
-					results.Rethrow();
+				// store the promised next signature if it is secret
+				if(genesisBlock.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
+					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.InsertModeratorKey(new TransactionId(), genesisBlock.SignatureSet.NextModeratorKey, genesisBlock.SignatureSet.ConvertToDehydratedKey());
 				}
 
-			});
+			} catch(Exception ex) {
+				Log.Fatal(ex, "Failed to insert genesis blocks into our model.");
 
-			this.DispatchTaskSync(serializationTask);
+				// this is very critical
+				throw;
+			}
 
 			// now inform the wallet manager that a new block has been received
 			this.SynchronizeWallet(genesisBlock, true, false);
@@ -472,92 +462,74 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			// if we are already at the height intended, then the block is inserted
 			bool isBlockAlreadyInserted = chainStateProvider.DiskBlockHeight >= block.BlockId.Value;
 
-			var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
+			// first and most important, add it to our archive
+			if(!isBlockAlreadyInserted) {
+				// lets transaction this operatoin
 
-			serializationTask.SetAction((serializationService, taskRoutingContext) => {
+				void InsertBlockData() {
+					this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SerializeBlock(dehydratedBlock);
 
-				// first and most important, add it to our archive
-				if(!isBlockAlreadyInserted) {
-					// lets transaction this operatoin
+					// lets update our chain
+					Repeater.Repeat(() => {
+						//TODO: group all this inside a single database call for efficiency
+						chainStateProvider.DiskBlockHeight = block.BlockId.Value;
 
-					void InsertBlockData() {
-						serializationService.SerializeBlock(dehydratedBlock);
+						chainStateProvider.LastBlockTimestamp = block.FullTimestamp;
 
-						// lets update our chain
-						Repeater.Repeat(() => {
-							//TODO: group all this inside a single database call for efficiency
-							chainStateProvider.DiskBlockHeight = block.BlockId.Value;
+						// a hint as to when we should expect the next one
+						chainStateProvider.LastBlockLifespan = block.Lifespan;
 
-							chainStateProvider.LastBlockTimestamp = block.FullTimestamp;
+						// lets store the block hash
+						chainStateProvider.LastBlockHash = block.Hash.ToExactByteArrayCopy();
 
-							// a hint as to when we should expect the next one
-							chainStateProvider.LastBlockLifespan = block.Lifespan;
-
-							// lets store the block hash
-							chainStateProvider.LastBlockHash = block.Hash.ToExactByteArrayCopy();
-
-							// store the promised next signature if it is secret
-							if(block.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-								chainStateProvider.UpdateModeratorKey(new TransactionId(), block.SignatureSet.NextModeratorKey, block.SignatureSet.ConvertToDehydratedKey());
-							}
-						});
-					}
-
-					if(useTransaction) {
-						using(IBlockInsertionTransactionProcessor blockStateSnapshotProcessor = this.CreateBlockInsertionTransactionProcessor(block.SignatureSet.NextModeratorKey)) {
-							InsertBlockData();
-
-							blockStateSnapshotProcessor.Commit();
+						// store the promised next signature if it is secret
+						if(block.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
+							chainStateProvider.UpdateModeratorKey(new TransactionId(), block.SignatureSet.NextModeratorKey, block.SignatureSet.ConvertToDehydratedKey());
 						}
-					} else {
+					});
+				}
+
+				if(useTransaction) {
+					using(IBlockInsertionTransactionProcessor blockStateSnapshotProcessor = this.CreateBlockInsertionTransactionProcessor(block.SignatureSet.NextModeratorKey)) {
 						InsertBlockData();
+
+						blockStateSnapshotProcessor.Commit();
 					}
-				}
-
-			}, (results, taskRoutingContext) => {
-
-				if(results.Success) {
-					// thats it really. now we have our block, lets update our chain stats.
-					if(!isBlockAlreadyInserted) {
-
-						// now, alert the world of this new block!
-						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInserted(block.BlockId.Value, block.FullTimestamp, block.Hash.Entry.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
-
-						try {
-							this.BlockInstalled(block, dehydratedBlock);
-						} catch(Exception ex) {
-							Log.Fatal(ex, "Failed to invoke block installed callback.");
-						}
-
-						try {
-							Repeater.Repeat(() => {
-								// Now we clear the transaction pool of any transactions contained in this block
-								this.ClearTransactionPoolBlockTransactions(block);
-							});
-						} catch(Exception ex) {
-							Log.Fatal(ex, "Failed to clear the transaction pool of block transactions.");
-						}
-					}
-
-					if(syncWallet) {
-						try {
-							this.SynchronizeWallet(block, true, false);
-
-						} catch(Exception ex) {
-							Log.Fatal(ex, "Failed to insert block into wallet. Not critical, block insertion continuing still...");
-						}
-					}
-
 				} else {
-					Log.Fatal(results.Exception, "Failed to insert block into our model.");
+					InsertBlockData();
+				}
+			}
 
-					// this is very critical
-					results.Rethrow();
+			// thats it really. now we have our block, lets update our chain stats.
+			if(!isBlockAlreadyInserted) {
+
+				// now, alert the world of this new block!
+				this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInserted(block.BlockId.Value, block.FullTimestamp, block.Hash.Entry.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
+
+				try {
+					this.BlockInstalled(block, dehydratedBlock);
+				} catch(Exception ex) {
+					Log.Fatal(ex, "Failed to invoke block installed callback.");
 				}
 
-			});
+				try {
+					Repeater.Repeat(() => {
+						// Now we clear the transaction pool of any transactions contained in this block
+						this.ClearTransactionPoolBlockTransactions(block);
+					});
+				} catch(Exception ex) {
+					Log.Fatal(ex, "Failed to clear the transaction pool of block transactions.");
+				}
+			}
 
-			this.DispatchTaskSync(serializationTask);
+			if(syncWallet) {
+				try {
+					this.SynchronizeWallet(block, true, false);
+
+				} catch(Exception ex) {
+					Log.Fatal(ex, "Failed to insert block into wallet. Not critical, block insertion continuing still...");
+				}
+			}
 
 			return true;
 		}
@@ -577,9 +549,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					while((chainStateProvider.BlockHeight < previousBlockId) || ((chainStateProvider.BlockHeight == previousBlockId) && (chainStateProvider.BlockInterpretationStatus != ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted))) {
 
 						long originalBlockId = chainStateProvider.BlockHeight;
-						(IBlock block, IDehydratedBlock dehydratedBlock) previousBlock = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockAndMetadata(originalBlockId);
+						(IBlock block1, IDehydratedBlock dehydratedBlock1) = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockAndMetadata(originalBlockId);
 
-						if(!this.InterpretBlock(previousBlock.block, previousBlock.dehydratedBlock, syncWallet, serializationTransactionProcessor, allowWalletSyncGrowth) || ((originalBlockId == chainStateProvider.BlockHeight) && (chainStateProvider.BlockInterpretationStatus != ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted))) {
+						if(!this.InterpretBlock(block1, dehydratedBlock1, syncWallet, serializationTransactionProcessor, allowWalletSyncGrowth) || ((originalBlockId == chainStateProvider.BlockHeight) && (chainStateProvider.BlockInterpretationStatus != ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted))) {
 							Log.Warning("We failed to catch up the missing blocks in interpretation.");
 						}
 					}
@@ -601,8 +573,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				if(chainStateProvider.BlockHeight == block.BlockId.Value - 1) {
 					chainStateProvider.BlockHeight = block.BlockId.Value;
 					chainStateProvider.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.Blank;
-				}
-				else if(chainStateProvider.BlockHeight < block.BlockId.Value - 1) {
+				} else if(chainStateProvider.BlockHeight < block.BlockId.Value - 1) {
 					throw new ArgumentException("Block Id is too low for interpretation");
 				}
 
@@ -612,7 +583,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateGeneralImpact(block, this, transactionalProcessor);
 
-				this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.InterpretNewBlockSnapshots(block, this, transactionalProcessor);
+				this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.InterpretNewBlockSnapshots(block, transactionalProcessor);
 			}
 
 			// if we are not already in a transaction, we make one
@@ -632,7 +603,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} else {
 				InterpretBlock(serializationTransactionProcessor);
 			}
-			
+
 			if(chainStateProvider.BlockInterpretationStatus != ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted) {
 				throw new ApplicationException($"Failed to interpret block id {block.BlockId}.");
 			}
@@ -648,15 +619,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(syncWallet) {
 				try {
 
+					void Catcher() {
+
+						// meanwhile, see if we need to mine
+						try {
+							this.PerformElection(block);
+						} finally {
+							this.CentralCoordinator.WalletSynced -= Catcher;
+						}
+					}
+
+					this.CentralCoordinator.WalletSynced += Catcher;
+
 					this.SynchronizeWallet(block, true, allowWalletSyncGrowth);
 
 				} catch(Exception ex) {
 					Log.Fatal(ex, "Failed to insert block into wallet. Not critical, block insertion continuing still...");
 				}
+			} else {
+				// we can give it a try
+				this.PerformElection(block);
 			}
-
-			// meanwhile, see if we need to mine
-			this.PerformElection(block);
 
 			return true;
 		}
@@ -695,7 +678,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="block"></param>
 		/// <param name="async"></param>
 		/// <returns></returns>
-		public virtual bool PerformElection(IBlock block) {
+		public virtual void PerformElection(IBlock block) {
 
 			bool elected = false;
 
@@ -704,12 +687,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					// ok, we are mining, lets check this block
 
 					if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount != 0) {
-						var messages = this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PerformElection(block, this.ChainEventPoolProvider, this);
-
-						if((messages != null) && messages.Any()) {
-							elected = true;
-							this.DispatchElectionMessages(messages);
-						}
+						this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PerformElection(block, this.ChainEventPoolProvider, this, (messages) => {
+							if((messages != null) && messages.Any()) {
+								elected = true;
+								this.DispatchElectionMessages(messages);
+							}
+						});
 					} else {
 						Log.Error("Mining is enabled but we are not connected to any peers. Elections cancelled.");
 					}
@@ -717,106 +700,66 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} catch(Exception ex) {
 				Log.Fatal(ex, "Failed to perform mining election.");
 			}
-
-			return elected;
 		}
 
 		public virtual void InstallDigest(int digestId) {
 
 			Log.Information($"Installing new digest Id {digestId}.");
 
-			var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<IBlockchainDigest>();
+			// first and most important, add it to our archive
+			IBlockchainDigest digest = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestHeader(digestId);
 
-			serializationTask.SetAction((serializationService, taskRoutingContext) => {
+			Log.Information($"Loaded digest Id {digest.DigestId} and Value {digest.Timestamp}.");
 
-				// first and most important, add it to our archive
-				serializationTask.Results = serializationService.LoadDigestHeader(digestId);
-			}, (results, taskRoutingContext) => {
+			// now validate
 
-				if(results.Success || (serializationTask.Results == null)) {
+			try {
 
-					IBlockchainDigest digest = serializationTask.Results;
-
-					Log.Information($"Loaded digest Id {digest.DigestId} and Value {digest.Timestamp}.");
-
-					// now validate
-					var validationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateValidationTask<ValidationResult>();
-
-					validationTask.SetAction((validationService, taskRoutingContext2) => {
-
-						validationTask.Results = validationService.ValidateDigest(digest, true);
-
-					}, (results2, taskRoutingContext2) => {
-
-						if(results2.Success) {
-
-							if(validationTask.Results.Invalid) {
-								// failed to validate digest
-								//TODO: what to do??
-								throw new ApplicationException("failed to validate digest");
-							}
-
-							// ok, its good, lets install the digest
-							var serializationTask2 = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<IBlockchainDigest>();
-
-							serializationTask2.SetAction((serializationService, taskRoutingContext3) => {
-
-								// ok, lets update the actual files and all
-
-								// first, we generate the digest channel descriptor, for quick use
-								serializationService.SaveDigestChannelDescription(digestId, digest.DigestDescriptor);
-
-								// now the big moment, we update the entire filesystem
-								serializationService.UpdateCurrentDigest(digest);
-
-							}, (results3, taskRoutingContext3) => {
-
-								if(results3.Success) {
-
-									Repeater.Repeat(() => {
-										// ok, now we update our states
-										this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestHeight = digestId;
-										this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestBlockHeight = digest.BlockId.Value;
-										this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastDigestHash = digest.Hash.ToExactByteArrayCopy();
-										this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastDigestTimestamp = this.timeService.GetTimestampDateTime(digest.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
-
-										if(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestBlockHeight > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) {
-											// ok, this digest is ahead for us, we must now update the snapshot state
-											this.UpdateAccountSnapshotFromDigest(digest);
-										}
-									});
-
-									// now, alert the world of this new digest!
-									this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.DigestInserted(digestId));
-
-									// and thats it, the digest is fully installed :)
-								}
-
-							});
-
-							this.DispatchTaskAsync(serializationTask2);
-
-						} else {
-							Log.Fatal(results2.Exception, $"Failed to validate digest id {digestId}.");
-
-							// this is very critical
-							results.Rethrow();
-						}
-
-					});
-
-					this.DispatchTaskAsync(validationTask);
-
-				} else {
-					Log.Fatal(results.Exception, $"Failed to load digest id {digestId}.");
-
-					// this is very critical
-					results.Rethrow();
+				var result = this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateDigest(digest, true);
+				
+				if(result.Invalid) {
+					// failed to validate digest
+					//TODO: what to do??
+					throw new ApplicationException("failed to validate digest");
 				}
 
-			});
+				// ok, its good, lets install the digest
 
-			this.DispatchTaskAsync(serializationTask);
+				// ok, lets update the actual files and all
+
+				// first, we generate the digest channel descriptor, for quick use
+				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveDigestChannelDescription(digestId, digest.DigestDescriptor);
+
+				// now the big moment, we update the entire filesystem
+				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.UpdateCurrentDigest(digest);
+
+				Repeater.Repeat(() => {
+					// ok, now we update our states
+					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestHeight = digestId;
+					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestBlockHeight = digest.BlockId.Value;
+					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastDigestHash = digest.Hash.ToExactByteArrayCopy();
+					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastDigestTimestamp = this.timeService.GetTimestampDateTime(digest.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
+
+					if(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestBlockHeight > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight) {
+						// ok, this digest is ahead for us, we must now update the snapshot state
+						this.UpdateAccountSnapshotFromDigest(digest);
+					}
+				});
+
+				// now, alert the world of this new digest!
+				this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.DigestInserted(digestId));
+
+				// and thats it, the digest is fully installed :)
+
+			}catch(Exception ex) {
+
+				Log.Fatal(ex, $"Failed to validate digest id {digestId}.");
+
+				// this is very critical
+				throw new ApplicationException($"Failed to validate digest id {digestId}.");
+					
+
+			}
 
 		}
 
@@ -824,23 +767,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			//save the message if we need so
 			if(this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MessageSavingMode == AppSettingsBase.MessageSavingModes.Enabled) {
-				var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
 
-				serializationTask.SetAction((serializationService, taskRoutingContext) => {
-
+				try {
 					// first and most important, add it to our archive
-					serializationService.SerializeBlockchainMessage(dehydratedMessage);
-				}, (results, taskRoutingContext) => {
+					this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SerializeBlockchainMessage(dehydratedMessage);
+				} catch(Exception ex) {
+					Log.Fatal(ex, "Failed to serialize message!.");
 
-					if(results.Error) {
-						Log.Fatal(results.Exception, "Failed to serialize message!.");
-
-						// this is very critical
-						results.Rethrow();
-					}
-				});
-
-				this.DispatchTaskAsync(serializationTask);
+					// this is very critical
+					throw;
+				}
 			}
 		}
 
@@ -854,12 +790,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(useWeb) {
 				try {
- 
+
 					this.PerformWebMessageRegistration(messageEnvelope, correlationContext);
 					sent = true;
-				}
-				catch(Exception ex) {
+				} catch(Exception ex) {
 					Log.Error(ex, "Failed to register message through web");
+
 					// do nothing, we will sent it on chain
 					sent = false;
 				}
@@ -869,7 +805,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount) {
 
 					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipBlockchainMessageMessageSet(messageEnvelope);
-					
+
 					Repeater.Repeat(() => {
 						// ok, we are ready. lets send it out to the world!!  :)
 						this.SendGossipTransaction(gossipMessageSet);
@@ -879,12 +815,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					if(!sent) {
 						throw new ApplicationException("Failed to send message");
 					}
-					
+
 				} else {
 					throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
 				}
 			}
-			
+
 			if(!sent) {
 				throw new ApplicationException("Failed to send message");
 			}
@@ -970,22 +906,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// ok, this digest is ahead for us, we must now update the snapshot state
 
 				// this is an important moment, and very rare. we will run it in the serialization thread
-				var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
 
-				serializationTask.SetAction((serializationService, taskRoutingContext) => {
-
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
+				try {
+					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
 
 						token.ThrowIfCancellationRequested();
 
 						this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.ClearSnapshots();
 
-						var walletAccounts = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccounts();
+						var walletAccounts = provider.GetAccounts();
 
 						token.ThrowIfCancellationRequested();
-
-						//var walletActions = new List<Action<WALLET_MANAGER, TaskRoutingContext>>();
-
+						
 						// loop all accounts :)
 						for(long accountSequenceId = 1; accountSequenceId < digest.LastStandardAccountId; accountSequenceId++) {
 
@@ -1000,10 +932,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 							if(localAccount != null) {
 
-								accountCard = serializationService.LoadDigestStandardAccount(accountSequenceId);
+								accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccount(accountSequenceId);
 
 								// ok, this is one of ours, we will need to update the wallet snapshot
-								this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshotFromDigest(accountCard);
+								provider.UpdateWalletSnapshotFromDigest(accountCard);
 							}
 
 							if(this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(accountId)) {
@@ -1011,12 +943,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 								//TODO: perform this
 								if(accountCard == null) {
-									accountCard = serializationService.LoadDigestStandardAccount(accountSequenceId);
+									accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccount(accountSequenceId);
 								}
 
 								this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.UpdateSnapshotDigestFromDigest(accountCard);
 
-								var accountKeyCards = serializationService.LoadDigestAccountKeyCards(accountSequenceId);
+								var accountKeyCards = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccountKeyCards(accountSequenceId);
 
 								foreach(IStandardAccountKeysDigestChannelCard digestKey in accountKeyCards) {
 									this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.UpdateAccountKeysFromDigest(digestKey);
@@ -1038,10 +970,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 							if(localAccount != null) {
 
-								accountCard = serializationService.LoadDigestJointAccount(accountSequenceId);
+								accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestJointAccount(accountSequenceId);
 
 								// ok, this is one of ours, we will need to update the wallet snapshot
-								this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshotFromDigest(accountCard);
+								provider.UpdateWalletSnapshotFromDigest(accountCard);
 							}
 
 							if(this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(accountId)) {
@@ -1049,7 +981,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 								//TODO: perform this
 								if(accountCard == null) {
-									accountCard = serializationService.LoadDigestJointAccount(accountSequenceId);
+									accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestJointAccount(accountSequenceId);
 								}
 
 								this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.UpdateSnapshotDigestFromDigest(accountCard);
@@ -1057,7 +989,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						}
 
 						// now the accreditation certificates
-						var certificates = serializationService.LoadDigestAccreditationCertificateCards();
+						var certificates = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestAccreditationCertificateCards();
 
 						foreach(IAccreditationCertificateDigestChannelCard certificate in certificates) {
 
@@ -1068,20 +1000,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 					});
 
-				}, (results, taskRoutingContext) => {
+				} catch(Exception ex) {
+					Log.Fatal(ex, "Failed to update the blockchain snapshots from the digest.");
 
-					if(results.Success) {
+					throw;
+				}
 
-					} else {
-						Log.Fatal(results.Exception, "Failed to update the blockchain snapshots from the digest.");
-
-						// this is very critical
-						results.Rethrow();
-					}
-
-				});
-
-				this.DispatchTaskAsync(serializationTask);
 			}
 		}
 
@@ -1168,7 +1092,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		protected override void Initialize(IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext) {
 			base.Initialize(workflow, taskRoutingContext);
-			
+
 			this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PeerConnectionsCountUpdated += ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated;
 
 			// make sure we check our status when starting
@@ -1212,7 +1136,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 								throw new ApplicationException("Failed to create a new wallet");
 							}
 						}, 2);
-						
 
 						LoadWallet();
 					}
@@ -1223,13 +1146,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		protected virtual void ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated(int count) {
- 
-            int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
-            if(this.lastConnectionCount < minimumSyncPeerCount && count >= minimumSyncPeerCount) {
-            	// we just got enough peers to potentially first peer, let's sync
-            	this.SynchronizeBlockchain(true);
-            }
-            this.lastConnectionCount = count;
+
+			int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
+
+			if(this.lastConnectionCount < minimumSyncPeerCount && count >= minimumSyncPeerCount) {
+				// we just got enough peers to potentially first peer, let's sync
+				this.SynchronizeBlockchain(true);
+			}
+
+			this.lastConnectionCount = count;
 		}
 
 	#region rpc methods
@@ -1243,9 +1168,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			IChainStateProvider chainState = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 			return new BlockchainInfo {
-				DownloadBlockId = chainState.DownloadBlockHeight, DiskBlockId = chainState.DiskBlockHeight, BlockId = chainState.BlockHeight, BlockHash = ((ByteArray) chainState.LastBlockHash)?.ToBase58(), BlockTimestamp = TimeService.FormatDateTimeStandardUtc(chainState.LastBlockTimestamp), PublicBlockId = chainState.PublicBlockHeight,
-				DigestId = chainState.DigestHeight, DigestHash = ((ByteArray) chainState.LastDigestHash)?.ToBase58(), DigestBlockId = chainState.DigestBlockHeight, DigestTimestamp = TimeService.FormatDateTimeStandardUtc(chainState.LastDigestTimestamp),
-				PublicDigestId = chainState.PublicDigestHeight
+				DownloadBlockId = chainState.DownloadBlockHeight, DiskBlockId = chainState.DiskBlockHeight, BlockId = chainState.BlockHeight, BlockHash = ByteArray.Wrap(chainState.LastBlockHash)?.ToBase58(),
+				BlockTimestamp = TimeService.FormatDateTimeStandardUtc(chainState.LastBlockTimestamp), PublicBlockId = chainState.PublicBlockHeight, DigestId = chainState.DigestHeight, DigestHash = ByteArray.Wrap(chainState.LastDigestHash)?.ToBase58(),
+				DigestBlockId = chainState.DigestBlockHeight, DigestTimestamp = TimeService.FormatDateTimeStandardUtc(chainState.LastDigestTimestamp), PublicDigestId = chainState.PublicDigestHeight
 			};
 		}
 
@@ -1314,7 +1239,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 								this.chainSynchWorkflow.Completed += (success, workflow) => {
 									lock(this.locker) {
 
-										if(success && this.BlockchainSynced) {
+										if(success && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
 											this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
 										} else {
 											// we never synced, we need to check more often to be ready to do so
@@ -1418,7 +1343,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.SynchronizeWallet(blocks, force, false, allowGrowth);
 		}
 
-		
 		public virtual void SynchronizeWallet(List<IBlock> blocks, bool force, bool mobileForce, bool? allowGrowth = null) {
 
 			var walletSynced = this.WalletSyncedNoWait;
@@ -1450,7 +1374,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 							lock(this.locker) {
 
 								// ok, now we can wait the regular intervals
-								if((success && this.WalletSynced) || this.BlockchainSyncing) {
+								if(success && this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
 									this.nextWalletSynchCheck = this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
 								} else {
 									this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(5);
@@ -1523,7 +1447,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				if(synthesizedBlockApi.BlockId == 1) {
 
 					// that's pretty important
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = DateTime.Parse(synthesizedBlockApi.SynthesizedGenesisBlockBase.Inception);
+					
+					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = DateTime.ParseExact(synthesizedBlockApi.SynthesizedGenesisBlockBase.Inception, "o", CultureInfo.InvariantCulture,  DateTimeStyles.AdjustToUniversal);
 				}
 
 				// we set the chain height to this block id
@@ -1554,74 +1479,83 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		private void CopyWalletRequest(CorrelationContext correlationContext, int attempt) {
 			Log.Information("Requesting loading wallet.");
 
-			AutoResetEvent resetEvent = new AutoResetEvent(false);
+			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
 
-			LoadWalletSystemMessageTask loadWalletTask = new LoadWalletSystemMessageTask(() => {
-				resetEvent.Set();
-			});
+				LoadWalletSystemMessageTask loadWalletTask = new LoadWalletSystemMessageTask(() => {
+					resetEvent.Set();
+				});
 
-			this.PostChainEvent(loadWalletTask);
+				this.PostChainEvent(loadWalletTask);
 
-			// wait up to 5 minutes for the wallet to be ready to load
-			resetEvent.WaitOne(TimeSpan.FromMinutes(5));
+				// wait up to 5 minutes for the wallet to be ready to load
+				resetEvent.Wait(TimeSpan.FromMinutes(5));
+			}
 
 			int g = 0;
 		}
 
 		private SecureString WalletProviderOnWalletPassphraseRequest(CorrelationContext correlationContext, int attempt) {
 			Log.Information("Requesting wallet passphrase.");
-			AutoResetEvent resetEvent = new AutoResetEvent(false);
 
-			if(correlationContext.IsNew) {
-				correlationContext.InitializeNew();
+			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
+
+				if(correlationContext.IsNew) {
+					correlationContext.InitializeNew();
+				}
+
+				RequestWalletPassphraseSystemMessageTask loadWalletPassphraseTask = new RequestWalletPassphraseSystemMessageTask(attempt, () => {
+					resetEvent.Set();
+				});
+
+				this.PostChainEvent(loadWalletPassphraseTask, correlationContext);
+
+				// wait until we get the passphrase back
+				resetEvent.Wait();
+
+
+				return loadWalletPassphraseTask.Passphrase;
 			}
-
-			RequestWalletPassphraseSystemMessageTask loadWalletPassphraseTask = new RequestWalletPassphraseSystemMessageTask(attempt, () => {
-				resetEvent.Set();
-			});
-
-			this.PostChainEvent(loadWalletPassphraseTask, correlationContext);
-
-			// wait until we get the passphrase back
-			resetEvent.WaitOne();
-
-			return loadWalletPassphraseTask.Passphrase;
 		}
 
 		private SecureString WalletProviderOnWalletKeyPassphraseRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt) {
 			Log.Information($"Requesting wallet key {keyname} passphrase.");
-			AutoResetEvent resetEvent = new AutoResetEvent(false);
 
-			RequestWalletKeyPassphraseSystemMessageTask loadWalletKeyPasshraseTask = new RequestWalletKeyPassphraseSystemMessageTask(accountuuid, keyname, attempt, () => {
-				resetEvent.Set();
-			});
+			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
 
-			this.PostChainEvent(loadWalletKeyPasshraseTask);
+				RequestWalletKeyPassphraseSystemMessageTask loadWalletKeyPasshraseTask = new RequestWalletKeyPassphraseSystemMessageTask(accountuuid, keyname, attempt, () => {
+					resetEvent.Set();
+				});
 
-			// wait up to 5 hours for the wallet to be ready to load
-			resetEvent.WaitOne(TimeSpan.FromHours(5));
+				this.PostChainEvent(loadWalletKeyPasshraseTask);
 
-			return loadWalletKeyPasshraseTask.Passphrase;
+				// wait up to 5 hours for the wallet to be ready to load
+				resetEvent.Wait(TimeSpan.FromHours(5));
+
+
+				return loadWalletKeyPasshraseTask.Passphrase;
+			}
 		}
 
 		private void WalletProviderOnWalletCopyKeyFileRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt) {
 			Log.Information($"Requesting wallet key {keyname} passphrase.");
-			AutoResetEvent resetEvent = new AutoResetEvent(false);
 
-			RequestWalletKeyCopyFileSystemMessageTask loadWalletKeyCopyFileTask = new RequestWalletKeyCopyFileSystemMessageTask(accountuuid, keyname, attempt, () => {
-				resetEvent.Set();
-			});
+			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
 
-			this.PostChainEvent(loadWalletKeyCopyFileTask);
+				RequestWalletKeyCopyFileSystemMessageTask loadWalletKeyCopyFileTask = new RequestWalletKeyCopyFileSystemMessageTask(accountuuid, keyname, attempt, () => {
+					resetEvent.Set();
+				});
 
-			// wait up to 5 hours for the wallet to be ready to load
-			resetEvent.WaitOne(TimeSpan.FromHours(5));
+				this.PostChainEvent(loadWalletKeyCopyFileTask);
+
+				// wait up to 5 hours for the wallet to be ready to load
+				resetEvent.Wait(TimeSpan.FromHours(5));
+			}
 		}
 
 		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
-			this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ChangeWalletEncryption(correlationContext, encryptWallet, encryptKeys, encryptKeysIndividually, passphrases);
+			this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
+				provider.ChangeWalletEncryption(correlationContext, encryptWallet, encryptKeys, encryptKeysIndividually, passphrases);
 			});
 
 		}

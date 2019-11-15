@@ -1,170 +1,172 @@
 using System;
+using System.Globalization;
+using System.Reflection;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using Neuralia.Blockchains.Tools.Data.Arrays;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General {
 	public static class JsonUtils {
 
-		public static JsonSerializer CreateSerializer() {
-			return JsonSerializer.Create(CreateBlockSerializerSettings());
+		public static string Serialize(object entry) {
+			return JsonSerializer.Serialize(entry, CreateBlockSerializerSettings());
 		}
 
-		public static JsonSerializerSettings CreateSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerSettings settings = new JsonSerializerSettings();
-			settings.Formatting = Formatting.None;
-			settings.PreserveReferencesHandling = PreserveReferencesHandling.All;
-			settings.TypeNameHandling = TypeNameHandling.Objects;
-			settings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
-			settings.NullValueHandling = NullValueHandling.Include;
-			settings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
-			settings.MissingMemberHandling = MissingMemberHandling.Ignore;
-			settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
-			settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
-
+		public static JsonSerializerOptions CreateSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
+			JsonSerializerOptions settings = new JsonSerializerOptions();
+			settings.WriteIndented = false;
+			settings.IgnoreNullValues = false;
+			settings.PropertyNameCaseInsensitive = false;
+			settings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+			
 			settings.Converters.Add(new ByteArrayBaseConverter(mode));
 			settings.Converters.Add(new DecimalConverter());
 
 			return settings;
 		}
 
-		public static JsonSerializerSettings CreateCompactSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerSettings settings = CreateSerializerSettings(mode);
+		public static JsonSerializerOptions CreateCompactSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
+			JsonSerializerOptions settings = CreateSerializerSettings(mode);
 
-			settings.Formatting = Formatting.None;
-
-			return settings;
-		}
-
-		public static JsonSerializerSettings CreateNoNamesSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerSettings settings = CreateCompactSerializerSettings(mode);
-
-			settings.PreserveReferencesHandling = PreserveReferencesHandling.All;
-			settings.TypeNameHandling = TypeNameHandling.None;
-			settings.NullValueHandling = NullValueHandling.Ignore;
-			settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
+			settings.WriteIndented = false;
 
 			return settings;
 		}
 
-		public static JsonSerializerSettings CreatePrettySerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerSettings settings = CreateSerializerSettings(mode);
+		public static JsonSerializerOptions CreateNoNamesSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
+			JsonSerializerOptions settings = CreateCompactSerializerSettings(mode);
 
-			settings.Formatting = Formatting.Indented;
+			settings.IgnoreNullValues = true;
+			settings.IgnoreNullValues = true;
 
 			return settings;
 		}
 
-		public static JsonSerializerSettings CreateBlockSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerSettings settings = CreateNoNamesSerializerSettings(mode);
+		public static JsonSerializerOptions CreatePrettySerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
+			JsonSerializerOptions settings = CreateSerializerSettings(mode);
 
-			settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+			settings.WriteIndented = true;
 
+			return settings;
+		}
+
+		public static JsonSerializerOptions CreateBlockSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
+			JsonSerializerOptions settings = CreateNoNamesSerializerSettings(mode);
+			
 			return settings;
 		}
 
 		public static string SerializeJsonSerializable(IJsonSerializable jsonSerializable) {
 
-			JsonDeserializer deserializer = new JsonDeserializer();
-
-			jsonSerializable.JsonDehydrate(deserializer);
-
-			return deserializer.Serialize();
+			
+			return JsonDeserializer.Serialize(jsonSerializable);
 		}
 	}
-
-	public class ByteArrayBaseConverter : JsonConverter {
+	
+	public class SafeArrayHandleConverter : JsonConverter<SafeArrayHandle> {
 		public enum BaseModes {
 			Base58,
 			Base64
 		}
 
 		private readonly BaseModes mode;
+		
+		public override SafeArrayHandle Read(ref Utf8JsonReader reader, 
+		                                     Type typeToConvert,
+		                                     JsonSerializerOptions options)
+		{
+			throw new NotImplementedException();
+		}
 
+		public override void Write(Utf8JsonWriter writer,
+		                           SafeArrayHandle value,
+		                           JsonSerializerOptions options)
+		{
+
+			if(value.IsEmpty) {
+				writer.WriteStringValue("");
+			} else {
+				if(this.mode == BaseModes.Base58) {
+					writer.WriteStringValue(value.Entry.ToBase58());
+				} else if(this.mode == BaseModes.Base64) {
+					writer.WriteStringValue(value.Entry.ToBase64());
+				}
+			}
+		}
+
+		public override bool CanConvert(Type typeToConvert) {
+			return typeof(SafeArrayHandle).IsAssignableFrom(typeToConvert) || typeof(ByteArray).IsAssignableFrom(typeToConvert);
+		}
+		
+		public SafeArrayHandleConverter(BaseModes mode = BaseModes.Base58) {
+			this.mode = mode;
+
+		}
+	}
+
+	public class ByteArrayBaseConverter : JsonConverter<ByteArray> {
+		public enum BaseModes {
+			Base58,
+			Base64
+		}
+
+		private readonly BaseModes mode;
+		
+		public override ByteArray Read(ref Utf8JsonReader reader, 
+		                              Type typeToConvert,
+		                              JsonSerializerOptions options)
+		{
+			throw new NotImplementedException();
+		}
+
+		public override void Write(Utf8JsonWriter writer,
+		                           ByteArray value,
+		                           JsonSerializerOptions options)
+		{
+
+			if(value.IsEmpty) {
+				writer.WriteStringValue("");
+			} else {
+				if(this.mode == BaseModes.Base58) {
+					writer.WriteStringValue(value.ToBase58());
+				} else if(this.mode == BaseModes.Base64) {
+					writer.WriteStringValue(value.ToBase64());
+				}
+			}
+
+		}
+
+		public override bool CanConvert(Type typeToConvert) {
+			return typeof(ByteArray).IsAssignableFrom(typeToConvert);
+		}
+		
 		public ByteArrayBaseConverter(BaseModes mode = BaseModes.Base58) {
 			this.mode = mode;
 
 		}
-
-		public override bool CanRead => false;
-
-		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
-			if(value is SafeArrayHandle arrayWrapper) {
-
-				if(arrayWrapper.IsEmpty) {
-					new JValue("").WriteTo(writer);
-				} else {
-					if(this.mode == BaseModes.Base58) {
-						new JValue(arrayWrapper.Entry.ToBase58()).WriteTo(writer);
-					} else if(this.mode == BaseModes.Base64) {
-						new JValue(arrayWrapper.Entry.ToBase64()).WriteTo(writer);
-					}
-				}
-			}
-			else if(value is ByteArray byteArray) {
-
-				if(this.mode == BaseModes.Base58) {
-					new JValue(byteArray.ToBase58()).WriteTo(writer);
-				} else if(this.mode == BaseModes.Base64) {
-					new JValue(byteArray.ToBase64()).WriteTo(writer);
-				}
-			}
-		}
-
-		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
-
-			throw new NotImplementedException();
-
-			// if(reader.Value == null) {
-			// 	return null;
-			// }
-			//
-			// string basevalue = reader.Value.ToString();
-			//
-			// if(this.mode == BaseModes.Base58) {
-			// 	return ByteArray.FromBase58(basevalue);
-			// }
-			//
-			// if(this.mode == BaseModes.Base64) {
-			// 	return ByteArray.FromBase64(basevalue);
-			// }
-			//
-			// return null;
-		}
-
-		public override bool CanConvert(Type objectType) {
-			return typeof(SafeArrayHandle).IsAssignableFrom(objectType);
-		}
 	}
 
-	internal class DecimalConverter : JsonConverter {
+	internal class DecimalConverter : JsonConverter<decimal> {
 		public override bool CanConvert(Type objectType) {
 			return (objectType == typeof(decimal)) || (objectType == typeof(decimal?));
 		}
 
-		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
-			JToken neuralium = JToken.Load(reader);
+		public override decimal Read(ref Utf8JsonReader reader, 
+		                              Type typeToConvert,
+		                              JsonSerializerOptions options)
+		{
+			var name = reader.GetString();
 
-			if((neuralium.Type == JTokenType.Float) || (neuralium.Type == JTokenType.Integer)) {
-				return neuralium.ToObject<decimal>();
-			}
-
-			if(neuralium.Type == JTokenType.String) {
-				// customize this to suit your needs
-				return decimal.Parse(neuralium.ToString());
-			}
-
-			if((neuralium.Type == JTokenType.Null) && (objectType == typeof(decimal?))) {
-				return null;
-			}
-
-			throw new JsonSerializationException("Unexpected neuralium type: " + neuralium.Type);
+			return decimal.Parse(name);
 		}
 
-		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
-			writer.WriteValue(value.ToString());
-
+		public override void Write(Utf8JsonWriter writer,
+		                           decimal value,
+		                           JsonSerializerOptions options)
+		{
+			writer.WriteStringValue(value.ToString(CultureInfo.InvariantCulture));
 		}
 	}
 }

@@ -7,7 +7,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations {
 	public class SerializationFastKeysOperations : SerializationTransactionOperation {
 
-		public SerializationFastKeysOperations(ISerializationManager serializationManager, IChainDataWriteProvider chainDataWriteProvider) : base(serializationManager, chainDataWriteProvider) {
+		public SerializationFastKeysOperations(IChainDataWriteProvider chainDataWriteProvider) : base(chainDataWriteProvider) {
 		}
 
 		public AccountId AccountId { get; set; } = new AccountId();

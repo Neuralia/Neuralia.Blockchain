@@ -100,8 +100,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages 
 		/// </summary>
 		/// <param name="workflowCorrelationId"></param>
 		/// <returns></returns>
-		public TriggerMessageSet<MessageGroupManifestTrigger<R>, R> CreateMessageGroupManifestWorkflowTriggerSet(uint workflowCorrelationId) {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<MessageGroupManifestTrigger<R>, R>, MessageGroupManifestTrigger<R>>(workflowCorrelationId);
+		public TriggerMessageSet<MessageGroupManifestTrigger<R>, R> CreateMessageGroupManifestWorkflowTriggerSet(uint workflowCorrelationId, uint workflowSessionId) {
+			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<MessageGroupManifestTrigger<R>, R>, MessageGroupManifestTrigger<R>>(workflowCorrelationId, workflowSessionId);
 
 			return messageSet;
 		}

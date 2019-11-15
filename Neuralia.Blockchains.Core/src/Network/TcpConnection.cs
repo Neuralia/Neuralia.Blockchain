@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Data;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -18,7 +20,8 @@ using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
 
-	public interface ITcpConnection : IDisposable2 {
+	public interface ITcpConnection : IDisposableExtended {
+		
 		EndPoint RemoteEndPoint { get; }
 		IPMode IPMode { get; }
 		NetworkEndPoint EndPoint { get; }
@@ -31,6 +34,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		event TcpConnection.MessageBytesReceived DataReceived;
 		event EventHandler<DisconnectedEventArgs> Disconnected;
 		event Action Connected;
+		event Action Disposing;
 		
 		event Action<Guid> ConnectedUuidProvided;
 
@@ -39,9 +43,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		bool SendMessage(long hash);
 		void SendBytes(SafeArrayHandle bytes);
 		void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback);
-		bool CheckConnected();
+		bool CheckConnected(bool force = false);
 
 		bool PerformCounterConnection(int port);
+
 	}
 
 	public interface IProtocolTcpConnection : ITcpConnection {
@@ -89,7 +94,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		private readonly ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters;
 		private readonly AdaptiveInteger1_4 receiveByteShrinker = new AdaptiveInteger1_4();
 
-		private readonly AutoResetEvent resetEvent = new AutoResetEvent(false);
+		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
 		private readonly AdaptiveInteger1_4 sendByteShrinker = new AdaptiveInteger1_4();
 
@@ -122,6 +127,36 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		protected CancellationTokenSource tokenSource;
 
+		/// <summary>
+		/// a timestamp to know when we should check the connection for keepalive
+		/// </summary>
+		private DateTime NextConnectedAliveCheck { get; set; } = DateTime.MinValue;
+		
+		/// <summary>
+		/// a timer that will periodically check if connections are still active
+		/// </summary>
+		private static readonly Timer connectionCheckTimer = new Timer(state => {
+
+			foreach(var connState in connectionStates.ToArray()) {
+				if(connState.Value.IsDisposed) {
+					connectionStates.RemoveSafe(connState.Key);
+				} else if(connState.Value.State == ConnectionState.Connected) {
+					connState.Value.CheckConnected();
+				}
+			}
+
+		}, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(10));
+		
+		protected Guid ConnectionId { get; } = Guid.NewGuid();
+		
+		private static readonly ConcurrentDictionary<Guid, TcpConnection<READING_CONTEXT>> connectionStates = new ConcurrentDictionary<Guid, TcpConnection<READING_CONTEXT>>();
+
+		private static void AddConnectionState(TcpConnection<READING_CONTEXT> connection) {
+			if(!connectionStates.ContainsKey(connection.ConnectionId)) {
+				connectionStates.AddSafe(connection.ConnectionId, connection);
+			}
+		}
+
 		public TcpConnection(TcpConnection.ExceptionOccured exceptionCallback, bool isServer = false, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) {
 			this.isServer = isServer;
 
@@ -136,6 +171,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			this.tokenSource = new CancellationTokenSource();
+			
+			AddConnectionState(this);
 		}
 
 		/// <summary>
@@ -159,6 +196,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.SocketNewlyConnected();
 
 			this.State = ConnectionState.Connected;
+
+			AddConnectionState(this);
 		}
 
 		public TcpConnection(NetworkEndPoint remoteEndPoint, TcpConnection.ExceptionOccured exceptionCallback, bool isServer = false, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) : this(exceptionCallback, isServer, protocolMessageFilters) {
@@ -186,6 +225,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			this.socket.InitializeSocketParameters();
+			
+			AddConnectionState(this);
 		}
 
 		private bool IsDisposing { get; set; }
@@ -222,7 +263,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					task?.Wait();
 				}
 			} catch(Exception e) {
-				P2pException he = new P2pException("Could not send data as an occured.", P2pException.Direction.Send, P2pException.Severity.Casual, e);
+				P2pException he = new P2pException("Could not send data as an error occured.", P2pException.Direction.Send, P2pException.Severity.Casual, e);
 				this.Close();
 
 				throw he;
@@ -235,20 +276,28 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public NetworkEndPoint EndPoint { get; }
 
-		public bool CheckConnected() {
-			if(!this.socket.IsReallyConnected()) {
-				// yes, we try twice, just in case...
-				Thread.Sleep(300);
+		public bool CheckConnected(bool force = false) {
+
+			if(this.NextConnectedAliveCheck < DateTime.Now || force) {
+				this.NextConnectedAliveCheck = DateTime.Now + TimeSpan.FromSeconds(20); 
+				
 				if(!this.socket.IsReallyConnected()) {
-					// ok, we give up, connection is disconnected
-					this.State = ConnectionState.NotConnected;
+					// yes, we try twice, just in case...
+					Thread.Sleep(300);
 
-					// seems we are not connected after all
-					Log.Verbose("Socket was disconnected ungracefully from the other side. Disconnecting.");
-					this.Close();
+					if(!this.socket.IsReallyConnected()) {
+						// ok, we give up, connection is disconnected
+						this.State = ConnectionState.NotConnected;
 
-					return false;
+						// seems we are not connected after all
+						Log.Verbose("Socket was disconnected ungracefully from the other side. Disconnecting.");
+						this.Close();
+
+						return false;
+					}
 				}
+				
+				
 			}
 
 			return true;
@@ -260,14 +309,6 @@ namespace Neuralia.Blockchains.Core.Network {
 				lock(this.locker) {
 					if(this.IsDisposed || this.IsDisposing) {
 						return ConnectionState.NotConnected;
-					}
-
-					if(this.state == ConnectionState.Connected) {
-						// here we believe we are still connected. lets confirm that we really still are by checking the socket
-
-						this.CheckConnected();
-
-						return this.state; // we truly are connected
 					}
 
 					return this.state;
@@ -297,6 +338,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		public event TcpConnection.MessageBytesReceived DataReceived;
 		public event EventHandler<DisconnectedEventArgs> Disconnected;
 		public event Action Connected;
+		public event Action Disposing;
 		public event Action<Guid> ConnectedUuidProvided;
 
 		public bool IsConnectedUuidProvidedSet => this.ConnectedUuidProvided != null;
@@ -367,14 +409,15 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.SendHandshakeVersion();
 
 			// now wait for the handshake to complete
-			this.resetEvent.WaitOne(TimeSpan.FromSeconds(10));
+			this.resetEvent.Wait(TimeSpan.FromSeconds(30));
 
 			if(this.handshakeStatus != HandshakeStatuses.Completed) {
 
 				this.Dispose();
 
-				throw new TcpApplicationException("Failed to complete handshake");
+				throw new TcpApplicationException("Timedout waiting for a proper connection handshake.");
 			}
+			this.resetEvent.Reset();;
 		}
 
 		/// <summary>
@@ -519,36 +562,36 @@ namespace Neuralia.Blockchains.Core.Network {
 				if(this.handshakeStatus == HandshakeStatuses.Completed) {
 					this.resetEvent.Set();
 				}
+				await this.ReadMessage(bytes => {
 
-				try {
-					await this.ReadMessage(bytes => {
+					if(handshakeCallback != null) {
 
-						if(handshakeCallback != null) {
+						this.TriggerHandshakeCallback(ref handshakeCallback, bytes);
 
-							this.TriggerHandshakeCallback(ref handshakeCallback, bytes);
+						this.handshakeStatus = HandshakeStatuses.Completed;
 
-							this.handshakeStatus = HandshakeStatuses.Completed;
-
-							this.resetEvent.Set();
-						} else {
-							// data received
-							this.InvokeDataReceived(bytes);
-						}
-					}, ct);
-				} catch(InvalidPeerException ipex) {
-					// ok, we got an invalid peer. we dont need to do anything, lost let it go and disconnect
-					this.alertExceptions = false;
-				} catch(TaskCanceledException tex) {
-					// the cancel request might be normal, we dont cause exception right away
-					//TODO: how do we handle this?
-					this.alertExceptions = false;
-				} catch(ObjectDisposedException ode) {
-					// do nothing
-					this.alertExceptions = false;
-				}
-
+						this.resetEvent.Set();
+					} else {
+						// data received
+						this.InvokeDataReceived(bytes);
+					}
+				}, ct);
+				
+			} catch(InvalidPeerException ipex) {
+				// ok, we got an invalid peer. we dont need to do anything, lost let it go and disconnect
+				this.alertExceptions = false;
 			} catch(CounterConnectionException cex) {
 				this.alertExceptions = false;
+			} catch(TaskCanceledException tex) {
+				this.alertExceptions = false;
+			} catch(OperationCanceledException opex) {
+				this.alertExceptions = false;
+			}catch(ObjectDisposedException ode) {
+				// do nothing
+				this.alertExceptions = false;
+			}catch(Exception ex) {
+				
+				Log.Verbose(ex, "Error occured on the connection");
 			} finally {
 				// disconnected
 				this.Close();
@@ -595,13 +638,29 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private async Task ReadHandshake(CancellationToken cancellationNeuralium = default) {
 
-			READING_CONTEXT read = await this.ReadDataFrame(default, cancellationNeuralium);
+			bool dataRead = false;
+			READING_CONTEXT read = default;
+			
+			DateTime timeout = DateTime.Now+TimeSpan.FromSeconds(30);
+			do {
+				if(timeout < DateTime.Now) {
+					throw new ApplicationException("Timeout out getting handshake");
+				}
+				
+				read = await this.ReadDataFrame(default, cancellationNeuralium); 
 
-			if(read.IsCanceled) {
-				this.ReadTaskCancelled();
+				if(read.IsCanceled || read.IsCompleted) {
+					this.ReadTaskCancelled();
 
-				throw new TaskCanceledException();
-			}
+					throw new TaskCanceledException();
+				}
+				dataRead = !read.IsEmpty; 
+
+				if(!dataRead) {
+					read.DataRead(0);
+				}
+
+			} while(dataRead == false);
 
 			// can we find a complete frame?
 			if(!read.IsEmpty && (read.Length == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length)) {
@@ -789,10 +848,12 @@ namespace Neuralia.Blockchains.Core.Network {
 								}
 
 								//lets handle the completed message. we can launch it in its own thread since message pumping can continue meanwhile independently
-								await Task<bool>.Factory.StartNew(() => {
 
-									using(releasedMainBuffer) {
-										using(IDataRehydrator bufferRehydrator = DataSerializationFactory.CreateRehydrator(releasedMainBuffer)) {
+								await Task.Run(() => {
+
+									var localMainBuffer = releasedMainBuffer;
+									using(localMainBuffer) {
+										using(IDataRehydrator bufferRehydrator = DataSerializationFactory.CreateRehydrator(localMainBuffer)) {
 
 											// skip the header offset
 											bufferRehydrator.Forward(messageEntry.Header.MessageOffset);
@@ -804,12 +865,13 @@ namespace Neuralia.Blockchains.Core.Network {
 									}
 
 									return true;
-								}, TaskCreationOptions.AttachedToParent).WithAllExceptions().ContinueWith(task => {
+								}, cancellationNeuralium).WithAllExceptions().ContinueWith(task => {
 									if(task.IsFaulted) {
 										//an exception occured
 										throw new P2pException("An exception occured while processing a message response.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
 									}
 								}, cancellationNeuralium);
+
 							}
 						} else {
 							tryAttempt++;
@@ -886,9 +948,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			DisconnectedEventArgs args = DisconnectedEventArgs.GetObject();
 
 			//Make a copy to avoid race condition between null check and invocation
-			var handler = this.Disconnected;
 
-			handler?.Invoke(this, args);
+			this.Disconnected?.Invoke(this, args);
 		}
 
 		protected bool WaitOnConnect(int timeout) {
@@ -898,7 +959,11 @@ namespace Neuralia.Blockchains.Core.Network {
 		private void Dispose(bool disposing) {
 			bool disposingChanged = false;
 
-			if(this.IsDisposed || this.IsDisposing) {
+			if(connectionStates.ContainsKey(this.ConnectionId)) {
+				connectionStates.RemoveSafe(this.ConnectionId);
+			}
+			
+			if(this.IsDisposed || !disposing || this.IsDisposing) {
 				return;
 
 			}
@@ -912,8 +977,10 @@ namespace Neuralia.Blockchains.Core.Network {
 				}
 
 				if(!this.IsDisposed || disposingChanged) {
-
+					
 					this.DisposeAll();
+					
+					this.Disposing?.Invoke();
 				}
 			} finally {
 				this.IsDisposed = true;
@@ -921,12 +988,22 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 		}
 
+		~TcpConnection() {
+			this.Dispose(false);
+		}
+		
 		protected virtual void DisposeAll() {
 
 			// give it a chance to stop cleanly by cancellation
 
 			try {
 				this.tokenSource?.Cancel();
+			} catch {
+
+			}
+			
+			try {
+				this.resetEvent?.Dispose();
 			} catch {
 
 			}

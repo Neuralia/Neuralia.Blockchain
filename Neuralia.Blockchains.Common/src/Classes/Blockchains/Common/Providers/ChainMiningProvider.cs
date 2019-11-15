@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading;
+using Microsoft.EntityFrameworkCore.Internal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections;
@@ -33,6 +35,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
@@ -61,7 +64,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void DisableMining();
 
-		List<IElectionCandidacyMessage> PerformElection(IBlock currentBlock, IEventPoolProvider chainEventPoolProvider, IBlockchainManager blockchainManager);
+		void PerformElection(IBlock currentBlock, IEventPoolProvider chainEventPoolProvider, IBlockchainManager blockchainManager, Action<List<IElectionCandidacyMessage>> electedCallback);
 		List<ElectedCandidateResultDistillate> PerformElectionComputations(BlockElectionDistillate blockElectionDistillate, IEventPoolProvider chainEventPoolProvider, IBlockchainManager blockchainManager);
 		List<IElectionCandidacyMessage> PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults, IEventPoolProvider chainEventPoolProvider, IBlockchainManager blockchainManager);
 	}
@@ -100,7 +103,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		private const int SEND_WORKFLOW_TIMEOUT = 30;
 
-		
+		/// <summary>
+		/// amount of seconds to wait for the blockchain to sync before giving up as out of sync
+		/// </summary>
+		private const int CHAIN_SYNC_WAIT_TIMEOUT = 30;
 
 		protected readonly CENTRAL_COORDINATOR centralCoordinator;
 
@@ -108,6 +114,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     Here we store the elections that have yet to come to maturity
 		/// </summary>
 		protected readonly Dictionary<long, List<BlockElectionDistillate>> electionBlockCache = new Dictionary<long, List<BlockElectionDistillate>>();
+
+		/// <summary>
+		/// Queue of events stored for later
+		/// </summary>
+		protected readonly ConcurrentQueue<Action> callbackQueue = new ConcurrentQueue<Action>();
 
 		protected readonly IElectionProcessorFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> factory;
 
@@ -121,13 +132,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected bool miningEnabled;
 
 		protected BlockchainNetworkingService.MiningRegistrationParameters registrationParameters;
-		
+
 		private Timer updateMiningRegistrationTimer;
 
 		private Timer updateMiningStatusTimer;
 
+		/// <summary>
+		/// If we request a mining callback to enable mining when blockchain is ready. AppSettings chain config EnableMiningPreload must be set to true
+		/// </summary>
+		private bool miningPreloadRequested = false;
+
+		private Action miningPreloadCallback;
+
 		public ChainMiningProvider(CENTRAL_COORDINATOR centralCoordinator) {
 			this.centralCoordinator = centralCoordinator;
+			this.centralCoordinator.BlockchainSynced += this.OnSyncedEvent;
+			this.centralCoordinator.WalletSynced += this.OnSyncedEvent;
+			
 			this.timeService = centralCoordinator.BlockchainServiceSet.TimeService;
 
 			this.factory = this.GetElectionProcessorFactory();
@@ -146,26 +167,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     This is NOT saved to the filesystem. we hold it in memory and we start fresh every time we load the daemon
 		/// </summary>
-		public bool MiningEnabled {
-			get {
-				if(!this.MiningAllowed) {
-					return false;
-				}
-
-				return this.miningEnabled;
-			}
-		}
+		public bool MiningEnabled => this.MiningAllowed && this.miningEnabled;
 
 		public IElectionProcessorFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ElectionProcessorFactory => this.factory;
 
 		public virtual void EnableMining(AccountId miningAccountId, AccountId delegateAccountId) {
 
+			if(this.MiningEnabled || this.miningPreloadRequested) {
+
+				if(this.MiningAccountId == null) {
+					this.DisableMining();
+				}
+
+				return;
+			}
+
+			IWalletAccount miningWalletAccount = null;
+
 			if(miningAccountId == null) {
-				
+
 				if(!this.WalletProvider.IsDefaultAccountPublished) {
-					
+
 					string message = "Failed to mine. The mining account has not yet been fully published. Mining is not yet possible until the account is presented and confirmed on the blockchain.";
 					Log.Error(message);
+
 					throw new ApplicationException(message);
 				}
 
@@ -174,19 +199,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(miningAccountId == null) {
 					string message = "Failed to mine. We could not load the default published account.";
 					Log.Error(message);
+
 					throw new ApplicationException(message);
 				}
-			} else {
-				
-				var walletAccount = this.WalletProvider.GetWalletAccount(miningAccountId);
 
-				if(walletAccount == null) {
+				miningWalletAccount = this.WalletProvider.GetActiveAccount();
+			} else {
+
+				miningWalletAccount = this.WalletProvider.GetWalletAccount(miningAccountId);
+
+				if(miningWalletAccount == null) {
 					string message = "Failed to mine. Account does not exist.";
 					Log.Error(message);
 
 					throw new ApplicationException(message);
 				}
-				if(!this.WalletProvider.IsAccountPublished(walletAccount.AccountUuid)) {
+
+				if(!this.WalletProvider.IsAccountPublished(miningWalletAccount.AccountUuid)) {
 					string message = "Failed to mine. The mining account has not yet been fully published. Mining is not yet possible until the account is presented and confirmed on the blockchain.";
 					Log.Error(message);
 
@@ -208,10 +237,54 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				throw new ApplicationException(message);
 			}
 
-			if(!this.centralCoordinator.IsChainLikelySynchronized) {
+			void QueryKeyPassphrase() {
+				// now, if the message key is encrypted, we need the passphrase
+				if(miningWalletAccount.KeysEncrypted) {
 
-				this.WaitForSync();
+					//ok, we must reqeset it
+					this.WalletProvider.EnsureWalletKeyIsReady(miningWalletAccount.AccountUuid, GlobalsService.MESSAGE_KEY_ORDINAL_ID);
+
+				}
 			}
+
+			if(!this.centralCoordinator.IsChainLikelySynchronized) {
+				if(!this.CheckSyncStatus()) {
+					// chain is still not synced, we wither fail, or register for full sync to start the mininig automatically
+					void Catcher() {
+						try {
+							this.EnableMining(miningAccountId, delegateAccountId);
+						} finally {
+							this.miningPreloadRequested = false;
+
+							if(this.miningPreloadCallback != null) {
+								this.centralCoordinator.BlockchainSynced -= this.miningPreloadCallback;
+								this.miningPreloadCallback = null;
+							}
+						}
+					}
+
+					if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnableMiningPreload && !this.miningPreloadRequested) {
+
+						QueryKeyPassphrase();
+
+						this.miningPreloadRequested = true;
+
+						this.miningPreloadCallback = Catcher;
+						this.centralCoordinator.BlockchainSynced += this.miningPreloadCallback;
+
+						Log.Information("Mining could not be enabled as the blockchain is not fully synced. A callback has been set and mining will be enabled automatically when the blockchain is fully synced.");
+
+						return;
+					}
+
+					string message = "Mining could not be enabled as the blockchain is not yet fully synced.";
+					Log.Error(message);
+
+					throw new ApplicationException(message);
+				}
+			}
+
+			QueryKeyPassphrase();
 
 			this.MiningAccountId = miningAccountId;
 			this.miningEnabled = true;
@@ -220,6 +293,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(this.MiningEnabled) {
 
 					this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.MiningStarted);
+					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.MiningStatusChanged(this.MiningEnabled));
 
 					Log.Information("Mining is now enabled.");
 
@@ -229,23 +303,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					// register the chain in the network service, so we can answer the IP Validator
 
-					BlockchainNetworkingService.MiningRegistrationParameters localRegistrationParameters = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RegisterMiningRegistrationParameters();
-
-					localRegistrationParameters.AccountId = miningAccountId;
-					localRegistrationParameters.DelegateAccountId = delegateAccountId;
-
-					// here we can reuse our existing password if its not too old
-					if(this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastMiningRegistrationUpdate >= (DateTime.UtcNow - TimeSpan.FromMinutes(GlobalsService.MINING_REGISTRATION_TIMEOUT))) {
-						localRegistrationParameters.Password = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.MiningPassword;
-					} else {
-						// generate our random password
-						localRegistrationParameters.Password = GlobalRandom.GetNextLong();
-					}
-
 					if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.DisableMiningRegistration) {
 
+						this.registrationParameters = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RegisterMiningRegistrationParameters();
+
+						this.registrationParameters.AccountId = miningAccountId;
+						this.registrationParameters.DelegateAccountId = delegateAccountId;
+						this.registrationParameters.Password = 0;
+
+						// here we can reuse our existing password if its not too old
+						if(this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastMiningRegistrationUpdate >= (DateTime.UtcNow - GlobalsService.TimeoutMinerDelay)) {
+							this.registrationParameters.Password = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.MiningPassword;
+
+							if(this.registrationParameters.Password == 0) {
+								// clear it all
+								this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.MiningPassword = 0;
+								this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastMiningRegistrationUpdate = DateTime.MinValue;
+							}
+						}
+
+						if(this.registrationParameters.Password == 0) {
+							// generate our random password
+							do {
+								this.registrationParameters.Password = GlobalRandom.GetNextLong();
+							} while(this.registrationParameters.Password == 0);
+						}
+
 						// ok, now we must register for mining.  if we can, we will try the rest api first, its so much simpler. if we can't, we will publish a message on chain
-						ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo(localRegistrationParameters);
 
 						bool success = false;
 						bool web = this.ChainConfiguration.ElectionsRegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Web);
@@ -253,12 +337,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 						if(web) {
 							try {
-								this.PerformWebapiRegistration(electionsCandidateRegistrationInfo);
-
-								this.registrationParameters = localRegistrationParameters;
-
-								this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.MiningPassword = this.registrationParameters.Password;
-								this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastMiningRegistrationUpdate = DateTime.UtcNow;
+								this.PerformWebapiRegistration();
 
 								// start our account update service
 								this.StartAccountUpdateController();
@@ -266,8 +345,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 								success = true;
 							} catch(Exception ex) {
-
-								this.registrationParameters = null;
 
 								if(chain) {
 									// do not raise an exception, we will try to mine on chain
@@ -277,26 +354,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 								}
 							}
 						}
+
 						if(chain && !success) {
 
-							// ok, well this is it, we will register for mining on chain
-							if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIp == null || string.IsNullOrWhiteSpace(electionsCandidateRegistrationInfo.Ip)) {
-								throw new ApplicationException("Our public IP is still undefined. We can not register for mining on chain without an IP address to provide.");
-							}
-
 							try {
-								this.registrationParameters = null;
-								this.PerformOnchainRegistration(electionsCandidateRegistrationInfo);
+
+								this.PerformOnchainRegistration();
 								success = true;
 							} catch(Exception ex) {
 								throw new ApplicationException("Failed to register for mining by on chain message.", ex);
 							}
+						}
+
+						if(success) {
+							this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.MiningPassword = this.registrationParameters.Password;
+							this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastMiningRegistrationUpdate = DateTime.UtcNow;
 						}
 					}
 				} else {
 					throw new ApplicationException();
 				}
 			} catch(Exception ex) {
+				this.registrationParameters = null;
 				Log.Error(ex, "Mining is disabled. Impossible to enable mining.");
 				this.DisableMining();
 			}
@@ -304,15 +383,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public virtual void DisableMining() {
-			
+
+			if(!this.MiningEnabled && !this.miningPreloadRequested && this.miningPreloadCallback == null) {
+				return;
+			}
+
 			this.StopAccountUpdateController();
-			
+
 			this.miningEnabled = false;
+
+			while(this.callbackQueue.TryDequeue(out Action callback)) {
+				// do nothing, we are clearing.
+			}
+			
+			if(this.miningPreloadRequested) {
+				if(this.miningPreloadCallback != null) {
+					this.centralCoordinator.BlockchainSynced += this.miningPreloadCallback;
+					this.miningPreloadCallback = null;
+				}
+
+				this.miningPreloadRequested = false;
+			}
+
+			bool web = this.ChainConfiguration.ElectionsRegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Web);
+
+			if(web && this.registrationParameters != null) {
+				try {
+					// lets try to release our registration if we can
+					this.PerformWebapiRegistrationStop();
+
+				} catch(Exception ex) {
+					// do nothing if this failed, its not very important
+					Log.Warning(ex, "Failed to stop mining through web registration");
+				}
+			}
 
 			this.registrationParameters = null;
 
 			this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.MiningEnded);
-
+			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.MiningStatusChanged(this.MiningEnabled));
+			
 			Log.Information("Mining is now disabled.");
 
 			// delete the file from the wallet
@@ -321,7 +431,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// remove our network registration
 			this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.UnRegisterMiningRegistrationParameters();
-
 		}
 
 		public virtual List<MiningHistoryEntry> GetMiningHistory() {
@@ -352,7 +461,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				}, this, TimeSpan.FromMinutes(GlobalsService.UPDATE_MINING_STATUS_START_DELAY), TimeSpan.FromMinutes(GlobalsService.UPDATE_MINING_STATUS_DELAY));
 			}
-			
+
 		}
 
 		protected void ResetAccountUpdateController() {
@@ -367,7 +476,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			try {
 				this.updateMiningRegistrationTimer?.Dispose();
-			} catch(Exception ex){
+			} catch(Exception ex) {
 				Log.Error(ex, $"Failed to dispose {nameof(this.updateMiningRegistrationTimer)}");
 			}
 
@@ -375,43 +484,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			try {
 				this.updateMiningStatusTimer?.Dispose();
-			} catch(Exception ex){
+			} catch(Exception ex) {
 				Log.Error(ex, $"Failed to dispose {nameof(this.updateMiningStatusTimer)}");
 			}
+
 			this.updateMiningStatusTimer = null;
 
 			return wasRunning;
-		}
-		
-		private void WaitForSync() {
-			AutoResetEvent resetEvent = new AutoResetEvent(false);
-
-			void Catcher() {
-				resetEvent.Set();
-			}
-
-			this.centralCoordinator.BlockchainSynced += Catcher;
-
-			try {
-				var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
-
-				blockchainTask.SetAction((service, taskRoutingContext2) => {
-					service.SynchronizeBlockchain(false);
-				});
-
-				blockchainTask.Caller = null;
-				this.centralCoordinator.RouteTask(blockchainTask);
-
-				if(!resetEvent.WaitOne(TimeSpan.FromSeconds(10))) {
-
-					string message = "Failed to mine. Your blockchain must be synchronized to mine.";
-					Log.Error(message);
-
-					throw new ApplicationException(message);
-				}
-			} finally {
-				this.centralCoordinator.BlockchainSynced -= Catcher;
-			}
 		}
 
 		/// <summary>
@@ -432,7 +511,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return false;
 		}
 
-		protected ElectionsCandidateRegistrationInfo PrepareRegistrationInfo(BlockchainNetworkingService.MiningRegistrationParameters registrationParameters) {
+		protected ElectionsCandidateRegistrationInfo PrepareRegistrationInfo() {
+
+			if(this.registrationParameters == null) {
+				throw new ArgumentException("registration parameters are null");
+			}
+
 			ElectionsCandidateRegistrationInfo info = new ElectionsCandidateRegistrationInfo();
 
 			if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIp != null) {
@@ -442,17 +526,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			info.Port = GlobalSettings.ApplicationSettings.Port;
 
-			info.AccountId = registrationParameters.AccountId;
-			info.DelegateAccountId = registrationParameters.DelegateAccountId;
+			info.AccountId = this.registrationParameters.AccountId;
+			info.DelegateAccountId = this.registrationParameters.DelegateAccountId;
 
 			info.ChainType = this.centralCoordinator.ChainId;
-			info.Password = registrationParameters.Password;
+			info.Password = this.registrationParameters.Password;
 
 			info.Timestamp = this.timeService.CurrentRealTime;
 
 			return info;
 		}
-		
+
 		/// <summary>
 		///     upudate our registration to keep it active by sending our information again, with the very same password.
 		///     Chain miners dont need to do this, since they will be contacted directly
@@ -460,8 +544,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected void UpdateWebapiAccountRegistration() {
 			if(this.ChainConfiguration.ElectionsRegistrationMethod.HasFlag(ChainConfigurations.RegistrationMethods.Web) && (this.registrationParameters != null)) {
 				try {
-					ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo(this.registrationParameters);
-					this.PerformWebapiRegistrationUpdate(electionsCandidateRegistrationInfo);
+					this.PerformWebapiRegistrationUpdate();
 
 					this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastMiningRegistrationUpdate = DateTime.UtcNow;
 
@@ -475,7 +558,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     try to register through the public webapi interface
 		/// </summary>
-		protected void PerformWebapiRegistrationUpdate(ElectionsCandidateRegistrationInfo registrationInfo) {
+		protected void PerformWebapiRegistrationUpdate() {
+
+			var registrationInfo = this.PrepareRegistrationInfo();
+
+			if(registrationInfo.Password == 0) {
+				throw new ApplicationException("Failed to update mining registration. Password was not set.");
+			}
+
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
 
 			Repeater.Repeat(() => {
@@ -483,12 +573,51 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
 				parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
+
 				if(registrationInfo.DelegateAccountId != null) {
 					parameters.Add("delegateAccountId", registrationInfo.DelegateAccountId.ToLongRepresentation());
 				}
+
 				parameters.Add("password", registrationInfo.Password);
-				
-				var result = restUtility.Put(url, "registration/update", parameters);
+
+				var result = restUtility.Put(url, "registration/update-registration", parameters);
+
+				if(result.Wait(TimeSpan.FromSeconds(20)) && !result.IsFaulted) {
+
+					// ok, check the result
+					if(result.Result.StatusCode == HttpStatusCode.OK) {
+
+						// we just udpated
+						return;
+					}
+				}
+
+				throw new ApplicationException("Failed to update mining registration through web");
+
+			});
+		}
+
+		/// <summary>
+		///     try to unregister a stop through the public webapi interface
+		/// </summary>
+		protected void PerformWebapiRegistrationStop() {
+
+			var registrationInfo = this.PrepareRegistrationInfo();
+
+			if(registrationInfo.Password == 0) {
+				throw new ApplicationException("Failed to stop mining registration. Password was not set.");
+			}
+
+			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
+
+			Repeater.Repeat(() => {
+				string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
+
+				Dictionary<string, object> parameters = new Dictionary<string, object>();
+				parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
+				parameters.Add("password", registrationInfo.Password);
+
+				var result = restUtility.Put(url, "registration/stop", parameters);
 
 				if(result.Wait(TimeSpan.FromSeconds(20)) && !result.IsFaulted) {
 
@@ -499,15 +628,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 				}
 
-				throw new ApplicationException("Failed to register for mining through web");
-
+				throw new ApplicationException("Failed to stop mining through web");
 			});
 		}
 
 		/// <summary>
 		///     try to register through the public webapi interface
 		/// </summary>
-		protected void PerformWebapiRegistration(ElectionsCandidateRegistrationInfo registrationInfo) {
+		protected void PerformWebapiRegistration() {
+
+			var registrationInfo = this.PrepareRegistrationInfo();
+
+			if(registrationInfo.Password == 0) {
+				throw new ApplicationException("Failed to register for mining. Password was not set.");
+			}
+
+			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
 
 			using(IXmssWalletKey key = this.WalletProvider.LoadKey<IXmssWalletKey>(GlobalsService.MESSAGE_KEY_NAME)) {
 
@@ -518,44 +654,44 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				registrationInfo.Autograph = autograph.ToExactByteArrayCopy();
 				autograph.Return();
 
-				Log.Verbose("Message successfully signed.");
-			}
+				if(registrationInfo.Autograph != null) {
 
-			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
+					Log.Verbose("Message successfully signed.");
 
-			if(registrationInfo.Autograph != null) {
-
-				Repeater.Repeat(() => {
-
+					var autograph64 = Convert.ToBase64String(registrationInfo.Autograph);
 					string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
+					var longAccountId = registrationInfo.AccountId.ToLongRepresentation();
 
-					Dictionary<string, object> parameters = new Dictionary<string, object>();
-					parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
+					Repeater.Repeat(() => {
 
-					if(registrationInfo.DelegateAccountId != null) {
-						parameters.Add("delegateAccountId", registrationInfo.DelegateAccountId.ToLongRepresentation());
-					}
+						Dictionary<string, object> parameters = new Dictionary<string, object>();
+						parameters.Add("accountId", longAccountId);
 
-					parameters.Add("password", registrationInfo.Password);
-					parameters.Add("autograph", Convert.ToBase64String(registrationInfo.Autograph));
-
-					var result = restUtility.Put(url, "registration/register", parameters);
-
-					if(result.Wait(TimeSpan.FromSeconds(20)) && !result.IsFaulted) {
-
-						// ok, check the result
-						if(result.Result.StatusCode == HttpStatusCode.OK) {
-							// ok, we are not registered. we can await a response from the IP Validator
-							return;
+						if(registrationInfo.DelegateAccountId != null) {
+							parameters.Add("delegateAccountId", registrationInfo.DelegateAccountId.ToLongRepresentation());
 						}
-					}
 
-					throw new ApplicationException("Failed to register for mining through web");
+						parameters.Add("password", registrationInfo.Password);
+						parameters.Add("autograph", autograph64);
 
-				});
+						var result = restUtility.Put(url, "registration/register", parameters);
 
-			} else {
-				throw new ApplicationException("Failed to register for mining through web; autograph was null");
+						if(result.Wait(TimeSpan.FromSeconds(5)) && !result.IsFaulted) {
+
+							// ok, check the result
+							if(result.Result.StatusCode == HttpStatusCode.OK) {
+								// ok, we are not registered. we can await a response from the IP Validator
+								return;
+							}
+						}
+
+						throw new ApplicationException("Failed to register for mining through web");
+
+					});
+
+				} else {
+					throw new ApplicationException("Failed to register for mining through web; autograph was null");
+				}
 			}
 		}
 
@@ -567,7 +703,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				Repeater.Repeat(() => {
 					string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
 
-					ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo(this.registrationParameters);
+					var electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo();
+
+					if(electionsCandidateRegistrationInfo.Password == 0) {
+						throw new ApplicationException("Failed to check mining registration status. Password was not set.");
+					}
 
 					var parameters = new Dictionary<string, object>();
 					parameters.Add("accountId", electionsCandidateRegistrationInfo.AccountId.ToLongRepresentation());
@@ -590,17 +730,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				});
 			}
 		}
-		
-		/// <summary>
-		///     je dois reviser
-		///     register through an onchain message
-		/// </summary>
-		protected void PerformOnchainRegistration(ElectionsCandidateRegistrationInfo registrationInfo) {
-			this.PerformMiningregistration(registrationInfo, ChainConfigurations.RegistrationMethods.Gossip);
-		}
 
-		protected void PerformMiningregistration(ElectionsCandidateRegistrationInfo registrationInfo, ChainConfigurations.RegistrationMethods registrationMethod) {
-			var sendWorkflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateSendElectionsCandidateRegistrationMessageWorkflow(this.MiningAccountId, registrationInfo, registrationMethod, new CorrelationContext());
+		protected void PerformOnchainRegistration() {
+
+			ElectionsCandidateRegistrationInfo registrationInfo = this.PrepareRegistrationInfo();
+
+			// ok, well this is it, we will register for mining on chain
+			if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIp == null || string.IsNullOrWhiteSpace(registrationInfo.Ip)) {
+				throw new ApplicationException("Our public IP is still undefined. We can not register for mining on chain without an IP address to provide.");
+			}
+
+			var sendWorkflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateSendElectionsCandidateRegistrationMessageWorkflow(this.MiningAccountId, registrationInfo, ChainConfigurations.RegistrationMethods.Gossip, new CorrelationContext());
 
 			this.centralCoordinator.PostImmediateWorkflow(sendWorkflow);
 
@@ -641,7 +781,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected void AddElectionBlock(BlockElectionDistillate blockElectionDistillate) {
 
 			if(blockElectionDistillate.HasActiveElection) {
-				long maturityId = blockElectionDistillate.currentBlockId + blockElectionDistillate.electionContext.Maturity;
+				long maturityId = blockElectionDistillate.currentBlockId + blockElectionDistillate.ElectionContext.Maturity;
 
 				if(!this.electionBlockCache.ContainsKey(maturityId)) {
 					this.electionBlockCache.Add(maturityId, new List<BlockElectionDistillate>());
@@ -662,7 +802,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(this.electionBlockCache.ContainsKey(maturityBlockId)) {
 				// we only care about active ones
-				results.AddRange(this.electionBlockCache[maturityBlockId].Where(b => (b.electionContext.ElectionMode == ElectionModes.Active) && (matureBlockIds?.Contains(b.currentBlockId) ?? true)));
+				results.AddRange(this.electionBlockCache[maturityBlockId].Where(b => (b.ElectionContext.ElectionMode == ElectionModes.Active) && (matureBlockIds?.Contains(b.currentBlockId) ?? true)));
 			}
 
 			return results;
@@ -728,34 +868,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			foreach(IIntermediaryElectionResults entry in currentBlock.IntermediaryElectionResults) {
 
 				var intermediateElectionContext = blockElectionDistillate.CreateIntermediateElectionContext();
-				
+
 				// now the questions
 				//TODO: this needs major cleaning
 				if(entry.SimpleQuestion is IBlockTransactionIdElectionQuestion blockTransactionIdElectionQuestion) {
 					var question = new QuestionTransactionSectionDistillate();
 
 					question.BlockId = blockTransactionIdElectionQuestion.BlockId;
-					
-					question.TransactionIndex = (int?)blockTransactionIdElectionQuestion.TransactionIndex?.Value;
 
-					question.SelectedTransactionSection = (byte)blockTransactionIdElectionQuestion.SelectedTransactionSection;
-					question.SelectedComponent = (byte)blockTransactionIdElectionQuestion.SelectedComponent;
-					
+					question.TransactionIndex = (int?) blockTransactionIdElectionQuestion.TransactionIndex?.Value;
+
+					question.SelectedTransactionSection = (byte) blockTransactionIdElectionQuestion.SelectedTransactionSection;
+					question.SelectedComponent = (byte) blockTransactionIdElectionQuestion.SelectedComponent;
+
 					intermediateElectionContext.SimpleQuestion = question;
 				}
-				
+
 				if(entry.HardQuestion is IBlockTransactionIdElectionQuestion hardBlockTransactionIdElectionQuestion) {
 					var question = new QuestionTransactionSectionDistillate();
 
 					question.BlockId = hardBlockTransactionIdElectionQuestion.BlockId;
-					question.TransactionIndex = (int?)hardBlockTransactionIdElectionQuestion.TransactionIndex?.Value;
+					question.TransactionIndex = (int?) hardBlockTransactionIdElectionQuestion.TransactionIndex?.Value;
 
-					question.SelectedTransactionSection = (byte)hardBlockTransactionIdElectionQuestion.SelectedTransactionSection;
-					question.SelectedComponent = (byte)hardBlockTransactionIdElectionQuestion.SelectedComponent;
-					
+					question.SelectedTransactionSection = (byte) hardBlockTransactionIdElectionQuestion.SelectedTransactionSection;
+					question.SelectedComponent = (byte) hardBlockTransactionIdElectionQuestion.SelectedComponent;
+
 					intermediateElectionContext.HardQuestion = question;
 				}
-				
+
 				if(entry is IPassiveIntermediaryElectionResults simplepassiveIntermediaryElectionResults) {
 
 					if(simplepassiveIntermediaryElectionResults.ElectedCandidates.Contains(miningAccountId)) {
@@ -765,7 +905,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						this.PreparePassiveElectionContext(currentBlock.BlockId.Value, miningAccountId, intermediateElectionContext.PassiveElectionContextDistillate, simplepassiveIntermediaryElectionResults, currentBlock);
 					}
 				}
-				
+
 				blockElectionDistillate.IntermediaryElectionResults.Add(intermediateElectionContext);
 			}
 
@@ -788,7 +928,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(currentBlock is IElectionBlock currentElection) {
 
-				blockElectionDistillate.electionContext = currentElection.ElectionContext;
+				blockElectionDistillate.ElectionContext = currentElection.ElectionContext;
 
 				blockElectionDistillate.HasActiveElection = true;
 			}
@@ -803,12 +943,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="miningAccountId"></param>
 		/// <returns></returns>
 		public virtual void PrepareBlockElectionContext(BlockElectionDistillate blockElectionDistillate, AccountId miningAccountId) {
-			if((blockElectionDistillate.blockHash == null) || blockElectionDistillate.blockHash.IsEmpty) {
-				if(string.IsNullOrWhiteSpace(blockElectionDistillate.blockHash64)) {
+			if((blockElectionDistillate.blockHash.Entry == null) || blockElectionDistillate.blockHash.IsEmpty) {
+				if(string.IsNullOrWhiteSpace(blockElectionDistillate.blockHashSerialized)) {
 					throw new ApplicationException("Invalid block distillate");
 				}
 
-				blockElectionDistillate.blockHash.Entry = ByteArray.FromBase64(blockElectionDistillate.blockHash64).Entry;
+				blockElectionDistillate.blockHash.Entry = ByteArray.FromBase58(blockElectionDistillate.blockHashSerialized).Entry;
 			}
 
 			if((blockElectionDistillate.blockType == (ComponentVersion<BlockType>) null) || blockElectionDistillate.blockType.IsNull) {
@@ -856,24 +996,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="currentBlock"></param>
 		/// <param name="chainEventPoolProvider"></param>
 		/// <returns></returns>
-		public virtual List<IElectionCandidacyMessage> PerformElection(IBlock currentBlock, IEventPoolProvider chainEventPoolProvider, IBlockchainManager blockchainManager) {
+		public virtual void PerformElection(IBlock currentBlock, IEventPoolProvider chainEventPoolProvider, IBlockchainManager blockchainManager, Action<List<IElectionCandidacyMessage>> electedCallback) {
 
-			BlockElectionDistillate blockElectionDistillate = this.PrepareBlockElectionContext(currentBlock, this.MiningAccountId);
+			void Callback() {
 
-			var electionResults = this.PerformElectionComputations(blockElectionDistillate, chainEventPoolProvider, blockchainManager);
+				// this check is important, in case we are running in deferred mode, we could be out of date, and thus moot.
+				if(!this.IsChainFullySynced || this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight != currentBlock.BlockId) {
+					// this wont work anymore, we must stop
+					return;
+				}
+				
+				BlockElectionDistillate blockElectionDistillate = this.PrepareBlockElectionContext(currentBlock, this.MiningAccountId);
 
-			if(electionResults == null) {
-				return new List<IElectionCandidacyMessage>();
+				var electionResults = this.PerformElectionComputations(blockElectionDistillate, chainEventPoolProvider, blockchainManager);
+
+				if(electionResults == null) {
+					return;
+				}
+
+				// select transactions
+				foreach(ElectedCandidateResultDistillate result in electionResults) {
+
+					// select transactions for this election
+					result.SelectedTransactionIds.AddRange(this.SelectTransactions(blockElectionDistillate.currentBlockId, result, chainEventPoolProvider).Select(t => t.ToString()));
+				}
+
+				var messages = this.PrepareElectionCandidacyMessages(blockElectionDistillate, electionResults, chainEventPoolProvider, blockchainManager);
+
+				if(messages.Any()) {
+					electedCallback(messages);
+				}
 			}
 
-			// select transactions
-			foreach(ElectedCandidateResultDistillate result in electionResults) {
-
-				// select transactions for this election
-				result.SelectedTransactionIds.AddRange(this.SelectTransactions(blockElectionDistillate.currentBlockId, result, chainEventPoolProvider).Select(t => t.ToString()));
+			if(this.IsChainFullySynced) {
+				// we are all good, we can run it now
+				Callback();
+			} else {
+				// store it for later and hope t will run in time
+				this.callbackQueue.Enqueue(Callback);
+				this.RequestSync();
 			}
-
-			return this.PrepareElectionCandidacyMessages(blockElectionDistillate, electionResults, chainEventPoolProvider, blockchainManager);
 		}
 
 		public List<TransactionId> SelectTransactions(BlockId currentBlockId, ElectedCandidateResultDistillate resultDistillate, IEventPoolProvider chainEventPoolProvider) {
@@ -890,44 +1052,111 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return new List<TransactionId>();
 		}
 
-		protected virtual bool CheckSyncStatus(IBlockchainManager blockchainManager) {
-			bool likelySynced = this.centralCoordinator.IsChainLikelySynchronized;
+	#region sync status checking
 
-			if(!likelySynced) {
+		private bool IsChainFullySynced => this.IsChainSynced && this.IsWalletSynced;
 
-				this.WaitForSync(service => service.SynchronizeBlockchain(false), blockchainManager, catcher => this.centralCoordinator.BlockchainSynced += catcher, catcher => this.centralCoordinator.BlockchainSynced -= catcher, "blockchain");
+		private bool IsChainSynced => this.centralCoordinator.IsChainLikelySynchronized;
+		
+		private bool IsWalletSynced {
+			get {
+				var walletSynced = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
+
+				return walletSynced.HasValue && walletSynced.Value;
 			}
 
-			var walletSynned = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
-
-			if(!walletSynned.HasValue || !walletSynned.Value) {
-
-				this.WaitForSync(service => service.SynchronizeWallet(false, true), blockchainManager, catcher => this.centralCoordinator.WalletSynced += catcher, catcher => this.centralCoordinator.WalletSynced -= catcher, "wallet");
-			}
-
-			return this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced;
 		}
 
-		private void WaitForSync(Action<IBlockchainManager> syncAction, IBlockchainManager blockchainManager, Action<Action> register, Action<Action> unregister, string name) {
-			AutoResetEvent resetEvent = new AutoResetEvent(false);
+		protected virtual bool CheckSyncStatus() {
 
-			void Catcher() {
-				resetEvent.Set();
+			if(!this.WaitForSync(() => this.IsChainSynced, service => service.SynchronizeBlockchain(false), catcher => this.centralCoordinator.BlockchainSynced += catcher, catcher => this.centralCoordinator.BlockchainSynced -= catcher, "blockchain")) {
+				return false;
 			}
 
-			register(Catcher);
+			return this.WaitForSync(() => this.IsWalletSynced, service => service.SynchronizeWallet(false, true), catcher => this.centralCoordinator.WalletSynced += catcher, catcher => this.centralCoordinator.WalletSynced -= catcher, "wallet");
+		}
 
-			try {
-				syncAction(blockchainManager);
+		private bool WaitForSync(Func<bool> validityCheck, Action<IBlockchainManager> syncAction, Action<Action> register, Action<Action> unregister, string name) {
 
-				if(!resetEvent.WaitOne(TimeSpan.FromSeconds(10))) {
+			if(validityCheck()) {
+				return true;
+			}
 
-					throw new ApplicationException($"The {name} is not synced. Cannot continue");
+			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
+
+				void Catcher() {
+					resetEvent.Set();
 				}
-			} finally {
-				unregister(Catcher);
+
+				register(Catcher);
+
+				try {
+					var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+					blockchainTask.SetAction((service, taskRoutingContext2) => {
+						syncAction(service);
+					});
+
+					blockchainTask.Caller = null;
+					this.centralCoordinator.RouteTask(blockchainTask);
+
+					DateTime timeout = DateTime.Now.AddSeconds(CHAIN_SYNC_WAIT_TIMEOUT);
+
+					while(DateTime.Now < timeout) {
+
+						if(resetEvent.Wait(TimeSpan.FromSeconds(1)) || validityCheck()) {
+							break;
+						}
+					}
+
+					return validityCheck();
+				} finally {
+					unregister(Catcher);
+				}
 			}
 		}
+
+		private void RequestSync() {
+
+			void Dispatch(Action<IBlockchainManager> syncAction) {
+				var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+				blockchainTask.SetAction((service, taskRoutingContext2) => {
+					syncAction(service);
+				});
+
+				blockchainTask.Caller = null;
+				this.centralCoordinator.RouteTask(blockchainTask);
+			}
+			if(!this.IsChainSynced) {
+				Dispatch(service => service.SynchronizeBlockchain(false));
+			}
+			else if(!this.IsWalletSynced) {
+				Dispatch(service => service.SynchronizeWallet(false, true));
+			}
+		}
+
+		/// <summary>
+		/// this method is called when the blockchain has been synced. we can empty our callback queue when it is.
+		/// </summary>
+		/// <exception cref="NotImplementedException"></exception>
+		protected virtual void OnSyncedEvent() {
+
+			if(!this.IsChainFullySynced) {
+				return;
+			}
+
+			// if we had any deferred actions, let's run them now
+			while(this.callbackQueue.TryDequeue(out Action callback)) {
+				try {
+					callback?.Invoke();
+				} catch {
+					// do nothing for now
+				}
+			}
+		}
+		
+	#endregion
 
 		/// <summary>
 		///     here we validate the election, and see if we are elected
@@ -939,10 +1168,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return null; // sorry, not happening
 			}
 			
-			if(!this.CheckSyncStatus(blockchainManager)) {
+			if(!this.IsChainFullySynced || this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight != blockElectionDistillate.currentBlockId) {
 				return null; // sorry, not happening, we can not mine while we are not synced
-			}
-
+			} 
+			
 			var electionResults = new List<ElectedCandidateResultDistillate>();
 
 			this.PrepareBlockElectionContext(blockElectionDistillate, this.MiningAccountId);
@@ -959,7 +1188,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// first thing, record this block in our cache so that we are ready to process it when it reaches maturity
 				this.AddElectionBlock(blockElectionDistillate);
 
-				Log.Information($"Block {blockElectionDistillate.currentBlockId} is an {blockElectionDistillate.electionContext.ElectionMode} election block and will be mature at height {blockElectionDistillate.currentBlockId + blockElectionDistillate.electionContext.Maturity} and published at height {blockElectionDistillate.currentBlockId + blockElectionDistillate.electionContext.Maturity + blockElectionDistillate.electionContext.Publication}");
+				Log.Information($"Block {blockElectionDistillate.currentBlockId} is an {blockElectionDistillate.ElectionContext.ElectionMode} election block and will be mature at height {blockElectionDistillate.currentBlockId + blockElectionDistillate.ElectionContext.Maturity} and published at height {blockElectionDistillate.currentBlockId + blockElectionDistillate.ElectionContext.Maturity + blockElectionDistillate.ElectionContext.Publication}");
 
 				// ok, any transactions in this block must be removed from our election cache. First, sum all the transactions
 
@@ -988,26 +1217,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					// let's answer the questions if we can
 					var configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
 					if(!GlobalSettings.ApplicationSettings.MobileMode && BlockchainUtilities.UsesPartialBlocks(configuration.BlockSavingMode) && intermediaryElectionResult.SimpleQuestion != null) {
 
 						var question = (QuestionTransactionSectionDistillate) intermediaryElectionResult.SimpleQuestion;
 
 						electionResultDistillate.simpleAnswer = this.AnswerQuestion(intermediaryElectionResult.SimpleQuestion);
 					}
-					
+
 					if(!GlobalSettings.ApplicationSettings.MobileMode && BlockchainUtilities.UsesAllBlocks(configuration.BlockSavingMode) && intermediaryElectionResult.HardQuestion != null) {
-					
-						var question = (QuestionTransactionSectionDistillate)intermediaryElectionResult.HardQuestion;
-							
+
+						var question = (QuestionTransactionSectionDistillate) intermediaryElectionResult.HardQuestion;
+
 						electionResultDistillate.hardAnswer = this.AnswerQuestion(intermediaryElectionResult.HardQuestion);
 					}
-					
+
 					if(intermediaryElectionResult.PassiveElectionContextDistillate != null) {
 						// ok, get the cached context
 						BlockElectionDistillate electionBlock = this.ObtainMatureElectionBlock(blockElectionDistillate.currentBlockId, intermediaryElectionResult.PassiveElectionContextDistillate.electionBlockId);
 
 						if(electionBlock != null) {
-							
+
 							electionResultDistillate.BlockId = electionBlock.currentBlockId;
 							electionResultDistillate.MaturityBlockId = blockElectionDistillate.currentBlockId;
 
@@ -1015,7 +1245,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							electionResultDistillate.MaturityBlockHash = electionBlock.blockxxHash;
 							electionResultDistillate.MatureBlockType = electionBlock.blockType;
-							electionResultDistillate.MatureElectionContextVersion = electionBlock.electionContext.Version;
+							electionResultDistillate.MatureElectionContextVersion = electionBlock.ElectionContext.Version;
 
 							this.centralCoordinator.PostSystemEvent(SystemEventGenerator.MiningElected(electionBlock.currentBlockId));
 							Log.Information($"We are elected in Block {blockElectionDistillate.currentBlockId}");
@@ -1040,7 +1270,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(electionResultDistillate != null) {
 
 					electionResultDistillate.MatureBlockType = matureElectionBlock.blockType;
-					electionResultDistillate.MatureElectionContextVersion = matureElectionBlock.electionContext.Version;
+					electionResultDistillate.MatureElectionContextVersion = matureElectionBlock.ElectionContext.Version;
 
 					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.MiningElected(matureElectionBlock.currentBlockId));
 					Log.Information($"We are elected in Block {blockElectionDistillate.currentBlockId}");
@@ -1077,8 +1307,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							switch(selectedComponent) {
 								case BlockTransactionIdElectionQuestion.QuestionTransactionIdComponents.Hash:
-									
-									TypeSerializer.Deserialize(block.Hash.Span.Slice(0,8), out long result);
+
+									TypeSerializer.Deserialize(block.Hash.Span.Slice(0, 8), out long result);
+
 									return result;
 								case BlockTransactionIdElectionQuestion.QuestionTransactionIdComponents.BlockTimestamp:
 									return block.Timestamp.Value;
@@ -1124,13 +1355,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 					}
 				}
+			} catch(Exception ex) {
+				Log.Error(ex, "Failed to answer mining question");
 			}
-			catch(Exception ex) {
-				Log.Error(ex, "Failed to answer mining question");	
-			}
-			
+
 			return answer;
 		}
+
 		protected abstract ElectedCandidateResultDistillate CreateElectedCandidateResult();
 
 		/// <summary>
@@ -1139,17 +1370,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="electionBlock"></param>
 		/// <returns></returns>
 		public virtual List<IElectionCandidacyMessage> PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults, IEventPoolProvider chainEventPoolProvider, IBlockchainManager blockchainManager) {
-			if(!this.MiningEnabled || (this.factory == null)) {
+			if(!this.MiningEnabled || this.factory == null) {
 				return null; // sorry, not happening
-			}
-			
-			if(!this.CheckSyncStatus(blockchainManager)) {
-				return null; // sorry, not happening, we can not mine while we are not synced
 			}
 
 			var messages = new List<IElectionCandidacyMessage>();
+			if(!this.IsChainFullySynced || this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight != blockElectionDistillate.currentBlockId) {
+				// this wont work anymore, we must stop
+				return messages;
+			}
+
 			RestUtility restUtility = null;
-			
+
 			//ok, here is how we proceed
 			//1. if we have an election block
 			//	1.1 remove any confirmed transactions from our election cache
@@ -1171,24 +1403,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					if(useWeb && restUtility == null) {
 						restUtility = new RestUtility(GlobalSettings.ApplicationSettings);
 					}
-					
+
 					Log.Information($"We have a mature election block with Id {electionResult.BlockId}");
 					IElectionProcessor matureElectionProcessor = this.factory.InstantiateProcessor(matureElectionBlock, this.centralCoordinator, chainEventPoolProvider);
 
 					bool sent = false;
 
-					if(useWeb) {
-						
-						ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo(this.registrationParameters);
-						
+					if(useWeb && this.registrationParameters != null) {
+
+						ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo();
+
 						try {
 
 							Repeater.Repeat(() => {
 								string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
-								
+
 								Dictionary<string, object> parameters = null;
 								string action = "";
-							
+
 								if(electionResult.ElectionMode == ElectionModes.Active) {
 									parameters = matureElectionProcessor.PrepareActiveElectionWebConfirmation(blockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password);
 									action = "registration/record-active-election";
@@ -1198,18 +1430,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 								} else {
 									throw new ApplicationException("Invalid election type");
 								}
-								
+
 								var result = restUtility.Put(url, action, parameters);
 
 								if(result.Wait(TimeSpan.FromSeconds(20)) && !result.IsFaulted) {
-							
+
 									// ok, check the result
 									if(result.Result.StatusCode == HttpStatusCode.OK) {
 										// ok, we are not registered. we can await a response from the IP Validator
 										return;
 									}
 								}
-							
+
 								throw new ApplicationException("Failed to record election results through web");
 							});
 
@@ -1217,6 +1449,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							sent = true;
 						} catch(Exception ex) {
 							Log.Error(ex, "Failed to record election results through web");
+
 							// do nothing, we will sent it on chain
 							sent = false;
 						}
@@ -1228,11 +1461,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 						if(electionResult.ElectionMode == ElectionModes.Active) {
 							electionConfirmationMessage = matureElectionProcessor.PrepareActiveElectionConfirmationMessage(blockElectionDistillate, electionResult);
-						} 
-						else if(electionResult.ElectionMode == ElectionModes.Passive) {
+						} else if(electionResult.ElectionMode == ElectionModes.Passive) {
 							electionConfirmationMessage = matureElectionProcessor.PreparePassiveElectionConfirmationMessage(blockElectionDistillate, electionResult);
-						}
-						else {
+						} else {
 							throw new ApplicationException("Invalid election type");
 						}
 

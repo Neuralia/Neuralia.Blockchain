@@ -46,7 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		/// <exception cref="ApplicationException"></exception>
 		public virtual ElectedCandidateResultDistillate PerformActiveElection(int maturityBlockHash, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
 
-			if(blockElectionDistillate.electionContext.ElectionMode != ElectionModes.Active) {
+			if(blockElectionDistillate.ElectionContext.ElectionMode != ElectionModes.Active) {
 				return null;
 			}
 
@@ -71,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 			electedCandidateResultDistillate.ElectionMode = ElectionModes.Active;
 			electedCandidateResultDistillate.BlockId = blockElectionDistillate.currentBlockId;
-			electedCandidateResultDistillate.MaturityBlockId = blockElectionDistillate.currentBlockId + blockElectionDistillate.electionContext.Maturity;
+			electedCandidateResultDistillate.MaturityBlockId = blockElectionDistillate.currentBlockId + blockElectionDistillate.ElectionContext.Maturity;
 			electedCandidateResultDistillate.MaturityBlockHash = maturityBlockHash;
 
 			return electedCandidateResultDistillate;
@@ -79,7 +79,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		}
 
 		public Dictionary<string, object> PrepareActiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, long password) {
-			if(blockElectionDistillate.electionContext is IActiveElectionContext activeElectionContext) {
+			if(blockElectionDistillate.ElectionContext is IActiveElectionContext activeElectionContext) {
 				
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
 				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
@@ -133,7 +133,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		}
 
 		public Dictionary<string, object> PreparePassiveElectionWebConfirmation(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, long password) {
-			if(blockElectionDistillate.electionContext is IPassiveElectionContext passiveElectionContext) {
+			if(blockElectionDistillate.ElectionContext is IPassiveElectionContext passiveElectionContext) {
 				Log.Information("We are elected in a passive election!...");
 
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
@@ -177,7 +177,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		
 		public virtual IElectionCandidacyMessage PrepareActiveElectionConfirmationMessage(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
 
-			if(blockElectionDistillate.electionContext is IActiveElectionContext activeElectionContext) {
+			if(blockElectionDistillate.ElectionContext is IActiveElectionContext activeElectionContext) {
 				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
 				ActiveElectionCandidacyMessage message = new ActiveElectionCandidacyMessage();
 
@@ -209,7 +209,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		/// <param name="dispatcher"></param>
 		public IElectionCandidacyMessage PreparePassiveElectionConfirmationMessage(BlockElectionDistillate blockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
 
-			if(blockElectionDistillate.electionContext is IPassiveElectionContext passiveElectionContext) {
+			if(blockElectionDistillate.ElectionContext is IPassiveElectionContext passiveElectionContext) {
 				Log.Information("We are elected in a passive election!...");
 
 				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
@@ -323,9 +323,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		/// <returns></returns>
 		protected SafeArrayHandle DetermineCandidacy(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
 
-			if(blockElectionDistillate.electionContext.CandidatureMethod.Version.Type == CandidatureMethodTypes.Instance.SimpleHash) {
-				if(blockElectionDistillate.electionContext.CandidatureMethod.Version == (1, 0)) {
-					return ((SimpleHashCandidatureMethod) blockElectionDistillate.electionContext.CandidatureMethod).DetermineCandidacy(blockElectionDistillate, miningAccount);
+			if(blockElectionDistillate.ElectionContext.CandidatureMethod.Version.Type == CandidatureMethodTypes.Instance.SimpleHash) {
+				if(blockElectionDistillate.ElectionContext.CandidatureMethod.Version == (1, 0)) {
+					return ((SimpleHashCandidatureMethod) blockElectionDistillate.ElectionContext.CandidatureMethod).DetermineCandidacy(blockElectionDistillate, miningAccount);
 				}
 			}
 
@@ -342,7 +342,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 			SafeArrayHandle resultingBallot = candidacy;
 
-			resultingBallot = blockElectionDistillate.electionContext.PrimariesBallotingMethod.PerformBallot(resultingBallot, blockElectionDistillate, miningAccount);
+			resultingBallot = blockElectionDistillate.ElectionContext.PrimariesBallotingMethod.PerformBallot(resultingBallot, blockElectionDistillate, miningAccount);
 
 			return resultingBallot; // we are simply not a candidate
 		}

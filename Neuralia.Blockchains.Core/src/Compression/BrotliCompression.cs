@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using Microsoft.IO;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Compression {
 	public class BrotliCompression : Compression<BrotliCompression> {

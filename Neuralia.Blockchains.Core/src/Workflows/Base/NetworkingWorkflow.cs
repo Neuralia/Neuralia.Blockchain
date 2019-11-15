@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 	public interface INetworkingWorkflow : IWorkflow {
 		uint CorrelationId { get; }
-
+		uint? SessionId { get; }
 		Guid ClientId { get; }
 	}
 
@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		where R : IRehydrationFactory {
 	}
 
-	public interface INetworkingWorkflow<MESSAGE_SET, HEADER, R> : INetworkingWorkflow<R>
+	public interface INetworkingWorkflow<in MESSAGE_SET, HEADER, R> : INetworkingWorkflow<R>
 		where MESSAGE_SET : INetworkMessageSet<R>
 		where HEADER : RoutingHeader
 		where R : IRehydrationFactory {
@@ -34,9 +34,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 	}
 
 	public static class NetworkingWorkflow {
-		public static string FormatScoppedId(Guid clientUuid, uint workflowId) {
-			return $"{clientUuid}-{workflowId}";
-		}
+
+		
 	}
 
 	public abstract class NetworkingWorkflow<MESSAGE_SET, HEADER, R> : Workflow<R>, INetworkingWorkflow<MESSAGE_SET, HEADER, R>
@@ -53,6 +52,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		public NetworkingWorkflow(ServiceSet<R> serviceSet) : base(serviceSet) {
 
 			this.networkMessageReceiver = new NetworkMessageReceiver<MESSAGE_SET>(serviceSet);
+			
 			this.ClientId = Guid.Empty;
 		}
 
@@ -65,8 +65,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		///     an ID to correlate between servers and clients
 		/// </summary>
 		public uint CorrelationId { get; protected set; }
+		
+		/// <summary>
+		///     an session ID to correlate between servers and clients when there are multiple instances of the same workflow
+		/// </summary>
+		public uint? SessionId { get; protected set; }
 
-		public override string Id => NetworkingWorkflow.FormatScoppedId(this.ClientId, this.CorrelationId);
+		public override WorkflowId Id => new NetworkWorkflowId(this.ClientId, this.CorrelationId, this.SessionId);
 
 		/// <summary>
 		///     The client Scope that is attached to this workflow.abstract If its our own, the ID is 0
@@ -115,7 +120,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// </summary>
 		/// <param name="Process">returns true if satisfied to end the loop, false if it still needs to wait</param>
 		/// <returns></returns>
-		private List<MESSAGE_SET> WaitNetworkMessages(Func<MESSAGE_SET, bool> ProcessSingle, Func<List<MESSAGE_SET>, bool> ProcessBatch, TimeSpan? timeout = null, int expectedCount = -1, AutoResetEvent autoEvent = null) {
+		private List<MESSAGE_SET> WaitNetworkMessages(Func<MESSAGE_SET, bool> ProcessSingle, Func<List<MESSAGE_SET>, bool> ProcessBatch, TimeSpan? timeout = null, int expectedCount = -1, ManualResetEventSlim autoEvent = null) {
 
 			if(!timeout.HasValue) {
 				timeout = DEFAULT_HIBERNATE_TIMEOUT;
@@ -149,13 +154,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 					if(now > timeoutTime) {
 						// we timed out
-						throw new ThreadTimeoutException("Timeout occured");
+						return messages;
 					}
 
 					TimeSpan timeRemaining = timeoutTime - now;
 
 					// lets hibernate for a maximum of 3 second
-					int minTimeout = (int) Math.Min(timeRemaining.TotalMilliseconds, 1000*3);
+					int minTimeout = (int) Math.Min(timeRemaining.TotalMilliseconds, 3000);
 					this.Hibernate(TimeSpan.FromMilliseconds(minTimeout), autoEvent);
 
 				} catch(ThreadTimeoutException ex) {
@@ -176,7 +181,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		///     Get a single message of a specific type. wait untl we receive it
 		/// </summary>
 		/// <returns></returns>
-		protected SPECIALIZED_MESSAGE_SET WaitSingleNetworkMessage<T, SPECIALIZED_MESSAGE_SET, R>(TimeSpan? timeout = null, AutoResetEvent autoEvent = null)
+		protected SPECIALIZED_MESSAGE_SET WaitSingleNetworkMessage<T, SPECIALIZED_MESSAGE_SET, R>(TimeSpan? timeout = null, ManualResetEventSlim autoEvent = null)
 			where T : NetworkMessage<R>
 			where SPECIALIZED_MESSAGE_SET : class, MESSAGE_SET, INetworkMessageSet<T, HEADER, R>
 			where R : IRehydrationFactory {
@@ -226,7 +231,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// <param name="types"></param>
 		/// <returns></returns>
 		/// <exception cref="WorkflowException"></exception>
-		protected MESSAGE_SET WaitSingleNetworkMessage(IEnumerable<Type> types, TimeSpan? timeout = null, AutoResetEvent autoEvent = null) {
+		protected MESSAGE_SET WaitSingleNetworkMessage(IEnumerable<Type> types, TimeSpan? timeout = null, ManualResetEventSlim autoEvent = null) {
 
 			var messages = this.WaitNetworkMessages(types, timeout, 1, autoEvent);
 
@@ -267,7 +272,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		///     Get a list of messages of a specific type. wait untl we receive them
 		/// </summary>
 		/// <returns></returns>
-		protected List<TargettedMessageSet<T, R>> WaitNetworkMessages<T, R>(TimeSpan? timeout = null, int expectedCount = -1, AutoResetEvent autoEvent = null)
+		protected List<ITargettedMessageSet<T, R>> WaitNetworkMessages<T, R>(TimeSpan? timeout = null, int expectedCount = -1, ManualResetEventSlim autoEvent = null)
 			where T : class, INetworkMessage<R>
 			where R : IRehydrationFactory {
 
@@ -279,17 +284,17 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 				return false; // keep waiting
 			}, null, timeout, expectedCount, autoEvent);
 
-			return messages.Cast<TargettedMessageSet<T, R>>().ToList();
+			return messages.Cast<ITargettedMessageSet<T, R>>().ToList();
 		}
 
 		/// <summary>
 		///     Get a list of messages of a specific list of types. wait until we receive them
 		/// </summary>
 		/// <returns></returns>
-		protected List<MESSAGE_SET> WaitNetworkMessages(IEnumerable<Type> messageTypes, TimeSpan? timeout = null, int expectedCount = -1, AutoResetEvent autoEvent = null) {
+		protected List<MESSAGE_SET> WaitNetworkMessages(IEnumerable<Type> messageTypes, TimeSpan? timeout = null, int expectedCount = -1, ManualResetEventSlim autoEvent = null) {
 			return this.WaitNetworkMessages(messageSet => messageTypes.Contains(messageSet.BaseMessage.GetType()), null, timeout, expectedCount, autoEvent);
 		}
-
+		
 		protected override void LogWorkflowException(Exception ex) {
 
 			// dont show send message exceptions

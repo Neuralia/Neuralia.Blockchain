@@ -66,7 +66,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			base.ValidationFailed(envelope, results);
 
 			if(results is TransactionValidationResult transactionValidationResult) {
-				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionError(envelope.Contents.Uuid.SimpleTransactionId, transactionValidationResult.ErrorCodes), this.correlationContext);
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.TransactionError(envelope.Contents.Uuid.SimpleTransactionId, transactionValidationResult.ErrorCodes), this.correlationContext);
 			}
 		}
 
@@ -74,7 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			base.ExceptionOccured(ex);
 
 			if(ex is EventGenerationException evex && evex.Envelope is ITransactionEnvelope envelope) {
-				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionError(envelope.Contents.Uuid.SimpleTransactionId, null), this.correlationContext);
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.TransactionError(envelope.Contents.Uuid.SimpleTransactionId, null), this.correlationContext);
 			}
 		}
 

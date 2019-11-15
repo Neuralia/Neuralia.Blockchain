@@ -8,7 +8,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		new TargettedHeader BaseHeader { get; set; }
 	}
 
-	public interface IBlockchainTargettedMessageSet<T> : IBlockchainTargettedMessageSet, ITargettedMessageSet<T, IBlockchainEventsRehydrationFactory>
+	public interface IBlockchainTargettedMessageSet<out T> : IBlockchainTargettedMessageSet, ITargettedMessageSet<T, IBlockchainEventsRehydrationFactory>
 		where T : NetworkMessage<IBlockchainEventsRehydrationFactory> {
 		new TargettedHeader Header { get; set; }
 	}

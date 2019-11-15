@@ -7,7 +7,7 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json.Linq;
+
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1 {
 	public interface IJointPresentationTransaction : IPresentationTransaction, IPresentation {
@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			//
 			jsonDeserializer.SetProperty("PowNonce", this.PowNonce);
 			jsonDeserializer.SetProperty("PowDifficulty", this.PowDifficulty);
-			jsonDeserializer.SetArray("PowSolutions", this.PowSolutions.Select(s => new JValue(s)));
+			jsonDeserializer.SetArray("PowSolutions", this.PowSolutions);
 		}
 
 		protected override ComponentVersion<TransactionType> SetIdentity() {

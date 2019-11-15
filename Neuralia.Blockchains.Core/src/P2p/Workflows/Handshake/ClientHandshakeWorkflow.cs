@@ -84,6 +84,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			handshakeTrigger.Message.peerType = GlobalSettings.Instance.PeerType;
 
+			handshakeTrigger.Message.generalSettings = this.networkingService.GeneralSettings;
+			
 			// lets make one last check, to ensure this connection is not already happening (maybe they tried to connect to us) before we contact them
 			if(this.networkingService.ConnectionStore.PeerConnectionExists(this.Endpoint, PeerConnection.Directions.Outgoing)) {
 				// thats it, we are already connecting, lets stop here and ignore it. we are done and we wont go further.
@@ -249,11 +251,16 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				// ok, seem its all in order, lets take its values
 				peerConnectionn.clientSoftwareVersion.SetVersion(serverHandshake.clientSoftwareVersion);
 
+				peerConnectionn.SetGeneralSettings(serverHandshake.generalSettings);
+				
 				// now we check the blockchains and the version they allow
 				foreach(var chainSetting in serverHandshake.chainSettings) {
 
 					// validate the blockchain valid minimum version
 					peerConnectionn.AddSupportedChain(chainSetting.Key, this.networkingService.IsChainVersionValid(chainSetting.Key, serverHandshake.clientSoftwareVersion));
+
+					// store the reported settings for later use
+					peerConnectionn.SetChainSettings(chainSetting.Key, chainSetting.Value);
 				}
 
 				if(peerConnectionn.NoSupportedChains || peerConnectionn.NoValidChainVersion) {

@@ -9,13 +9,15 @@ using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
-using Newtonsoft.Json;
+using Neuralia.Blockchains.Tools.Data.Arrays;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures {
 
 	public abstract class BlockElectionDistillate {
 		public readonly SafeArrayHandle blockHash = SafeArrayHandle.Create();
-		public string blockHash64;
+		public string blockHashSerialized;
 
 		public readonly List<string> BlockTransactionIds = new List<string>();
 
@@ -26,7 +28,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public string DehydratedElectionContext;
 
-		[JsonIgnore] public IElectionContext electionContext;
+		[JsonIgnore]
+		public IElectionContext ElectionContext { get; set; }
 
 		public readonly List<FinalElectionResultDistillate> FinalElectionResults = new List<FinalElectionResultDistillate>();
 
@@ -36,18 +39,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public readonly List<IntermediaryElectionContextDistillate> IntermediaryElectionResults = new List<IntermediaryElectionContextDistillate>();
 
-		public bool IsElectionContextLoaded => this.electionContext != null;
+		public bool IsElectionContextLoaded => this.ElectionContext != null;
 
 		public void RehydrateElectionContext(IBlockchainEventsRehydrationFactory rehydrationFactory) {
-			if((this.electionContext == null) && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
+			if((this.ElectionContext == null) && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
 
-				SafeArrayHandle compressed = (ByteArray) Convert.FromBase64String(this.DehydratedElectionContext);
+				SafeArrayHandle compressed = ByteArray.WrapAndOwn(Convert.FromBase64String(this.DehydratedElectionContext));
 
 				GzipCompression compressor = new GzipCompression();
 				SafeArrayHandle bytes = compressor.Decompress(compressed);
 
 				IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
-				this.electionContext = electionContextRehydrationFactory.CreateElectionContext(bytes);
+				this.ElectionContext = electionContextRehydrationFactory.CreateElectionContext(bytes);
 
 				compressed.Return();
 				bytes.Return();

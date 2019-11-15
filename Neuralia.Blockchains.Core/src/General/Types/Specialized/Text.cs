@@ -2,6 +2,7 @@ using System.Text;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Types.Specialized {
@@ -46,7 +47,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Specialized {
 				// lets attempt to compress the note, see if the comrpessed version is more space efficient
 				GzipCompression compressor = new GzipCompression();
 
-				ByteArray simpleBytes = Encoding.UTF8.GetBytes(this.Value);
+				ByteArray simpleBytes = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(this.Value));
 				SafeArrayHandle compressed = compressor.Compress(simpleBytes, CompressionLevelByte.Maximum);
 
 				if(compressed.Length < simpleBytes.Length) {

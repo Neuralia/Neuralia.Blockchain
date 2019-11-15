@@ -39,6 +39,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 		public long nonce;
 
 		public Enums.PeerTypes peerType;
+		
+		public GeneralSettings generalSettings = new GeneralSettings();
 
 		public string PerceivedIP;
 
@@ -53,6 +55,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			dehydrator.Write((byte) this.Status);
 			dehydrator.Write(this.nonce);
 			dehydrator.Write((byte) this.peerType);
+			this.generalSettings.Dehydrate(dehydrator);
 			dehydrator.Write(this.PerceivedIP);
 			dehydrator.Write(this.Connectable);
 			
@@ -77,6 +80,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			this.Status = (HandshakeStatuses) rehydrator.ReadByte();
 			this.nonce = rehydrator.ReadLong();
 			this.peerType = (Enums.PeerTypes) rehydrator.ReadByte();
+			this.generalSettings.Rehydrate(rehydrator);
 			this.PerceivedIP = rehydrator.ReadString();
 			this.Connectable = rehydrator.ReadNullableBool();
 
@@ -104,6 +108,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			nodesList.Add(this.PerceivedIP);
 			nodesList.Add(this.nonce);
 			nodesList.Add((byte) this.peerType);
+			nodesList.Add(this.generalSettings);
 			nodesList.Add(this.Connectable);
 			
 			foreach(var chainsetting in this.chainSettings.OrderBy(e => e.Key)) {

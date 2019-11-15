@@ -130,8 +130,6 @@ namespace Neuralia.Blockchains.Core {
 		public const PeerTypeSupport HubSupport = PeerTypeSupport.None;
 
 		public const string INTERFACE = "interface";
-		public const string SERIALIZATION_SERVICE = "serialization";
-		public const string VALIDATION_SERVICE = "validation";
 		public const string BLOCKCHAIN_SERVICE = "blockchain";
 		public const string GOSSIP_SERVICE = "gossip";
 		

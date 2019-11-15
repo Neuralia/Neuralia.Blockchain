@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization {

@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
-	public abstract class SHA3 : HashAlgorithm, IDisposable2 {
+	public abstract class SHA3 : HashAlgorithm, IDisposableExtended {
 
 		public bool IsDisposed { get; protected set; }
 

@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Exceptions;
@@ -21,7 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		private IWalletKey key;
 
-		public WalletKeyFileInfo(IWalletAccount account, string keyName, byte ordinalId, Type keyType, string filename, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, AccountPassphraseDetails accountPassphraseDetails, WalletPassphraseDetails walletSecurityDetails) : base(filename, serviceSet, serialisationFal, walletSecurityDetails) {
+		public WalletKeyFileInfo(IWalletAccount account, string keyName, byte ordinalId, Type keyType, string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, AccountPassphraseDetails accountPassphraseDetails, WalletPassphraseDetails walletSecurityDetails) : base(filename, chainConfiguration, serviceSet, serialisationFal, walletSecurityDetails) {
 
 			this.account = account;
 			this.KeyName = keyName;
@@ -90,10 +91,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
-					this.EncryptionInfo.encrypt = this.accountPassphraseDetails.EncryptWalletKeys;
+					this.EncryptionInfo.Encrypt = this.accountPassphraseDetails.EncryptWalletKeys;
 				}
 
-				if(this.EncryptionInfo.encrypt) {
+				if(this.EncryptionInfo.Encrypt) {
 					if(!this.accountPassphraseDetails.KeyPassphraseValid(this.account.AccountUuid, this.KeyName)) {
 						throw new ApplicationException("Encrypted wallet key does not have a valid passphrase");
 					}
@@ -101,7 +102,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					this.EncryptionInfo.Secret = () => this.accountPassphraseDetails.KeyPassphrase(this.account.AccountUuid, this.KeyName).ConvertToUnsecureBytes();
 
 					// get the parameters from the account
-					this.EncryptionInfo.encryptionParameters = this.account.Keys.Single(ki => ki.Name == this.KeyName).EncryptionParameters;
+					this.EncryptionInfo.EncryptionParameters = this.account.Keys.Single(ki => ki.Name == this.KeyName).EncryptionParameters;
 
 				}
 			}

@@ -5,7 +5,7 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures {
-	public class DataSlice : DataSliceInfo, IDisposable2 {
+	public class DataSlice : DataSliceInfo, IDisposableExtended {
 
 		public DataSlice() {
 			
@@ -58,7 +58,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		~DataSlice() {
 			this.Dispose(false);
 		}
-		
 
 	#endregion
 	}

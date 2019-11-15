@@ -11,7 +11,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts {
 
-	public interface IElectionContext : IVersionable<ElectionContextType> {
+	public interface IElectionContext : IVersionable<ElectionContextType>, IJsonSerializable {
 
 		byte Maturity { get; set; }
 		byte Publication { get; set; }

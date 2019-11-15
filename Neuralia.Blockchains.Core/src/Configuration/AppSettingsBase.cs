@@ -166,14 +166,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     here we can reject IPs from the same CIDR range as ours.
 		/// </summary>
 		public bool AllowConnectionsFromLocalCidrRange { get; set; } = true;
-
-		/// <summary>
-		///     how long to store a passphrase before it is forgotten. null or -1 is infinite.
-		/// </summary>
-		public int? PassphraseTimeout { get; set; } = null;
-
-		public byte WalletEncryptionFormat { get; set; } = (byte) EncryptorParameters.SymetricCiphers.XCHACHA_40;
-
+		
 		public ProxySettings ProxySettings { get; set; } = null;
 
 		/// <summary>
@@ -295,6 +288,14 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			Sha3
 		}
 
+		/// <summary>
+		///     how long to store a passphrase before it is forgotten. null or -1 is infinite.
+		/// </summary>
+		public int? PassphraseTimeout { get; set; } = null;
+
+		public EncryptorParameters.SymetricCiphers WalletEncryptionFormat { get; set; } = EncryptorParameters.SymetricCiphers.XCHACHA_40;
+
+		
 		public bool Enabled { get; set; } = true;
 
 		/// <summary>
@@ -328,6 +329,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     How do we want to capture the passphrases.
 		/// </summary>
 		public AppSettingsBase.PassphraseQueryMethod PassphraseCaptureMethod { get; set; } = AppSettingsBase.PassphraseQueryMethod.Event;
+
+		/// <summary>
+		/// if true, mining can be enabled even chain is not synced. mining wlil start when fully synced
+		/// </summary>
+		public bool EnableMiningPreload { get; set; } = false;
 
 		/// <summary>
 		///     if true, the wallet will be loaded at chain start automatically. Otherwise, only on demand if transactions are
@@ -366,9 +372,9 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 
 		//TODO: should this be 3 for prod??
-		public int MinimumSyncPeerCount { get; set; } = 2;
+		public int MinimumSyncPeerCount { get; set; } = 1;
 
-		public int MinimumDispatchPeerCount { get; set; } = 2;
+		public int MinimumDispatchPeerCount { get; set; } = 1;
 
 		/// <summary>
 		///     How we determine the max size of a block group file. If we have a block count mode, then its the maximum number of
@@ -434,11 +440,6 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public bool EnableFastKeyIndex { get; set; } = true;
 
 		public FastKeyTypes EnabledFastKeyTypes { get; set; } = FastKeyTypes.All;
-
-		/// <summary>
-		///     How many parallel validation threads can we have
-		/// </summary>
-		public int MaxValidationParallelCount { get; set; } = 3;
 
 		/// <summary>
 		///     How many parallel workflow threads can we have at a maximum in this chain

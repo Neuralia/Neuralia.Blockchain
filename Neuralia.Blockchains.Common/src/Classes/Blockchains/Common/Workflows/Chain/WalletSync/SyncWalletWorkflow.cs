@@ -47,7 +47,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public bool? AllowGrowth { get; set; }
 		private bool IsBusy { get; set; } = false;
 		private bool shutdownRequest = false;
+		
+		protected readonly RateCalculator rateCalculator = new RateCalculator();
 
+		protected override TaskCreationOptions TaskCreationOptions => TaskCreationOptions.LongRunning;
+		
 		/// <summary>
 		///     The latest block that may have been received
 		/// </summary>
@@ -61,6 +65,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
 
 			if(!BlockchainUtilities.UsesBlocks(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockSavingMode) && !GlobalSettings.ApplicationSettings.MobileMode) {
+				
+				this.TriggerWalletSynced();
 				return;
 			}
 
@@ -78,15 +84,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			if(!syncableAccounts.Any()) {
 				// no syncing possible
+				this.TriggerWalletSynced();
+				
 				return;
 			}
-
+			
 			try {
 
 				this.centralCoordinator.ShutdownRequested += this.CentralCoordinatorOnShutdownRequested;
 
 				this.IsBusy = true;
-				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.WalletSyncStarted);
+				
+				
 				Log.Verbose("Wallet sync started");
 
 				bool sequentialSync = true;
@@ -104,7 +113,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				long nextBlockHeight = currentBlockHeight + 1;
 
-				SynthesizedBlock currentSynthesizedBlock = null;
 				SynthesizedBlock nextSynthesizedBlock = null;
 
 				long currentHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
@@ -118,16 +126,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					nextSynthesizedBlock = this.GetSynthesizedBlock(currentBlockHeight);
 				}
 
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStarted(currentBlockHeight, currentHeight));
+				
 				// now we get the lowest blockheight account; our point to start
 
 				// load the blocks one at a time
-				while(sequentialSync && (currentBlockHeight <= currentHeight)) {
+				while(sequentialSync && (currentBlockHeight <= currentHeight) && nextSynthesizedBlock != null) {
 
 					if(this.CheckShouldStop()) {
 						break;
 					}
 
-					currentSynthesizedBlock = nextSynthesizedBlock;
+					SynthesizedBlock currentSynthesizedBlock = nextSynthesizedBlock;
 
 					Task nextBlockTask = null;
 
@@ -135,19 +145,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					if(nextBlockHeight <= currentHeight) {
 						long height = nextBlockHeight;
 
-						nextBlockTask = new Task(() => {
+						nextBlockTask = Task.Run(() => {
 							// since there can be a transaction below, lets make sure to whitelist ourselves. we dont need anything extravagant anyways. no real risk of collision
 							this.centralCoordinator.ChainComponentProvider.WalletProviderBase.RequestFriendlyAccess(() => {
 								nextSynthesizedBlock = this.GetSynthesizedBlock(height);
 							});
 						});
-
-						nextBlockTask.Start();
 					}
 
 					// update this block now. everything happens in the wallet service
 
-					this.SynchronizeBlock(currentSynthesizedBlock, currentBlockHeight, currentBlockHeight - 1, taskRoutingContext);
+					this.SynchronizeBlock(currentSynthesizedBlock, currentBlockHeight, currentBlockHeight - 1, currentHeight, taskRoutingContext);
 
 					// make sure it is completed before we move forward
 					nextBlockTask?.Wait();
@@ -172,12 +180,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					foreach(SynthesizedBlock synthesizedBlock in synthesizedBlocks) {
 
-						this.SynchronizeBlock(synthesizedBlock, currentBlockHeight, currentBlockHeight, taskRoutingContext);
+						this.SynchronizeBlock(synthesizedBlock, currentBlockHeight, currentBlockHeight, currentBlockHeight, taskRoutingContext);
 
 						currentBlockHeight = synthesizedBlock.BlockId;
 					}
 				}
 
+				
+				if(currentBlockHeight > this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) {
+					currentBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
+				}
+				
 				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CleanSynthesizedBlockCache();
 
 				Log.Verbose("Wallet sync completed");
@@ -188,21 +201,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			} finally {
 				this.IsBusy = false;
 
-				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.WalletSyncEnded);
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncEnded(currentBlockHeight, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight));
+				
 				this.centralCoordinator.ShutdownRequested -= this.CentralCoordinatorOnShutdownRequested;
 
-				try {
-					var synced = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
-
-					if(synced.HasValue && synced.Value) {
-						this.centralCoordinator.TriggerWalletSyncedEvent();
-					}
-				} catch {
-
-				}
+				this.TriggerWalletSynced();
 			}
 		}
 
+		private void TriggerWalletSynced() {
+			try {
+				var synced = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
+
+				if(synced.HasValue && synced.Value) {
+					this.centralCoordinator.TriggerWalletSyncedEvent();
+				}
+			} catch {
+
+			}
+		}
 		/// <summary>
 		///     Ensure that we dont stop during a sync step if a shutdown has been requested
 		/// </summary>
@@ -228,12 +245,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
-		private void SynchronizeBlock(SynthesizedBlock synthesizedBlock, long currentHeight, long previousBlock, TaskRoutingContext taskRoutingContext) {
+		private void SynchronizeBlock(SynthesizedBlock synthesizedBlock, long currentHeight, long previousBlock, long targetHeight, TaskRoutingContext taskRoutingContext) {
 
+			this.rateCalculator.AddHistoryEntry(synthesizedBlock.BlockId);
+			
 			Log.Information($"Performing Wallet sync for block {synthesizedBlock.BlockId} out of {Math.Max(currentHeight, synthesizedBlock.BlockId)}");
 
+			string syncRate = this.rateCalculator.CalculateSyncingRate(targetHeight-synthesizedBlock.BlockId);
 			// alert that we are syncing a block
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.WalletSyncStepEvent(synthesizedBlock.BlockId, currentHeight));
+			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(currentHeight, targetHeight, syncRate));
+			
 
 			bool allAccountsUpdatedWalletBlock = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.AllAccountsUpdatedWalletBlock(synthesizedBlock, previousBlock);
 
@@ -261,15 +282,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					if(this.CheckShouldStop()) {
 						return;
 					}
-					Log.Verbose($"updating wallet blocks for block {synthesizedBlock.BlockId}...");
+					Log.Verbose($"Preparing to update wallet blocks for block {synthesizedBlock.BlockId}...");
 
-					this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
+					this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
 						// update the chain height
-						this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletBlock(synthesizedBlock, previousBlock);
+						Log.Verbose($"updating wallet blocks for block {synthesizedBlock.BlockId}...");
+						provider.UpdateWalletBlock(synthesizedBlock, previousBlock);
 
 						token.ThrowIfCancellationRequested();
 
-						allAccountsUpdatedWalletBlock = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.AllAccountsUpdatedWalletBlock(synthesizedBlock);
+						allAccountsUpdatedWalletBlock = provider.AllAccountsUpdatedWalletBlock(synthesizedBlock);
+						Log.Verbose($"updated wallet blocks for block {synthesizedBlock.BlockId}...");
 					});
 				}
 
@@ -282,17 +305,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 
-						Log.Verbose($"UpdateWalletKeyLogs  for block {synthesizedBlock.BlockId}...");
+						Log.Verbose($"Update Wallet Key Logs for block {synthesizedBlock.BlockId}...");
 
-						this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
-							token.ThrowIfCancellationRequested();
-
-							if(!allAccountsWalletKeyLogSet) {
+						if(!allAccountsWalletKeyLogSet) {
+							this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
+								token.ThrowIfCancellationRequested();
 
 								// update the key logs
-								this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletKeyLogs(synthesizedBlock);
-							}
-						});
+								provider.UpdateWalletKeyLogs(synthesizedBlock);
+							});
+						}
 					}, () => {
 						if(this.CheckShouldStop()) {
 							return;
@@ -303,7 +325,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						if(!allImmediateAccountsImpactsPerformed) {
 
 							// run the interpretation if any account is tracked
-							this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateAccountsImpact(synthesizedBlock, taskRoutingContext);
+							this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateAccountsImpact(synthesizedBlock);
 						}
 
 					}, () => {

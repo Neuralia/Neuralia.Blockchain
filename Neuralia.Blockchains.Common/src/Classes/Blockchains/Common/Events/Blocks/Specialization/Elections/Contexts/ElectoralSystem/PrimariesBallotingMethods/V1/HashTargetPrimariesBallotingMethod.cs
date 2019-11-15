@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
@@ -46,6 +47,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			HashNodeList nodeList = base.GetStructuresArray();
 
 			return nodeList;
+		}
+		
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+			
+			jsonDeserializer.SetProperty("Name", "HashTarget");
 		}
 	}
 }

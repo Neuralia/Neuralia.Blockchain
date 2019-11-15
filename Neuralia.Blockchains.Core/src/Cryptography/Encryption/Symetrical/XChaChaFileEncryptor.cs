@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.Engines;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
@@ -47,8 +48,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			try {
 				using(Rfc2898DeriveBytes rfc2898DeriveBytes = new Rfc2898DeriveBytes(password.ToExactByteArrayCopy(), this.parameters.Salt.ToExactByteArrayCopy(), this.parameters.Iterations)) {
 
-					ByteArray Key = rfc2898DeriveBytes.GetBytes(256 / 8);
-					ByteArray IV = rfc2898DeriveBytes.GetBytes(192 / 8);
+					ByteArray Key = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(256 / 8));
+					ByteArray IV = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(192 / 8));
 
 					cipher.Init(forEncryption, new ParametersWithIV(new KeyParameter(Key.ToExactByteArrayCopy()), IV.ToExactByteArrayCopy()));
 				}
@@ -84,12 +85,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 				cipherType = EncryptorParameters.SymetricCiphers.XCHACHA_20;
 			}
 
-			return new XChachaEncryptorParameters() {cipher = cipherType, Salt = salt.ToExactByteArrayCopy(), Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			return new XChachaEncryptorParameters(cipherType) {Salt = salt, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
 		}
 
 		public SafeArrayHandle Encrypt(SafeArrayHandle plain, SecureString password) {
 
-			SafeArrayHandle passwordBtyes = (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString());
+			SafeArrayHandle passwordBtyes = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(password.ConvertToUnsecureString()));
 
 			return this.Encrypt(plain, passwordBtyes);
 		}
@@ -114,7 +115,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 		public SafeArrayHandle Decrypt(SafeArrayHandle cipher, SecureString password) {
 			try {
-				SafeArrayHandle passwordBtyes = (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString());
+				SafeArrayHandle passwordBtyes = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(password.ConvertToUnsecureString()));
 
 				return this.Decrypt(cipher, 0, cipher.Length, passwordBtyes);
 

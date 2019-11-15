@@ -24,25 +24,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			if(type == TransactionSelectionMethodTypes.Instance.CreationTime) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new CreationTimeTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.electionContext.MaximumElectedTransactionCount, blockChainConfigurations.CreationTimeTransactionSelectionStrategySettings);
+				return new CreationTimeTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.ElectionContext.MaximumElectedTransactionCount, blockChainConfigurations.CreationTimeTransactionSelectionStrategySettings);
 			}
 
 			if(type == TransactionSelectionMethodTypes.Instance.TransationTypes) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new TransactionTypeTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.electionContext.MaximumElectedTransactionCount, blockChainConfigurations.TransactionTypeTransactionSelectionStrategySettings);
+				return new TransactionTypeTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.ElectionContext.MaximumElectedTransactionCount, blockChainConfigurations.TransactionTypeTransactionSelectionStrategySettings);
 			}
 
 			if(type == TransactionSelectionMethodTypes.Instance.Size) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new SizeTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.electionContext.MaximumElectedTransactionCount, blockChainConfigurations.SizeTransactionSelectionStrategySettings);
+				return new SizeTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.ElectionContext.MaximumElectedTransactionCount, blockChainConfigurations.SizeTransactionSelectionStrategySettings);
 			}
 
 			if(type == TransactionSelectionMethodTypes.Instance.Random) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new RandomTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.electionContext.MaximumElectedTransactionCount, blockChainConfigurations.RandomTransactionSelectionStrategySettings);
+				return new RandomTransactionSelectionMethod(blockId, walletProvider, blockElectionDistillate.ElectionContext.MaximumElectedTransactionCount, blockChainConfigurations.RandomTransactionSelectionStrategySettings);
 			}
 
 			return null;

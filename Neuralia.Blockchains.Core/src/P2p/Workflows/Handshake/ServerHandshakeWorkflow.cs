@@ -241,11 +241,16 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			// lets take note of this peer's type
 			this.ClientConnection.PeerType = this.triggerMessage.Message.peerType;
 
+			this.ClientConnection.SetGeneralSettings(this.triggerMessage.Message.generalSettings);
+			
 			// now we check the blockchains and the version they allow
 			foreach(var chainSetting in this.triggerMessage.Message.chainSettings) {
 
 				// validate the blockchain valid minimum version
 				this.ClientConnection.AddSupportedChain(chainSetting.Key, this.networkingService.IsChainVersionValid(chainSetting.Key, this.triggerMessage.Message.clientSoftwareVersion));
+				
+				// store the reported settings for later use
+				this.ClientConnection.SetChainSettings(chainSetting.Key, chainSetting.Value);
 			}
 
 			if(!this.CheckSupportedBlockchains(serverHandshake)) {
@@ -280,6 +285,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			serverHandshake.Message.chainSettings = this.networkingService.ChainSettings;
 
 			serverHandshake.Message.peerType = this.PeerType;
+			
+			serverHandshake.Message.generalSettings = this.networkingService.GeneralSettings;
 
 			return serverHandshake;
 		}
@@ -406,7 +413,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 		protected override bool CompareOtherPeerId(IWorkflow other) {
 			if(other is ServerHandshakeWorkflow<R> clientHandshakeWorkflow) {
-				return this.triggerMessage.Header.originatorId == clientHandshakeWorkflow.triggerMessage.Header.originatorId;
+				return this.triggerMessage.Header.OriginatorId == clientHandshakeWorkflow.triggerMessage.Header.OriginatorId;
 			}
 
 			return base.CompareOtherPeerId(other);

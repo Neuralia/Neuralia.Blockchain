@@ -5,11 +5,12 @@ using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.PrimariesBallotingMethods {
-	public interface IPrimariesBallotingMethod : IVersionable<PrimariesBallotingMethodType>, IJsonSerializable {
+	public interface IPrimariesBallotingMethod : IVersionable<PrimariesBallotingMethodType> {
 
 		AdaptiveLong1_9 Difficulty { get; set; }
 		SafeArrayHandle PerformBallot(SafeArrayHandle candidature, BlockElectionDistillate blockElectionDistillate, AccountId miningAccount);
@@ -40,6 +41,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			nodeList.Add(this.Difficulty);
 
 			return nodeList;
+		}
+		
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+			
+			jsonDeserializer.SetProperty("Difficulty", this.Difficulty.Value);
 		}
 	}
 }

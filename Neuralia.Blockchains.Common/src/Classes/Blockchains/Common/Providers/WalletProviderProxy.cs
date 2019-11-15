@@ -36,7 +36,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		K ScheduleTransaction<K>(Func<CancellationToken, K> action, int timeout = 60, Action prepareAction = null);
 		K ScheduleTransaction<K>(Func<IWalletProvider, CancellationToken, K> action, int timeout = 60, Action prepareAction = null);
-		void ScheduleTransaction(Action<CancellationToken> action, int timeout = 60, Action prepareAction = null);
 		void ScheduleTransaction(Action<IWalletProvider, CancellationToken> action, int timeout = 60, Action prepareAction = null);
 		void ScheduleChildTransactionalThread(Action action);
 		bool IsActiveTransactionThread(int threadId);
@@ -63,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void RemoveFriendlyThread(int threadId);
 	}
 
-	public interface IWalletProviderProxy : IWalletProvider, IWalletProviderProxyTransactions, IDisposable2 {
+	public interface IWalletProviderProxy : IWalletProvider, IWalletProviderProxyTransactions, IDisposableExtended {
 		bool? SyncedNoWait { get; }
 	}
 
@@ -159,6 +158,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleRead(() => this.walletProvider.GetPublicAccountId());
 		}
 
+		public AccountId GetPublicAccountId(Guid accountUuid) {
+			return this.ScheduleRead(() => this.walletProvider.GetPublicAccountId(accountUuid));
+		}
+
 		public AccountId GetAccountUuidHash() {
 			return this.ScheduleRead(() => this.walletProvider.GetAccountUuidHash());
 		}
@@ -191,6 +194,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public WalletTransactionHistoryDetailsAPI APIQueryWalletTransationHistoryDetails(Guid accountUuid, string transactionId) {
 			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletTransationHistoryDetails(accountUuid, transactionId));
+		}
+
+		public WalletInfoAPI APIQueryWalletInfoAPI() {
+			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletInfoAPI());
 		}
 
 		public List<WalletAccountAPI> APIQueryWalletAccounts() {
@@ -645,6 +652,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
+		public bool IsKeyEncrypted(Guid accountUuid) {
+			
+			return this.ScheduleKeyedRead(() => this.walletProvider.IsKeyEncrypted(accountUuid), () => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+			});
+		}
+
 		public bool IsNextKeySet(Guid accountUuid, string keyName) {
 			return this.ScheduleKeyedRead(() => this.walletProvider.IsNextKeySet(accountUuid, keyName), () => {
 				// load wallet & key
@@ -923,12 +938,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public bool LoadWallet(CorrelationContext correlationContext) {
+		public void EnsureWalletKeyIsReady(Guid accountUuid, string keyname) {
+			this.ScheduleKeyedRead(t => this.walletProvider.EnsureWalletKeyIsReady(accountUuid, keyname));
+		}
 
-			return this.ScheduleTransaction(t => this.walletProvider.LoadWallet(correlationContext), 60, () => {
+		public void EnsureWalletKeyIsReady(Guid accountUuid, byte ordinal) {
+			this.ScheduleKeyedRead(t => this.walletProvider.EnsureWalletKeyIsReady(accountUuid, ordinal));
+		}
+
+		public bool LoadWallet(CorrelationContext correlationContext, string passphrase = null) {
+
+			return this.ScheduleTransaction(t => this.walletProvider.LoadWallet(correlationContext,passphrase), 5*60, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletFileIsPresent();
-				this.walletProvider.EnsureWalletPassphrase();
+				this.walletProvider.EnsureWalletPassphrase(passphrase);
 			});
 		}
 
@@ -1259,11 +1282,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}, timeout);
 			}
 		}
-
-		public void ScheduleTransaction(Action<CancellationToken> action, int timeout = 60, Action prepareAction = null) {
-			this.ScheduleTransaction((provider, token) => action(token), timeout, prepareAction);
-		}
-
+		
 		public void ScheduleChildTransactionalThread(Action action) {
 			this.resourceAccessScheduler.AllowChildThreadLock(action);
 		}

@@ -4,6 +4,7 @@ using System.IO.Abstractions;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Services {
@@ -71,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Services {
 				throw new ApplicationException("Failed to obtain genesis verification hash.");
 			}
 
-			return HashingUtils.ExtractCombinedDualHash((ByteArray) data);
+			return HashingUtils.ExtractCombinedDualHash(ByteArray.WrapAndOwn(data));
 		}
 
 		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string digestHashPath, int digestId) {
@@ -91,7 +92,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			var data = File.ReadAllBytes(filepath);
 
-			return HashingUtils.ExtractCombinedDualHash((ByteArray) data);
+			return HashingUtils.ExtractCombinedDualHash(ByteArray.WrapAndOwn(data));
 		}
 	}
 }

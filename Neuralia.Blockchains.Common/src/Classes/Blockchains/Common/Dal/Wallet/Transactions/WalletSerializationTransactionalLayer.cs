@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
-using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -27,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 	///     changes
 	/// </summary>
 	/// <remarks>This class is very sensitive to file access and should be run inside file and thread locks.</remarks>
-	public class WalletSerializationTransactionalLayer : IDisposable2 {
+	public class WalletSerializationTransactionalLayer : IDisposableExtended {
 
 		public enum FileOps {
 			Created,
@@ -45,6 +44,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			Folder
 		}
 
+		private const string BACKUP_PATH_NAME = "backup";
+		
 		private const uint HRFileLocked = 0x80070020;
 		private const uint HRPortionOfFileLocked = 0x80070021;
 
@@ -197,25 +198,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			// copy directory structure
 			IDirectoryInfo activeDirectoryInfo = this.activeFileSystem.DirectoryInfo.FromDirectoryName(this.walletsPath);
 			IDirectoryInfo physicalDirectoryInfo = this.physicalFileSystem.DirectoryInfo.FromDirectoryName(this.walletsPath);
-			string zipPath = Path.Combine(this.walletsPath, "backup.zip");
+			string backupPath = Path.Combine(this.walletsPath, BACKUP_PATH_NAME);
 
 			var fileDeltas = new List<FileOperationInfo>();
 
 			try {
 				this.BuildDelta(activeDirectoryInfo, physicalDirectoryInfo, fileDeltas);
 
-				this.CreateSafetyBackup(zipPath, fileDeltas);
+				this.CreateSafetyBackup(backupPath, fileDeltas);
 
 				this.ApplyFileDeltas(fileDeltas);
-
+				
 				this.CompleteFileChanges(fileDeltas);
 
 				this.Repeat(() => {
 
-					IFileInfo zipFileInfo = this.physicalFileSystem.FileInfo.FromFileName(zipPath);
+					foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+						IFileInfo fileInfo = this.physicalFileSystem.FileInfo.FromFileName(file);
 
-					if(zipFileInfo.Exists) {
-						this.FullyDeleteFile(zipFileInfo.FullName, this.physicalFileSystem);
+						if(fileInfo.Exists) {
+							this.FullyDeleteFile(fileInfo.FullName, this.physicalFileSystem);
+						}
 					}
 				});
 
@@ -223,7 +226,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 				// delete our temp work
 				Log.Error(ex, "Failed to write transaction data. Will attempt to undo");
 
-				if(this.UndoFileChanges(zipPath, fileDeltas)) {
+				if(this.UndoFileChanges(backupPath, fileDeltas)) {
 					// ok, at least we undid everything
 					Log.Error(ex, "Undo transaction was successful");
 				} else {
@@ -236,66 +239,70 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		protected void CreateSafetyBackup(string zipPath, List<FileOperationInfo> fileDeltas) {
+		protected void CreateSafetyBackup(string backupPath, List<FileOperationInfo> fileDeltas) {
 
-			IFileInfo zipFileInfo = this.physicalFileSystem.FileInfo.FromFileName(zipPath);
-
+			Narballer nar = new Narballer(this.walletsPath, this.physicalFileSystem);
+			
 			this.Repeat(() => {
-				if(zipFileInfo.Exists) {
-					this.FullyDeleteFile(zipFileInfo.FullName, this.physicalFileSystem);
+				foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+					IFileInfo fileInfo = this.physicalFileSystem.FileInfo.FromFileName(file);
+
+					if(fileInfo.Exists) {
+						this.FullyDeleteFile(fileInfo.FullName, this.physicalFileSystem);
+					}
 				}
 			});
 
-			using(Stream stream = this.FileSystem.FileStream.Create(zipPath, FileMode.CreateNew)) {
-				using(ZipArchive zipArchive = new ZipArchive(stream, ZipArchiveMode.Create)) {
-					foreach(FileOperationInfo file in fileDeltas) {
-						if(file.FileOp == FileOps.Deleted) {
+			foreach(FileOperationInfo file in fileDeltas) {
+				if(file.FileOp == FileOps.Deleted) {
 
-							this.Repeat(() => {
-								FileInfo fileInfo = new FileInfo(file.originalName);
+					this.Repeat(() => {
+						FileInfo fileInfo = new FileInfo(file.originalName);
 
-								string adjustedPath = file.originalName.Replace(this.walletsPath, "");
-								string separator1 = Path.DirectorySeparatorChar.ToString();
-								string separator2 = Path.AltDirectorySeparatorChar.ToString();
+						string adjustedPath = file.originalName.Replace(this.walletsPath, "");
+						string separator1 = Path.DirectorySeparatorChar.ToString();
+						string separator2 = Path.AltDirectorySeparatorChar.ToString();
 
-								if(adjustedPath.StartsWith(separator1)) {
-									adjustedPath = adjustedPath.Substring(separator1.Length, adjustedPath.Length - separator1.Length);
-								}
-
-								if(adjustedPath.StartsWith(separator2)) {
-									adjustedPath = adjustedPath.Substring(separator2.Length, adjustedPath.Length - separator2.Length);
-								}
-
-								if(fileInfo.Exists) {
-									zipArchive.CreateEntryFromFile(fileInfo.FullName, adjustedPath);
-								}
-							});
+						if(adjustedPath.StartsWith(separator1)) {
+							adjustedPath = adjustedPath.Substring(separator1.Length, adjustedPath.Length - separator1.Length);
 						}
 
-						if(file.FileOp == FileOps.Modified) {
-
-							this.Repeat(() => {
-								FileInfo fileInfo = new FileInfo(file.originalName);
-
-								string adjustedPath = file.originalName.Replace(this.walletsPath, "");
-								string separator1 = Path.DirectorySeparatorChar.ToString();
-								string separator2 = Path.AltDirectorySeparatorChar.ToString();
-
-								if(adjustedPath.StartsWith(separator1)) {
-									adjustedPath = adjustedPath.Substring(separator1.Length, adjustedPath.Length - separator1.Length);
-								}
-
-								if(adjustedPath.StartsWith(separator2)) {
-									adjustedPath = adjustedPath.Substring(separator2.Length, adjustedPath.Length - separator2.Length);
-								}
-
-								if(fileInfo.Exists) {
-									ZipArchiveEntry entry = zipArchive.CreateEntryFromFile(fileInfo.FullName, adjustedPath);
-								}
-							});
+						if(adjustedPath.StartsWith(separator2)) {
+							adjustedPath = adjustedPath.Substring(separator2.Length, adjustedPath.Length - separator2.Length);
 						}
-					}
+
+						if(fileInfo.Exists) {
+							nar.AddFile(fileInfo.FullName);
+						}
+					});
 				}
+
+				if(file.FileOp == FileOps.Modified) {
+
+					this.Repeat(() => {
+						FileInfo fileInfo = new FileInfo(file.originalName);
+
+						string adjustedPath = file.originalName.Replace(this.walletsPath, "");
+						string separator1 = Path.DirectorySeparatorChar.ToString();
+						string separator2 = Path.AltDirectorySeparatorChar.ToString();
+
+						if(adjustedPath.StartsWith(separator1)) {
+							adjustedPath = adjustedPath.Substring(separator1.Length, adjustedPath.Length - separator1.Length);
+						}
+
+						if(adjustedPath.StartsWith(separator2)) {
+							adjustedPath = adjustedPath.Substring(separator2.Length, adjustedPath.Length - separator2.Length);
+						}
+
+						if(fileInfo.Exists) {
+							nar.AddFile(fileInfo.FullName);
+						}
+					});
+				}
+			}
+
+			if(!nar.Package(backupPath)) {
+				Log.Verbose("No files were found to backup. no backup created.");
 			}
 		}
 
@@ -366,7 +373,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		protected bool UndoFileChanges(string zipPath, List<FileOperationInfo> fileDeltas) {
+		protected bool UndoFileChanges(string backupPath, List<FileOperationInfo> fileDeltas) {
+			
 			try {
 				this.RepeatFileOperation(() => {
 
@@ -451,35 +459,43 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 				}
 
 				if(missingFileDeltas.Any()) {
-					this.RestoreFromBackup(zipPath, missingFileDeltas);
+					this.RestoreFromBackup(backupPath, missingFileDeltas);
 				}
 
-				IFileInfo zipFileInfo = this.physicalFileSystem.FileInfo.FromFileName(zipPath);
+				this.Repeat(() => {
+					foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+						IFileInfo fileInfo = this.physicalFileSystem.FileInfo.FromFileName(file);
 
-				if(zipFileInfo.Exists) {
-					this.FullyDeleteFile(zipFileInfo.FullName, this.physicalFileSystem);
-				}
+						if(fileInfo.Exists) {
+							this.FullyDeleteFile(fileInfo.FullName, this.physicalFileSystem);
+						}
+					}
+				});
 
 				// clear remaining zomkbie directories
 				this.DeleteInnexistentDirectories(this.physicalFileSystem.DirectoryInfo.FromDirectoryName(this.walletsPath));
 
 				return true;
 			} catch(Exception ex) {
-				IFileInfo zipFileInfo = this.physicalFileSystem.FileInfo.FromFileName(zipPath);
+				
 
-				if(zipFileInfo.Exists) {
-					Log.Error(ex, "An exception occured in the transaction. attempting to restore from zip");
+				if(Narballer.PackageFilesValid(backupPath, this.physicalFileSystem)) {
+					Log.Error(ex, "An exception occured in the transaction. attempting to restore from backup package");
 
 					// ok, lets restore from the zip
 					try {
-						this.RestoreFromBackup(zipPath, fileDeltas);
+						this.RestoreFromBackup(backupPath, fileDeltas);
 
 						try {
-							zipFileInfo = this.physicalFileSystem.FileInfo.FromFileName(zipPath);
+							this.Repeat(() => {
+								foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+									IFileInfo fileInfo = this.physicalFileSystem.FileInfo.FromFileName(file);
 
-							if(zipFileInfo.Exists) {
-								this.FullyDeleteFile(zipFileInfo.FullName, this.physicalFileSystem);
-							}
+									if(fileInfo.Exists) {
+										this.FullyDeleteFile(fileInfo.FullName, this.physicalFileSystem);
+									}
+								}
+							});
 
 						} catch {
 							// nothing to do, its ok
@@ -530,53 +546,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		protected void RestoreFromBackup(string zipPath, List<FileOperationInfo> fileDeltas) {
+		protected void RestoreFromBackup(string backupPath, List<FileOperationInfo> fileDeltas) {
 			try {
 				this.Repeat(() => {
-					IFileInfo zipFileInfo = this.physicalFileSystem.FileInfo.FromFileName(zipPath);
-
-					if(!zipFileInfo.Exists) {
+					if(!Narballer.PackageFilesValid(backupPath, this.physicalFileSystem)) {
 						return;
 					}
 
-					using(Stream stream = this.FileSystem.FileStream.Create(zipPath, FileMode.Open)) {
-						using(ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Read)) {
-							var actions = new List<Action>();
-
-							foreach(ZipArchiveEntry entry in archive.Entries) {
-
-								actions.Add(() => {
-									string filePath = Path.Combine(this.walletsPath, entry.FullName);
-
-									FileOperationInfo clearableEntry = fileDeltas.SingleOrDefault(e => e.originalName == filePath);
-
-									if(clearableEntry != null) {
-										this.RepeatFileOperation(() => {
-
-											IFileInfo fileInfo = this.physicalFileSystem.FileInfo.FromFileName(filePath);
-
-											if(fileInfo.Exists) {
-												this.FullyDeleteFile(fileInfo.FullName, this.physicalFileSystem);
-											}
-
-											entry.ExtractToFile(filePath);
-
-											fileInfo = this.physicalFileSystem.FileInfo.FromFileName(filePath);
-
-											if(!fileInfo.Exists || (clearableEntry.originalHash != this.HashFile(filePath))) {
-												throw new ApplicationException("Invalid restored file!!");
-											}
-										});
-									}
-								});
-							}
-
-							IndependentActionRunner.Run(actions.ToArray());
-						}
-					}
+					Narballer nar = new Narballer(this.walletsPath, this.physicalFileSystem);
+					
+					nar.Restore(this.walletsPath, backupPath, fileDeltas.Select(d => d.originalName).ToList(), false);
 				});
 			} catch(Exception ex) {
-				throw new ApplicationException($"Failed to restore wallet from backup. This is serious. Original backup files remain available and can be recovered manually from '{zipPath}'.", ex);
+				throw new ApplicationException($"Failed to restore wallet from backup. This is serious. Original backup files remain available and can be recovered manually from '{backupPath}'.", ex);
 			}
 		}
 

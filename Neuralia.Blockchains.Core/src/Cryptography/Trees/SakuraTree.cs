@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
@@ -138,7 +139,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 	#region internal classes
 
-		public abstract class Hop : IDisposable2 {
+		public abstract class Hop : IDisposableExtended {
 			public readonly SafeArrayHandle data = SafeArrayHandle.Create();
 			public bool IsHashed { get; set; }
 			public abstract SafeArrayHandle GetHopBytes(int level);
@@ -161,6 +162,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 			public void Dispose() {
 				this.Dispose(true);
+				GC.SuppressFinalize(this);
 			}
 
 			private void Dispose(bool disposing) {
@@ -191,7 +193,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		protected class LeafHop : Hop {
 			private static readonly byte[] LEAF_HOP_FLAG = {0};
-			private static readonly byte[] LEAF_HOP_LEVEL = TypeSerializer.Serialize(0);
+			private static readonly ByteArray LEAF_HOP_LEVEL = TypeSerializer.Serialize(0);
 
 			public LeafHop(SafeArrayHandle entry) : base(entry) {
 
@@ -216,7 +218,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				result.Entry.CopyFrom(intBytes, 0, this.data.Length, sizeof(int));
 
 				// now we add a constant 0 level
-				result.Entry.CopyFrom(LEAF_HOP_LEVEL.AsSpan(), 0, this.data.Length + sizeof(int), sizeof(int));
+				result.Entry.CopyFrom(LEAF_HOP_LEVEL.Span, 0, this.data.Length + sizeof(int), sizeof(int));
 
 				// and since this is a leaf hop, we always have a flag of 0
 				result.Entry.CopyFrom(LEAF_HOP_FLAG.AsSpan(), 0, this.data.Length + (sizeof(int) * 2), sizeof(byte));

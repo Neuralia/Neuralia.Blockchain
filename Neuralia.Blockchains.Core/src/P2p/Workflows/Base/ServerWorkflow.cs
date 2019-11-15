@@ -3,6 +3,7 @@ using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 	public interface IServerWorkflow<R> : INetworkWorkflow<R>
@@ -26,6 +27,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 
 			// we give ourselves the same ID as the other side.
 			this.CorrelationId = this.triggerMessage.Header.WorkflowCorrelationId;
+			
+			this.SessionId = this.triggerMessage.Header.WorkflowSessionId;
 
 			// we need this also, to scope this workflow as a response to a certain client
 			this.ClientId = clientConnection.ClientUuid;

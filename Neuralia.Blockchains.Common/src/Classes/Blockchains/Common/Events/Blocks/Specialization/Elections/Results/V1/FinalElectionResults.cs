@@ -100,15 +100,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			base.JsonDehydrate(jsonDeserializer);
 
 			jsonDeserializer.SetArray("DelegateAccounts", this.DelegateAccounts, (js, e) => {
-
-				js.SetProperty("AccountId", e.Key);
-				js.SetProperty("Results", e.Value);
+				js.WriteObject((s) => {
+					s.SetProperty("AccountId", e.Key);
+					s.SetProperty("Results", e.Value);
+				});
+				
 			});
 
 			jsonDeserializer.SetArray("ElectedCandidates", this.ElectedCandidates, (js, e) => {
-
-				js.SetProperty("AccountId", e.Key);
-				js.SetProperty("Results", e.Value);
+				js.WriteObject((s) => {
+					s.SetProperty("AccountId", e.Key);
+					s.SetProperty("Results", e.Value);
+				});
+				
 			});
 		}
 

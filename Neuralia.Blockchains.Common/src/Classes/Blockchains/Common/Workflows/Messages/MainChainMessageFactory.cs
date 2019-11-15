@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		BlockchainTargettedMessageSet<T> CreateTargettedMessageSet<T>(TargettedHeader original)
 			where T : NetworkMessage<IBlockchainEventsRehydrationFactory>, new();
 
-		BlockchainTriggerMessageSet<T> CreateTriggerMessageSet<T>(uint workflowCorrelationId)
+		BlockchainTriggerMessageSet<T> CreateTriggerMessageSet<T>(uint workflowCorrelationId, uint? workflowSessionId = null)
 			where T : WorkflowTriggerMessage<IBlockchainEventsRehydrationFactory>, new();
 
 		BlockchainTriggerMessageSet<T> CreateTriggerMessageSet<T>(TargettedHeader original)
@@ -233,7 +233,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		public void CopyTargettedHeaderInfo(TargettedHeader newHeader, TargettedHeader triggerHeader) {
 			if(triggerHeader != null) {
 				newHeader.WorkflowCorrelationId = triggerHeader.WorkflowCorrelationId;
-				newHeader.originatorId = triggerHeader.originatorId;
+				newHeader.WorkflowSessionId = triggerHeader.WorkflowSessionId;
+				newHeader.OriginatorId = triggerHeader.OriginatorId;
 			}
 		}
 
@@ -259,8 +260,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 
 			return messageSet;
 		}
-
-		public BlockchainTriggerMessageSet<T> CreateTriggerMessageSet<T>(uint workflowCorrelationId)
+		
+		public BlockchainTriggerMessageSet<T> CreateTriggerMessageSet<T>(uint workflowCorrelationId, uint? workflowSessionId = null)
 			where T : WorkflowTriggerMessage<IBlockchainEventsRehydrationFactory>, new() {
 			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<BlockchainTriggerMessageSet<T>, T>(workflowCorrelationId);
 

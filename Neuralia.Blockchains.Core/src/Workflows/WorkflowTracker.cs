@@ -14,15 +14,17 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		where WORKFLOW : class, IWorkflow
 		where R : IRehydrationFactory {
 		private readonly uint correlationId;
+		private readonly uint? sessionId;
 		private readonly Guid myClientId;
 		private readonly Guid originatorId;
 
 		private readonly PeerConnection peerConnection;
 		private readonly IWorkflowCoordinator<WORKFLOW, R> workflowCoordinator;
 
-		public WorkflowTracker(PeerConnection peerConnection, uint correlationId, Guid originatorId, Guid myClientId, IWorkflowCoordinator<WORKFLOW, R> workflowCoordinator) {
+		public WorkflowTracker(PeerConnection peerConnection, uint correlationId, uint? sessionId, Guid originatorId, Guid myClientId, IWorkflowCoordinator<WORKFLOW, R> workflowCoordinator) {
 			this.peerConnection = peerConnection;
 			this.correlationId = correlationId;
+			this.sessionId = sessionId;
 			this.originatorId = originatorId;
 			this.myClientId = myClientId;
 			this.workflowCoordinator = workflowCoordinator;
@@ -30,14 +32,14 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 		public bool WorkflowExists() {
 
-			string workflowId = this.GetWorkflowId();
+			WorkflowId workflowId = this.GetWorkflowId();
 
 			return this.workflowCoordinator.WorkflowExists(workflowId);
 		}
 
 		public WORKFLOW GetActiveWorkflow() {
 
-			string workflowId = this.GetWorkflowId();
+			WorkflowId workflowId = this.GetWorkflowId();
 
 			WORKFLOW workflow = this.workflowCoordinator.GetExecutingWorkflow(workflowId);
 
@@ -58,14 +60,14 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			return workflow;
 		}
 
-		public string GetWorkflowId() {
-			string workflowId = "";
+		public WorkflowId GetWorkflowId() {
+			WorkflowId workflowId = "";
 
 			// now we verify if this message originator was us. if it was, we override the client ID
 			if(this.originatorId == this.myClientId) {
-				workflowId = NetworkingWorkflow.FormatScoppedId(this.myClientId, this.correlationId);
+				workflowId = new NetworkWorkflowId(this.myClientId, this.correlationId, this.sessionId);
 			} else {
-				workflowId = NetworkingWorkflow.FormatScoppedId(this.peerConnection.ClientUuid, this.correlationId);
+				workflowId = new NetworkWorkflowId(this.peerConnection.ClientUuid, this.correlationId, this.sessionId);
 			}
 
 			return workflowId;

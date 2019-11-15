@@ -3,6 +3,7 @@ using System.Text;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Serialization {
@@ -227,11 +228,12 @@ namespace Neuralia.Blockchains.Core.Serialization {
 		}
 
 		private SafeArrayHandle Encrypt(in Span<byte> bytes) {
-			return FileEncryptor.Encrypt(bytes.ToArray(), this.secret, this.encryptorParameters);
+			//TODO: the toarray causes performance considerations
+			return FileEncryptor.Encrypt(ByteArray.Wrap(bytes.ToArray()), this.secret, this.encryptorParameters);
 		}
 
 		private SafeArrayHandle Decrypt(in Span<byte> bytes) {
-			return FileEncryptor.Decrypt(bytes.ToArray(), this.secret, this.encryptorParameters);
+			return FileEncryptor.Decrypt(ByteArray.Wrap(bytes.ToArray()), this.secret, this.encryptorParameters);
 		}
 
 		public void Deserialize(in Span<byte> bytes, out byte value) {

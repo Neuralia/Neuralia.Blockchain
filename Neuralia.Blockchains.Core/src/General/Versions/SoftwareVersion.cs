@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 	/// <summary>
 	///     Simple structure to represent our client version
 	/// </summary>
-	public class SoftwareVersion : IBinarySerializable, IEquatable<SoftwareVersion>, ITreeHashable, IJsonSerializable {
+	public class SoftwareVersion : IBinarySerializable, IEquatable<SoftwareVersion>, ITreeHashable {
 
 		private readonly Func<SoftwareVersion, bool> validateVersion;
 
@@ -95,11 +95,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 			return (this.Build == other.Build) && (this.Major == other.Major) && (this.Revision == other.Revision) && (this.Minor == other.Minor);
 		}
-
-		public void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-			jsonDeserializer.SetValue(this.ToString());
-		}
-
+		
 		public HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = new HashNodeList();
 

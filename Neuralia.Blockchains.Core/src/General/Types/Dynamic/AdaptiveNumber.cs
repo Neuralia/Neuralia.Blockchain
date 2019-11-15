@@ -5,10 +5,11 @@ using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
-	public abstract class AdaptiveNumber<T> : ITreeHashable, IBinarySerializable, IJsonSerializable, IEquatable<AdaptiveNumber<T>>, IComparable<T>, IComparable<AdaptiveNumber<T>>
+	public abstract class AdaptiveNumber<T> : ITreeHashable, IBinarySerializable, IEquatable<AdaptiveNumber<T>>, IComparable<T>, IComparable<AdaptiveNumber<T>>
 		where T : struct, IComparable, IConvertible, IFormattable, IComparable<T>, IEquatable<T> {
 
 		private T value;
@@ -99,11 +100,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 			return this.value.Equals(other.value);
 		}
-
-		public void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-			jsonDeserializer.SetValue(this.Value);
-		}
-
+		
 		public HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
 

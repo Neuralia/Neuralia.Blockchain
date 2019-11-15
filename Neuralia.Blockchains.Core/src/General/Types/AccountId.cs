@@ -7,15 +7,17 @@ using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Types {
 	/// <summary>
 	///     Account IDs on the blockchain.  we  an go as high as 0xFFFFFFFFFFFFFFL.
 	/// </summary>
 	[JsonConverter(typeof(AccountIdJsonConverter))]
-	public class AccountId : ISerializableCombo, IComparable<AccountId> {
+	public class AccountId : IBinarySerializable, ITreeHashable, IComparable<AccountId> {
 
 		private const long SEQUENCE_MASK = 0xFFFFFFFFFFFFFFL; // the maximum amount of accounts we support by type
 		private const byte ACCOUNT_TYPE_MASK = 0x7F; // up to 127 account types.
@@ -84,12 +86,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 
 			return this.AccountTypeRaw.CompareTo(other.AccountTypeRaw);
 		}
-
-		public void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-
-			jsonDeserializer.SetValue(this.ToString());
-		}
-
+		
 		public HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = new HashNodeList();
 
@@ -187,7 +184,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			// display accountId as a base30 string, divided in groups of 4 characters
 
 			// skip all high entries that are 0
-			ByteArray usefulSimpleBytes = bytes.TrimEnd().ToArray();
+			ByteArray usefulSimpleBytes = ByteArray.WrapAndOwn(bytes.TrimEnd().ToArray());
 			string base30 = usefulSimpleBytes.ToBase30();
 
 			var chars = base30.ToCharArray().ToArray();
@@ -210,7 +207,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			Span<byte> buffer = stackalloc byte[sizeof(long)];
 			TypeSerializer.Serialize(this.SequenceId, buffer);
 
-			return $"{this.GetAccountIdentifier()}{ByteArray.Create(buffer.TrimEnd().ToArray()).ToBase94()}";
+			return $"{this.GetAccountIdentifier()}{ByteArray.Wrap(buffer.TrimEnd().ToArray()).ToBase94()}";
 
 		}
 

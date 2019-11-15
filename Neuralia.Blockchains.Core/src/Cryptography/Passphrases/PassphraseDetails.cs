@@ -6,7 +6,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 	/// <summary>
 	///     A utility class to hold memory passphrases and other parameters about them if applicable
 	/// </summary>
-	public abstract class PassphraseDetails : IDisposable2 {
+	public abstract class PassphraseDetails : IDisposableExtended {
 
 		protected readonly int? keyPassphraseTimeout;
 

@@ -4,10 +4,11 @@ using System.Security.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.SHA3;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Crypto;
 
 namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
-	public abstract class ShaDigestBase : IDigest, IDisposable2 {
+	public abstract class ShaDigestBase : IDigest, IDisposableExtended {
 
 		private const int BYTE_LENGTH = 64;
 		private SafeArrayHandle data = SafeArrayHandle.Create();
@@ -165,7 +166,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 				hash = sha3.CustomComputeHash(this.data.Entry, 0, this.length);
 
 			} else {
-				hash = (ByteArray) this.sha.ComputeHash(this.data.Bytes, this.data.Offset, this.length);
+				hash = ByteArray.WrapAndOwn(this.sha.ComputeHash(this.data.Bytes, this.data.Offset, this.length));
 			}
 
 			this.Reset();

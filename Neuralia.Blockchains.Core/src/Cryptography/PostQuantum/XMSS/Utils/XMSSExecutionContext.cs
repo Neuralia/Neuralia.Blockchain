@@ -6,7 +6,7 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
-	public class XMSSExecutionContext : IDisposable2 {
+	public class XMSSExecutionContext : IDisposableExtended {
 
 		public XMSSExecutionContext(Func<IDigest> digestFactory, SecureRandom random) {
 			this.DigestFactory = digestFactory;

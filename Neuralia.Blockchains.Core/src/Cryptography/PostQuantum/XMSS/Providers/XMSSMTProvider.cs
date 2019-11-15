@@ -1,6 +1,7 @@
 ﻿using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {

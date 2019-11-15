@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 	public class WalletPassphraseDetails : PassphraseDetails {
@@ -27,7 +28,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 		public SecureString WalletPassphrase { get; private set; }
 
-		public SafeArrayHandle WalletPassphraseBytes => this.WalletPassphrase == null ? null : (ByteArray) Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString());
+		public SafeArrayHandle WalletPassphraseBytes => this.WalletPassphrase == null ? null : ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString()));
 
 		/// <summary>
 		///     An explicit flag to determine if we should encrypt the wallet

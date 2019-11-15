@@ -7,10 +7,11 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
-	public class XMSSNodeCache : IDisposable2, IBinarySerializable {
+	public class XMSSNodeCache : IDisposableExtended, IBinarySerializable {
 
 		public const int LEVELS_TO_CACHE_ABSOLUTELY = 5;
 

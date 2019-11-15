@@ -52,17 +52,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
-		void InterpretNewBlockSnapshots(IBlock block, IRoutedTaskRoutingHandler routedTaskRoutingHandler, SerializationTransactionProcessor serializationTransactionProcessor);
+		void InterpretNewBlockSnapshots(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor);
 		void InterpretNewBlockLocalWallet(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext);
 
-		void InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock, IRoutedTaskRoutingHandler routedTaskRoutingHandler);
+		void InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock);
 		void InterpretGenesisBlockLocalWallet(SynthesizedBlock synthesizedBlockk, TaskRoutingContext taskRoutingContext);
 
 		SynthesizedBlock SynthesizeBlock(IBlock block);
 		void ProcessBlockImmediateGeneralImpact(BlockId blockId, List<ITransaction> transactions, IRoutedTaskRoutingHandler routedTaskRoutingHandler, SerializationTransactionProcessor serializationTransactionProcessor);
 		void ProcessBlockImmediateGeneralImpact(IBlock block, IRoutedTaskRoutingHandler routedTaskRoutingHandler, SerializationTransactionProcessor serializationTransactionProcessor);
 		void ProcessBlockImmediateGeneralImpact(SynthesizedBlock synthesizedBlock, IRoutedTaskRoutingHandler routedTaskRoutingHandler, SerializationTransactionProcessor serializationTransactionProcessor);
-		void ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext);
+		void ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock);
 
 		SynthesizedBlock CreateSynthesizedBlock();
 	}
@@ -151,11 +151,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected abstract ICardUtils CardUtils { get; }
 
-		public virtual void InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock, IRoutedTaskRoutingHandler routedTaskRoutingHandler) {
+		public virtual void InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock) {
 
 			// first thing, lets add the moderator keys to our chainState. these are pretty important
 
-			this.InterpretBlockSnapshots((BLOCK) genesisBlock, routedTaskRoutingHandler, null);
+			this.InterpretBlockSnapshots((BLOCK) genesisBlock, null);
 		}
 
 		public virtual void InterpretGenesisBlockLocalWallet(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext) {
@@ -165,12 +165,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.InterpretBlockLocalWallet(synthesizedBlock, taskRoutingContext);
 		}
 
-		public void InterpretNewBlockSnapshots(IBlock block, IRoutedTaskRoutingHandler routedTaskRoutingHandler, SerializationTransactionProcessor serializationTransactionProcessor) {
+		public void InterpretNewBlockSnapshots(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor) {
 
 			if((block.BlockId.Value == 1) && block is IGenesisBlock genesisBlock) {
-				this.InterpretGenesisBlockSnapshots(genesisBlock, routedTaskRoutingHandler);
+				this.InterpretGenesisBlockSnapshots(genesisBlock);
 			} else {
-				this.InterpretBlockSnapshots((BLOCK) block, routedTaskRoutingHandler, serializationTransactionProcessor);
+				this.InterpretBlockSnapshots((BLOCK) block, serializationTransactionProcessor);
 			}
 		}
 
@@ -262,10 +262,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     determine any impact the block has on our general wallet
 		/// </summary>
 		/// <param name="block"></param>
-		public void ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext) {
+		public void ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock) {
 
 			var walletActionSets = new Dictionary<AccountId, (List<Action> walletActions, SynthesizedBlock.SynthesizedBlockAccountSet scoppedSynthesizedBlock)>();
-			var serializationActions = new List<Action<ISerializationManager, TaskRoutingContext>>();
+			var serializationActions = new List<Action>();
 
 			AccountCache accountCache = null;
 
@@ -374,24 +374,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			Repeater.Repeat(() => {
 				if(serializationActions.Any()) {
 
-					var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
-
-					serializationTask.Set((serializationService, taskRoutingContext2) => {
-
-						if(serializationActions.Any()) {
-
-							//TODO: should we use serialization transactions here too?
-							serializationService.RunTransactionalActions(serializationActions, null, taskRoutingContext2);
-						}
-					}, (results, taskRoutingContext2) => {
+					try {
+						//TODO: should we use serialization transactions here too?
+						this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RunTransactionalActions(serializationActions, null);
+						
+					}catch(Exception ex) {
 						//TODO: what do we do here?
-						if(results.Error) {
-							Log.Error(results.Exception, "Failed to serialize");
-						}
-					});
-
-					taskRoutingContext.AddChild(serializationTask);
-					taskRoutingContext.DispatchChildrenSync();
+						Log.Error(ex, "Failed to serialize");
+					}
 				}
 			});
 		}
@@ -736,7 +726,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     Receive and post a newly accepted transaction for processing
 		/// </summary>
 		/// <param name="transaction"></param>
-		protected virtual void InterpretBlockSnapshots(BLOCK block, IRoutedTaskRoutingHandler routedTaskRoutingHandler, SerializationTransactionProcessor serializationTransactionProcessor) {
+		protected virtual void InterpretBlockSnapshots(BLOCK block, SerializationTransactionProcessor serializationTransactionProcessor) {
 
 			IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
@@ -751,7 +741,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return;
 			}
 
-			var serializationActions = new List<Action<ISerializationManager, TaskRoutingContext>>();
+			var serializationActions = new List<Action>();
 
 			var snapshotsTransactionInterpretationProcessor = this.CreateSnapshotsTransactionInterpretationProcessor();
 
@@ -795,43 +785,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				if(serializationActions.Any()) {
 
-					var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
-
-					serializationTask.Set((serializationService, taskRoutingContext) => {
-
+					try {
 						if(serializationActions.Any()) {
 
-							serializationService.RunTransactionalActions(serializationActions, serializationTransactionProcessor, taskRoutingContext);
+							this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RunTransactionalActions(serializationActions, serializationTransactionProcessor);
 						}
-					}, (results, taskRoutingContext) => {
+					} catch(Exception ex) {
 						//TODO: what do we do here?
-						if(results.Error) {
-							Log.Error(results.Exception, "Failed to perform serializations during block interpretation");
-						}
-					});
-
-					routedTaskRoutingHandler.DispatchTaskSync(serializationTask);
+						Log.Error(ex, "Failed to perform serializations during block interpretation");
+					}
 				}
 
 				// now, alert the world of this new block!
 				chainStateProvider.BlockInterpretationStatus |= ChainStateEntryFields.BlockInterpretationStatuses.InterpretationSerializationDone;
 				interpretationSerializationDone = true;
 			} else {
+				
 				// ensure we load the operations that were saved in case we need them since we are not jsut creating them
-				var serializationTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
 
-				serializationTask.Set((serializationService, taskRoutingContext) => {
+				try {
+					if(serializationActions.Any()) {
 
-					serializationTransactionProcessor.LoadUndoOperations(serializationService, serializationService.ChainDataWriteProvider);
-
-				}, (results, taskRoutingContext) => {
-					//TODO: what do we do here?
-					if(results.Error) {
-						Log.Error(results.Exception, "Failed to serialize");
+						serializationTransactionProcessor.LoadUndoOperations(this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase);
 					}
-				});
+				} catch(Exception ex) {
+					//TODO: what do we do here?
+					Log.Error(ex, "Failed to serialize");
+				}
 
-				routedTaskRoutingHandler.DispatchTaskSync(serializationTask);
 			}
 
 			if(!snapshotInterpretationDone) {
@@ -1023,7 +1004,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			if(accountActions.Any()) {
-				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
+				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
 
 					// run for all accounts, try to get as much done as possible before we break for exceptions
 					IndependentActionRunner.Run(accountActions.ToArray());
@@ -1042,7 +1023,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		protected void HandleConfirmedKeyedTransaction(long BlockId, IKeyedTransaction transaction, int keyedTransactionIndex, AccountCache accountCache, List<Action> walletActions, List<Action<ISerializationManager, TaskRoutingContext>> serializationActions) {
+		protected void HandleConfirmedKeyedTransaction(long BlockId, IKeyedTransaction transaction, int keyedTransactionIndex, AccountCache accountCache, List<Action> walletActions, List<Action> serializationActions) {
 
 			IWalletAccount publishedAccount = this.IsLocalAccount(accountCache.publishedAccounts, transaction.TransactionId.Account);
 			IWalletAccount dispatchedAccount = this.IsLocalAccount(accountCache.dispatchedAccounts, transaction.TransactionId.Account);
@@ -1083,13 +1064,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(moderationKeyedTransaction is IGenesisModeratorAccountPresentationTransaction genesisModeratorAccountPresentationTransaction) {
 				this.HandleGenesisModeratorAccountTransaction(genesisModeratorAccountPresentationTransaction);
-			}
-			else if(moderationKeyedTransaction is IModeratorKeyChangeTransaction moderatorKeyChangeTransaction) {
+			} else if(moderationKeyedTransaction is IModeratorKeyChangeTransaction moderatorKeyChangeTransaction) {
 				this.HandleModeratorKeyChangeTransaction(moderatorKeyChangeTransaction);
 			}
 		}
 
-		private void HandleModerationKeyedLocalImpactTransaction(long BlockId, IModerationKeyedTransaction moderationKeyedTransaction, AccountCache accountCache, List<Action> walletActions, List<Action<ISerializationManager, TaskRoutingContext>> serializationActions) {
+		private void HandleModerationKeyedLocalImpactTransaction(long BlockId, IModerationKeyedTransaction moderationKeyedTransaction, AccountCache accountCache, List<Action> walletActions, List<Action> serializationActions) {
 
 			if(moderationKeyedTransaction is IAccountResetTransaction accountResetTransaction) {
 
@@ -1138,6 +1118,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					if(transaction is ISetAccountRecoveryTransaction setAccountRecoveryTransaction) {
 						this.ProcessLocalConfirmedSetAccountRecoveryTransaction(BlockId, setAccountRecoveryTransaction, publishedAccount, walletActions);
 					}
+
 					if(transaction is ISetAccountCorrelationIdTransaction setAccountCorrelationIdTransaction) {
 						this.ProcessLocalConfirmedSetAccountCorrelationIdTransaction(BlockId, setAccountCorrelationIdTransaction, publishedAccount, walletActions);
 					}
@@ -1246,7 +1227,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			account.ConfirmationBlockId = BlockId;
 
-			this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, new object[] {account.AccountUuid, true, account.PublicAccountId.ToString()});
+			this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, new object[] {account.AccountUuid, true, account.PublicAccountId.ToString()},  new CorrelationContext());
 
 			Action operation = () => {
 
@@ -1303,7 +1284,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			account.PublicAccountId = new AccountId(trx.AssignedAccountId);
 
 			//TODO: presentation
-			this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, new object[] {account.AccountUuid, true, account.PublicAccountId.ToString()});
+			this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, new object[] {account.AccountUuid, true, account.PublicAccountId.ToString()},  new CorrelationContext());
 
 			Action operation = () => {
 
@@ -1392,7 +1373,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			//TODO: set this
 		}
-		
+
 		protected virtual void ProcessLocalConfirmedSetAccountCorrelationIdTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Action> walletActions)
 			where T : ISetAccountCorrelationIdTransaction {
 
@@ -1403,7 +1384,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			walletActions.Add(Operation);
 		}
-		
 
 		protected virtual void ProcessLocalRejectedPresentationTransaction(long BlockId, RejectedTransaction trx, IWalletAccount account, List<Action> walletActions) {
 			// thats it, this account is now rejected.

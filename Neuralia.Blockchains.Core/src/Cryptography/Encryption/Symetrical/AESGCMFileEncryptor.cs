@@ -6,6 +6,7 @@ using Microsoft.IO;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Org.BouncyCastle.Security;
 
@@ -68,11 +69,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			// get a random salt
 			salt.FillSafeRandom();
 
-			return new AesGcmEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_GCM_256, Salt = salt.ToExactByteArrayCopy(), Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			return new AesGcmEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_GCM_256, Salt = salt, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
 		}
 
 		public static (ByteArray Key, ByteArray Nonce) InitSymmetric(SecureString password, AesGcmEncryptorParameters parameters) {
-			return InitSymmetric((ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString()), parameters);
+			return InitSymmetric(ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(password.ConvertToUnsecureString())), parameters);
 		}
 
 		public static (ByteArray Key, ByteArray Nonce) InitSymmetric(SafeArrayHandle password, AesGcmEncryptorParameters parameters) {
@@ -82,8 +83,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			try {
 				using(Rfc2898DeriveBytes rfc2898DeriveBytes = new Rfc2898DeriveBytes(password.ToExactByteArray(), parameters.Salt.ToExactByteArray(), parameters.Iterations)) {
 					
-					ByteArray key = rfc2898DeriveBytes.GetBytes(parameters.KeyBitLength / 8);
-					ByteArray nonce = rfc2898DeriveBytes.GetBytes(12);
+					ByteArray key = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(parameters.KeyBitLength / 8));
+					ByteArray nonce = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(12));
 
 					return (key, nonce);
 				}
@@ -99,7 +100,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 			(ByteArray key, ByteArray nonce) = InitSymmetric(password, parameters);
 
-			ByteArray tag = ByteArray.Create(key.Length);
+			ByteArray tag = ByteArray.Create(16);
 			ByteArray ciphertext = ByteArray.Create(plain.Length);
 			
 #if (NETSTANDARD2_0)
@@ -138,7 +139,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 #else
 			using (AesGcm aesGcm = new AesGcm(key.ToExactByteArray()))
 			{
-				aesGcm.Decrypt(nonce.Span, cipher.Span, decrypted.Span, tag.Span);
+				aesGcm.Decrypt(nonce.Span, cipher.Span, tag.Span, decrypted.Span);
 			}
 #endif
 

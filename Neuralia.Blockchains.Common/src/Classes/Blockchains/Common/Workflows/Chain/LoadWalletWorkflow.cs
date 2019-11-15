@@ -22,14 +22,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
 		private readonly CorrelationContext correlationContext;
-		public LoadWalletWorkflow(CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator) {
+		private readonly string passphrase;
+		
+		public LoadWalletWorkflow(CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext, string passphrase = null) : base(centralCoordinator) {
 			this.correlationContext = correlationContext;
+			this.passphrase = passphrase;
 		}
 
 		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
 			
 			taskRoutingContext.SetCorrelationContext(this.correlationContext);
-			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(this.correlationContext);
+			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(this.correlationContext, this.passphrase);
 		}
 	}
 }

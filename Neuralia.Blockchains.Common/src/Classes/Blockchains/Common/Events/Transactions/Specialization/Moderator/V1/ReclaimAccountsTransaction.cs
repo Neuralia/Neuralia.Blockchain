@@ -35,9 +35,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.JsonDehydrate(jsonDeserializer);
 
 			jsonDeserializer.SetArray("Accounts", this.Accounts, (ds, e) => {
-
-				ds.SetProperty("Account", e.Account);
-				ds.SetProperty("Reason", e.Reason);
+				ds.WriteObject((s) => {
+					s.SetProperty("Account", e.Account);
+					s.SetProperty("Reason", e.Reason);
+				});
+				
 			});
 		}
 

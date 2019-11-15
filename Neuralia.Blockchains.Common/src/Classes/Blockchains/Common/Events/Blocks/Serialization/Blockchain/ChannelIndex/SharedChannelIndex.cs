@@ -687,6 +687,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 					results[provider.Key] = provider.Value.DataFile.ReadBytes(index.start, index.end);
 				}
 			}
+			else {
+				throw new ApplicationException("Failed to load indicies from disk.");
+			}
 
 			return results;
 		}
@@ -694,6 +697,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
 			var indices = this.QueryIndex(adjustedBlockId);
 
+			if(indices == null) {
+				throw new ApplicationException("Failed to load indicies from disk.");
+			}
 			var results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
 
 			foreach(var provider in this.EssentialProviders) {
@@ -713,6 +719,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
 			var indices = this.QueryIndex(adjustedBlockId);
 
+			if(indices == null) {
+				throw new ApplicationException("Failed to load indicies from disk.");
+			}
+			
 			if(!indices.Entries.Any()) {
 				return null;
 			}

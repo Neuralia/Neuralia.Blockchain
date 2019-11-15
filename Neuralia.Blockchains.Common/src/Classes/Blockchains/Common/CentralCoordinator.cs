@@ -36,11 +36,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		BlockchainServiceSet BlockchainServiceSet { get; }
 
-		void PostSystemEvent(SystemMessageTask messageTask, CorrelationContext correlationContext = default);
-
-		void PostSystemEvent(BlockchainSystemEventType eventType, CorrelationContext correlationContext = default);
-		void PostSystemEvent(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext correlationContext = default);
-		void PostSystemEvent(SystemEventGenerator generator, CorrelationContext correlationContext = default);
+		void PostSystemEvent(SystemMessageTask messageTask, CorrelationContext? correlationContext = null);
+		void PostSystemEvent(BlockchainSystemEventType eventType, CorrelationContext? correlationContext = null);
+		void PostSystemEvent(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext? correlationContext = null);
+		void PostSystemEvent(SystemEventGenerator generator, CorrelationContext? correlationContext = null);
+		
+		void PostSystemEventImmediate(SystemMessageTask messageTask, CorrelationContext? correlationContext = null);
+		void PostSystemEventImmediate(BlockchainSystemEventType eventType, CorrelationContext? correlationContext = null);
+		void PostSystemEventImmediate(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext? correlationContext = null);
+		void PostSystemEventImmediate(SystemEventGenerator generator, CorrelationContext? correlationContext = null);
+		
+		
 	}
 
 	public interface ICentralCoordinator : ILoopThread, ICoordinatorTaskDispatcher {
@@ -384,7 +390,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 					IBlockchainTargettedMessageSet messageSet = (IBlockchainTargettedMessageSet) this.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.RehydrateMessage(messageTask.data, targettedHeader, this.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
-					var workflowTracker = new WorkflowTracker<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>(messageTask.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.originatorId, this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, this.workflowCoordinator);
+					var workflowTracker = new WorkflowTracker<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>(messageTask.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.WorkflowSessionId, messageSet.Header.OriginatorId, this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, this.workflowCoordinator);
 
 					if(messageSet.Header.IsWorkflowTrigger && messageSet is IBlockchainTriggerMessageSet triggerMessageSet) {
 						// route the message
@@ -418,7 +424,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 							workflow.ReceiveNetworkMessage(messageSet);
 						} else {
-							Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' which does not exist");
+							Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' and session Id '{messageSet.Header.WorkflowSessionId}' which does not exist");
 						}
 					}
 				}
@@ -427,12 +433,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}
 		}
 
-		protected ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory> GetActiveWorkflow(PeerConnection peerConnection, uint correlationId, Guid originatorId) {
-			string workflowId = NetworkingWorkflow.FormatScoppedId(peerConnection.ClientUuid, correlationId);
+		protected ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory> GetActiveWorkflow(PeerConnection peerConnection, uint correlationId, uint? sessionId, Guid originatorId) {
+			WorkflowId workflowId = new NetworkWorkflowId(peerConnection.ClientUuid, correlationId, sessionId);
 
 			// now we verify if this message originator was us. if it was, we override the client ID
 			if(originatorId == this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid) {
-				workflowId = NetworkingWorkflow.FormatScoppedId(this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, correlationId);
+				workflowId = new NetworkWorkflowId(this.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid, correlationId, sessionId);
 			}
 
 			return this.workflowCoordinator.GetWorkflow(workflowId) as ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory>;
@@ -473,8 +479,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		protected virtual void SetServices(IChainComponentsInjection<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainComponentsInjection) {
-			this.AddService(Enums.SERIALIZATION_SERVICE, chainComponentsInjection.serializationManager);
-			this.AddService(Enums.VALIDATION_SERVICE, chainComponentsInjection.validationManager);
 			this.AddService(Enums.BLOCKCHAIN_SERVICE, chainComponentsInjection.blockchainManager);
 			this.AddService(Enums.GOSSIP_SERVICE, chainComponentsInjection.gossipManager);
 		}
@@ -570,7 +574,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		
 	#region System events
 
-		public void PostSystemEvent(SystemMessageTask messageTask, CorrelationContext correlationContext = default) {
+		public void PostSystemEvent(SystemMessageTask messageTask, CorrelationContext? correlationContext = null) {
 			// for now, only the interface is interrested in system messages
 			this.chainInterface.ReceiveChainMessageTask(messageTask);
 		}
@@ -579,18 +583,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		///     Post a system event
 		/// </summary>
 		/// <param name="eventType"></param>
-		public void PostSystemEvent(BlockchainSystemEventType eventType, CorrelationContext correlationContext = default) {
+		public void PostSystemEvent(BlockchainSystemEventType eventType, CorrelationContext? correlationContext = null) {
 			this.PostSystemEvent(eventType, null, correlationContext);
 		}
 
-		public void PostSystemEvent(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext correlationContext = default) {
+		public void PostSystemEvent(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext? correlationContext = null) {
 			//TODO refactor the post system events system
 			SystemMessageTask systemMessage = new SystemMessageTask(eventType, parameters, correlationContext);
 
 			this.PostSystemEvent(systemMessage);
 		}
 
-		public void PostSystemEvent(SystemEventGenerator generator, CorrelationContext correlationContext = default) {
+		public void PostSystemEvent(SystemEventGenerator generator, CorrelationContext? correlationContext = null) {
 			if(generator == null) {
 				return;
 			}
@@ -601,6 +605,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.PostSystemEvent(systemMessage);
 		}
 
+		public void PostSystemEventImmediate(SystemMessageTask messageTask, CorrelationContext? correlationContext = null) {
+			// for now, only the interface is interrested in system messages
+			this.chainInterface.ReceiveChainMessageTaskImmediate(messageTask);
+		}
+
+		/// <summary>
+		///     Post a system event
+		/// </summary>
+		/// <param name="eventType"></param>
+		public void PostSystemEventImmediate(BlockchainSystemEventType eventType, CorrelationContext? correlationContext = null) {
+			this.PostSystemEventImmediate(eventType, null, correlationContext);
+		}
+
+		public void PostSystemEventImmediate(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext? correlationContext = null) {
+			//TODO refactor the post system events system
+			SystemMessageTask systemMessage = new SystemMessageTask(eventType, parameters, correlationContext);
+
+			this.PostSystemEventImmediate(systemMessage);
+		}
+
+		public void PostSystemEventImmediate(SystemEventGenerator generator, CorrelationContext? correlationContext = null) {
+			if(generator == null) {
+				return;
+			}
+
+			//TODO refactor the post system events system
+			SystemMessageTask systemMessage = new SystemMessageTask(generator.EventType, generator.Parameters, correlationContext);
+
+			this.PostSystemEventImmediate(systemMessage);
+		}
 	#endregion
 
 	}

@@ -1,5 +1,6 @@
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -60,7 +61,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 
 			signer.init(true, new ParametersWithRandom(QTESLAPrivateKeyParameters.Rehydrate(privateKey), new SecureRandom()));
 
-			return (ByteArray) signer.generateSignature(content.ToExactByteArray());
+			return ByteArray.WrapAndOwn(signer.generateSignature(content.ToExactByteArray()));
 		}
 
 		public override bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {

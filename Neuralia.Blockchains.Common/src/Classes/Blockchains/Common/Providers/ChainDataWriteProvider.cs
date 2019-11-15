@@ -3,18 +3,27 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Serialization;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Cryptography;
+using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
+using Org.BouncyCastle.Crypto;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
@@ -26,7 +35,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void SaveDigestChannelDescription(int digestId, BlockchainDigestDescriptor blockchainDigestDescriptor);
 
 		void UpdateCurrentDigest(int digestId, long blockHeight);
-
+		void UpdateCurrentDigest(IBlockchainDigest digest);
+		
 		void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader);
 		void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal);
 
@@ -36,6 +46,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void TruncateBlockFileSizes(long blockId, Dictionary<string, long> fileSizes);
 
 		void EnsureFastKeysIndex();
+
+		void RunTransactionalActions(List<Action> serializationActions, SerializationTransactionProcessor serializationTransactionProcessor);
 	}
 
 	public interface IChainDataWriteProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataWriteProvider
@@ -56,6 +68,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		private static bool instantiated;
 
+		//TODO: review ALL locks to optimize. I did this quickly and its surely not optimal
+		private readonly object writeLocker = new object();
+		
 		protected ChainDataWriteProvider(CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator) {
 			if(instantiated && !GlobalSettings.TestingMode) {
 				throw new ApplicationException("Cannot instantiate more than one of this provider");
@@ -71,96 +86,107 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public void SerializeBlock(IDehydratedBlock dehydratedBlock) {
 
-			BlockChainConfigurations configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			lock(this.writeLocker) {
+				BlockChainConfigurations configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-			if(!BlockchainUtilities.UsesBlocks(configuration.BlockSavingMode)) {
-				// we dotn save the blocks
-				return;
+				if(!BlockchainUtilities.UsesBlocks(configuration.BlockSavingMode)) {
+					// we dotn save the blocks
+					return;
+				}
+
+				//1. ok, there we go. first step, lets make sure this block is not already serialized
+
+				(int index, long startingBlockId) index = this.FindBlockIndex(dehydratedBlock.BlockId.Value);
+
+				//2. now, we will determine where it should physically go, and insert it in the block index
+
+				// we are ready to insert the block index entry
+
+				bool inserted = false;
+
+				try {
+					inserted = this.BlockchainEventSerializationFal.InsertBlockEntry(dehydratedBlock.BlockId.Value, index, dehydratedBlock.GetEssentialDataChannels(), dehydratedBlock.RehydratedBlock.KeyedOffsets);
+				} catch(Exception ex) {
+					Log.Error(ex, $"Failed to insert the block id {dehydratedBlock.BlockId} into the blockchain filesystem");
+
+					throw;
+				}
+
+				if(inserted) {
+					Log.Information($"Block id {dehydratedBlock.BlockId} has been successfully inserted in the blockchain filesystem.");
+				} else {
+					Log.Information($"Block id {dehydratedBlock.BlockId} already existed in the blockchain filesystem. Nothing changed.");
+				}
+
+				// ok, our block is saved!
+
+				// store in memory for quick access when required
+				this.CacheBlock(dehydratedBlock.RehydratedBlock, dehydratedBlock.GetEssentialDataChannels(), dehydratedBlock);
 			}
-
-			//1. ok, there we go. first step, lets make sure this block is not already serialized
-
-			(int index, long startingBlockId) index = this.FindBlockIndex(dehydratedBlock.BlockId.Value);
-
-			//2. now, we will determine where it should physically go, and insert it in the block index
-
-			// we are ready to insert the block index entry
-
-			bool inserted = false;
-
-			try {
-				inserted = this.BlockchainEventSerializationFal.InsertBlockEntry(dehydratedBlock.BlockId.Value, index, dehydratedBlock.GetEssentialDataChannels(), dehydratedBlock.RehydratedBlock.KeyedOffsets);
-			} catch(Exception ex) {
-				Log.Error(ex, $"Failed to insert the block id {dehydratedBlock.BlockId} into the blockchain filesystem");
-
-				throw;
-			}
-
-			if(inserted) {
-				Log.Information($"Block id {dehydratedBlock.BlockId} has been successfully inserted in the blockchain filesystem.");
-			} else {
-				Log.Information($"Block id {dehydratedBlock.BlockId} already existed in the blockchain filesystem. Nothing changed.");
-			}
-
-			// ok, our block is saved!
-
-			// store in memory for quick access when required
-			this.CacheBlock(dehydratedBlock.RehydratedBlock, dehydratedBlock.GetEssentialDataChannels(), dehydratedBlock);
 		}
 
 		public void SerializeBlockchainMessage(IDehydratedBlockchainMessage dehydratedBlockchainMessage) {
 
-			//TODO: make this method atomic!!!
-			// get our message bytes
-			SafeArrayHandle messageBytes = dehydratedBlockchainMessage.Dehydrate();
+			lock(this.writeLocker) {
+				//TODO: make this method atomic!!!
+				// get our message bytes
+				SafeArrayHandle messageBytes = dehydratedBlockchainMessage.Dehydrate();
 
-			Guid uuid = dehydratedBlockchainMessage.RehydratedMessage.Uuid;
+				Guid uuid = dehydratedBlockchainMessage.RehydratedMessage.Uuid;
 
-			// ok, now we create our new entry. lets create the directory structure and blocks file if it does not exist
-			string messagesFile = this.GetMessagesFile(uuid);
-			string messagesIndexFile = this.GetMessagesIndexFile(uuid);
+				// ok, now we create our new entry. lets create the directory structure and blocks file if it does not exist
+				string messagesFile = this.GetMessagesFile(uuid);
+				string messagesIndexFile = this.GetMessagesIndexFile(uuid);
 
-			this.BlockchainEventSerializationFal.EnsureFileExists(messagesFile);
-			this.BlockchainEventSerializationFal.EnsureFileExists(messagesIndexFile);
+				this.BlockchainEventSerializationFal.EnsureFileExists(messagesFile);
+				this.BlockchainEventSerializationFal.EnsureFileExists(messagesIndexFile);
 
-			var messagesFileSize = this.ChainDataLoadProvider.GetMessagesFileSize(uuid);
+				var messagesFileSize = this.ChainDataLoadProvider.GetMessagesFileSize(uuid);
 
-			if(!messagesFileSize.HasValue) {
-				throw new ApplicationException("Messages file did not exist");
+				if(!messagesFileSize.HasValue) {
+					throw new ApplicationException("Messages file did not exist");
+				}
+
+				// we are ready to insert the block index entry
+				this.BlockchainEventSerializationFal.InsertMessagesIndexEntry(messagesIndexFile, uuid, messagesFileSize.Value, messageBytes.Length);
+
+				this.BlockchainEventSerializationFal.InsertMessagesEntry(messagesFile, messageBytes);
 			}
-
-			// we are ready to insert the block index entry
-			this.BlockchainEventSerializationFal.InsertMessagesIndexEntry(messagesIndexFile, uuid, messagesFileSize.Value, messageBytes.Length);
-
-			this.BlockchainEventSerializationFal.InsertMessagesEntry(messagesFile, messageBytes);
 		}
 
 		public void SaveDigestChannelDescription(int digestId, BlockchainDigestDescriptor blockchainDigestDescriptor) {
-			this.BlockchainEventSerializationFal.SaveDigestChannelDescription(this.GetDigestsScoppedFolderPath(digestId), blockchainDigestDescriptor);
+			lock(this.writeLocker) {
+				this.BlockchainEventSerializationFal.SaveDigestChannelDescription(this.GetDigestsScoppedFolderPath(digestId), blockchainDigestDescriptor);
+			}
 		}
 
+		public void UpdateCurrentDigest(IBlockchainDigest digest) {
+			this.UpdateCurrentDigest(digest.DigestId, digest.BlockId.Value);
+		}
 		public void UpdateCurrentDigest(int digestId, long blockHeight) {
-			bool deletePreviousBlocks = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().BlockSavingMode == AppSettingsBase.BlockSavingModes.DigestsThenBlocks;
-			(int index, long startingBlockId)? blockGroupIndex = null;
+			lock(this.writeLocker) {
+				bool deletePreviousBlocks = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().BlockSavingMode == AppSettingsBase.BlockSavingModes.DigestsThenBlocks;
+				(int index, long startingBlockId)? blockGroupIndex = null;
 
-			if(deletePreviousBlocks) {
-				blockGroupIndex = this.FindBlockIndex(blockHeight);
+				if(deletePreviousBlocks) {
+					blockGroupIndex = this.FindBlockIndex(blockHeight);
+				}
+
+				this.BlockchainEventSerializationFal.UpdateCurrentDigest(this.GetDigestsScoppedFolderPath(digestId), deletePreviousBlocks, blockGroupIndex);
 			}
-
-			this.BlockchainEventSerializationFal.UpdateCurrentDigest(this.GetDigestsScoppedFolderPath(digestId), deletePreviousBlocks, blockGroupIndex);
 		}
 
 		public void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader) {
-			this.BlockchainEventSerializationFal.SaveDigestHeader(this.GetDigestsScoppedFolderPath(digestId), digestHeader);
-		}
-
-		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
-			this.BlockchainEventSerializationFal.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal);
+			lock(this.writeLocker) {
+				this.BlockchainEventSerializationFal.SaveDigestHeader(this.GetDigestsScoppedFolderPath(digestId), digestHeader);
+			}
 		}
 
 		public void EnsureFastKeysIndex() {
-			if(this.FastKeyEnabled(GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || this.FastKeyEnabled(GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
-				this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
+			lock(this.writeLocker) {
+				if(this.FastKeyEnabled(GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || this.FastKeyEnabled(GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
+					this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
+				}
 			}
 		}
 
@@ -170,38 +196,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockId"></param>
 		/// <param name="fileSizes"></param>
 		public void TruncateBlockFileSizes(long blockId, Dictionary<string, long> fileSizes) {
-			(int index, long startingBlockId) index = this.FindBlockIndex(blockId);
+			lock(this.writeLocker) {
+				(int index, long startingBlockId) index = this.FindBlockIndex(blockId);
 
-			string folderPath = this.BlockchainEventSerializationFal.GetBlockPath(index.index);
+				string folderPath = this.BlockchainEventSerializationFal.GetBlockPath(index.index);
 
-			foreach(var entry in fileSizes) {
+				foreach(var entry in fileSizes) {
 
-				string filename = Path.Combine(folderPath, entry.Key);
+					string filename = Path.Combine(folderPath, entry.Key);
 
-				if(entry.Value <= 0) {
-					if(this.centralCoordinator.FileSystem.File.Exists(filename)) {
-						this.centralCoordinator.FileSystem.File.Delete(filename);
-					}
-				} else {
-					if(this.centralCoordinator.FileSystem.File.Exists(filename) && (this.centralCoordinator.FileSystem.FileInfo.FromFileName(filename).Length != entry.Value)) {
-						using(Stream fileStream = this.centralCoordinator.FileSystem.FileInfo.FromFileName(filename).OpenWrite()) {
-							fileStream.SetLength(entry.Value);
+					if(entry.Value <= 0) {
+						if(this.centralCoordinator.FileSystem.File.Exists(filename)) {
+							this.centralCoordinator.FileSystem.File.Delete(filename);
+						}
+					} else {
+						if(this.centralCoordinator.FileSystem.File.Exists(filename) && (this.centralCoordinator.FileSystem.FileInfo.FromFileName(filename).Length != entry.Value)) {
+							using(Stream fileStream = this.centralCoordinator.FileSystem.FileInfo.FromFileName(filename).OpenWrite()) {
+								fileStream.SetLength(entry.Value);
+							}
 						}
 					}
 				}
-			}
 
-			// now any file not in the list must be deleted
-			if(this.centralCoordinator.FileSystem.Directory.Exists(folderPath)) {
+				// now any file not in the list must be deleted
+				if(this.centralCoordinator.FileSystem.Directory.Exists(folderPath)) {
 
-				// select files that were actually existing with data
-				var snapshotFiles = fileSizes.Where(f => f.Value > 0).Select(f => f.Key).ToList();
+					// select files that were actually existing with data
+					var snapshotFiles = fileSizes.Where(f => f.Value > 0).Select(f => f.Key).ToList();
 
-				foreach(string entry in this.centralCoordinator.FileSystem.Directory.GetFiles(folderPath).Select(Path.GetFileName).Where(f => !snapshotFiles.Contains(f))) {
-					string fullPath = Path.Combine(folderPath, entry);
+					foreach(string entry in this.centralCoordinator.FileSystem.Directory.GetFiles(folderPath).Select(Path.GetFileName).Where(f => !snapshotFiles.Contains(f))) {
+						string fullPath = Path.Combine(folderPath, entry);
 
-					if(this.centralCoordinator.FileSystem.File.Exists(fullPath)) {
-						this.centralCoordinator.FileSystem.File.Delete(fullPath);
+						if(this.centralCoordinator.FileSystem.File.Exists(fullPath)) {
+							this.centralCoordinator.FileSystem.File.Delete(fullPath);
+						}
 					}
 				}
 			}
@@ -215,55 +243,155 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockEnvelope"></param>
 		public virtual void CacheUnvalidatedBlockGossipMessage(IBlockEnvelope unvalidatedBlockEnvelope, long xxHash) {
 
-			string walletPath = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath();
-			IMessageRegistryDal messageRegistryDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(walletPath, this.centralCoordinator.BlockchainServiceSet);
+			lock(this.writeLocker) {
+				string walletPath = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath();
+				IMessageRegistryDal messageRegistryDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(walletPath, this.centralCoordinator.BlockchainServiceSet);
 
-			bool result = false;
+				bool result = false;
 
-			lock(this.locker) {
-				result = messageRegistryDal.CacheUnvalidatedBlockGossipMessage(unvalidatedBlockEnvelope.BlockId, xxHash);
-			}
+				lock(this.locker) {
+					result = messageRegistryDal.CacheUnvalidatedBlockGossipMessage(unvalidatedBlockEnvelope.BlockId, xxHash);
+				}
 
-			if(result) {
-				// ok, let's save the file
+				if(result) {
+					// ok, let's save the file
 
-				string folderPath = this.GetBlocksGossipCacheFolderPath();
+					string folderPath = this.GetBlocksGossipCacheFolderPath();
 
-				FileExtensions.EnsureDirectoryStructure(folderPath, this.centralCoordinator.FileSystem);
+					FileExtensions.EnsureDirectoryStructure(folderPath, this.centralCoordinator.FileSystem);
 
-				string completeFile = this.GetUnvalidatedBlockGossipMessageFullFileName(unvalidatedBlockEnvelope.BlockId, xxHash);
+					string completeFile = this.GetUnvalidatedBlockGossipMessageFullFileName(unvalidatedBlockEnvelope.BlockId, xxHash);
 
-				if(!this.centralCoordinator.FileSystem.File.Exists(completeFile)) {
-					FileExtensions.WriteAllBytes(completeFile, unvalidatedBlockEnvelope.DehydrateEnvelope(), this.centralCoordinator.FileSystem);
+					if(!this.centralCoordinator.FileSystem.File.Exists(completeFile)) {
+						FileExtensions.WriteAllBytes(completeFile, unvalidatedBlockEnvelope.DehydrateEnvelope(), this.centralCoordinator.FileSystem);
+					}
 				}
 			}
 		}
 
 		public void ClearCachedUnvalidatedBlockGossipMessage(long blockId) {
 
-			string walletPath = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath();
-			IMessageRegistryDal messageRegistryDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(walletPath, this.centralCoordinator.BlockchainServiceSet);
+			lock(this.writeLocker) {
+				string walletPath = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath();
+				IMessageRegistryDal messageRegistryDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(walletPath, this.centralCoordinator.BlockchainServiceSet);
 
-			string folderPath = this.GetBlocksGossipCacheFolderPath();
-			FileExtensions.EnsureDirectoryStructure(folderPath, this.centralCoordinator.FileSystem);
+				string folderPath = this.GetBlocksGossipCacheFolderPath();
+				FileExtensions.EnsureDirectoryStructure(folderPath, this.centralCoordinator.FileSystem);
 
-			var deletedEntries = new List<(long blockId, long xxHash)>();
+				var deletedEntries = new List<(long blockId, long xxHash)>();
 
-			lock(this.locker) {
-				deletedEntries = messageRegistryDal.RemoveCachedUnvalidatedBlockGossipMessages(blockId);
-			}
-
-			// delete the files
-			foreach((long blockId, long xxHash) entry in deletedEntries) {
-				try {
-					string completeFile = this.GetUnvalidatedBlockGossipMessageFullFileName(entry.blockId, entry.xxHash);
-
-					if(this.centralCoordinator.FileSystem.File.Exists(completeFile)) {
-						this.centralCoordinator.FileSystem.File.Delete(completeFile);
-					}
-				} catch(Exception ex) {
-					Log.Error(ex, $"Failed to delete a cached gossip block message file for block Id {entry.blockId}");
+				lock(this.locker) {
+					deletedEntries = messageRegistryDal.RemoveCachedUnvalidatedBlockGossipMessages(blockId);
 				}
+
+				// delete the files
+				foreach((long blockId, long xxHash) entry in deletedEntries) {
+					try {
+						string completeFile = this.GetUnvalidatedBlockGossipMessageFullFileName(entry.blockId, entry.xxHash);
+
+						if(this.centralCoordinator.FileSystem.File.Exists(completeFile)) {
+							this.centralCoordinator.FileSystem.File.Delete(completeFile);
+						}
+					} catch(Exception ex) {
+						Log.Error(ex, $"Failed to delete a cached gossip block message file for block Id {entry.blockId}");
+					}
+				}
+			}
+		}
+		
+
+		
+
+	#endregion
+		
+		#region imports from Serialization Service
+
+
+		
+		
+		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
+
+			lock(this.writeLocker) {
+				void Action() {
+					using(key) {
+						this.BlockchainEventSerializationFal.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal);
+					}
+				}
+
+				if(this.serializationTransactionProcessor != null) {
+
+					var keyData = this.ChainDataLoadProvider.LoadAccountKeyFromIndex(accountId, ordinal);
+					SerializationFastKeysOperations undoOperation = null;
+
+					// we undo if we had a previous key. otherwise, leave it there as junk
+					if(keyData.HasValue && keyData.Value != default) {
+						undoOperation = new SerializationFastKeysOperations(this);
+						undoOperation.AccountId = accountId;
+						undoOperation.Ordinal = ordinal;
+						undoOperation.Key.Entry = keyData.Value.keyBytes.Entry;
+						undoOperation.TreeHeight = keyData.Value.treeheight;
+						undoOperation.HashBits = keyData.Value.hashBits;
+
+					}
+
+					this.serializationTransactionProcessor.AddOperation(Action, undoOperation);
+				} else {
+					Action();
+				}
+			}
+		}
+
+	#endregion
+		
+	#region Simple transactional System
+
+		protected SerializationTransactionProcessor serializationTransactionProcessor;
+
+		/// <summary>
+		///     This method will run a series of operations using our very simple transactional system.
+		/// </summary>
+		/// <param name="serializationActions"></param>
+		/// <param name="taskRoutingContext"></param>
+		public void RunTransactionalActions(List<Action> serializationActions, SerializationTransactionProcessor serializationTransactionProcessor) {
+
+			lock(this.writeLocker) {
+				this.BeginTransaction(serializationTransactionProcessor);
+
+				try {
+					foreach(var action in serializationActions.Where(a => a != null)) {
+						action();
+					}
+
+					this.CommitTransaction();
+				} catch(Exception ex) {
+					this.RollbackTransaction();
+
+					throw;
+				}
+			}
+		}
+
+		/// <summary>
+		///     This is a very simple transactional system for fast keys. It should be improved in the future to something more
+		///     robust
+		/// </summary>
+		protected void BeginTransaction(SerializationTransactionProcessor serializationTransactionProcessor) {
+
+
+			this.serializationTransactionProcessor = serializationTransactionProcessor;
+		}
+
+		protected void CommitTransaction() {
+			this.serializationTransactionProcessor?.Apply();
+			this.serializationTransactionProcessor = null;
+		}
+
+		protected void RollbackTransaction() {
+
+			try {
+				this.serializationTransactionProcessor?.Rollback();
+			} finally {
+				this.serializationTransactionProcessor = null;
 			}
 		}
 

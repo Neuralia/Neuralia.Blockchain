@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
@@ -120,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				ITransactionEnvelope envelope = null;
 
 				if(this.SaveTransactionEnvelopes && File.Exists(trxfile)) {
-					SafeArrayHandle trxBytes = (ByteArray) File.ReadAllBytes(trxfile);
+					SafeArrayHandle trxBytes = ByteArray.WrapAndOwn(File.ReadAllBytes(trxfile));
 
 					envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(trxBytes);
 				}

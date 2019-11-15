@@ -5,6 +5,7 @@ using System.Net.Http;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Services {
 	public interface IHttpService {
@@ -71,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				this.Download(requestUri, memoryStream);
 
-				return (ByteArray) memoryStream.ToArray();
+				return ByteArray.WrapAndOwn( memoryStream.ToArray());
 			}
 		}
 

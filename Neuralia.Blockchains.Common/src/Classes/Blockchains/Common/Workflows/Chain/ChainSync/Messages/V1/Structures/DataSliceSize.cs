@@ -1,4 +1,5 @@
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures {
@@ -17,14 +18,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.Length = rehydrator.ReadLong();
-
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
+			adaptiveSet.Rehydrate(rehydrator);
+			this.Length = adaptiveSet.Value;
 		}
 
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {
 
-			dehydrator.Write(this.Length);
-
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9(this.Length);
+			adaptiveSet.Dehydrate(dehydrator);
 		}
 
 		public virtual HashNodeList GetStructuresArray() {

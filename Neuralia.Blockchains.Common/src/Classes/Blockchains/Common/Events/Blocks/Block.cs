@@ -428,7 +428,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			IElectionResultsRehydrator electionResultsRehydrator = blockComponentRehydrationFactory.CreateElectionResultsRehydrator();
 
 			if(count != 0) {
-				transactionIndexesTree = transactionIndexesTree ?? this.GetAllIndexedTransactionsDictionary();
+				transactionIndexesTree ??= this.GetAllIndexedTransactionsDictionary();
 
 				for(byte i = 0; i < count; i++) {
 
@@ -439,7 +439,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			count = rehydratorHeader.ReadByte();
 
 			if(count != 0) {
-				transactionIndexesTree = transactionIndexesTree ?? this.GetAllIndexedTransactionsDictionary();
+				transactionIndexesTree ??= this.GetAllIndexedTransactionsDictionary();
 
 				for(byte i = 0; i < count; i++) {
 					this.FinalElectionResults.Add(electionResultsRehydrator.RehydrateFinalResults(rehydratorHeader, transactionIndexesTree));

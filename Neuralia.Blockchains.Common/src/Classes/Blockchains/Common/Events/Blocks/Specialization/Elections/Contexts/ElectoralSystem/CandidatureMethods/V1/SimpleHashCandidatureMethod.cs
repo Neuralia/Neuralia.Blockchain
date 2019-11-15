@@ -3,6 +3,7 @@ using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.CandidatureMethods.V1 {
@@ -23,6 +24,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			HashNodeList nodeList = base.GetStructuresArray();
 
 			return nodeList;
+		}
+		
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+			
+			jsonDeserializer.SetProperty("Name", "SimpleHash");
 		}
 	}
 }

@@ -3,7 +3,8 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers {
 	/// <summary>

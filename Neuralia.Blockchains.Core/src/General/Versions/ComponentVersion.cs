@@ -8,7 +8,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Versions {
 
-	public class ComponentVersion : ISerializableCombo {
+	public class ComponentVersion : IBinarySerializable, ITreeHashable {
 
 		public ComponentVersion() {
 			this.Major = new AdaptiveShort1_2();
@@ -68,12 +68,6 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 			return hashNodeList;
 		}
-
-		public virtual void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-
-			jsonDeserializer.SetValue(this.ToString());
-		}
-
 		public static implicit operator ComponentVersion((ushort major, ushort minor) d) {
 			return new ComponentVersion(d.major, d.minor);
 		}
@@ -241,11 +235,6 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 		public override string ToString() {
 			return $"{this.Type.Value.Value}.{this.Major.Value}.{this.Minor.Value}";
-		}
-
-		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-
-			jsonDeserializer.SetValue(this.ToString());
 		}
 
 		public override bool Equals(object obj) {

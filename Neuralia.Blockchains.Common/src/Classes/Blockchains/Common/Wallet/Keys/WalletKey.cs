@@ -9,7 +9,7 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
-	public interface IWalletKey : IDisposable2, ITreeHashable {
+	public interface IWalletKey : IDisposableExtended, ITreeHashable {
 		[BsonId]
 		Guid Id { get; set; }
 

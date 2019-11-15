@@ -25,6 +25,7 @@ using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
@@ -68,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			singleEntryContext.syncManifest = this.LoadBlockSyncManifest(singleEntryContext.details.Id);
 
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.BlockchainSyncUpdate(1, 1, ""));
+			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(1, 1, ""));
 
 			if((singleEntryContext.syncManifest != null) && ((singleEntryContext.syncManifest.Key != 1) || (singleEntryContext.syncManifest.Attempts >= 3))) {
 				// we found one, but if we are here, it is stale so we delete it
@@ -103,7 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				// lets generate the file map
 				foreach(var channel in singleEntryContext.details.nextBlockSize.SlicesInfo) {
-					singleEntryContext.syncManifest.Files.Add(channel.Key, new DataSlice {Length = channel.Value.Length});
+					singleEntryContext.syncManifest.Files.Add(channel.Key, new DataSlice { Length = channel.Value.Length});
 				}
 
 				this.GenerateSyncManifestStructure<BlockFilesetSyncManifest, BlockChannelUtils.BlockChannelTypes, BlockFilesetSyncManifest.BlockSyncingDataSlice>(singleEntryContext.syncManifest);
@@ -249,20 +250,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			try {
 
 				if(this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetUnvalidatedBlockGossipMessageCached(currentBlockId)) {
-
-					IBlockEnvelope validBlockMessage = null;
-
-					var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<List<(IBlockEnvelope envelope, long xxHash)>>();
-
-					serializationTask.SetAction((serializationService, taskRoutingContext) => {
-
-						serializationTask.Results = serializationService.GetCachedUnvalidatedBlockGossipMessage(currentBlockId);
-					});
-
-					// yes, we want to wait
-					this.DispatchTaskSync(serializationTask);
-
-					return serializationTask.Results;
+					
+					return this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetCachedUnvalidatedBlockGossipMessage(currentBlockId);
 				}
 
 			} catch(Exception ex) {
@@ -315,7 +304,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							newConnectionSet.Set(newConnections);
 
 							// lets launch our parallel task to get new peers while we sync
-							this.newPeerTask = new Task<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>>(this.FetchNewPeers, (newConnectionSet, connections));
+							this.newPeerTask = new Task<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>>(this.FetchNewPeers, (newConnectionSet, connections), TaskCreationOptions.None);
 
 							this.newPeerTask?.ContinueWith(t => {
 								// retrieve the results
@@ -469,7 +458,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 			
 			// launch the various tasks
-			var downloadTask = new Task<bool>(() => {
+			var downloadTask = Task<bool>.Factory.StartNew(() => {
 
 				Thread.CurrentThread.Name = "Chain Sync Download Thread";
 				
@@ -500,9 +489,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				return true;
-			}, this.CancelTokenSource.Token, TaskCreationOptions.LongRunning);
+			}, this.CancelTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-			var verifyTask = new Task<bool>(() => {
+			var verifyTask = Task<bool>.Factory.StartNew(() => {
 
 				Thread.CurrentThread.Name = "Chain Sync Verification Thread";
 				
@@ -523,10 +512,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				return true;
-			}, this.CancelTokenSource.Token, TaskCreationOptions.LongRunning);
+			}, this.CancelTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-			var interpretationTask = new Task<bool>(() => {
-
+			var interpretationTask = Task<bool>.Factory.StartNew(() => {
 				
 				Thread.CurrentThread.Name = "Chain Sync Interpretation Thread";
 				this.CheckShouldCancel();
@@ -545,11 +533,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				return true;
-			}, this.CancelTokenSource.Token, TaskCreationOptions.LongRunning);
-
-			downloadTask.Start();
-			verifyTask.Start();
-			interpretationTask.Start();
+			}, this.CancelTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+			
 
 			var tasksSet = new Task[] {downloadTask, verifyTask, interpretationTask};
 
@@ -832,57 +817,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					// now perform validation
 
-					var validationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateValidationTask<bool>();
+					if(loadSource == LoadSources.Gossip) {
 
-					validationTask.SetAction((validationService, taskRoutingContext) => { 
+						foreach((IBlockEnvelope envelope, long xxHash) potentialMessageEntry in gossipEnvelopes) {
 
-						if(loadSource == LoadSources.Gossip) {
-
-							foreach((IBlockEnvelope envelope, long xxHash) potentialMessageEntry in gossipEnvelopes) {
-
-								IRoutedTask validateEnvelopeContentTask = validationService.ValidateEnvelopedContent(potentialMessageEntry.envelope, result => {
-									results = result;
-								});
-
-								if(validateEnvelopeContentTask != null) {
-									taskRoutingContext.AddChild(validateEnvelopeContentTask);
-
-									// let's wait for the answer
-									taskRoutingContext.WaitDispatchedChildren();
-								}
-
-								if(results.Valid) {
-									// ok, thats it, we found a valid block in our cache!
-									dehydratedBlock = potentialMessageEntry.envelope.Contents;
-
-									// now lets update the message, since we know it's validation status
-									try {
-										IMessageRegistryDal sqliteDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(this.centralCoordinator.BlockchainServiceSet.GlobalsService.GetSystemFilesDirectoryPath(), this.serviceSet);
-
-										// update the validation status, we know its a good message
-										sqliteDal.CheckMessageInCache(potentialMessageEntry.xxHash, true);
-
-									} catch(Exception ex) {
-										Log.Error(ex, "Failed to update cached message validation status");
-									}
-
-									break;
-								}
-							}
-						} else if(loadSource == LoadSources.Sync) {
-							IRoutedTask blockValidationTask = validationService.ValidateBlock(dehydratedBlock, result => {
+							this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(potentialMessageEntry.envelope, result => {
 								results = result;
 							});
 
-							if(blockValidationTask != null) {
-								taskRoutingContext.AddChild(blockValidationTask);
+							if(results.Valid) {
+								// ok, thats it, we found a valid block in our cache!
+								dehydratedBlock = potentialMessageEntry.envelope.Contents;
 
-								taskRoutingContext.WaitDispatchedChildren();
+								// now lets update the message, since we know it's validation status
+								try {
+									IMessageRegistryDal sqliteDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(this.centralCoordinator.BlockchainServiceSet.GlobalsService.GetSystemFilesDirectoryPath(), this.serviceSet);
+
+									// update the validation status, we know its a good message
+									sqliteDal.CheckMessageInCache(potentialMessageEntry.xxHash, true);
+
+								} catch(Exception ex) {
+									Log.Error(ex, "Failed to update cached message validation status");
+								}
+
+								break;
 							}
 						}
-					});
-
-					this.DispatchTaskSync(validationTask);
+					} else if(loadSource == LoadSources.Sync) {
+						this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateBlock(dehydratedBlock, result => {
+							results = result;
+						});
+					}
+					
 
 					if(results.Valid) {
 
@@ -912,14 +878,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					// lets clean up
 					if(loadSource == LoadSources.Gossip) {
-						var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
+		
+						this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.ClearCachedUnvalidatedBlockGossipMessage(nextBlockId);
 
-						serializationTask.SetAction((serializationService, taskRoutingContext2) => {
-
-							serializationService.ClearCachedUnvalidatedBlockGossipMessage(nextBlockId);
-						});
-
-						this.DispatchTaskSync(serializationTask);
 					} else if(loadSource == LoadSources.Sync) {
 						this.ClearBlockSyncManifest(nextBlockId);
 					}
@@ -956,9 +917,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
+				//TODO: do we really need a dispatch for this???   perhaps not. interpret could be inthread.
 				blockchainTask.SetAction((blockchainService, taskRoutingContext2) => {
 
 					blockchainService.InterpretBlock(block, dehydratedBlock, false, null, false);
+				}, (result, taskRoutingContext) => {
+					if(result.Success) {
+						this.rateCalculator.AddHistoryEntry(dehydratedBlock.BlockId);
+					}
 				});
 
 				this.DispatchTaskSync(blockchainTask);
@@ -1044,6 +1010,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return; // (null, ResultsState.OK);
 			}
 
+			if(singleEntryContext.details.Id == this.ChainStateProvider.DownloadBlockHeight) {
+				// ok, the last download must have been lost, so we reset to the previous and do it all again
+				this.ChainStateProvider.DownloadBlockHeight -= 1;
+			}
+
 			if(singleEntryContext.syncManifest == null) {
 				// ok, determine if there is a digest to get
 
@@ -1077,7 +1048,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				this.CreateBlockSyncManifest(singleEntryContext.syncManifest);
 			}
 
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.BlockchainSyncUpdate(singleEntryContext.details.Id, this.ChainStateProvider.PublicBlockHeight, this.CalculateSyncingRate()));
+			string syncRate = this.rateCalculator.CalculateSyncingRate(this.ChainStateProvider.PublicBlockHeight - this.ChainStateProvider.DownloadBlockHeight);
+			
+			Log.Information($"Estimated time to blockchain sync completion: {syncRate}");
+			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(singleEntryContext.details.Id, this.ChainStateProvider.PublicBlockHeight, syncRate));
 
 			singleEntryContext.blockFetchAttemptCounter = 1;
 			singleEntryContext.blockFetchAttempt = BlockFetchAttemptTypes.Attempt1;
@@ -1756,7 +1730,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					throw;
 				}
 			}, (results, taskRoutingContext) => {
-				if(results.Error) {
+				if(results.Success) {
+					
+				}
+				else{
 					Log.Error(results.Exception, "Failed to insert block into the local blockchain. we may try again...");
 					valid = false;
 

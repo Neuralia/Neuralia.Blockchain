@@ -7,14 +7,15 @@ using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 	/// <summary>
 	///     a dynamic decimal that can take up to 8 bytes above the point and 8 bytes below the point. +one metadata byte and one possible extra byte if there are leading zeros either in the integral or the fraction.
 	/// . so the maximum size it will take is 18 bytes.
 	/// </summary>
-	public class AdaptiveDecimal : ITreeHashable, IBinarySerializable, IJsonSerializable, IEquatable<AdaptiveDecimal>, IComparable<decimal>, IComparable<AdaptiveDecimal> {
+	public class AdaptiveDecimal : ITreeHashable, IBinarySerializable, IEquatable<AdaptiveDecimal>, IComparable<decimal>, IComparable<AdaptiveDecimal> {
 
 		private const byte INTEGRAL_MASK = 0x7;
 		private const byte FRACTION_MASK = 0x38;
@@ -93,10 +94,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 			return this.Value == other.Value;
 		}
-
-		public void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-			jsonDeserializer.SetValue(this.Value);
-		}
+		
 
 		public HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();

@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.General.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -90,7 +91,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public void Rehydrate(IDataRehydrator rehydrator) {
 			byte types = rehydrator.ReadByte();
 
-			this.bitArray.SetData((ByteArray) new[] {types}, 2);
+			this.bitArray.SetData(ByteArray.WrapAndOwn(new[] {types}), 2);
 
 			if(this.AccountSignatureType == BlockSignatureTypes.Genesis) {
 				this.BlockAccountSignature = new GenesisBlockAccountSignature();

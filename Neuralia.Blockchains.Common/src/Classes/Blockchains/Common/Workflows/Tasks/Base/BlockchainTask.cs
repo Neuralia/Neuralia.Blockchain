@@ -14,14 +14,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		where T : IRoutedTaskRoutingHandler {
 	}
 
-	public interface IBlockchainTask<out WALLET_MANAGER, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IBlockchainTask<WALLET_MANAGER, K>
-		where WALLET_MANAGER : IRoutedTaskRoutingHandler
+	public interface IBlockchainTask<out BLOCKCHAIN_MANAGER, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IBlockchainTask<BLOCKCHAIN_MANAGER, K>
+		where BLOCKCHAIN_MANAGER : IRoutedTaskRoutingHandler
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 	}
 
-	public class BlockchainTask<WALLET_MANAGER, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : RoutedTask<WALLET_MANAGER, K>, IBlockchainTask<WALLET_MANAGER, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where WALLET_MANAGER : IRoutedTaskRoutingHandler
+	public class BlockchainTask<BLOCKCHAIN_MANAGER, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : RoutedTask<BLOCKCHAIN_MANAGER, K>, IBlockchainTask<BLOCKCHAIN_MANAGER, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+		where BLOCKCHAIN_MANAGER : IRoutedTaskRoutingHandler
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
@@ -29,7 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		}
 
-		public BlockchainTask(Action<WALLET_MANAGER, TaskRoutingContext> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) : base(Enums.BLOCKCHAIN_SERVICE, newAction, newCompleted) {
+		public BlockchainTask(Action<BLOCKCHAIN_MANAGER, TaskRoutingContext> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) : base(Enums.BLOCKCHAIN_SERVICE, newAction, newCompleted) {
 
 		}
 	}

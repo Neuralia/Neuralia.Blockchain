@@ -53,7 +53,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			ENVELOPE_TYPE envelope = null;
 
 			try {
-				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(token => {
+				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
 
 					token.ThrowIfCancellationRequested();
 
@@ -76,32 +76,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 						token.ThrowIfCancellationRequested();
 
-						var validationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateValidationTask<ValidationResult>();
 
-						validationTask.SetAction((validationService, taskRoutingContext2) => {
+						try{
 
 							token.ThrowIfCancellationRequested();
 
-							IRoutedTask validateEventTask = validationService.ValidateEnvelopedContent(envelope, validationResult => {
-								validationTask.Results = validationResult;
+							this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(envelope, validationResult => {
+								result = validationResult;
 							});
+							
+							if(result.Invalid) {
 
-							taskRoutingContext2.AddChild(validateEventTask);
-						}, (results, taskRoutingContext2) => {
-							if(results.Success) {
-								if(validationTask.Results.Invalid) {
-
-									throw validationTask.Results.GenerateException();
-								}
-
-							} else {
-								Log.Error(results.Exception, "Failed to validate event");
-
-								results.Rethrow();
+								throw result.GenerateException();
 							}
-						});
 
-						this.DispatchTaskSync(validationTask);
+						}catch(Exception ex) {
+							Log.Error(ex, "Failed to validate event");
+
+							throw;
+						}
+
 
 						this.PostProcess();
 
@@ -148,29 +142,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		}
 
 		private void WaitForSync(Action<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>> syncAction, Action<Action> register, Action<Action> unregister, string name) {
-			AutoResetEvent resetEvent = new AutoResetEvent(false);
+			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
 
-			void Catcher() {
-				resetEvent.Set();
-			}
-
-			register(Catcher);
-
-			try {
-				var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
-
-				blockchainTask.SetAction((service, taskRoutingContext2) => {
-					syncAction(service);
-				});
-
-				this.DispatchTaskSync(blockchainTask);
-
-				if(!resetEvent.WaitOne(TimeSpan.FromSeconds(10))) {
-
-					throw new ApplicationException($"The {name} is not synced. Cannot continue");
+				void Catcher() {
+					resetEvent.Set();
 				}
-			} finally {
-				unregister(Catcher);
+
+				register(Catcher);
+
+				try {
+					var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+					blockchainTask.SetAction((service, taskRoutingContext2) => {
+						syncAction(service);
+					});
+
+					this.DispatchTaskSync(blockchainTask);
+
+					if(!resetEvent.Wait(TimeSpan.FromSeconds(10))) {
+
+						throw new ApplicationException($"The {name} is not synced. Cannot continue");
+					}
+				} finally {
+					unregister(Catcher);
+				}
 			}
 		}
 

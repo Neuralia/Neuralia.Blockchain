@@ -9,7 +9,7 @@ using org.bouncycastle.pqc.crypto.mceliece;
 using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
-	public class McElieceEncryptor : IDisposable2 {
+	public class McElieceEncryptor : IDisposableExtended {
 
 		public enum McElieceCipherModes : byte {
 			McEliece = 1,

@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 
@@ -14,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		private readonly IWalletAccount account;
 
-		public WalletKeyLogFileInfo(IWalletAccount account, string filename, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails) : base(filename, serviceSet, serialisationFal, walletSecurityDetails) {
+		public WalletKeyLogFileInfo(IWalletAccount account, string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails) : base(filename, chainConfiguration, serviceSet, serialisationFal, walletSecurityDetails) {
 			this.account = account;
 
 		}
@@ -44,11 +45,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
-					this.EncryptionInfo.encrypt = this.WalletSecurityDetails.EncryptWallet;
+					this.EncryptionInfo.Encrypt = this.WalletSecurityDetails.EncryptWallet;
 
-					if(this.EncryptionInfo.encrypt) {
+					if(this.EncryptionInfo.Encrypt) {
 
-						this.EncryptionInfo.encryptionParameters = this.account.KeyLogFileEncryptionParameters;
+						this.EncryptionInfo.EncryptionParameters = this.account.KeyLogFileEncryptionParameters;
 						this.EncryptionInfo.Secret = () => this.account.KeyLogFileSecret;
 					}
 				}

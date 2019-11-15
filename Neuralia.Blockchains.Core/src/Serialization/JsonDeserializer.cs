@@ -1,100 +1,184 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.Services;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Serialization {
-	public class JsonDeserializer {
+	public class JsonDeserializer  {
 
-		private readonly JsonSerializer jsonSerializer = JsonUtils.CreateSerializer();
-
-		public JsonDeserializer() {
-
+		private readonly Utf8JsonWriter writer;
+		
+		public JsonDeserializer(Utf8JsonWriter writer) {
+			this.writer = writer;
 		}
 
-		private JsonDeserializer(JsonSerializer jsonSerializer) {
+		
+		public static string Serialize(IJsonSerializable jsonSerializable) {
+			
+			var options = new JsonWriterOptions
+			{
+				Indented = false
+			};
+			
+			using (var stream = MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("json"))
+			{
+				using (var writer = new Utf8JsonWriter(stream, options))
+				{
+					writer.WriteStartObject();
+					
+					JsonDeserializer deserializer = new JsonDeserializer(writer);
+					jsonSerializable.JsonDehydrate(deserializer);
+					
+					writer.WriteEndObject();
+				}
 
+				return Encoding.UTF8.GetString(stream.ToArray());
+			}
 		}
 
-		public JToken RootBase { get; private set; } = new JObject();
-
-		public JObject Root => (JObject) this.RootBase;
-
-		public string Serialize() {
-			return this.Root.ToString(Formatting.None);
+		private void DehydrateSerializable(string name, IJsonSerializable value) {
+			this.writer.WriteStartObject(name);
+			value?.JsonDehydrate(this);
+			this.writer.WriteEndObject();
 		}
 
-		private JToken DehydrateSerializable(IJsonSerializable value) {
-			JsonDeserializer subSerializer = new JsonDeserializer(this.jsonSerializer);
-			value.JsonDehydrate(subSerializer);
-
-			return subSerializer.RootBase;
+		public void WriteObject(Action<JsonDeserializer> action) {
+			this.writer.WriteStartObject();
+			action(this);
+			this.writer.WriteEndObject();
 		}
-
-		private JToken DehydrateSerializable<T>(T value, Action<JsonDeserializer, T> transform) {
-			JsonDeserializer subSerializer = new JsonDeserializer(this.jsonSerializer);
-			transform(subSerializer, value);
-
-			return subSerializer.RootBase;
+		
+		private void DehydrateSerializable<T>(T value, Action<JsonDeserializer, T> transform) {
+			
+			if(value != null) {
+				transform(this, value);
+			}
 		}
-
-		public void SetValue(IJsonSerializable value) {
-
-			this.RootBase =  value != null ? this.DehydrateSerializable(value) : null;
-		}
-
-		public void SetValue(object value) {
-			this.RootBase = this.BuildToken(value);
-		}
-
+		
 		public void SetProperty(string name, IJsonSerializable value) {
-
-			this.Root.Add(new JProperty(name, value != null ? this.DehydrateSerializable(value) : null));
+			
+			this.DehydrateSerializable(name, value);
 		}
 
 		public void SetProperty(string name, DateTime value) {
 			
-			this.Root.Add(new JProperty(name, TimeService.FormatDateTimeStandardUtc(value)));
+			 this.writer.WritePropertyName(name);
+			 this.writer.WriteStringValue( TimeService.FormatDateTimeStandardUtc(value));
 		}
 		
 		public void SetProperty(string name, object value) {
 
-			this.Root.Add(new JProperty(name, this.BuildToken(value)));
+			object entry = this.TranslateValue(value);
+
+			if(entry == null) {
+				this.writer.WriteNull(name);
+			}
+
+			else if(entry is byte b1) {
+				this.writer.WriteNumber(name, b1);
+			}
+
+			else if(entry is short s1) {
+				this.writer.WriteNumber(name, s1);
+			}
+
+			else if(entry is ushort @ushort) {
+				this.writer.WriteNumber(name, @ushort);
+			}
+
+			else if(entry is int i) {
+				this.writer.WriteNumber(name, i);
+			}
+
+			else if(entry is uint u) {
+				this.writer.WriteNumber(name, u);
+			}
+
+			else if(entry is long @long) {
+				this.writer.WriteNumber(name, @long);
+			}
+
+			else if(entry is ulong @ulong) {
+				this.writer.WriteNumber(name, @ulong);
+			}
+
+			else if(entry is double d) {
+				this.writer.WriteNumber(name, d);
+			}
+
+			else if(entry is decimal dec) {
+				this.writer.WriteNumber(name, dec);
+			}
+
+			else if(entry is bool b) {
+				this.writer.WriteBoolean(name, b);
+			}
+
+			else if(entry is Guid guid) {
+				this.writer.WriteString(name, guid);
+			}
+
+			else if(entry is string s) {
+				this.writer.WriteString(name, s);
+			}
+
+			else if(entry is DateTime time) {
+				this.writer.WriteString(name, time);
+			}
+
+			else if(entry is Enum @enum) {
+				this.writer.WriteString(name, @enum.ToString());
+			}
+			else if(value is IJsonSerializable serializable) {
+				this.SetProperty(name, serializable);
+			} else {
+				this.writer.WriteString(name, entry?.ToString());
+			}
+			
 		}
 
-		public void SetProperty(string name, JArray array) {
+		public void SetProperty(string name, object[] array) {
 
-			this.Root.Add(new JProperty(name, array));
+			this.writer.WriteStartArray(name);
+			
+			 foreach(var value in array) {
+				this.BuildToken(value);
+			 }
+			 
+			this.writer.WriteEndArray();
 		}
-
+		
 		public void SetProperty<T>(string name, T value, Action<JsonDeserializer, T> transform) {
-			this.Root.Add(new JProperty(name, this.DehydrateSerializable(value, transform)));
+			
+			this.writer.WriteStartObject(name);
+			
+			this.DehydrateSerializable(value, transform);
+			
+			this.writer.WriteEndObject();
 		}
 
-		public void SetArray<T>(string name, IEnumerable<T> values, Action<JsonDeserializer, T> transform) {
+		public void SetArray(string name, object[] array) {
 
-			this.SetProperty(name, new JArray(values.Select(e => this.DehydrateSerializable(e, transform))));
+			this.writer.WriteStartArray(name);
+			
+			foreach(var value in array) {
+				this.BuildToken(value);
+			}
+			 
+			this.writer.WriteEndArray();
 		}
-
-		public void SetArray(string name, IJsonSerializable[] values) {
-
-			this.SetProperty(name, values != null ?new JArray(values.Select(this.DehydrateSerializable)): null);
-		}
-
+		
 		public void SetArray(string name, IEnumerable<object> values) {
 
-			this.SetProperty(name, values != null ? new JArray(values.Select(o => {
-
-				if(o is IJsonSerializable serializable) {
-					return this.DehydrateSerializable(serializable);
-				}
-
-				return this.BuildToken(o);
-			})) : null);
+			this.SetArray(name, values.ToArray());
 		}
 
 		public void SetArray(string name, IEnumerable values) {
@@ -102,6 +186,18 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			this.SetArray(name, values.Cast<object>());
 		}
 
+		public void SetArray<T>(string name, IEnumerable<T> values, Action<JsonDeserializer, T> transform) {
+
+			this.writer.WriteStartArray(name);
+			
+			foreach(var value in values) {
+				transform(this, value);
+			}
+			 
+			this.writer.WriteEndArray();
+		}
+
+		
 		private object TranslateValue(object value) {
 
 			if(value == null) {
@@ -112,17 +208,92 @@ namespace Neuralia.Blockchains.Core.Serialization {
 				return Enum.GetName(value.GetType(), value);
 			}
 
+			if(value is SafeArrayHandle handle) {
+				value = handle.Entry;
+			}
+
+			if(value is byte[] array) {
+				value = ByteArray.Wrap(array);
+			}
+			
+			if(value is ByteArray bytearray) {
+				return bytearray?.ToBase58();
+			}
+
 			return value;
 		}
 
-		private JToken BuildToken(object value) {
-			JToken token = null;
+		private void BuildToken(object value) {
 
-			if(value != null) {
-				token = JToken.FromObject(this.TranslateValue(value), this.jsonSerializer);
+			object entry = this.TranslateValue(value);
+
+			if(entry == null) {
+				this.writer.WriteNullValue();
 			}
 
-			return token;
+			else if(entry is byte b1) {
+				this.writer.WriteNumberValue(b1);
+			}
+
+			else if(entry is short s1) {
+				this.writer.WriteNumberValue(s1);
+			}
+
+			else if(entry is ushort @ushort) {
+				this.writer.WriteNumberValue(@ushort);
+			}
+
+			else if(entry is int i) {
+				this.writer.WriteNumberValue(i);
+			}
+
+			else if(entry is uint u) {
+				this.writer.WriteNumberValue(u);
+			}
+
+			else if(entry is long @long) {
+				this.writer.WriteNumberValue(@long);
+			}
+
+			else if(entry is ulong @ulong) {
+				this.writer.WriteNumberValue(@ulong);
+			}
+
+			else if(entry is double d) {
+				this.writer.WriteNumberValue(d);
+			}
+
+			else if(entry is decimal dec) {
+				this.writer.WriteNumberValue(dec);
+			}
+
+			else if(entry is bool b) {
+				this.writer.WriteBooleanValue(b);
+			}
+
+			else if(entry is Guid guid) {
+				this.writer.WriteStringValue(guid);
+			}
+
+			else if(entry is string s) {
+				this.writer.WriteStringValue(s);
+			}
+
+			else if(entry is DateTime time) {
+				this.writer.WriteStringValue(time);
+			}
+
+			else if(entry is Enum @enum) {
+				this.writer.WriteStringValue(@enum.ToString());
+			}
+			else if(value is IJsonSerializable serializable) {
+				this.WriteObject((s) => {
+					serializable.JsonDehydrate(this);
+				});
+				
+			} else {
+				this.writer.WriteStringValue(entry?.ToString());
+			}
 		}
 	}
 }

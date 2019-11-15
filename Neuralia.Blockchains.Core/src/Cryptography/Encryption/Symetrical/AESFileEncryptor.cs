@@ -6,6 +6,7 @@ using Microsoft.IO;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
@@ -21,11 +22,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			// get a random salt
 			salt.FillSafeRandom();
 
-			return new AesEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_256, Salt = salt.ToExactByteArrayCopy(), Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			return new AesEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_256, Salt = salt, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
 		}
 
 		public static SymmetricAlgorithm InitSymmetric(SymmetricAlgorithm algorithm, SecureString password, AesEncryptorParameters parameters) {
-			return InitSymmetric(algorithm, (ByteArray) Encoding.UTF8.GetBytes(password.ConvertToUnsecureString()), parameters);
+			return InitSymmetric(algorithm, ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(password.ConvertToUnsecureString())), parameters);
 		}
 
 		public static SymmetricAlgorithm InitSymmetric(SymmetricAlgorithm algorithm, SafeArrayHandle password, AesEncryptorParameters parameters) {

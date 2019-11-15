@@ -133,13 +133,19 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			T[] tasks = null;
 
 			lock(this.locker) {
-				tasks = this.reinsertedTasks.Values.Where(t => t.CanRun).OrderBy(t => t.timestamp).Select(t => t.task).ToArray();
+				if(this.reinsertedTasks.Any()) {
+					tasks = this.reinsertedTasks.Values.Where(t => t.CanRun).OrderBy(t => t.timestamp).Select(t => t.task).ToArray();
+				}
 			}
 
-			foreach(T reinsertTask in tasks) {
-				lock(this.locker) {
-					this.selectedTaskQueue.Add(reinsertTask);
-					this.selectedTaskIds.Add(reinsertTask.Id);
+			if(tasks != null) {
+				foreach(T reinsertTask in tasks) {
+					lock(this.locker) {
+						if(!this.selectedTaskIds.Contains(reinsertTask.Id)) {
+							this.selectedTaskQueue.Add(reinsertTask);
+							this.selectedTaskIds.Add(reinsertTask.Id);
+						}
+					}
 				}
 			}
 		}

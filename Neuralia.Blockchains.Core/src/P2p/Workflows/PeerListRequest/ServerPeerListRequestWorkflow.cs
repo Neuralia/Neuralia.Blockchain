@@ -54,7 +54,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 
 		protected override bool CompareOtherPeerId(IWorkflow other) {
 			if(other is ServerPeerListRequestWorkflow<R> otherWorkflow) {
-				return this.triggerMessage.Header.originatorId == otherWorkflow.triggerMessage.Header.originatorId;
+				return this.triggerMessage.Header.OriginatorId == otherWorkflow.triggerMessage.Header.OriginatorId;
 			}
 
 			return base.CompareOtherPeerId(other);

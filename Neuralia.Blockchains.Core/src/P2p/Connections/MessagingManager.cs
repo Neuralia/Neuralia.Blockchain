@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		private DateTime? nextDatabaseClean;
 
-		public MessagingManager(ServiceSet<R> serviceSet) : base(10) {
+		public MessagingManager(ServiceSet<R> serviceSet) : base(1000) {
 
 			this.globalsService = serviceSet.GlobalsService;
 			this.networkingService = (INetworkingService<R>) DIService.Instance.GetService<INetworkingService>();
@@ -82,8 +82,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.serviceSet = serviceSet;
 
 			this.RoutedTaskReceiver = new ColoredRoutedTaskReceiver(this.HandleTask);
+			this.RoutedTaskReceiver.TaskReceived += this.RoutedTaskReceiverOnTaskReceived;
+			this.dataDispatcher = new DataDispatcher(serviceSet.TimeService, (faultyConnection) => {
+				// just in case, attempt to remove the connection if it was not already
+				this.networkingService.ConnectionStore.RemoveConnection(faultyConnection);
+			});
+		}
 
-			this.dataDispatcher = new DataDispatcher(serviceSet.TimeService);
+		private void RoutedTaskReceiverOnTaskReceived() {
+			this.ClearWait();
 		}
 
 		/// <summary>
@@ -101,7 +108,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected virtual void HandleTask(IColoredTask task) {
 			try {
 				if(task is MessageReceivedTask messageReceivedTask) {
-					this.HandleMessageReceived(messageReceivedTask);
+					System.Threading.Tasks.Task.Run(() => {
+						this.HandleMessageReceived(messageReceivedTask);
+					}, this.CancelNeuralium);
+					
 				} else if(task is ForwardGossipMessageTask forwardGossipMessageTask) {
 					this.HandleForwardGossipMessageTask(forwardGossipMessageTask);
 				} else if(task is PostNewGossipMessageTask postNewGossipMessageTask) {
@@ -290,7 +300,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			try {
 				// lets see what we just received
 				IRoutingHeader header = this.RehydrateHeader(task);
-
+				
 				// set the client Scope of the client who sent us this message
 				header.ClientId = task.Connection.ClientUuid;
 
@@ -339,7 +349,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 							var messageSet = this.networkingService.MessageFactory.RehydrateMessage(task.data, targettedHeader, this.chainlessBlockchainEventsRehydrationFactory);
 
-							var workflowTracker = new WorkflowTracker<IWorkflow<R>, R>(task.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.originatorId, this.networkingService.ConnectionStore.MyClientUuid, this.networkingService.WorkflowCoordinator);
+							var workflowTracker = new WorkflowTracker<IWorkflow<R>, R>(task.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.WorkflowSessionId, messageSet.Header.OriginatorId, this.networkingService.ConnectionStore.MyClientUuid, this.networkingService.WorkflowCoordinator);
 
 							if(messageSet.Header.IsWorkflowTrigger && messageSet is ITriggerMessageSet<R> triggeMessageSet) {
 								// route the message
@@ -386,7 +396,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 								// this method will ensure we get the right workflow id for our connection
 
 								//----------------------------------------------------
-
+								
 								if(workflowTracker.GetActiveWorkflow() is ITargettedNetworkingWorkflow<R> workflow) {
 
 									if(!task.Connection.IsConfirmed && !(workflow is IHandshakeWorkflow)) {
@@ -396,7 +406,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 									workflow.ReceiveNetworkMessage(messageSet);
 								} else {
 									//messageSet.BaseMessage?.Dispose();
-									Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' which does not exist");
+									Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' and session ID '{messageSet.Header.WorkflowSessionId}' which does not exist");
 								}
 							}
 						} finally {

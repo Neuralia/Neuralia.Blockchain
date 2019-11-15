@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Crypto;
 
 #if CONCURRENCY_ANALYSER
@@ -534,7 +535,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 			public ByteArray[] signature;
 		}
 
-		public class ThreadContext : IDisposable2 {
+		public class ThreadContext : IDisposableExtended {
 			public int count;
 			public IDigest digest;
 			public int index;

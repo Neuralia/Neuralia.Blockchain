@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Core.Network.Protocols.SplitMessages;
 using Neuralia.Blockchains.Core.Network.Protocols.V1;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Tools.Serialization;
 

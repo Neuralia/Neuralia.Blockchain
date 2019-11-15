@@ -58,12 +58,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
 
-			this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationStarted, this.correlationContext);
+			this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationStarted, this.correlationContext);
 
 			try {
 				base.PerformWork(workflow, taskRoutingContext);
 			} finally {
-				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, this.correlationContext);
+				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, this.correlationContext);
 			}
 		}
 
@@ -75,7 +75,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			base.ExceptionOccured(ex);
 
 			if(ex is EventGenerationException evex && evex.Envelope is ITransactionEnvelope envelope) {
-				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.CreateErrorMessage(BlockchainSystemEventTypes.Instance.AccountPublicationError, ex.Message), this.correlationContext);
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.CreateErrorMessage(BlockchainSystemEventTypes.Instance.AccountPublicationError, ex.Message), this.correlationContext);
 			}
 		}
 

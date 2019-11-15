@@ -22,6 +22,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 		protected object locker = new object();
 		protected object transferredQueueLocker = new object();
 
+		public event Action MessageReceived;
+		
 		public NetworkMessageReceiver(ServiceSet serviceSet) {
 
 		}
@@ -90,6 +92,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 			try {
 				this.messageQueue.AddSafe(message.GetHashCode(), message);
 
+				this.MessageReceived?.Invoke();
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to post network message");
 			}

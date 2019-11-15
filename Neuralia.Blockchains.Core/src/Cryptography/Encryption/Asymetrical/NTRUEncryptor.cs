@@ -6,7 +6,7 @@ using Neuralia.BouncyCastle.extra.pqc.crypto.ntru;
 using Org.BouncyCastle.Crypto;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
-	public class NtruEncryptor : IDisposable2 {
+	public class NtruEncryptor : IDisposableExtended {
 
 		protected NTRUEncryptionKeyGenerationParameters parameters;
 

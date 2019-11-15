@@ -7,7 +7,7 @@ using Neuralia.Blockchains.Tools;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
-	public interface IConnectionListener : IDisposable2 {
+	public interface IConnectionListener : IDisposableExtended {
 		event TcpServer.MessageBytesReceived NewConnectionReceived;
 		event Action<ITcpConnection> NewConnectionRequestReceived;
 		void Start();

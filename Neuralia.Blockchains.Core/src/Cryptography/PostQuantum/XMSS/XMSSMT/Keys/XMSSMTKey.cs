@@ -1,10 +1,11 @@
 using System;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
-	public abstract class XMSSMTKey : IDisposable2 {
+	public abstract class XMSSMTKey : IDisposableExtended {
 
 		public virtual void LoadKey(ByteArray publicKey) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(publicKey);

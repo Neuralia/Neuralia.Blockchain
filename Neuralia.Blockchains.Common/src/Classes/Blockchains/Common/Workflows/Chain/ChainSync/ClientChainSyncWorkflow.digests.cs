@@ -468,45 +468,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				this.CheckShouldCancel();
 
 				if(valid) {
-
-					var validationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateValidationTask<ValidationResult>();
-
-					validationTask.SetAction((validationService, taskRoutingContext) => {
-						valid = validationService.ValidateDigest(dehydratedDigest.RehydratedDigest, false).Valid;
-					});
-
-					this.DispatchTaskSync(validationTask);
+					
+					valid = this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateDigest(dehydratedDigest.RehydratedDigest, false).Valid;
 
 					this.CheckShouldCancel();
 				}
 
 				if(valid) {
 					// ok, we have our digest header! :D
-					var serializationTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateSerializationTask<bool>();
 
-					serializationTask.SetAction((serializationService, taskRoutingContext) => {
+					try {
+						this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveDigestHeader(parameters.singleEntryContext.details.digestId, digestHeaderFile);
+					}
+					catch(Exception ex){
+						Log.Error(ex, "Failed to insert digest into the local blockchain. we may try again...");
+						valid = false;
+						
+						// thats bad, we failed to add our transaction
+						if(parameters.singleEntryContext.blockFetchAttemptCounter == 3) {
 
-						serializationService.SaveDigestHeader(parameters.singleEntryContext.details.digestId, digestHeaderFile);
-					}, (results, taskRoutingContext) => {
-						if(results.Error) {
-							Log.Error(results.Exception, "Failed to insert digest into the local blockchain. we may try again...");
-							valid = false;
-
-							results.Handled();
-
-							// thats bad, we failed to add our transaction
-							if(parameters.singleEntryContext.blockFetchAttemptCounter == 3) {
-								results.Wrap<WorkflowException>("Failed to insert block into the local blockchain.");
-
-								// thats it, we tried enough. we  have to break
-								results.Rethrow();
-							}
+							// thats it, we tried enough. we  have to break
+							throw new ApplicationException("Failed to insert block into the local blockchain.");
 						}
-
-					});
-
-					this.DispatchTaskSync(serializationTask);
-
+					}
 				}
 
 				return valid;

@@ -9,7 +9,8 @@ using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers {
 	
@@ -18,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	/// </summary>
 	/// <remarks>we do not inherit from transactionId to prevent accidental equality. better make them explicit</remarks>
 	[JsonConverter(typeof(TransactionIdExtendedJsonConverter))]
-	public class TransactionIdExtended : ISerializableCombo, IComparable<TransactionIdExtended> {
+	public class TransactionIdExtended : IBinarySerializable, ITreeHashable, IComparable<TransactionIdExtended> {
 
 		private const char EXTENDED_SEPARATOR = '/';
 
@@ -163,12 +164,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			
 			this.SimpleTransactionId.RehydrateRelative(rehydrator);
 			this.RehydrateTail(rehydrator);
-		}
-
-		public void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-
-			this.simpleTransactionId.JsonDehydrate(jsonDeserializer);
-			jsonDeserializer.SetValue(this.ToExtendedString());
 		}
 
 		public HashNodeList GetStructuresArray() {

@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Seria
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Tags;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
@@ -24,14 +25,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Id.Dehydrate(dehydrator);
 			dehydrator.Write((ushort) this.Slices.Count);
 
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
 			foreach(var entry in this.Slices) {
 
 				dehydrator.Write((byte) entry.Count);
 
 				foreach(var entry2 in entry) {
 
+					
 					dehydrator.Write((byte) entry2.Key);
-					dehydrator.Write(entry2.Value);
+
+					adaptiveSet.Value = entry2.Value;
+					adaptiveSet.Dehydrate(dehydrator);
 				}
 			}
 		}
@@ -66,6 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			this.Slices.Clear();
 
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
 			for(int i = 0; i < count; i++) {
 
 				int count2 = rehydrator.ReadByte();
@@ -75,9 +81,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				for(int j = 0; j < count2; j++) {
 
 					BlockChannelUtils.BlockChannelTypes key = (BlockChannelUtils.BlockChannelTypes) rehydrator.ReadByte();
-					int length = rehydrator.ReadInt();
+					
+					adaptiveSet.Rehydrate(rehydrator);
 
-					channels.Add(key, length);
+					channels.Add(key, (int)adaptiveSet.Value);
 				}
 
 				this.Slices.Add(channels);

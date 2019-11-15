@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 	public class AccountPassphraseDetails : PassphraseDetails {
@@ -21,7 +22,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 		public SecureString WalletPassphrase { get; private set; }
 
-		public SafeArrayHandle WalletPassphraseBytes => (ByteArray) Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString());
+		public SafeArrayHandle WalletPassphraseBytes => ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString()));
 
 		public bool HasKeysPassphrases => this.keys.Count != 0;
 

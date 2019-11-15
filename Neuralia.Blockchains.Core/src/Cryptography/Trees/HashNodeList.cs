@@ -10,10 +10,11 @@ using System.Linq;
 using System.Text;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
-	public class HashNodeList : IHashNodeList, IDisposable2 {
+	public class HashNodeList : IHashNodeList, IDisposableExtended {
 		private readonly List<SafeArrayHandle> nodes = new List<SafeArrayHandle>();
 
 #if LOG_SOURCE
@@ -26,7 +27,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		public int Count => this.nodes.Count;
 
 		public HashNodeList Add(byte value) {
-			return this.Add(new[] {value});
+			return this.AddOwn(new[] {value});
 		}
 
 		public HashNodeList Add(byte? value) {
@@ -41,7 +42,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		public HashNodeList Add(short value) {
 			
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(short? value) {
@@ -55,7 +56,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(ushort value) {
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(ushort? value) {
@@ -69,7 +70,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(int value) {
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(int? value) {
@@ -83,7 +84,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(uint value) {
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(uint? value) {
@@ -97,7 +98,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(long value) {
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(long? value) {
@@ -111,7 +112,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(ulong value) {
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(ulong? value) {
@@ -125,7 +126,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(double value) {
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(double? value) {
@@ -139,7 +140,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(decimal value) {
-			return this.Add(TypeSerializer.Serialize(value));
+			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
 		public HashNodeList Add(decimal? value) {
@@ -167,7 +168,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(Guid value) {
-			return this.Add(value.ToByteArray());
+			return this.AddOwn(value.ToByteArray());
 		}
 
 		public HashNodeList Add(Guid? value) {
@@ -178,7 +179,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			if(value == null) {
 				this.AddNull();
 			} else {
-				this.Add(Encoding.UTF8.GetBytes(value));
+				this.AddOwn(Encoding.UTF8.GetBytes(value));
 			}
 
 			return this;
@@ -212,20 +213,34 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			return this;
 		}
 
+		public HashNodeList AddOwn(Span<byte> array) {
+			return this.AddOwn(array.ToArray());
+		}
+		
 		public HashNodeList Add(Span<byte> array) {
-			this.nodes.Add(array.ToArray());
+			return this.Add(array.ToArray());
+		}
+		
+		private HashNodeList AddOwn(byte[] array) {
+			this.nodes.Add(ByteArray.Create(array));
 
 			return this;
 		}
 		
 		public HashNodeList Add(byte[] array) {
-			this.nodes.Add(array);
+			this.nodes.Add(ByteArray.Wrap(array));
 
 			return this;
 		}
 
 		public HashNodeList Add(ByteArray array) {
-			this.nodes.Add(array.Clone());
+			this.nodes.Add(ByteArray.Wrap(array));
+
+			return this;
+		}
+		
+		public HashNodeList AddOwn(ByteArray array) {
+			this.nodes.Add(ByteArray.Create(array));
 
 			return this;
 		}

@@ -42,7 +42,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 			where M : TargettedMessageSet<T, R>, new()
 			where T : NetworkMessage<R>, new();
 
-		M CreateTriggerMessageSet<M, T>(uint workflowCorrelationId)
+		M CreateTriggerMessageSet<M, T>(uint workflowCorrelationId, uint? workflowSessionId = null)
 			where M : TriggerMessageSet<T, R>, new()
 			where T : WorkflowTriggerMessage<R>, new();
 
@@ -167,7 +167,8 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 			if(triggerHeader != null) {
 				newHeader.NetworkOptions.Value = triggerHeader.NetworkOptions.Value;
 				newHeader.WorkflowCorrelationId = triggerHeader.WorkflowCorrelationId;
-				newHeader.originatorId = triggerHeader.originatorId;
+				newHeader.WorkflowSessionId = triggerHeader.WorkflowSessionId;
+				newHeader.OriginatorId = triggerHeader.OriginatorId;
 			}
 		}
 
@@ -194,13 +195,14 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 			return messageSet;
 		}
 
-		public M CreateTriggerMessageSet<M, T>(uint workflowCorrelationId)
+		public M CreateTriggerMessageSet<M, T>(uint workflowCorrelationId, uint? workflowSessionId = null)
 			where M : TriggerMessageSet<T, R>, new()
 			where T : WorkflowTriggerMessage<R>, new() {
 			M messageSet = this.CreateMessageSet<M, T, TargettedHeader>();
 
 			messageSet.Header.WorkflowCorrelationId = workflowCorrelationId;
-			messageSet.Header.originatorId = this.NetworkingService.ConnectionStore.MyClientUuid; // our identifying id
+			messageSet.Header.WorkflowSessionId = workflowSessionId;
+			messageSet.Header.OriginatorId = this.NetworkingService.ConnectionStore.MyClientUuid; // our identifying id
 
 			// always true for workflow triggers
 			messageSet.Header.options.SetOption((byte) RoutingHeader.Options.WorkflowTrigger);

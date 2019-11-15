@@ -7,12 +7,13 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Tools;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.DataAccess {
 #if (NETSTANDARD2_0)
-			public interface IEntityFrameworkContext : IDisposable2, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbQueryCache, IDbContextPoolable{
+			public interface IEntityFrameworkContext : IDisposableExtended, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbQueryCache, IDbContextPoolable{
 #else
-	public interface IEntityFrameworkContext : IDisposable2, IAsyncDisposable, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbContextPoolable {
+	public interface IEntityFrameworkContext : IDisposableExtended, IAsyncDisposable, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbContextPoolable {
 			
 #endif
 
@@ -78,9 +79,15 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		/// </summary>
 		public virtual void EnsureCreated() {
 
-			lock(this.locker) {
-				RelationalDatabaseCreator databaseCreator = (RelationalDatabaseCreator) this.Database.GetService<IDatabaseCreator>();
-				databaseCreator.EnsureCreated();
+			try {
+				lock(this.locker) {
+					RelationalDatabaseCreator databaseCreator = (RelationalDatabaseCreator) this.Database.GetService<IDatabaseCreator>();
+					databaseCreator.EnsureCreated();
+				}
+			} catch(Exception ex) {
+				Log.Error(ex, "Failed to create database schema");
+
+				throw;
 			}
 		}
 

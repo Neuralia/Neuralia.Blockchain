@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
@@ -75,7 +76,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			SafeArrayHandle sha3 = null;
 
 
-			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(publicKey);
+			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(ByteArray.Wrap(publicKey));
 			// sha2
 			sha2 =Hash2(sliceHashNodeList);
 			
@@ -89,7 +90,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		public static (SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) HashSecretComboKey(byte[] publicKey, long promisedNonce1, long promisedNonce2) {
 
 			// sha2
-			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(publicKey);
+			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(ByteArray.Wrap(publicKey));
 
 			SafeArrayHandle sha2 = null;
 
@@ -225,7 +226,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		public static ImmutableList<SafeArrayHandle> GenerateMd5Hash(List<SafeArrayHandle> data) {
 
 			using(MD5 md5Hash = MD5.Create()) {
-				return data.Select(h => (SafeArrayHandle) md5Hash.ComputeHash(h.ToExactByteArray())).ToImmutableList();
+				return data.Select(h => (SafeArrayHandle)ByteArray.WrapAndOwn(md5Hash.ComputeHash(h.ToExactByteArray()))).ToImmutableList();
 			}
 		}
 
@@ -239,7 +240,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		public static SafeArrayHandle GenerateMd5Hash(SafeArrayHandle data) {
 
 			using(MD5 md5Hash = MD5.Create()) {
-				return (ByteArray) md5Hash.ComputeHash(data.ToExactByteArray());
+				return ByteArray.WrapAndOwn(md5Hash.ComputeHash(data.ToExactByteArray()));
 			}
 		}
 

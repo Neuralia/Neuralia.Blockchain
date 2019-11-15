@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -9,7 +10,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 	public class BlockChannelsInfoSet<T> : ChannelsInfoSet<BlockChannelUtils.BlockChannelTypes, T>
 		where T : DataSliceSize, new() {
 
-		public BlockChannelsInfoSet() : base((key, dehydrator) => dehydrator.Write((int) key), rehydrator => (BlockChannelUtils.BlockChannelTypes) rehydrator.ReadInt()) {
+		public BlockChannelsInfoSet() : base((key, dehydrator) => {
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9((int) key);
+			adaptiveSet.Dehydrate(dehydrator);
+		}, rehydrator => {
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
+			adaptiveSet.Rehydrate(rehydrator);
+			return (BlockChannelUtils.BlockChannelTypes) adaptiveSet.Value;
+		}) {
 		}
 
 		public T HighHeaderInfo => this.SlicesInfo.ContainsKey(BlockChannelUtils.BlockChannelTypes.HighHeader) ? this.SlicesInfo[BlockChannelUtils.BlockChannelTypes.HighHeader] : default;
@@ -20,7 +28,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 	public class DigestChannelsInfoSet<T> : ChannelsInfoSet<int, T>
 		where T : DataSliceSize, new() {
 
-		public DigestChannelsInfoSet() : base((key, dehydrator) => dehydrator.Write(key), rehydrator => rehydrator.ReadInt()) {
+		public DigestChannelsInfoSet() : base((key, dehydrator) => {
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9(key);
+			adaptiveSet.Dehydrate(dehydrator);
+		}, rehydrator => {
+
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
+			adaptiveSet.Rehydrate(rehydrator);
+			return (int) adaptiveSet.Value;
+		}) {
 			this.SlicesInfo.Add(1, new T());
 		}
 
@@ -42,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 	}
 
-	public class ChannelsInfoSet<KEY, T> : IBinarySerializable, ITreeHashable, IDisposable2
+	public class ChannelsInfoSet<KEY, T> : IBinarySerializable, ITreeHashable, IDisposableExtended
 		where T : DataSliceSize, new() {
 
 		private readonly Action<KEY, IDataDehydrator> dehydrateKey;
@@ -58,7 +74,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
 
-			dehydrator.Write(this.FileId);
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9(this.FileId);
+			adaptiveSet.Dehydrate(dehydrator);
+			
 			dehydrator.Write((byte) this.SlicesInfo.Count);
 
 			foreach(var entry in this.SlicesInfo) {
@@ -71,7 +89,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.FileId = rehydrator.ReadUShort();
+			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
+			adaptiveSet.Rehydrate(rehydrator);
+			this.FileId = (ushort)adaptiveSet.Value;
+
 			byte count = rehydrator.ReadByte();
 
 			this.SlicesInfo.Clear();

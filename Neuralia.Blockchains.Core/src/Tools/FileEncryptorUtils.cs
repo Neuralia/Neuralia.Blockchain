@@ -4,17 +4,17 @@ using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 
 namespace Neuralia.Blockchains.Core.Tools {
 	public static class FileEncryptorUtils {
-		public static IEncryptorParameters GenerateEncryptionParameters(AppSettingsBase appSettingsBase) {
+		public static IEncryptorParameters GenerateEncryptionParameters(ChainConfigurations chainConfiguration) {
 
-			if(appSettingsBase.WalletEncryptionFormat == (byte) EncryptorParameters.SymetricCiphers.AES_256) {
+			if(chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.AES_256) {
 				return AESFileEncryptor.GenerateEncryptionParameters();
 			}
 			
-			if(appSettingsBase.WalletEncryptionFormat == (byte) EncryptorParameters.SymetricCiphers.AES_GCM_256) {
+			if(chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.AES_GCM_256) {
 				return AESGCMFileEncryptor.GenerateEncryptionParameters();
 			}
 
-			if((appSettingsBase.WalletEncryptionFormat == (byte) EncryptorParameters.SymetricCiphers.XCHACHA_20) || (appSettingsBase.WalletEncryptionFormat == (byte) EncryptorParameters.SymetricCiphers.XCHACHA_40)) {
+			if((chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.XCHACHA_20) || (chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.XCHACHA_40)) {
 				return XChaChaFileEncryptor.GenerateEncryptionParameters();
 			}
 

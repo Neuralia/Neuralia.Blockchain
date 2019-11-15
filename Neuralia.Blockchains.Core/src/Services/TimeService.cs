@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using Neuralia.Blockchains.Core.Configuration;
@@ -36,7 +37,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		private TimeSpan timeDelta;
 
 		public static string FormatDateTimeStandardUtc(DateTime dateTime) {
-			return dateTime.ToUniversalTime().ToString("o");
+			return dateTime.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
 		}
 		
 		public void InitTime() {
@@ -191,7 +192,8 @@ namespace Neuralia.Blockchains.Core.Services {
 			if(chainInception.Kind != DateTimeKind.Utc) {
 				throw new ApplicationException("Chain inception should always be in UTC");
 			}
-			return chainInception + TimeSpan.FromSeconds(timestamp);
+			
+			return (chainInception + TimeSpan.FromSeconds(timestamp)).ToUniversalTime();
 		}
 
 		public TimeSpan GetTimeDifference(long timestamp, DateTime time, DateTime chainInception) {

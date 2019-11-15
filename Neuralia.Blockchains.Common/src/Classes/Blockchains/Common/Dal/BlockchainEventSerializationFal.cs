@@ -20,8 +20,9 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
@@ -395,7 +396,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				return null;
 			}
 
-			return (ByteArray) this.fileSystem.File.ReadAllBytes(filename);
+			return ByteArray.WrapAndOwn(this.fileSystem.File.ReadAllBytes(filename));
 		}
 
 		public SafeArrayHandle LoadDigestBytes(int digestId, int offset, int length, string filename) {
@@ -637,7 +638,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public BlockchainMessagesMetadata GetMessagesMetadata(string filename) {
 
-			return JsonConvert.DeserializeObject<BlockchainMessagesMetadata>(this.fileSystem.File.ReadAllText(filename));
+			return JsonSerializer.Deserialize<BlockchainMessagesMetadata>(this.fileSystem.File.ReadAllText(filename));
 		}
 
 		public void InsertNextMessagesIndex(string filename) {
@@ -647,7 +648,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			metadata.Counts.Add(metadata.Counts.Count + 1, 0);
 
 			this.fileSystem.File.Delete(filename);
-			this.fileSystem.File.WriteAllText(filename, JsonConvert.SerializeObject(metadata));
+			this.fileSystem.File.WriteAllText(filename, JsonSerializer.Serialize(metadata));
 		}
 
 		public void InsertMessagesIndexEntry(string filename, Guid uuid, long blockOffset, int length) {

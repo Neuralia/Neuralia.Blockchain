@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 	/// <summary>
 	///     Wrapper class around a TcpConnection with various connection about our peer
 	/// </summary>
-	public class PeerConnection : IDisposable2 {
+	public class PeerConnection : IDisposableExtended {
 
 		public enum ConnectionStates {
 			Unvalidated,
@@ -43,13 +43,19 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		public readonly Dictionary<BlockchainType, bool> ValidBlockchainVersions = new Dictionary<BlockchainType, bool>();
 
+		public readonly Dictionary<BlockchainType, ChainSettings> ChainSettings = new Dictionary<BlockchainType, ChainSettings>();
+
+		public GeneralSettings GeneralSettings { get; private set; }
+
 		public DateTime ConnectionTime;
 
 		public byte ConnectionType = CONNECTION_PEER;
+		private bool isDisposed;
 
 		public PeerConnection(ITcpConnection connection, Directions direction) {
 			this.connection = connection;
 
+			this.connection.Disposing += this.Dispose;
 			this.direction = direction;
 			this.ConnectionTime = DateTime.UtcNow;
 		}
@@ -109,7 +115,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public bool IsUnvalidated => this.ConnectionState == ConnectionStates.Unvalidated;
 
-		public bool IsDisposed { get; private set; }
+		public bool IsDisposed {
+			get => this.isDisposed || this.connection.IsDisposed;
+			private set => this.isDisposed = value;
+		}
 
 		public void Dispose() {
 			this.Dispose(true);
@@ -157,6 +166,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
+		public void SetGeneralSettings(GeneralSettings generalSettings) {
+			this.GeneralSettings = generalSettings;
+		}
+		
+		public void SetChainSettings(BlockchainType chainType, ChainSettings chainSettings) {
+			if(!this.ChainSettings.ContainsKey(chainType)) {
+				this.ChainSettings.Add(chainType, chainSettings);
+			}
+
+			this.ChainSettings[chainType] = chainSettings;
+		}
+
 		public void AddSupportedChain(BlockchainType chainType, bool isValid) {
 			if(!this.ValidBlockchainVersions.ContainsKey(chainType)) {
 				this.ValidBlockchainVersions.Add(chainType, isValid);
@@ -173,7 +194,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			if(disposing && !this.IsDisposed) {
 				try {
-					this.connection.Close();
+					this.connection.Dispose();
 				} finally {
 					this.TriggerDisposed();
 				}

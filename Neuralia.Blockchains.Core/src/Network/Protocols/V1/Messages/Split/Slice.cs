@@ -5,7 +5,7 @@ using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
-	public class Slice : IDisposable2 {
+	public class Slice : IDisposableExtended {
 
 		public const int MAXIMUM_SIZE = LargeMessageHeader.MAXIMUM_SIZE;
 		public readonly SafeArrayHandle bytes = SafeArrayHandle.Create();

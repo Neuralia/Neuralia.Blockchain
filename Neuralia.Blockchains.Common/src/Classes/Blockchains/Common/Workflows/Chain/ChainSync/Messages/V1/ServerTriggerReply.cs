@@ -15,7 +15,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			Synching = 1,
 			NoTransactionDetails = 2,
 			Refused = 3,
-			Error = 4
+			Error = 4,
+			Busy = 5
 		}
 
 		public SyncHandshakeStatuses Status { get; set; }

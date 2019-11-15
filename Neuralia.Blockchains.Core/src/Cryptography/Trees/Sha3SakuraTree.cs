@@ -4,7 +4,7 @@ using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
-	public class Sha3SakuraTree : SakuraTree , IDisposable2{
+	public class Sha3SakuraTree : SakuraTree , IDisposableExtended{
 		
 
 		private readonly Sha3ExternalDigest digest;

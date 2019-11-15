@@ -8,10 +8,11 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
-	public class XMSSMTNodeCache : IDisposable2, IBinarySerializable {
+	public class XMSSMTNodeCache : IDisposableExtended, IBinarySerializable {
 
 		// versioning information
 		public readonly byte Major = 1;

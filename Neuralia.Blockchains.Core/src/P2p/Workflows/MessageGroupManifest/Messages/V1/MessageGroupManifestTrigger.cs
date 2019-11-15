@@ -15,13 +15,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 
 		public readonly List<GossipGroupMessageInfo<R>> messageInfos = new List<GossipGroupMessageInfo<R>>();
 		
-		public int sessionId;
-
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
-
-			dehydrator.Write(this.sessionId);
-
+			
 			dehydrator.Write(this.messageInfos.Count);
 
 			foreach(var info in this.messageInfos) {
@@ -31,9 +27,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 
 		public override void Rehydrate(IDataRehydrator rehydrator, R rehydrationFactory) {
 			base.Rehydrate(rehydrator, rehydrationFactory);
-
-			this.sessionId = rehydrator.ReadInt();
-
+			
 			int count = rehydrator.ReadInt();
 
 			for(int i = 0; i < count; i++) {
@@ -48,7 +42,6 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 			HashNodeList nodesList = new HashNodeList();
 
 			nodesList.Add(base.GetStructuresArray());
-			nodesList.Add(this.sessionId);
 
 			nodesList.Add(this.messageInfos.Count);
 

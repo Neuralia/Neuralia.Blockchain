@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Extensions;
@@ -9,18 +10,18 @@ using Neuralia.Blockchains.Tools;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Workflows {
-	public interface IWorkflowCoordinator<WORKFLOW, R> : IDisposable2
+	public interface IWorkflowCoordinator<WORKFLOW, R> : IDisposableExtended
 		where WORKFLOW : IWorkflow
 		where R : IRehydrationFactory {
 
 		int WaitingWorkflows { get; }
 		void AddWorkflow(WORKFLOW workflow, bool immediateStart = false);
 		void AddImmediateWorkflow(WORKFLOW workflow);
-		bool WorkflowExists(string Id);
+		bool WorkflowExists(WorkflowId Id);
 
-		WORKFLOW GetExecutingWorkflow(string Id);
-		WORKFLOW GetWorkflow(string Id);
-		bool AttemptStart(string Id, Action<WORKFLOW> started, Action<WORKFLOW> failed);
+		WORKFLOW GetExecutingWorkflow(WorkflowId Id);
+		WORKFLOW GetWorkflow(WorkflowId Id);
+		bool AttemptStart(WorkflowId Id, Action<WORKFLOW> started, Action<WORKFLOW> failed);
 	}
 
 	/// <summary>
@@ -30,7 +31,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		where WORKFLOW : class, IWorkflow
 		where R : IRehydrationFactory {
 
-		public readonly ConcurrentDictionary<string, (WORKFLOW workflow, DateTime starttime)> executingWorkflows = new ConcurrentDictionary<string, (WORKFLOW workflow, DateTime starttime)>();
+		public readonly ConcurrentDictionary<WorkflowId, (WORKFLOW workflow, DateTime starttime)> executingWorkflows = new ConcurrentDictionary<WorkflowId, (WORKFLOW workflow, DateTime starttime)>();
 		private readonly object locker = new object();
 
 		private readonly int maximumParallelExecution;
@@ -38,7 +39,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		/// <summary>
 		///     when some workflows are long running, we promote them so that we can clear the wait for other workflows
 		/// </summary>
-		public readonly ConcurrentDictionary<string, WORKFLOW> promotedWorkflows = new ConcurrentDictionary<string, WORKFLOW>();
+		public readonly ConcurrentDictionary<WorkflowId, WORKFLOW> promotedWorkflows = new ConcurrentDictionary<WorkflowId, WORKFLOW>();
 
 		private readonly ConcurrentQueue<WORKFLOW> queuedWorkflows = new ConcurrentQueue<WORKFLOW>();
 
@@ -47,7 +48,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		/// <summary>
 		///     all the workflows tracked, no matter their status
 		/// </summary>
-		private readonly ConcurrentDictionary<string, WORKFLOW> workflows = new ConcurrentDictionary<string, WORKFLOW>();
+		private readonly ConcurrentDictionary<WorkflowId, WORKFLOW> workflows = new ConcurrentDictionary<WorkflowId, WORKFLOW>();
 
 		public WorkflowCoordinator(ServiceSet<R> serviceSet, int maximumParallelExecution = 10) {
 			this.maximumParallelExecution = maximumParallelExecution;
@@ -68,6 +69,16 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 		public void AddWorkflow(WORKFLOW workflow, bool immediateStart = false) {
 
+			Task DisposeWorkflow(WORKFLOW disposeWorkflow) {
+				return Task.Run(disposeWorkflow.Dispose);
+			}
+				
+			Task DisposeRemoveWorkflow(WORKFLOW disposeWorkflow) {
+				var task = DisposeWorkflow(disposeWorkflow);
+				this.RemoveWorkflow(false, disposeWorkflow);
+				return task;
+			}
+			
 			lock(this.locker) {
 				this.CheckWorkflowPromotions();
 			}
@@ -82,39 +93,37 @@ namespace Neuralia.Blockchains.Core.Workflows {
 				//return, we dont run the SAME workflow twice
 				Log.Verbose($"A workflow of type '{workflow.GetType().FullName}' that was already added was being added again. ignoring.");
 
+				DisposeWorkflow(workflow);
 				return;
 			}
 
 			if(workflow.ExecutionMode.HasFlag(Workflow.ExecutingMode.Single)) {
 				var workingWorkflows = this.workflows.ToArray().Where(w => w.Value.VirtualMatch(workflow)).ToList();
-
+				
 				if(workingWorkflows.Any()) {
 
 					if(workingWorkflows.Count > 1) {
-						Log.Error($"Multiple instances of a single workflow detected for type \"{workingWorkflows.GetType().Name}\"");
+						Log.Verbose($"Multiple instances of a single workflow detected for type \"{workingWorkflows.First().Value.GetType().Name}\"");
 
-						workflow.Dispose();
+						// remove all the duplicates
+						foreach(var obsoleteWf in workingWorkflows) {
+							
+							DisposeRemoveWorkflow(obsoleteWf.Value);
+						}
+					} else {
 
-						return;
+						var active = workingWorkflows.Single();
+
+						// we already have one, so we ignore it
+						if(active.Value.ExecutionMode != Workflow.ExecutingMode.SingleRepleacable) {
+							DisposeWorkflow(workflow);
+
+							return;
+						}
+						
+						// ok, it is replaceable, lets do that and remove the current one so we can add it again
+						DisposeRemoveWorkflow(active.Value);
 					}
-
-					var active = workingWorkflows.Single();
-
-					// we already have one, so we ignore it
-					if(active.Value.ExecutionMode != Workflow.ExecutingMode.SingleRepleacable) {
-						workflow.Dispose();
-
-						return;
-					}
-
-					// ok, it is replaceable, lets do that and remove the current one so we can add it again
-
-					// potential async solution:
-					// active.Value.Completed += (w, e) => {
-					// 	this.AddWorkflow(workflow, immediateStart);
-					// };
-					//TODO: this cna be very time expensive. redesign.
-					active.Value.Dispose();
 				}
 			}
 
@@ -142,7 +151,8 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			if(!canStartWorkflow) {
 				lock(this.locker) {
 
-					canStartWorkflow = (workflow.Priority == Workflow.Priority.High) || (this.executingWorkflows.Count < this.maximumParallelExecution);
+					//TODO: see how we can improve this. for now i disable it.
+					canStartWorkflow = true;//(workflow.Priority == Workflow.Priority.High) || (this.executingWorkflows.Count < this.maximumParallelExecution);
 				}
 			}
 
@@ -159,7 +169,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		/// <param name="Id"></param>
 		/// <param name="started"></param>
 		/// <returns></returns>
-		public bool AttemptStart(string Id, Action<WORKFLOW> started, Action<WORKFLOW> failed) {
+		public bool AttemptStart(WorkflowId Id, Action<WORKFLOW> started, Action<WORKFLOW> failed) {
 			WORKFLOW workflow = this.GetWorkflow(Id);
 
 			if((workflow != null) && !workflow.IsCompleted && !workflow.IsStarted) {
@@ -195,11 +205,11 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			return false;
 		}
 
-		public bool WorkflowExists(string Id) {
+		public bool WorkflowExists(WorkflowId Id) {
 			return this.workflows.ContainsKey(Id);
 		}
 
-		public WORKFLOW GetWorkflow(string Id) {
+		public WORKFLOW GetWorkflow(WorkflowId Id) {
 
 			if(this.workflows.ContainsKey(Id)) {
 				return this.workflows[Id];
@@ -208,7 +218,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			return null;
 		}
 
-		public WORKFLOW GetExecutingWorkflow(string Id) {
+		public WORKFLOW GetExecutingWorkflow(WorkflowId Id) {
 			if(this.WorkflowExists(Id)) {
 				WORKFLOW workflow = null;
 
@@ -264,70 +274,82 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			}
 		}
 
+		protected void WorkflowCompleted(bool success, object sender) {
+			WORKFLOW workflow = (WORKFLOW) sender;
+
+			this.WorkflowCompleted(success, workflow);
+		}
+
 		/// <summary>
 		///     a workflow is completed, so we clean up and let it die
 		/// </summary>
 		/// <param name="sender"></param>
-		protected void WorkflowCompleted(bool success, object sender) {
-
-			WORKFLOW workflow = (WORKFLOW) sender;
-
+		protected void WorkflowCompleted(bool success, WORKFLOW workflow) {
+			
 			try {
-
-				bool canStartNextWorkflow = false;
-				workflow.Completed -= this.WorkflowCompleted;
-
-				// now we clean up the garbage
-				string Id = workflow.Id;
-
-				if(this.workflows.ContainsKey(Id)) {
-					this.workflows.RemoveSafe(Id);
-				}
-
-				if(this.executingWorkflows.ContainsKey(Id)) {
-					this.executingWorkflows.RemoveSafe(Id);
-				}
-
-				if(this.promotedWorkflows.ContainsKey(Id)) {
-					this.promotedWorkflows.RemoveSafe(Id);
-				}
-
-				lock(this.locker) {
-					canStartNextWorkflow = (this.queuedWorkflows.Count != 0) && (this.executingWorkflows.Count < this.maximumParallelExecution);
-				}
-
-				// now check if we should start another workflow
-				if(canStartNextWorkflow) {
-
-					int numToStart = this.maximumParallelExecution - this.executingWorkflows.Count;
-					int potentialWorkflows = this.queuedWorkflows.Count;
-
-					while((numToStart != 0) && (potentialWorkflows != 0)) {
-
-						this.queuedWorkflows.TryDequeue(out WORKFLOW nextWorkflow);
-
-						if(nextWorkflow != null) {
-							potentialWorkflows--;
-
-							if(nextWorkflow.ExecutionMode == Workflow.ExecutingMode.Sequential) {
-								if(this.executingWorkflows.ToArray().Any(w => w.Value.workflow.VirtualMatch(workflow)) || this.promotedWorkflows.ToArray().Any(w => w.Value.VirtualMatch(workflow))) {
-									// we can't run this yet, another one is still running so we reenqueue it
-									this.queuedWorkflows.Enqueue(nextWorkflow);
-
-									continue;
-								}
-							}
-
-							this.StartWorkflow(nextWorkflow);
-							numToStart--;
-						}
-					}
-				}
+				this.RemoveWorkflow(success, workflow);
 			} finally {
 				workflow?.Dispose();
 
 				lock(this.locker) {
 					this.CheckWorkflowPromotions();
+				}
+			}
+		}
+
+		protected void RemoveWorkflow(bool success, WORKFLOW workflow) {
+			
+			bool canStartNextWorkflow = false;
+			try {
+				workflow.Completed -= this.WorkflowCompleted;
+			} catch {
+					
+			}
+
+			// now we clean up the garbage
+			var Id = workflow.Id;
+
+			if(this.workflows.ContainsKey(Id)) {
+				this.workflows.RemoveSafe(Id);
+			}
+
+			if(this.executingWorkflows.ContainsKey(Id)) {
+				this.executingWorkflows.RemoveSafe(Id);
+			}
+
+			if(this.promotedWorkflows.ContainsKey(Id)) {
+				this.promotedWorkflows.RemoveSafe(Id);
+			}
+
+			lock(this.locker) {
+				canStartNextWorkflow = (this.queuedWorkflows.Count != 0) && (this.executingWorkflows.Count < this.maximumParallelExecution);
+			}
+
+			// now check if we should start another workflow
+			if(canStartNextWorkflow) {
+
+				int numToStart = this.maximumParallelExecution - this.executingWorkflows.Count;
+				int potentialWorkflows = this.queuedWorkflows.Count;
+
+				while((numToStart != 0) && (potentialWorkflows != 0)) {
+
+					this.queuedWorkflows.TryDequeue(out WORKFLOW nextWorkflow);
+
+					if(nextWorkflow != null) {
+						potentialWorkflows--;
+
+						if(nextWorkflow.ExecutionMode == Workflow.ExecutingMode.Sequential) {
+							if(this.executingWorkflows.ToArray().Any(w => w.Value.workflow.VirtualMatch(workflow)) || this.promotedWorkflows.ToArray().Any(w => w.Value.VirtualMatch(workflow))) {
+								// we can't run this yet, another one is still running so we reenqueue it
+								this.queuedWorkflows.Enqueue(nextWorkflow);
+
+								continue;
+							}
+						}
+
+						this.StartWorkflow(nextWorkflow);
+						numToStart--;
+					}
 				}
 			}
 		}

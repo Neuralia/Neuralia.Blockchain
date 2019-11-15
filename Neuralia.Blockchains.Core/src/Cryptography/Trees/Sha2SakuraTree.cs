@@ -2,10 +2,11 @@
 using System.Security.Cryptography;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	
-	public class Sha2SakuraTree : SakuraTree, IDisposable2 {
+	public class Sha2SakuraTree : SakuraTree, IDisposableExtended {
 
 		private readonly HashAlgorithm sha2;
 
@@ -24,7 +25,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry) {
-			return (ByteArray) this.sha2.ComputeHash(entry.Bytes, entry.Offset, entry.Length);
+			return ByteArray.WrapAndOwn(this.sha2.ComputeHash(entry.Bytes, entry.Offset, entry.Length));
 		}
 		
 	#region Dispose

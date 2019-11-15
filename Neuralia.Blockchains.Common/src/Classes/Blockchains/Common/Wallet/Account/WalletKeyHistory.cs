@@ -6,7 +6,9 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Tools.Data;
-using Newtonsoft.Json;
+using Neuralia.Blockchains.Tools.Data.Arrays;
+using System.Text.Json;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
 	public interface IWalletKeyHistory {
@@ -48,8 +50,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			this.DeclarationTransactionId = key.KeyAddress.DeclarationTransactionId.Clone;
 			this.KeySequenceId = key.KeySequenceId;
 
-			string keyDeserialized = JsonConvert.SerializeObject(key, JsonUtils.CreateSerializerSettings());
-			SafeArrayHandle bytes = Compressors.GeneralPurposeCompressor.Compress((ByteArray) Encoding.UTF8.GetBytes(keyDeserialized));
+			string keyDeserialized = JsonSerializer.Serialize(key, JsonUtils.CreateSerializerSettings());
+			SafeArrayHandle bytes = Compressors.GeneralPurposeCompressor.Compress(ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(keyDeserialized)));
 			this.Key = bytes.ToExactByteArrayCopy();
 			bytes.Return();
 		}

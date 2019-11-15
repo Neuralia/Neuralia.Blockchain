@@ -18,8 +18,11 @@ namespace Neuralia.Blockchains.Core.Tools {
 		private readonly object locker = new object();
 		private readonly ITimeService timeService;
 
-		public DataDispatcher(ITimeService timeService) {
+		private readonly Action<PeerConnection> invalidConnectionCallback;
+		
+		public DataDispatcher(ITimeService timeService, Action<PeerConnection> invalidConnectionCallback) {
 			this.timeService = timeService;
+			this.invalidConnectionCallback = invalidConnectionCallback;
 		}
 
 		private SafeArrayHandle DehydrateMessage(INetworkMessageSet message) {
@@ -68,6 +71,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 				try {
 					if(peerConnection.IsDisposed) {
+						peerConnection.connection.Dispose();
+						this.invalidConnectionCallback?.Invoke(peerConnection);
+						
 						return false;
 					}
 
@@ -116,6 +122,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 		private bool ConnectAndSendBytesToPeer(PeerConnection peerConnection, SafeArrayHandle data) {
 
 			if(peerConnection.IsDisposed) {
+				peerConnection.connection.Dispose();
+				this.invalidConnectionCallback?.Invoke(peerConnection);
+				
 				return false;
 			}
 

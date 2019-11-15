@@ -12,6 +12,7 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
@@ -457,7 +458,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public SafeArrayHandle GetModeratorKeyBytes(byte keyId) {
 			MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.GetJoinedField(entry => entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId));
 
-			return chainKeyEntry?.PublicKey;
+			return ByteArray.Wrap(chainKeyEntry?.PublicKey);
 		}
 
 		public T GetModeratorKey<T>(byte keyId)
@@ -513,6 +514,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					throw new ApplicationException($"Moderator key with ordinal {keyId} does not exist.");
 				}
 
+				if(key?.IsZero ?? false) {
+					throw new ApplicationException($"Moderator key with ordinal {keyId} is null and wont be saved.");
+				}
 				chainKeyEntry.PublicKey = key?.ToExactByteArrayCopy();
 				chainKeyEntry.DeclarationTransactionId = transactionId.ToString();
 			});
@@ -566,9 +570,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateEntry.LastDigestTimestamp = DateTime.MinValue;
 			chainStateEntry.MaxBlockInterval = 0;
 
-			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 4).ToString();
-			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 4).ToString();
-			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 4).ToString();
+			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 5).ToString();
+			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 5).ToString();
+			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 5).ToString();
 
 			return chainStateEntry;
 		}

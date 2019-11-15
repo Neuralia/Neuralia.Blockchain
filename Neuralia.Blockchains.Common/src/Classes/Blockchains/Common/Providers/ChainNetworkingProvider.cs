@@ -62,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void PauseNetwork();
 		void RestoreNetwork();
 
-		
+		void RemoveConnection(PeerConnection connection);
 	}
 
 	public interface IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainNetworkingProvider
@@ -92,7 +92,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.networkingService.ConnectionStore.IsConnectableChange += (connectable) => {
 				
 					// alert that our connectable status has changed
-					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnecableChanged(connectable));
+					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnectableChanged(connectable));
 				};
 
 				this.networkingService.ConnectionStore.PeerConnectionsCountUpdated += (c) => this.PeerConnectionsCountUpdated?.Invoke(c);
@@ -128,7 +128,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.networkingService.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
 			}
 		}
-		
+
+		public void RemoveConnection(PeerConnection connection) {
+			this.networkingService.ConnectionStore.RemoveConnection(connection);
+		}
+
 		public int CurrentPeerCount => this.networkingService.CurrentPeerCount;
 
 		public bool HasPeerConnections => this.CurrentPeerCount != 0;
@@ -213,7 +217,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			return settings;
 		}
-
+		
 	#region Scopped connections
 
 		public List<string> AllIPCache => this.networkingService.ConnectionStore.AvailablePeerNodesCopy.Select(n => n.AdjustedIp).ToList();

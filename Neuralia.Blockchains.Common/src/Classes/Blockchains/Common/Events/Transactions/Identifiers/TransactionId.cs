@@ -10,8 +10,10 @@ using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers {
 
@@ -19,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	///     The unique id of a transaction on the chain
 	/// </summary>
 	[JsonConverter(typeof(TransactionIdJsonConverter))]
-	public class TransactionId : ISerializableCombo, IComparable<TransactionId> {
+	public class TransactionId : IBinarySerializable, ITreeHashable, IComparable<TransactionId> {
 
 		public const char SEPARATOR = ':';
 		public const char COMPACT_SEPARATOR = ' ';
@@ -129,11 +131,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			return nodeList;
 		}
-
-		public virtual void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-			jsonDeserializer.SetValue(this.ToString());
-		}
-
 		protected virtual string[] GetTransactionIdComponents(string transactionId) {
 
 			return transactionId.Split(new[] {SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
@@ -249,14 +246,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			Span<byte> buffer = stackalloc byte[sizeof(long)];
 			TypeSerializer.Serialize(this.Timestamp.Value, buffer);
-			string timeStamp = ByteArray.Create(buffer.TrimEnd().ToArray()).ToBase94();
+			string timeStamp = ByteArray.Wrap(buffer.TrimEnd().ToArray()).ToBase94();
 
 			string transactionId = $"{accountId}{COMPACT_SEPARATOR}{timeStamp}";
 
 			// we only display the scope if it is noy zero. otherwise it is ont put, and thus assumed to be 0
 			if(this.Scope != 0) {
 
-				transactionId += $"{COMPACT_SEPARATOR}{ByteArray.Create(new[] {this.Scope}).ToBase94()}";
+				transactionId += $"{COMPACT_SEPARATOR}{ByteArray.Wrap(new[] {this.Scope}).ToBase94()}";
 			}
 
 			return transactionId;

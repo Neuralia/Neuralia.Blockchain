@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		}
 
 		public static BigInteger GetHash512Target(ulong difficulty) {
-			int high = (int) (difficulty >> 56);
+			int high = (int) (difficulty >> 0x38);
 			ulong low = difficulty & 0xFF_FFFFFF_FFFFFFUL;
 
 			if(low == 0) {
@@ -85,7 +85,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			BigInteger biglow = new BigInteger(low);
 
-			return biglow * BigInteger.Pow(BIGINT_TWO, 8 * high);
+			return biglow * BigInteger.Pow(BIGINT_TWO, high << 3);
 		}
 
 		public static BigInteger GetHash512TargetMaximum() {

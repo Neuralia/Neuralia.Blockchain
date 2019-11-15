@@ -19,6 +19,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 
 		public Dictionary<BlockchainType, ChainSettings> chainSettings = new Dictionary<BlockchainType, ChainSettings>();
 
+		public GeneralSettings generalSettings = new GeneralSettings();
+		
 		/// <summary>
 		///     since its impossible to know otherwise, we communicate our listening port, in case it is non standard. (0 means
 		///     off)
@@ -43,6 +45,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			dehydrator.Write(this.listeningPort);
 			dehydrator.Write(this.nonce);
 			dehydrator.Write((byte) this.peerType);
+			
+			this.generalSettings.Dehydrate(dehydrator);
+
 			dehydrator.Write(this.PerceivedIP);
 
 			this.clientSoftwareVersion.Dehydrate(dehydrator);
@@ -65,6 +70,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			this.listeningPort = rehydrator.ReadInt();
 			this.nonce = rehydrator.ReadLong();
 			this.peerType = (Enums.PeerTypes) rehydrator.ReadByte();
+			
+			this.generalSettings.Rehydrate(rehydrator);
+			
 			this.PerceivedIP = rehydrator.ReadString();
 
 			this.clientSoftwareVersion.SetVersion(rehydrator.Rehydrate<SoftwareVersion>());
@@ -92,6 +100,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			nodesList.Add(this.listeningPort);
 			nodesList.Add(this.nonce);
 			nodesList.Add((byte) this.peerType);
+			nodesList.Add(this.generalSettings);
 			nodesList.Add(this.PerceivedIP);
 
 			foreach(var chainsetting in this.chainSettings.OrderBy(s => s.Key)) {

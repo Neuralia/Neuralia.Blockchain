@@ -6,12 +6,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 	public abstract class SerializationTransactionOperation : IBinarySerializable {
 		protected readonly IChainDataWriteProvider chainDataWriteProvider;
 
-		protected readonly ISerializationManager serializationManager;
 
-		public SerializationTransactionOperation(ISerializationManager serializationManager, IChainDataWriteProvider chainDataWriteProvider) {
+		public SerializationTransactionOperation(IChainDataWriteProvider chainDataWriteProvider) {
 			this.SetType();
 
-			this.serializationManager = serializationManager;
 			this.chainDataWriteProvider = chainDataWriteProvider;
 		}
 

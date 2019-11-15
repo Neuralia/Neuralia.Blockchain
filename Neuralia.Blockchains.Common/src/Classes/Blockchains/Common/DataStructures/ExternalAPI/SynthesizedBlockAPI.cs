@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using System.Text.Json.Serialization;
 #if (NETSTANDARD2_0)
-using Newtonsoft.Json;
+using System.Text.Json;
 #else
 using System.Text.Json.Serialization;
 #endif

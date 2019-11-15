@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.BouncyCastle.extra.pqc.math.ntru.util;
 using Org.BouncyCastle.Crypto;
 

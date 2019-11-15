@@ -27,8 +27,10 @@ using Neuralia.Blockchains.Core.Debugging;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Neuralia.Blockchains.Core.General;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
@@ -87,7 +89,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					// now lets publish our keys
 
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.EnsureWalletLoaded();
+					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.EnsureWalletIsLoaded();
 
 					// This is a VERY special case. presentation is the only transaction where we have no account ID on the chain.
 					// so, we will overwrite the empty accountId and publish our hash of our internal account id, and the mods will assign us a public id
@@ -115,7 +117,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						standardPresentation.TransactionCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.TransactionCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.TransactionCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.TransactionCryptographicKey.Key.Entry = key.PublicKey;
+						standardPresentation.TransactionCryptographicKey.Key.Entry = ByteArray.Wrap(key.PublicKey);
 					}
 
 					using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.MESSAGE_KEY_NAME)) {
@@ -131,7 +133,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						standardPresentation.MessageCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.MessageCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.MessageCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.MessageCryptographicKey.Key.Entry = key.PublicKey;
+						standardPresentation.MessageCryptographicKey.Key.Entry = ByteArray.Wrap(key.PublicKey);
 					}
 
 					using(IXmssWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.CHANGE_KEY_NAME)) {
@@ -147,7 +149,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						standardPresentation.ChangeCryptographicKey.Id = key.KeyAddress.OrdinalId;
 						standardPresentation.ChangeCryptographicKey.BitSize = (byte) key.HashBits;
 						standardPresentation.ChangeCryptographicKey.TreeHeight = (byte) key.TreeHeight;
-						standardPresentation.ChangeCryptographicKey.Key.Entry = key.PublicKey;
+						standardPresentation.ChangeCryptographicKey.Key.Entry = ByteArray.Wrap(key.PublicKey);
 					}
 
 					using(ISecretWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretWalletKey>(account.AccountUuid, GlobalsService.SUPER_KEY_NAME)) {
@@ -263,7 +265,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							// lets publish its public details
 							standardAccountKeyChange.XmssNewCryptographicKey.TreeHeight = (byte) nextKey.TreeHeight;
 							standardAccountKeyChange.XmssNewCryptographicKey.BitSize = (byte) nextKey.HashBits;
-							standardAccountKeyChange.XmssNewCryptographicKey.Key.Entry =  nextKey.PublicKey;
+							standardAccountKeyChange.XmssNewCryptographicKey.Key.Entry =  ByteArray.Wrap(nextKey.PublicKey);
 						}
 
 						if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(account.AccountUuid, keyChangeName)) {
@@ -368,7 +370,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public void DebugSerializeBlock(string filepath, ITransaction transaction) {
-			File.WriteAllText(filepath, JsonConvert.SerializeObject(transaction, Formatting.Indented, new ByteConverter()));
+			File.WriteAllText(filepath, JsonSerializer.Serialize(transaction, JsonUtils.CreateSerializerSettings()));
 		}
 
 		/// <summary>
@@ -557,7 +559,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						if(sig is IPromisedSecretAccountSignature secretSig) {
 							if(key is ISecretWalletKey secretWalletKey) {
 								// a secret key publishes only the hash
-								secretSig.PromisedPublicKey.Entry =  secretWalletKey.PublicKey;
+								secretSig.PromisedPublicKey.Entry =  ByteArray.Wrap(secretWalletKey.PublicKey);
 
 							} else {
 								throw new ApplicationException("Wallet key is not of secret type.");
@@ -567,7 +569,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						if(sig is IPromisedSecretComboAccountSignature secretComboSig) {
 							if(key is ISecretDoubleWalletKey secretDoubleWalletKey) {
 								// a secret key publishes only the hash
-								secretComboSig.PromisedPublicKey.Entry =  secretDoubleWalletKey.PublicKey;
+								secretComboSig.PromisedPublicKey.Entry =  ByteArray.Wrap(secretDoubleWalletKey.PublicKey);
 								secretComboSig.PromisedNonce1 = secretDoubleWalletKey.PromisedNonce1;
 								secretComboSig.PromisedNonce2 = secretDoubleWalletKey.PromisedNonce2;
 
@@ -575,7 +577,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							if(key is ISecretComboWalletKey secretComboWalletKey) {
 								// a secret key publishes only the hash
-								secretComboSig.PromisedPublicKey.Entry =  secretComboWalletKey.PublicKey;
+								secretComboSig.PromisedPublicKey.Entry =  ByteArray.Wrap(secretComboWalletKey.PublicKey);
 								secretComboSig.PromisedNonce1 = secretComboWalletKey.PromisedNonce1;
 								secretComboSig.PromisedNonce2 = secretComboWalletKey.PromisedNonce2;
 
@@ -585,7 +587,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						} else if(sig is IFirstAccountKey firstSig) {
 							if(key is IQTeslaWalletKey secretWalletKey) {
 								// a first time signature will publish its public key, since there is nothing to refer to
-								firstSig.PublicKey.Entry =  secretWalletKey.PublicKey;
+								firstSig.PublicKey.Entry =  ByteArray.Wrap(secretWalletKey.PublicKey);
 								firstSig.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) secretWalletKey.SecurityCategory;
 							} else {
 								throw new ApplicationException("Wallet key is not of secret type.");
