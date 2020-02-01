@@ -262,7 +262,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					this.EncryptionInfo.Secret = () => this.WalletSecurityDetails.WalletPassphraseBytes;
 
-					ByteArray cryptoParameterSimpleBytes = ByteArray.WrapAndOwn(this.serialisationFal.TransactionalFileSystem.ReadAllBytes(this.walletCryptoFile));
+					ByteArray cryptoParameterSimpleBytes = ByteArray.Wrap(this.serialisationFal.TransactionalFileSystem.ReadAllBytes(this.walletCryptoFile));
 					this.EncryptionInfo.EncryptionParameters = EncryptorParameters.RehydrateEncryptor(cryptoParameterSimpleBytes);
 				}
 			}

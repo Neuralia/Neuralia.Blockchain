@@ -15,5 +15,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		public string MinimumWarningVersionAllowed { get; set; }
 		public string MinimumVersionAllowed { get; set; }
 		public int MaxBlockInterval { get; set; }
+		public bool AllowGossipPresentations { get; set; }
 	}
 }

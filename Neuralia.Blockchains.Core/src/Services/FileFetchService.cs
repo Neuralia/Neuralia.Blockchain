@@ -1,20 +1,23 @@
 ﻿using System;
 using System.IO;
 using System.IO.Abstractions;
+using System.Linq;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.Services {
 
 	public interface IFileFetchService {
-		(SafeArrayHandle sha2, SafeArrayHandle sha3) FetchGenesisHash(string chainWalletPat, string name);
-		(SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string chainWalletPath, int digestId);
-		Guid? FetchSuperkeyConfirmationUuid(long blockId);
+		(SafeArrayHandle sha2, SafeArrayHandle sha3)? FetchGenesisHash(string hashuri, string chainWalletPat, string name);
+		(SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string hashuri, string chainWalletPath, int digestId);
+		Guid? FetchSuperkeyConfirmationUuid(string hashuri, long blockId);
 
-		SafeArrayHandle FetchBlockPublicHash(long blockId);
+		SafeArrayHandle FetchBlockPublicHash(string hashuri, long blockId);
 	}
 
 	public class FileFetchService : IFileFetchService {
@@ -22,26 +25,38 @@ namespace Neuralia.Blockchains.Core.Services {
 		private readonly IGlobalsService globalsService;
 
 		private readonly IHttpService httpService;
-
+		private readonly ChainConfigurations chainConfiguration;
+		
 		public FileFetchService(IHttpService httpService, IGlobalsService globalsService) {
 			this.httpService = httpService;
 			this.globalsService = globalsService;
 		}
 
-		public Guid? FetchSuperkeyConfirmationUuid(long blockId) {
+		public static string Combine( string basepath, string path, string path2) {
+			return Combine(basepath, Combine(path, path2));
+		}
+		
+		public static string Combine(string uri1, string uri2)
+		{
+			uri1 = uri1.TrimEnd('/');
+			uri2 = uri2.TrimStart('/');
+			return $"{uri1}/{uri2}";
+		}
+		
+		public Guid? FetchSuperkeyConfirmationUuid(string hashuri, long blockId) {
 			string confirmationName = $"confirmation-{blockId}.conf";
 
-			SafeArrayHandle result = this.httpService.Download(("https://hash.neuralium.com/confirmations/" + confirmationName).ToLower());
+			SafeArrayHandle result = this.httpService.Download((Combine(hashuri, "/confirmations/" ,confirmationName)).ToLower());
 
 			TypeSerializer.Deserialize(result.Span, out Guid confirmation);
 
 			return confirmation;
 		}
 
-		public SafeArrayHandle FetchBlockPublicHash(long blockId) {
+		public SafeArrayHandle FetchBlockPublicHash(string hashuri, long blockId) {
 
 			string hashName = $"block-{blockId}.hash";
-			SafeArrayHandle result = this.httpService.Download(("https://hash.neuralium.com/hashes/" + hashName).ToLower());
+			SafeArrayHandle result = this.httpService.Download((Combine(hashuri, "/hashes/", hashName)).ToLower());
 
 			return result;
 		}
@@ -52,30 +67,32 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		/// <param name="name"></param>
 		/// <returns></returns>
-		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchGenesisHash(string genesisPath, string filename) {
+		public (SafeArrayHandle sha2, SafeArrayHandle sha3)? FetchGenesisHash(string hashuri, string genesisPath, string filename) {
 
-			string hashName = $"{filename}.hash";
+			string hashName = $"{filename.CapitallizeFirstLetter()}.hash";
 			FileExtensions.EnsureDirectoryStructure(genesisPath, new FileSystem());
 			string filepath = Path.Combine(genesisPath, hashName);
 
 			if(!File.Exists(filepath)) {
-				this.httpService.Download(("https://hash.neuralium.com/" + hashName).ToLower(), filepath);
+				
+				string hashUri = Combine(hashuri.ToLower(), hashName);
+				Log.Information($"Downloading genesis hash from {hashUri}");
+				this.httpService.Download(hashUri, filepath);
 			}
 
 			if(!File.Exists(filepath)) {
-				return default;
+				return null;
 			}
 
-			var data = File.ReadAllBytes(filepath);
+			var data = ByteArray.WrapAndOwn(File.ReadAllBytes(filepath));
 
-			if((data == null) || (data.Length == 0)) {
+			if(data == null || data.IsCleared) {
 				throw new ApplicationException("Failed to obtain genesis verification hash.");
 			}
-
-			return HashingUtils.ExtractCombinedDualHash(ByteArray.WrapAndOwn(data));
+			return HashingUtils.ExtractCombinedDualHash(data);
 		}
 
-		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string digestHashPath, int digestId) {
+		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string hashuri, string digestHashPath, int digestId) {
 
 			string hashName = $"digest-{digestId}.hash";
 			FileExtensions.EnsureDirectoryStructure(digestHashPath, new FileSystem());
@@ -83,16 +100,19 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			if(!File.Exists(filepath)) {
 
-				this.httpService.Download(("https://hash.neuralium.com/" + hashName).ToLower(), filepath);
+				this.httpService.Download((Combine(hashuri, "/hashes/", hashName)).ToLower(), filepath);
 			}
 
 			if(!File.Exists(filepath)) {
 				return default;
 			}
 
-			var data = File.ReadAllBytes(filepath);
+			var data = ByteArray.WrapAndOwn(File.ReadAllBytes(filepath));
 
-			return HashingUtils.ExtractCombinedDualHash(ByteArray.WrapAndOwn(data));
+			if(data == null || data.IsCleared) {
+				throw new ApplicationException("Failed to obtain digest verification hash.");
+			}
+			return HashingUtils.ExtractCombinedDualHash(data);
 		}
 	}
 }

@@ -1,7 +1,10 @@
-﻿using Neuralia.Blockchains.Core;
+﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
 	public interface ISecretDoubleCryptographicKey : ISecretComboCryptographicKey {
@@ -48,6 +51,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.SecretDouble;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is ISecretDoubleWalletKey secretDoubleWalletKey) {
+				
+				this.SecondKey.SetFromWalletKey(secretDoubleWalletKey.SecondKey);
+				this.SecondKey.Id = secretDoubleWalletKey.KeyAddress.OrdinalId;
+			}
 		}
 	}
 }

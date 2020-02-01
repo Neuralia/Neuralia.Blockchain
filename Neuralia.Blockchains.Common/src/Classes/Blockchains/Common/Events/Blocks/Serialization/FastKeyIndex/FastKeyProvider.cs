@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.FastKeyIndex {
 	/// <summary>
@@ -62,8 +63,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public bool Test() {
-			
-			return this.fileSystem.File.Exists(this.GetBasePath());
+
+			string path = this.GetBasePath();
+			try {
+				bool result = this.fileSystem.File.Exists(path);
+				Log.Verbose($"testing for existance of fast key provider file at path {path}. File '{(result?"":"does not")} exist'");
+
+				return result;
+
+			} catch(Exception ex) {
+				Log.Error(ex, $"Failed to test for existance of fast key provider file at path {path}");
+			}
+
+			return false;
 		}
 
 		public void EnsureBaseFileExists() {
@@ -78,7 +90,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				}
 			}
 		}
-		public (SafeArrayHandle keyBytes, byte treeheight, byte hashBits) LoadKeyFile(AccountId accountId, byte ordinal) {
+		public (SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits) LoadKeyFile(AccountId accountId, byte ordinal) {
 
 			this.TestKeyValidity(ordinal);
 
@@ -101,7 +113,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			ByteArray keySimpleBytes = ByteArray.Create(this.GetKeySize(ordinal));
 			results.Entry.Slice(2).CopyTo(keySimpleBytes.Span);
 
-			return (keySimpleBytes, results[0], results[1]);
+			return (keySimpleBytes, results[0], (Enums.KeyHashBits)results[1]);
 		}
 
 		private int GetKeySize(byte ordinal) {
@@ -112,7 +124,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID ? TRANSACTION_ENTRY_SIZE : MESSAGE_ENTRY_SIZE;
 		}
 
-		public void WriteKey(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
+		public void WriteKey(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal) {
 
 			this.TestKeyValidity(ordinal);
 
@@ -156,7 +168,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			Span<byte> dataEntry = stackalloc byte[entrySize];
 			dataEntry[0] = treeHeight;
-			dataEntry[1] = hashBits;
+			dataEntry[1] = (byte)hashBits;
 			key.Span.CopyTo(dataEntry.Slice(2, keySize));
 
 			using(Stream fs = this.fileSystem.File.OpenWrite(fileName)) {

@@ -9,8 +9,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		int MaturityBlockHash { get; set; }
 		BlockId BlockId { get; set; }
 		
-		AdaptiveLong1_9 SimpleAnswer { get; set; }
-		AdaptiveLong1_9 HardAnswer { get; set; }
+		AdaptiveLong1_9 SecondTierAnswer { get; set; }
+		AdaptiveLong1_9 DigestAnswer { get; set; }
+		AdaptiveLong1_9 FirstTierAnswer { get; set; }
 
 		AccountId AccountId { get; set; }
 	}
@@ -18,8 +19,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 	public abstract class ElectionCandidacyMessage : BlockchainMessage, IElectionCandidacyMessage {
 
 		public BlockId BlockId { get; set; } = new BlockId();
-		public AdaptiveLong1_9 SimpleAnswer { get; set; }
-		public AdaptiveLong1_9 HardAnswer { get; set; }
+		public AdaptiveLong1_9 SecondTierAnswer { get; set; }
+		public AdaptiveLong1_9 DigestAnswer { get; set; }
+		public AdaptiveLong1_9 FirstTierAnswer { get; set; }
 		public AccountId AccountId { get; set; } = new AccountId();
 
 		/// <summary>
@@ -34,20 +36,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			this.MaturityBlockHash = rehydrator.ReadInt();
 			this.AccountId.Rehydrate(rehydrator);
 
-			this.SimpleAnswer = null;
+			this.SecondTierAnswer = null;
 			bool hasValue = rehydrator.ReadBool();
 
 			if(hasValue) {
-				this.SimpleAnswer = new AdaptiveLong1_9();
-				this.SimpleAnswer.Rehydrate(rehydrator);
+				this.SecondTierAnswer = new AdaptiveLong1_9();
+				this.SecondTierAnswer.Rehydrate(rehydrator);
 			}
 			
-			this.HardAnswer = null;
+			this.DigestAnswer = null;
 			hasValue = rehydrator.ReadBool();
 
 			if(hasValue) {
-				this.HardAnswer = new AdaptiveLong1_9();
-				this.HardAnswer.Rehydrate(rehydrator);
+				this.DigestAnswer = new AdaptiveLong1_9();
+				this.DigestAnswer.Rehydrate(rehydrator);
+			}
+			
+			this.FirstTierAnswer = null;
+			hasValue = rehydrator.ReadBool();
+
+			if(hasValue) {
+				this.FirstTierAnswer = new AdaptiveLong1_9();
+				this.FirstTierAnswer.Rehydrate(rehydrator);
 			}
 		}
 
@@ -58,16 +68,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			dehydrator.Write(this.MaturityBlockHash);
 			this.AccountId.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.SimpleAnswer != null);
+			dehydrator.Write(this.SecondTierAnswer != null);
 
-			if(this.SimpleAnswer != null) {
-				this.SimpleAnswer.Dehydrate(dehydrator);
+			if(this.SecondTierAnswer != null) {
+				this.SecondTierAnswer.Dehydrate(dehydrator);
 			}
 			
-			dehydrator.Write(this.HardAnswer != null);
+			dehydrator.Write(this.DigestAnswer != null);
 
-			if(this.HardAnswer != null) {
-				this.HardAnswer.Dehydrate(dehydrator);
+			if(this.DigestAnswer != null) {
+				this.DigestAnswer.Dehydrate(dehydrator);
+			}
+			
+			dehydrator.Write(this.FirstTierAnswer != null);
+
+			if(this.FirstTierAnswer != null) {
+				this.FirstTierAnswer.Dehydrate(dehydrator);
 			}
 		}
 	}

@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
+using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
@@ -20,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 	}
 
-	public interface IChainDataProvider {
+	public interface IChainDataProvider: IChainProvider {
 
 		string GetDigestSyncManifestFileName();
 
@@ -70,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public const string DIGESTS_FOLDER_NAME = "digests";
 		public const string DIGESTS_SCOPED_FOLDER_NAME = "digest-{0}";
-		public const string DIGESTS_HEADER_FILE_NAME = "digest.neuralia";
+		public const string DIGESTS_HEADER_FILE_NAME = "digest-{0}.neuralia";
 		public const string DIGEST_HASH_FOLDER_PATH = "hashes";
 
 		public const string BLOCKS_FILE_NAME = "blocks.neuralia";
@@ -270,7 +271,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public string GetDigestsHeaderFilePath(int digestId) {
 
-			return Path.Combine(this.GetDigestsPackedFolderPath(digestId), DIGESTS_HEADER_FILE_NAME);
+			return Path.Combine(this.GetDigestsPackedFolderPath(digestId), string.Format(DIGESTS_HEADER_FILE_NAME, digestId));
 		}
 
 		public string GetDigestsExpandedFolderPath(int digestId) {

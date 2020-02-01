@@ -1,12 +1,17 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+﻿using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1 {
-	public interface IStandardAccountKeyChangeTransaction : IKeyedTransaction {
+	public interface IStandardAccountKeyChangeTransaction : IKeyedTransaction, IKeychange {
 
 		CryptographicKey NewCryptographicKey { get; }
 		SecretCryptographicKey NextSuperCryptographicKey { get; }
@@ -88,5 +93,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.KEY_CHANGE, 1, 0);
 		}
+		
+		public override ImmutableList<AccountId> TargetAccounts => new [] {this.TransactionId.Account}.ToImmutableList();
 	}
 }

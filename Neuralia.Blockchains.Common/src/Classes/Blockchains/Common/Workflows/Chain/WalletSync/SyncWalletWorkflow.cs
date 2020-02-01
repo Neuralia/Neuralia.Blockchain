@@ -14,13 +14,14 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.WalletSync {
 	public interface ISyncWalletWorkflow : IChainWorkflow {
-		Dictionary<BlockId, IBlock> LoadedBlocks { get; }
+		ConcurrentDictionary<BlockId, IBlock> LoadedBlocks { get; }
 
 		bool? AllowGrowth { get; set; }
 	}
@@ -55,8 +56,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <summary>
 		///     The latest block that may have been received
 		/// </summary>
-		public Dictionary<BlockId, IBlock> LoadedBlocks { get; } = new Dictionary<BlockId, IBlock>();
+		public ConcurrentDictionary<BlockId, IBlock> LoadedBlocks { get; } = new ConcurrentDictionary<BlockId, IBlock>();
 
+		/// <summary>
+		/// this is a hack
+		/// TODO: improve this, a static variable is bad
+		/// </summary>
+		private static DateTime lastClearTimedout = DateTime.MinValue;
+		
 		protected virtual bool CheckShouldStop() {
 
 			return this.shutdownRequest || this.CheckCancelRequested();
@@ -64,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
 
-			if(!BlockchainUtilities.UsesBlocks(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockSavingMode) && !GlobalSettings.ApplicationSettings.MobileMode) {
+			if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.NodeShareType().DoesNotShare && !GlobalSettings.ApplicationSettings.SynclessMode) {
 				
 				this.TriggerWalletSynced();
 				return;
@@ -76,7 +83,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			var walletAccounts = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccounts();
 
-			long startBLockHeight = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight;
+			long startBLockHeight = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight.Value;
 
 			long currentBlockHeight = startBLockHeight;
 
@@ -102,7 +109,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(syncableAccounts.All(a => (WalletAccountChainState.BlockSyncStatuses) this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(a.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus == WalletAccountChainState.BlockSyncStatuses.FullySynced) || (startBLockHeight == 0)) {
 					// all accounts are fully synced. we can move on to the next block
-					if(GlobalSettings.ApplicationSettings.MobileMode) {
+					if(GlobalSettings.ApplicationSettings.SynclessMode) {
 						// in mobile, we see we are up to date, no need to do the sequential
 						sequentialSync = false;
 					} else {
@@ -117,7 +124,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				long currentHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
 
-				if(GlobalSettings.ApplicationSettings.MobileMode) {
+				if(GlobalSettings.ApplicationSettings.SynclessMode) {
 					// in mobile mode, we dont want to sync every block, we only sync the ones we have. lets start with the current one only
 					currentHeight = currentBlockHeight;
 				}
@@ -147,9 +154,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						nextBlockTask = Task.Run(() => {
 							// since there can be a transaction below, lets make sure to whitelist ourselves. we dont need anything extravagant anyways. no real risk of collision
-							this.centralCoordinator.ChainComponentProvider.WalletProviderBase.RequestFriendlyAccess(() => {
-								nextSynthesizedBlock = this.GetSynthesizedBlock(height);
-							});
+							nextSynthesizedBlock = this.GetSynthesizedBlock(height);
 						});
 					}
 
@@ -169,7 +174,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				}
 
-				if(GlobalSettings.ApplicationSettings.MobileMode) {
+				if(GlobalSettings.ApplicationSettings.SynclessMode) {
 
 					this.CheckShouldCancel();
 
@@ -192,6 +197,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 				
 				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CleanSynthesizedBlockCache();
+
+				// now we ensure that all timed out in the wallet are updated
+				if(lastClearTimedout < DateTime.Now) {
+					bool changed = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ResetAllTimedOut();
+					// do it again, but not too often. if we did not change anything, perhaps
+					//TODO: review this timeout. 
+					lastClearTimedout = DateTime.Now.AddMinutes(10);
+				}
 
 				Log.Verbose("Wallet sync completed");
 			} catch(Exception ex) {
@@ -230,7 +243,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			// ok, if this happens while we are syncing, we ask for a grace period until we are ready to clean exit
 			if(this.IsBusy) {
-				beacons.Add(new TaskFactory().StartNew(() => {
+				beacons.Add(Task.Run(() => {
 
 					while(true) {
 						if(!this.IsBusy) {
@@ -353,7 +366,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return synthesizedBlock;
 			}
 
-			if(GlobalSettings.ApplicationSettings.MobileMode) {
+			if(GlobalSettings.ApplicationSettings.SynclessMode) {
 				// in mobile mode, we will never have blocks. we can represent a block we dont ahve by an empoty synthesized block
 				synthesizedBlock = this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.CreateSynthesizedBlock();
 				synthesizedBlock.BlockId = blockId;

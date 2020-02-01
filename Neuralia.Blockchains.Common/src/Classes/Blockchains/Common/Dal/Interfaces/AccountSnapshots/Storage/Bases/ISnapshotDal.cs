@@ -4,7 +4,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 	public interface ISnapshotDal : IDalInterfaceBase {
 	}
 
-	public interface ISnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT> : ISnapshotDal
-		where ACCOUNT_SNAPSHOT_CONTEXT : ISnapshotContext {
+	public interface ISnapshotDal<SNAPSHOT_CONTEXT> : ISnapshotDal
+		where SNAPSHOT_CONTEXT : ISnapshotContext {
 	}
 }

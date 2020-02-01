@@ -27,6 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		int? FileCacheTimeout { get; set; }
 		bool IsLoaded { get; }
 		bool FileExists { get; }
+		void RefreshFile();
 		void CreateEmptyFile(object data = null);
 		void Load(object data = null);
 		void Reset();
@@ -89,6 +90,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		public bool IsLoaded => this.Filebytes.HasData;
 
 		public bool FileExists => this.serialisationFal.TransactionalFileSystem.FileExists(this.Filename);
+		
+		public void RefreshFile() {
+			this.serialisationFal.TransactionalFileSystem.RefreshFile(this.Filename);
+		}
 
 		public virtual void CreateEmptyFile(object data = null) {
 			if(this.IsLoaded) {

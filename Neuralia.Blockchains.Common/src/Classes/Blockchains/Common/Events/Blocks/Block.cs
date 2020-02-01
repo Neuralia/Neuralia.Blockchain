@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
@@ -13,6 +14,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization;
+using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Compression;
@@ -40,15 +42,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		AdaptiveShort1_2 Lifespan { get; set; }
 
 		DateTime FullTimestamp { get; set; }
+		
+		Enums.BlockHashingModes BlockHashingMode { get; set; }
+		
+		SafeArrayHandle ExtendedData { get; set; }
 
 		BlockSignatureSet SignatureSet { get; set; }
 
-		List<IKeyedTransaction> ConfirmedKeyedTransactions { get; }
-		List<(int offset, int lengt)> KeyedOffsets { get; }
+		List<IMasterTransaction> ConfirmedMasterTransactions { get; }
+		List<(int offset, int lengt)> MasterOffsets { get; }
 
-		void BuildKeyedOffsets();
+		void BuildMasterTransactionOffsets();
 	}
 
+	
 	public interface IBlock : IBlockHeader {
 
 		List<ITransaction> ConfirmedTransactions { get; }
@@ -64,8 +71,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		Dictionary<int, TransactionId> GetAllIndexedTransactionsDictionary();
 		Dictionary<TransactionId, ITransaction> GetAllConfirmedTransactions();
 	}
-
+	
+	[DebuggerDisplay("BlockId: {BlockId}")]
 	public abstract class BlockHeader : BlockchainEvent<IDehydratedBlock, DehydratedBlock, IBlockchainEventsRehydrationFactory, BlockType>, IBlockHeader {
+
+		
 
 		/// <summary>
 		///     sha3 512 size.
@@ -81,7 +91,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 		// header
 		public BlockId BlockId { get; set; } = BlockId.NullBlockId;
+		
+		/// <summary>
+		/// how the block is hashed
+		/// </summary>
+		public Enums.BlockHashingModes BlockHashingMode { get; set; } = Enums.BlockHashingModes.Mode1;
 
+		/// <summary>
+		/// Space for adhoc extra data if ever needed
+		/// </summary>
+		public SafeArrayHandle ExtendedData { get; set; } = null;
+		
 		/// <summary>
 		///     The timestamp since chain inception
 		/// </summary>
@@ -96,7 +116,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		/// </summary>
 		public AdaptiveShort1_2 Lifespan { get; set; } = new AdaptiveShort1_2();
 
-		public List<IKeyedTransaction> ConfirmedKeyedTransactions { get; } = new List<IKeyedTransaction>();
+		public List<IMasterTransaction> ConfirmedMasterTransactions { get; } = new List<IMasterTransaction>();
 
 		public override HashNodeList GetStructuresArray() {
 			throw new NotImplementedException("Blocks do not implement this version of the structures array.");
@@ -111,9 +131,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 			nodeList.Add(this.Timestamp);
 			nodeList.Add(this.Lifespan);
-
-			nodeList.Add(this.ConfirmedKeyedTransactions.Count);
-			nodeList.Add(this.ConfirmedKeyedTransactions.OrderBy(t => t.TransactionId));
+			
+			nodeList.Add(this.BlockHashingMode);
+			nodeList.Add(this.ExtendedData);
+			
+			nodeList.Add(this.ConfirmedMasterTransactions.Count);
+			nodeList.Add(BlockchainHashingUtils.GenerateTransactionSetNodeList(this.ConfirmedMasterTransactions));
 
 			return nodeList;
 		}
@@ -148,10 +171,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 	#region Serialization
 
-		public List<(int offset, int lengt)> KeyedOffsets { get; private set; }
+		public List<(int offset, int lengt)> MasterOffsets { get; private set; }
 
-		public void BuildKeyedOffsets() {
-			this.KeyedOffsets = new List<(int offset, int lengt)>();
+		public void BuildMasterTransactionOffsets() {
+			this.MasterOffsets = new List<(int offset, int lengt)>();
 		}
 
 		public static (ComponentVersion<BlockType> version, SafeArrayHandle hash, BlockId blockId) RehydrateHeaderEssentials(IDataRehydrator rehydratorHeader) {
@@ -167,7 +190,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 		public override void Rehydrate(IDehydratedBlock dehydratedBlock, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 
-			GzipCompression compressor = null;
+			BrotliCompression compressor = null;
 
 			List<SafeArrayHandle> toReturn = new List<SafeArrayHandle>();
 			var channelRehydrators = dehydratedBlock.GetEssentialDataChannels().ConvertAll((band, data) => {
@@ -180,7 +203,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 				// decompress if we should
 				if(rehydrationFactory.CompressedBlockchainChannels.HasFlag(band)) {
 					if(compressor == null) {
-						compressor = new GzipCompression();
+						compressor = new BrotliCompression();
 					}
 
 					bytes = compressor.Decompress(data);
@@ -204,6 +227,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			this.Timestamp.Rehydrate(rehydratorHeader);
 			this.Lifespan.Rehydrate(rehydratorHeader);
 
+			this.BlockHashingMode = (Enums.BlockHashingModes)rehydratorHeader.ReadByte();
+			this.ExtendedData = rehydratorHeader.ReadArray();
+
 			this.SignatureSet.Rehydrate(rehydratorHeader);
 
 			// timestamp baseline
@@ -212,14 +238,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			long timestampBaseline = adaptiveLong.Value;
 
 			adaptiveLong.Rehydrate(rehydratorHeader);
-			int count = (ushort) adaptiveLong.Value;
+			int count = (int) adaptiveLong.Value;
 
 			for(int i = 0; i < count; i++) {
 
-				// now the keyed transaction's starting address
+				// now the master transaction's starting address
 				int offset = rehydratorHeader.Offset;
 
-				// keyed transactions have their own independent rehydrator array which contains only the header (body)
+				// master transactions have their own independent rehydrator array which contains only the header (body)
 				SafeArrayHandle keyedBytes = rehydratorHeader.ReadNonNullableArray();
 
 				using(IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes)) {
@@ -227,15 +253,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 					DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
 					dehydratedTransaction.Rehydrate(keyedRehydrator);
 
-					IKeyedTransaction keyedTransaction = rehydrationFactory.CreateKeyedTransaction(dehydratedTransaction);
-					keyedTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
+					IMasterTransaction masterTransaction = rehydrationFactory.CreateMasterTransaction(dehydratedTransaction);
+					masterTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
 
 					int nextOffset = rehydratorHeader.Offset;
 
 					// and give it its address
-					this.KeyedOffsets?.Add((offset, nextOffset - offset));
+					this.MasterOffsets?.Add((offset, nextOffset - offset));
 
-					this.ConfirmedKeyedTransactions.Add(keyedTransaction);
+					this.ConfirmedMasterTransactions.Add(masterTransaction);
 				}
 			}
 
@@ -251,7 +277,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			}
 		}
 
-		protected virtual void PrepareRehydrated(IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		protected virtual void PrepareRehydrated(IBlockRehydrationFactory rehydrationFactory) {
 			rehydrationFactory.PrepareBlockHeader(this);
 		}
 
@@ -286,13 +312,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			jsonDeserializer.SetProperty("Lifespan", this.Lifespan);
 			jsonDeserializer.SetProperty("SignatureSet", this.SignatureSet);
 
-			jsonDeserializer.SetArray("ConfirmedKeyedTransactions", this.ConfirmedKeyedTransactions);
+			jsonDeserializer.SetArray("ConfirmedMasterTransactions", this.ConfirmedMasterTransactions);
 		}
 		
 	#endregion
 
 	}
 
+	[DebuggerDisplay("BlockId: {BlockId}")]
 	public abstract class Block : BlockHeader, IBlock {
 
 		public List<ITransaction> ConfirmedTransactions { get; } = new List<ITransaction>();
@@ -305,10 +332,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 			HashNodeList nodeList = base.GetStructuresArray(previousBlockHash);
 
 			nodeList.Add(this.ConfirmedTransactions.Count);
-			nodeList.Add(this.ConfirmedTransactions.OrderBy(t => t.TransactionId));
+			nodeList.Add(BlockchainHashingUtils.GenerateTransactionSetNodeList(this.ConfirmedTransactions));
 
 			nodeList.Add(this.RejectedTransactions.Count);
-			nodeList.Add(this.RejectedTransactions.OrderBy(t => t.TransactionId));
+			nodeList.Add(BlockchainHashingUtils.GenerateRejectedTransactionSetNodeList(this.RejectedTransactions));
 
 			nodeList.Add(this.IntermediaryElectionResults.Count);
 			nodeList.Add(this.IntermediaryElectionResults.OrderByDescending(t => t.BlockOffset));
@@ -330,19 +357,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		}
 
 		public List<TransactionId> GetAllTransactions() {
-			var transactions = this.ConfirmedKeyedTransactions.Select(t => t.TransactionId.ToTransactionId()).ToList();
-			transactions.AddRange(this.ConfirmedTransactions.Select(t => t.TransactionId.ToTransactionId()));
-			transactions.AddRange(this.RejectedTransactions.Select(t => t.TransactionId.ToTransactionId()));
+			var transactions = this.ConfirmedMasterTransactions.Select(t => t.TransactionId).ToList();
+			transactions.AddRange(this.ConfirmedTransactions.Select(t => t.TransactionId));
+			transactions.AddRange(this.RejectedTransactions.Select(t => t.TransactionId));
 
 			return transactions;
 		}
 
 		public List<(TransactionId TransactionId, int index)> GetAllIndexedTransactions() {
-			var transactionIndexes = this.ConfirmedKeyedTransactions.Select((t, index) => (t.TransactionId.ToTransactionId(), index)).ToList();
+			var transactionIndexes = this.ConfirmedMasterTransactions.Select((t, index) => (t.TransactionId, index)).ToList();
 			int count = transactionIndexes.Count;
-			transactionIndexes.AddRange(this.ConfirmedTransactions.Select((t, index) => (t.TransactionId.ToTransactionId(), count + index)));
+			transactionIndexes.AddRange(this.ConfirmedTransactions.Select((t, index) => (t.TransactionId, count + index)));
 			count = transactionIndexes.Count;
-			transactionIndexes.AddRange(this.RejectedTransactions.Select((t, index) => (TransactionId: t.TransactionId.ToTransactionId(), count + index)));
+			transactionIndexes.AddRange(this.RejectedTransactions.Select((t, index) => (TransactionId: t.TransactionId, count + index)));
 
 			return transactionIndexes;
 		}
@@ -353,10 +380,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 		public Dictionary<TransactionId, ITransaction> GetAllConfirmedTransactions() {
 
-			var results = this.ConfirmedTransactions.ToDictionary(t => t.TransactionId.ToTransactionId(), t => t);
+			var results = this.ConfirmedTransactions.ToDictionary(t => t.TransactionId, t => t);
 
-			foreach(IKeyedTransaction t in this.ConfirmedKeyedTransactions) {
-				results.Add(t.TransactionId.ToTransactionId(), t);
+			foreach(IMasterTransaction t in this.ConfirmedMasterTransactions) {
+				results.Add(t.TransactionId, t);
 			}
 
 			return results;
@@ -378,11 +405,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 				var rparameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
-				int currentGroupCount = 0;
 				Enums.AccountTypes currentAccountType = Enums.AccountTypes.Standard;
 
 				rparameters.InitializeGroup = (groupIndex, groupCount, accountType) => {
-					currentGroupCount = groupCount;
 					currentAccountType = accountType;
 					timestampsCalculator.Reset(timestampBaseline);
 				};
@@ -413,11 +438,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 		}
 
-		protected virtual void RehydrateBody(IDataRehydrator rehydratorHeader, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		protected virtual void RehydrateBody(IDataRehydrator rehydratorHeader, IBlockRehydrationFactory rehydrationFactory) {
 
 		}
 
-		protected void RehydrateElectionResults(IDataRehydrator rehydratorHeader, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		private void RehydrateElectionResults(IDataRehydrator rehydratorHeader, IBlockRehydrationFactory rehydrationFactory) {
 
 			// now build the transaction indexes
 			var transactionIndexesTree = this.GetAllIndexedTransactionsDictionary();
@@ -448,11 +473,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 		}
 
-		protected virtual void RehydrateDataChannels(ChannelsEntries<IDataRehydrator> dataChannels, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		protected virtual void RehydrateDataChannels(ChannelsEntries<IDataRehydrator> dataChannels, IBlockRehydrationFactory rehydrationFactory) {
 
 		}
 
-		protected override void PrepareRehydrated(IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		protected override void PrepareRehydrated(IBlockRehydrationFactory rehydrationFactory) {
 			rehydrationFactory.PrepareBlock(this);
 		}
 		

@@ -1,19 +1,25 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations {
 
-	public class JointAccountSnapshot<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE> : AccountSnapshot<ACCOUNT_FEATURE>, IJointAccountSnapshot<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE>
-		where ACCOUNT_FEATURE : IAccountFeature
+	public class JointAccountSnapshot<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE> : AccountSnapshot<ACCOUNT_ATTRIBUTE>, IJointAccountSnapshot<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE>
+		where ACCOUNT_ATTRIBUTE : IAccountAttribute
 		where JOINT_MEMBER_FEATURE : IJointMemberAccount {
 
 		public int RequiredSignatures { get; set; }
-		public List<JOINT_MEMBER_FEATURE> MemberAccounts { get; set; }
+		public ImmutableList<IJointMemberAccount> MemberAccountsBase => this.MemberAccounts.Cast<IJointMemberAccount>().ToImmutableList();
+		public List<JOINT_MEMBER_FEATURE> MemberAccounts { get; set; } = new List<JOINT_MEMBER_FEATURE>();
 
 		public void CreateNewCollectionEntry(out IJointMemberAccount result) {
 			TypedCollectionExposureUtil<IJointMemberAccount>.CreateNewCollectionEntry(this.MemberAccounts, out result);
+		}
+		
+		void ITypedCollectionExposure<IJointMemberAccount>.ClearCollection() {
+			this.MemberAccounts.Clear();
 		}
 
 		public void AddCollectionEntry(IJointMemberAccount entry) {

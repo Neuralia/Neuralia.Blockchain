@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO.Abstractions;
 using System.Linq;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 
@@ -12,9 +15,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		SafeArrayHandle GetKey(long accountId, byte ordinal);
 	}
 
-	public interface IStandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD> : IStandardAccountKeysDigestChannel
+	public interface IStandardAccountKeysDigestChannel<out ACCOUNT_KEYS_CARD> : IStandardAccountKeysDigestChannel
 		where ACCOUNT_KEYS_CARD : class, IStandardAccountKeysDigestChannelCard {
-		List<ACCOUNT_KEYS_CARD> GetKeys(long accountId);
+		ACCOUNT_KEYS_CARD[] GetKeys(long accountId);
 	}
 
 	public abstract class StandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD> : DigestChannel<AccountKeysDigestChannel.AccountKeysDigestChannelBands, SafeArrayHandle, int, (long accountId, byte ordinal), (uint offset, uint length)>, IStandardAccountKeysDigestChannel<ACCOUNT_KEYS_CARD>
@@ -44,11 +47,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			return results[AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys].Branch();
 		}
-
-		public List<ACCOUNT_KEYS_CARD> GetKeys(long accountId) {
+		
+		protected abstract ICardUtils GetCardUtils();
+		
+		public ACCOUNT_KEYS_CARD[] GetKeys(long accountId) {
 
 			// this works because we have only one channel for now
-			var castedIndex = (DualKeySingleKeySequentialFileChannelBandIndex<AccountKeysDigestChannel.AccountKeysDigestChannelBands>) this.channelBandIndexSet.BandIndices.Values.Single();
+			var castedIndex = (DualKeySingleKeyTrippleFileChannelBandIndex<AccountKeysDigestChannel.AccountKeysDigestChannelBands>) this.channelBandIndexSet.BandIndices.Values.Single();
 
 			var results = castedIndex.QuerySubCards(accountId);
 
@@ -58,19 +63,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				ACCOUNT_KEYS_CARD card = this.CreateNewCardInstance();
 
 
-				card.Id = accountId;
+				card.Id = new AccountId(accountId, Enums.AccountTypes.Standard).ToLongRepresentation();
 				card.OrdinalId = result.Key;
 				card.PublicKey = result.Value.Entries[AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys].ToExactByteArray();
+
+				card.CompositeKey = this.GetCardUtils().GenerateCompositeKey(card);
+				
 
 				cards.Add(card);
 			}
 
-			return cards;
+			return cards.ToArray();
 		}
 
 		protected override void BuildBandsIndices() {
 
-			this.channelBandIndexSet.AddIndex(1, new DualKeySingleKeySequentialFileChannelBandIndex<AccountKeysDigestChannel.AccountKeysDigestChannelBands>(KEYS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys, new FileSystem()));
+			this.channelBandIndexSet.AddIndex(1, new DualKeySingleKeyTrippleFileChannelBandIndex<AccountKeysDigestChannel.AccountKeysDigestChannelBands>(KEYS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys, new FileSystem()));
 		}
 
 		protected override ComponentVersion<DigestChannelType> SetIdentity() {

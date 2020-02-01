@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,42 +26,41 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
+using Org.BouncyCastle.Utilities;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	public interface IWalletProviderProxyTransactions {
 		bool IsActiveTransaction { get; }
-
-		K ScheduleTransaction<K>(Func<CancellationToken, K> action, int timeout = 60, Action prepareAction = null);
-		K ScheduleTransaction<K>(Func<IWalletProvider, CancellationToken, K> action, int timeout = 60, Action prepareAction = null);
-		void ScheduleTransaction(Action<IWalletProvider, CancellationToken> action, int timeout = 60, Action prepareAction = null);
-		void ScheduleChildTransactionalThread(Action action);
 		bool IsActiveTransactionThread(int threadId);
+		
+		K ScheduleTransaction<K>(Func<CancellationToken, K> action, int timeout = 60, Action prepareAction = null, Action failure = null);
+		K ScheduleTransaction<K>(Func<IWalletProvider, CancellationToken, K> action, int timeout = 60, Action prepareAction = null, Action failure = null);
+		void ScheduleTransaction(Action<IWalletProvider, CancellationToken> action, int timeout = 60, Action prepareAction = null, Action failure = null);
 		K ScheduleRead<K>(Func<K> action);
 		K ScheduleRead<K>(Func<IWalletProvider, K> action);
 		void ScheduleRead(Action action);
 		void ScheduleRead(Action<IWalletProvider> action);
 		K ScheduleWrite<K>(Func<K> action);
-		K ScheduleWrite<K>(Func<IWalletProvider, K> action);
-		void ScheduleWrite(Action<IWalletProvider> action);
+		K ScheduleWrite<K>(Func<IWalletProvider, K> action, int timeout = 60);
+		void ScheduleWrite(Action<IWalletProvider> action, int timeout = 60);
 		void ScheduleWrite(Action action);
-		K ScheduleKeyedRead<K>(Func<K> action, Action prepareAction = null);
-		K ScheduleKeyedRead<K>(Func<IWalletProvider, K> action, Action prepareAction = null);
-		void ScheduleKeyedRead(Action action, Action prepareAction = null);
-		void ScheduleKeyedRead(Action<IWalletProvider> action, Action prepareAction = null);
-		K ScheduleKeyedWrite<K>(Func<K> action, Action prepareAction = null);
-		K ScheduleKeyedWrite<K>(Func<IWalletProvider, K> action, Action prepareAction = null);
-		void ScheduleKeyedWrite(Action action, Action prepareAction = null);
-		void ScheduleKeyedWrite(Action<IWalletProvider> action, Action prepareAction = null);
-		K ScheduleTransactionalKeyedRead<K>(Func<CancellationToken, K> action, Action prepareAction = null);
-		K ScheduleTransactionalKeyedRead<K>(Func<IWalletProvider, CancellationToken, K> action, Action prepareAction = null);
-		void RequestFriendlyAccess(Action action);
-		void WhitelistFriendlyThread(int threadId);
-		void RemoveFriendlyThread(int threadId);
+		K ScheduleKeyedRead<K>(Func<K> action, Action prepareAction = null, Action failure = null);
+		K ScheduleKeyedRead<K>(Func<IWalletProvider, K> action, Action prepareAction = null, Action failure = null);
+		void ScheduleKeyedRead(Action action, Action prepareAction = null, Action failure = null);
+		void ScheduleKeyedRead(Action<IWalletProvider> action, Action prepareAction = null, Action failure = null);
+		K ScheduleKeyedWrite<K>(Func<K> action, Action prepareAction = null, Action failure = null);
+		K ScheduleKeyedWrite<K>(Func<IWalletProvider, K> action, Action prepareAction = null, Action failure = null);
+		void ScheduleKeyedWrite(Action action, Action prepareAction = null, Action failure = null);
+		void ScheduleKeyedWrite(Action<IWalletProvider> action, Action prepareAction = null, Action failure = null);
+		K ScheduleTransactionalKeyedRead<K>(Func<CancellationToken, K> action, Action prepareAction = null, Action failure = null);
+		K ScheduleTransactionalKeyedRead<K>(Func<IWalletProvider, CancellationToken, K> action, Action prepareAction = null, Action failure = null);
+		void AddTransactionSuccessActions(List<Action> transactionalSuccessActions);
 	}
 
 	public interface IWalletProviderProxy : IWalletProvider, IWalletProviderProxyTransactions, IDisposableExtended {
@@ -73,16 +74,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public abstract class WalletProviderProxy<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IWalletProviderProxy, IWalletProviderProxyInternal
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
-		protected readonly ThreadExclusionResourceAccessScheduler resourceAccessScheduler;
+		protected readonly RecursiveResourceAccessScheduler<IWalletProviderInternal> RecursiveResourceAccessScheduler;
 
 		protected readonly IWalletProviderInternal walletProvider;
+
+		protected readonly CENTRAL_COORDINATOR centralCoordinator;
+		protected static readonly TimeSpan defaultTransactionTimeout = TimeSpan.FromMinutes(1);
 
 		public WalletProviderProxy(CENTRAL_COORDINATOR centralCoordinator, IWalletProvider walletProvider) {
 			this.walletProvider = (IWalletProviderInternal) walletProvider;
 
-			this.resourceAccessScheduler = new ThreadExclusionResourceAccessScheduler();
-			this.resourceAccessScheduler.Start();
+			this.centralCoordinator = centralCoordinator;
+			this.RecursiveResourceAccessScheduler = new RecursiveResourceAccessScheduler<IWalletProviderInternal>(this.walletProvider);
 		}
+
 
 		public string GetChainDirectoryPath() {
 			return this.walletProvider.GetChainDirectoryPath();
@@ -119,101 +124,113 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.walletProvider.RemovePIDLock();
 		}
 
-		public long LowestAccountBlockSyncHeight => this.ScheduleRead(() => this.walletProvider.LowestAccountBlockSyncHeight);
-		public bool Synced => this.ScheduleRead(() => this.walletProvider.Synced);
+		public long? LowestAccountBlockSyncHeight => this.ScheduleRead(() => this.walletProvider.LowestAccountBlockSyncHeight);
+		public bool? Synced => this.ScheduleRead(() => this.walletProvider.Synced);
 
 		public bool? SyncedNoWait {
 			get {
-				(bool result, bool completed) = this.ScheduleReadNoWait(provider => provider.Synced);
+				(bool? result, bool completed) = this.ScheduleReadNoWait(provider => provider.Synced);
 
 				return completed ? (bool?) result : null;
 			}
 		}
 
 		public bool WalletContainsAccount(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.WalletContainsAccount(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.WalletContainsAccount(accountUuid));
 		}
 
 		public List<IWalletAccount> GetWalletSyncableAccounts(long blockId) {
-			return this.ScheduleRead(() => this.walletProvider.GetWalletSyncableAccounts(blockId));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetWalletSyncableAccounts(blockId));
 		}
 
 		public IAccountFileInfo GetAccountFileInfo(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.GetAccountFileInfo(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetAccountFileInfo(accountUuid));
 		}
 
 		public List<IWalletAccount> GetAccounts() {
-			return this.ScheduleRead(() => this.walletProvider.GetAccounts());
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetAccounts());
 		}
 
 		public List<IWalletAccount> GetAllAccounts() {
-			return this.ScheduleRead(() => this.walletProvider.GetAllAccounts());
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetAllAccounts());
 		}
 
 		public Guid GetAccountUuid() {
-			return this.ScheduleRead(() => this.walletProvider.GetAccountUuid());
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetAccountUuid());
 		}
 
 		public AccountId GetPublicAccountId() {
-			return this.ScheduleRead(() => this.walletProvider.GetPublicAccountId());
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetPublicAccountId());
 		}
 
 		public AccountId GetPublicAccountId(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.GetPublicAccountId(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetPublicAccountId(accountUuid));
 		}
 
 		public AccountId GetAccountUuidHash() {
-			return this.ScheduleRead(() => this.walletProvider.GetAccountUuidHash());
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetAccountUuidHash());
 		}
 
 		public bool IsDefaultAccountPublished => this.ScheduleRead(() => this.walletProvider.IsDefaultAccountPublished);
 
 		public bool IsAccountPublished(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.IsAccountPublished(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.IsAccountPublished(accountUuid));
 		}
 		
 		public IWalletAccount GetActiveAccount() {
-			return this.ScheduleRead(() => this.walletProvider.GetActiveAccount());
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetActiveAccount());
 		}
 
 		public IWalletAccount GetWalletAccount(Guid id) {
-			return this.ScheduleRead(() => this.walletProvider.GetWalletAccount(id));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetWalletAccount(id));
 		}
 
 		public IWalletAccount GetWalletAccount(string name) {
-			return this.ScheduleRead(() => this.walletProvider.GetWalletAccount(name));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetWalletAccount(name));
 		}
 
 		public IWalletAccount GetWalletAccount(AccountId accountId) {
-			return this.ScheduleRead(() => this.walletProvider.GetWalletAccount(accountId));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetWalletAccount(accountId));
+		}
+		
+		public Dictionary<AccountId, int> ClearTimedOutTransactions() {
+			return this.ScheduleKeyedWrite(() => this.walletProvider.ClearTimedOutTransactions());
+		}
+
+		public bool ResetTimedOutWalletEntries(List<(Guid accountUuid, string name)> forcedKeys = null) {
+			return this.ScheduleKeyedWrite(() => this.walletProvider.ResetTimedOutWalletEntries(forcedKeys));
+		}
+
+		public bool ResetAllTimedOut(List<(Guid accountUuid, string name)> forcedKeys = null) {
+			return this.ScheduleKeyedWrite(() => this.walletProvider.ResetAllTimedOut(forcedKeys));
 		}
 
 		public List<WalletTransactionHistoryHeaderAPI> APIQueryWalletTransactionHistory(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletTransactionHistory(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.APIQueryWalletTransactionHistory(accountUuid));
 		}
 
 		public WalletTransactionHistoryDetailsAPI APIQueryWalletTransationHistoryDetails(Guid accountUuid, string transactionId) {
-			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletTransationHistoryDetails(accountUuid, transactionId));
+			return this.ScheduleKeyedRead(() => this.walletProvider.APIQueryWalletTransationHistoryDetails(accountUuid, transactionId));
 		}
 
 		public WalletInfoAPI APIQueryWalletInfoAPI() {
-			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletInfoAPI());
+			return this.ScheduleKeyedRead(() => this.walletProvider.APIQueryWalletInfoAPI());
 		}
 
 		public List<WalletAccountAPI> APIQueryWalletAccounts() {
-			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletAccounts());
+			return this.ScheduleKeyedRead(() => this.walletProvider.APIQueryWalletAccounts());
 		}
 
 		public WalletAccountDetailsAPI APIQueryWalletAccountDetails(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletAccountDetails(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.APIQueryWalletAccountDetails(accountUuid));
 		}
 
 		public TransactionId APIQueryWalletAccountPresentationTransactionId(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.APIQueryWalletAccountPresentationTransactionId(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.APIQueryWalletAccountPresentationTransactionId(accountUuid));
 		}
 
 		public List<TransactionId> GetElectionCacheTransactions(IWalletAccount account) {
-			return this.ScheduleRead(() => this.walletProvider.GetElectionCacheTransactions(account));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetElectionCacheTransactions(account));
 		}
 
 		public SynthesizedBlock ExtractCachedSynthesizedBlock(long blockId) {
@@ -274,35 +291,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public IWalletStandardAccountSnapshot CreateNewWalletStandardAccountSnapshot(IWalletAccount account) {
-			return this.ScheduleRead(() => this.walletProvider.CreateNewWalletStandardAccountSnapshot(account));
+			return this.ScheduleKeyedWrite(() => this.walletProvider.CreateNewWalletStandardAccountSnapshot(account));
 		}
 
 		public IWalletJointAccountSnapshot CreateNewWalletJointAccountSnapshot(IWalletAccount account) {
-			return this.ScheduleRead(() => this.walletProvider.CreateNewWalletJointAccountSnapshot(account));
+			return this.ScheduleKeyedWrite(() => this.walletProvider.CreateNewWalletJointAccountSnapshot(account));
 		}
 
 		public IWalletStandardAccountSnapshot CreateNewWalletStandardAccountSnapshot(IWalletAccount account, IWalletStandardAccountSnapshot accountSnapshot) {
-			return this.ScheduleRead(() => this.walletProvider.CreateNewWalletStandardAccountSnapshot(account, accountSnapshot));
+			return this.ScheduleKeyedWrite(() => this.walletProvider.CreateNewWalletStandardAccountSnapshot(account, accountSnapshot));
 		}
 
 		public IWalletJointAccountSnapshot CreateNewWalletJointAccountSnapshot(IWalletAccount account, IWalletJointAccountSnapshot accountSnapshot) {
-			return this.ScheduleRead(() => this.walletProvider.CreateNewWalletJointAccountSnapshot(account, accountSnapshot));
+			return this.ScheduleKeyedWrite(() => this.walletProvider.CreateNewWalletJointAccountSnapshot(account, accountSnapshot));
 		}
 
 		public IWalletStandardAccountSnapshot CreateNewWalletStandardAccountSnapshotEntry() {
-			return this.ScheduleRead(() => this.walletProvider.CreateNewWalletStandardAccountSnapshotEntry());
+			return this.ScheduleKeyedWrite(() => this.walletProvider.CreateNewWalletStandardAccountSnapshotEntry());
 		}
 
 		public IWalletJointAccountSnapshot CreateNewWalletJointAccountSnapshotEntry() {
-			return this.ScheduleRead(() => this.walletProvider.CreateNewWalletJointAccountSnapshotEntry());
+			return this.ScheduleKeyedWrite(() => this.walletProvider.CreateNewWalletJointAccountSnapshotEntry());
 		}
 
 		public IWalletAccountSnapshot GetWalletFileInfoAccountSnapshot(Guid accountUuid) {
-			return this.ScheduleRead(() => this.walletProvider.GetWalletFileInfoAccountSnapshot(accountUuid));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetWalletFileInfoAccountSnapshot(accountUuid));
 		}
 
 		public IWalletAccountSnapshot GetAccountSnapshot(AccountId accountId) {
-			return this.ScheduleRead(() => this.walletProvider.GetAccountSnapshot(accountId));
+			return this.ScheduleKeyedRead(() => this.walletProvider.GetAccountSnapshot(accountId));
 		}
 
 		public void Initialize() {
@@ -331,51 +348,51 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public bool AllAccountsHaveSyncStatus(SynthesizedBlock block, WalletAccountChainState.BlockSyncStatuses status) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.AllAccountsHaveSyncStatus(block, status);
 			});
 		}
 
 		public bool AllAccountsUpdatedWalletBlock(SynthesizedBlock block) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.AllAccountsUpdatedWalletBlock(block);
 			});
 		}
 
 		public bool AllAccountsUpdatedWalletBlock(SynthesizedBlock block, long previousBlockId) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.AllAccountsUpdatedWalletBlock(block, previousBlockId);
 			});
 		}
 
 		public void UpdateWalletBlock(SynthesizedBlock block) {
-			this.walletProvider.UpdateWalletBlock(block);
+			this.ScheduleKeyedWrite(() => this.walletProvider.UpdateWalletBlock(block));
 		}
 
 		public void UpdateWalletBlock(SynthesizedBlock block, long previousBlockId) {
-			this.walletProvider.UpdateWalletBlock(block, previousBlockId);
+			this.ScheduleKeyedWrite(() => this.walletProvider.UpdateWalletBlock(block, previousBlockId));
 		}
 
 		public void UpdateWalletKeyLogs(SynthesizedBlock block) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateWalletKeyLogs(block);
 			});
 		}
 
 		public bool AllAccountsWalletKeyLogSet(SynthesizedBlock block) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.AllAccountsWalletKeyLogSet(block);
 			});
 		}
 
 		public bool SetActiveAccount(string name) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.SetActiveAccount(name);
 			});
 		}
 
 		public bool SetActiveAccount(Guid accountUuid) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.SetActiveAccount(accountUuid);
 			});
 		}
@@ -393,226 +410,226 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public void UpdateWalletSnapshotFromDigest(IAccountSnapshotDigestChannelCard accountCard) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateWalletSnapshotFromDigest(accountCard);
 			});
 		}
 
 		public void UpdateWalletSnapshotFromDigest(IStandardAccountSnapshotDigestChannelCard accountCard) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateWalletSnapshotFromDigest(accountCard);
 			});
 		}
 
 		public void UpdateWalletSnapshotFromDigest(IJointAccountSnapshotDigestChannelCard accountCard) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateWalletSnapshotFromDigest(accountCard);
 			});
 		}
 
 		public void UpdateWalletSnapshot(IAccountSnapshot accountSnapshot) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateWalletSnapshot(accountSnapshot);
 			});
 		}
 
 		public void UpdateWalletSnapshot(IAccountSnapshot accountSnapshot, Guid accountUuid) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateWalletSnapshot(accountSnapshot, accountUuid);
 			});
 		}
 
 		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.ChangeWalletEncryption(correlationContext, encryptWallet, encryptKeys, encryptKeysIndividually, passphrases);
 			});
 		}
 
 		public void SaveWallet() {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.SaveWallet();
 			});
 		}
 
 		public IWalletAccount CreateNewAccount(string name, bool encryptKeys, bool encryptKeysIndividually, CorrelationContext correlationContext, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, SystemEventGenerator.AccountCreationStepSet accountCreationStepSet, bool setactive = false) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.CreateNewAccount(name, encryptKeys, encryptKeysIndividually, correlationContext, walletCreationStepSet, accountCreationStepSet, setactive);
 			});
 		}
 
 		public bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases, walletCreationStepSet, accountCreatedCallback);
 			});
 		}
 
 		public bool CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases);
 			});
 		}
 
-		public void InsertKeyLogTransactionEntry(IWalletAccount account, TransactionIdExtended transactionId, byte keyOrdinalId) {
-			this.ScheduleWrite(() => {
-				this.walletProvider.InsertKeyLogTransactionEntry(account, transactionId, keyOrdinalId);
+		public void InsertKeyLogTransactionEntry(IWalletAccount account, TransactionId transactionId, KeyUseIndexSet keyUseIndexSet, byte keyOrdinalId) {
+			this.ScheduleKeyedWrite(() => {
+				this.walletProvider.InsertKeyLogTransactionEntry(account, transactionId, keyUseIndexSet, keyOrdinalId);
 			});
 		}
 
 		public void InsertKeyLogBlockEntry(IWalletAccount account, BlockId blockId, byte keyOrdinalId, KeyUseIndexSet keyUseIndex) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.InsertKeyLogBlockEntry(account, blockId, keyOrdinalId, keyUseIndex);
 			});
 		}
 
 		public void InsertKeyLogDigestEntry(IWalletAccount account, int digestId, byte keyOrdinalId, KeyUseIndexSet keyUseIndex) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.InsertKeyLogDigestEntry(account, digestId, keyOrdinalId, keyUseIndex);
 			});
 		}
 
 		public void InsertKeyLogEntry(IWalletAccount account, string eventId, Enums.BlockchainEventTypes eventType, byte keyOrdinalId, KeyUseIndexSet keyUseIndex) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.InsertKeyLogEntry(account, eventId, eventType, keyOrdinalId, keyUseIndex);
 			});
 		}
 
 		public void ConfirmKeyLogBlockEntry(IWalletAccount account, BlockId blockId, long confirmationBlockId) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.ConfirmKeyLogBlockEntry(account, blockId, confirmationBlockId);
 			});
 		}
 
-		public void ConfirmKeyLogTransactionEntry(IWalletAccount account, TransactionIdExtended transactionId, long confirmationBlockId) {
-			this.ScheduleWrite(() => {
-				this.walletProvider.ConfirmKeyLogTransactionEntry(account, transactionId, confirmationBlockId);
+		public void ConfirmKeyLogTransactionEntry(IWalletAccount account, TransactionId transactionId, KeyUseIndexSet keyUseIndexSet, long confirmationBlockId) {
+			this.ScheduleKeyedWrite(() => {
+				this.walletProvider.ConfirmKeyLogTransactionEntry(account, transactionId, keyUseIndexSet, confirmationBlockId);
 			});
 		}
 
 		public bool KeyLogTransactionExists(IWalletAccount account, TransactionId transactionId) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.KeyLogTransactionExists(account, transactionId);
 			});
 		}
 
 		public IWalletKey CreateBasicKey(string name, Enums.KeyTypes keyType) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.CreateBasicKey(name, keyType);
 			});
 		}
 
 		public T CreateBasicKey<T>(string name, Enums.KeyTypes keyType)
 			where T : IWalletKey {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.CreateBasicKey<T>(name, keyType);
 			});
 		}
 
 		public void HashKey(IWalletKey key) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.HashKey(key);
 			});
 		}
 
 		public void SetChainStateHeight(Guid accountUuid, long blockId) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.SetChainStateHeight(accountUuid, blockId);
 			});
 		}
 
 		public long GetChainStateHeight(Guid accountUuid) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.GetChainStateHeight(accountUuid);
 			});
 		}
 
 		public KeyUseIndexSet GetChainStateLastSyncedKeyHeight(IWalletKey key) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.GetChainStateLastSyncedKeyHeight(key);
 			});
 		}
 
 		public void UpdateLocalChainStateKeyHeight(IWalletKey key) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateLocalChainStateKeyHeight(key);
 			});
 		}
 
 		public IWalletElectionsHistory InsertElectionsHistoryEntry(SynthesizedBlock.SynthesizedElectionResult electionResult, AccountId electedAccountId) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.InsertElectionsHistoryEntry(electionResult, electedAccountId);
 			});
 		}
 
 		public void InsertLocalTransactionCacheEntry(ITransactionEnvelope transactionEnvelope) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.InsertLocalTransactionCacheEntry(transactionEnvelope);
 			});
 		}
 
-		public IWalletTransactionHistory InsertTransactionHistoryEntry(ITransaction transaction, AccountId targetAccountId, string note) {
-			return this.ScheduleWrite(() => {
-				return this.walletProvider.InsertTransactionHistoryEntry(transaction, targetAccountId, note);
+		public List<IWalletTransactionHistory> InsertTransactionHistoryEntry(ITransaction transaction, string note) {
+			return this.ScheduleKeyedWrite(() => {
+				return this.walletProvider.InsertTransactionHistoryEntry(transaction, note);
 			});
 		}
 
 		public void UpdateLocalTransactionCacheEntry(TransactionId transactionId, WalletTransactionCache.TransactionStatuses status, long gossipMessageHash) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.UpdateLocalTransactionCacheEntry(transactionId, status, gossipMessageHash);
 			});
 		}
 
 		public IWalletTransactionHistoryFileInfo UpdateLocalTransactionHistoryEntry(TransactionId transactionId, WalletTransactionHistory.TransactionStatuses status) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedWrite(() => {
 				return this.walletProvider.UpdateLocalTransactionHistoryEntry(transactionId, status);
 			});
 		}
 
 		public IWalletTransactionCache GetLocalTransactionCacheEntry(TransactionId transactionId) {
-			return this.ScheduleWrite(() => {
+			return this.ScheduleKeyedRead(() => {
 				return this.walletProvider.GetLocalTransactionCacheEntry(transactionId);
 			});
 		}
 
 		public void RemoveLocalTransactionCacheEntry(TransactionId transactionId) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.RemoveLocalTransactionCacheEntry(transactionId);
 			});
 		}
 
 		public void CreateElectionCacheWalletFile(IWalletAccount account) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.CreateElectionCacheWalletFile(account);
 			});
 		}
 
 		public void DeleteElectionCacheWalletFile(IWalletAccount account) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.DeleteElectionCacheWalletFile(account);
 			});
 		}
 
 		public void InsertElectionCacheTransactions(List<TransactionId> transactionIds, long blockId, IWalletAccount account) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.InsertElectionCacheTransactions(transactionIds, blockId, account);
 			});
 		}
 
 		public void RemoveBlockElection(long blockId, IWalletAccount account) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.RemoveBlockElection(blockId, account);
 			});
 		}
 
 		public void RemoveBlockElectionTransactions(long blockId, List<TransactionId> transactionIds, IWalletAccount account) {
-			this.ScheduleWrite(() => {
+			this.ScheduleKeyedWrite(() => {
 				this.walletProvider.RemoveBlockElectionTransactions(blockId, transactionIds, account);
 			});
 		}
 
-		public void AddAccountKey<KEY>(Guid accountUuid, KEY key, ImmutableDictionary<int, string> passphrases)
-			where KEY : IWalletKey {
-			this.ScheduleWrite(() => {
-				this.walletProvider.AddAccountKey(accountUuid, key, passphrases);
+		public void AddAccountKey<KEY>(Guid accountUuid, KEY key, ImmutableDictionary<int, string> passphrases, KEY nextKey = null)
+			where KEY : class, IWalletKey {
+			this.ScheduleKeyedWrite(() => {
+				this.walletProvider.AddAccountKey(accountUuid, key, passphrases, nextKey);
 			});
 		}
 
@@ -625,12 +642,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public void UpdateNextKey(Guid accountUuid, IWalletKey nextKey) {
-			this.ScheduleKeyedWrite(() => this.walletProvider.UpdateNextKey(accountUuid, nextKey), () => {
+		public void UpdateNextKey(IWalletKey nextKey) {
+			this.ScheduleKeyedWrite(() => this.walletProvider.UpdateNextKey(nextKey), () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
-				this.walletProvider.EnsureKeyFileIsPresent(accountUuid, nextKey.Name, 1);
-				this.walletProvider.EnsureKeyPassphrase(accountUuid, nextKey.Name, 1);
+				this.walletProvider.EnsureKeyFileIsPresent(nextKey.AccountUuid, nextKey.Name, 1);
+				this.walletProvider.EnsureKeyPassphrase(nextKey.AccountUuid, nextKey.Name, 1);
 			});
 		}
 
@@ -669,6 +686,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
+		public T LoadNextKey<T>(Guid AccountUuid, string keyName)
+			where T : class, IWalletKey {
+			return this.ScheduleKeyedRead(() => this.walletProvider.LoadNextKey<T>(AccountUuid, keyName), () => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+				this.walletProvider.EnsureKeyFileIsPresent(AccountUuid, keyName, 1);
+				this.walletProvider.EnsureKeyPassphrase(AccountUuid, keyName, 1);
+			});
+		}
+		
+		public IWalletKey LoadNextKey(Guid AccountUuid, string keyName) {
+			return this.ScheduleKeyedRead(() => this.walletProvider.LoadNextKey(AccountUuid, keyName), () => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+				this.walletProvider.EnsureKeyFileIsPresent(AccountUuid, keyName, 1);
+				this.walletProvider.EnsureKeyPassphrase(AccountUuid, keyName, 1);
+			});
+		}
 		public IWalletKey LoadKey(Guid AccountUuid, string keyName) {
 			return this.ScheduleKeyedRead(() => this.walletProvider.LoadKey(AccountUuid, keyName), () => {
 				// load wallet & key
@@ -811,6 +846,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
+		public void SwapNextKey(Guid accountUUid, string keyName, bool storeHistory = true) {
+			this.ScheduleKeyedWrite(() => this.walletProvider.SwapNextKey(accountUUid, keyName, storeHistory), () => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+				this.walletProvider.EnsureKeyFileIsPresent(accountUUid, keyName, 1);
+				this.walletProvider.EnsureKeyPassphrase(accountUUid, keyName, 1);
+			});
+		}
+
 		public void EnsureWalletLoaded() {
 
 			this.ScheduleKeyedWrite(() => this.walletProvider.EnsureWalletLoaded(), () => {
@@ -851,15 +895,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public SafeArrayHandle PerformCryptographicSignature(Guid accountUuid, string keyName, SafeArrayHandle message) {
+		public SafeArrayHandle PerformCryptographicSignature(Guid accountUuid, string keyName, SafeArrayHandle message, bool allowPassKeyLimit = false) {
 			return this.ScheduleWrite(() => {
-				return this.walletProvider.PerformCryptographicSignature(accountUuid, keyName, message);
+				return this.walletProvider.PerformCryptographicSignature(accountUuid, keyName, message, allowPassKeyLimit);
 			});
 		}
 
-		public SafeArrayHandle PerformCryptographicSignature(IWalletKey key, SafeArrayHandle message) {
+		public SafeArrayHandle PerformCryptographicSignature(IWalletKey key, SafeArrayHandle message, bool allowPassKeyLimit = false) {
 			return this.ScheduleWrite(() => {
-				return this.walletProvider.PerformCryptographicSignature(key, message);
+				return this.walletProvider.PerformCryptographicSignature(key, message, allowPassKeyLimit);
 			});
 		}
 
@@ -890,23 +934,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, string keyName) {
-			return this.ScheduleTransaction(t => this.walletProvider.SignTransaction(transactionHash, keyName), 20, () => {
+		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, string keyName, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction(t => this.walletProvider.SignTransaction(transactionHash, keyName, allowPassKeyLimit), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 			});
 		}
 
-		public SafeArrayHandle SignTransactionXmss(SafeArrayHandle transactionHash, IXmssWalletKey key) {
-			return this.ScheduleTransaction(t => this.walletProvider.SignTransactionXmss(transactionHash, key), 20, () => {
+		public SafeArrayHandle SignTransactionXmss(SafeArrayHandle transactionHash, IXmssWalletKey key, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction(t => this.walletProvider.SignTransactionXmss(transactionHash, key, allowPassKeyLimit), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 				this.walletProvider.EnsureWalletKeyIsReady(key.AccountUuid, key.Name);
 			});
 		}
 
-		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, IWalletKey key) {
-			return this.ScheduleTransaction(t => this.walletProvider.SignTransaction(transactionHash, key), 20, () => {
+		public SafeArrayHandle SignTransaction(SafeArrayHandle transactionHash, IWalletKey key, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction(t => this.walletProvider.SignTransaction(transactionHash, key, allowPassKeyLimit), 20, () => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 				this.walletProvider.EnsureWalletKeyIsReady(key.AccountUuid, key.Name);
@@ -948,10 +992,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public bool LoadWallet(CorrelationContext correlationContext, string passphrase = null) {
 
-			return this.ScheduleTransaction(t => this.walletProvider.LoadWallet(correlationContext,passphrase), 5*60, () => {
+			return this.ScheduleKeyedRead(t => this.walletProvider.LoadWallet(correlationContext,passphrase),() => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletFileIsPresent();
 				this.walletProvider.EnsureWalletPassphrase(passphrase);
+			}, () => {
+				// we failed
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext);
 			});
 		}
 
@@ -988,19 +1035,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public (K result, bool completed) ScheduleReadNoWait<K>(Func<IWalletProvider, K> action) {
-			return this.resourceAccessScheduler.ScheduleRead(this.walletProvider, action, false);
+			return this.RecursiveResourceAccessScheduler.ScheduleReadNoWait( action);
 		}
 
-		public K ScheduleRead<K>(Func<IWalletProvider, K> action) {
-			return this.resourceAccessScheduler.ScheduleRead(this.walletProvider, action).result;
+		public K  ScheduleRead<K>(Func<IWalletProvider, K> action) {
+			(K result, bool success) = this.RecursiveResourceAccessScheduler.ScheduleRead(action);
+
+			if(success) {
+				return result;
+			}
+			throw new ApplicationException("Failed to acquire resource lock");
 		}
 
 		public bool ScheduleReadNoWait(Action<IWalletProvider> action) {
-			return this.resourceAccessScheduler.ScheduleRead(this.walletProvider, action, false);
+			return this.RecursiveResourceAccessScheduler.ScheduleReadNoWait( action);
 		}
 
 		public void ScheduleRead(Action<IWalletProvider> action) {
-			this.resourceAccessScheduler.ScheduleRead(this.walletProvider, action);
+			this.RecursiveResourceAccessScheduler.ScheduleRead(action);
 		}
 
 		public bool ScheduleReadNoWait(Action action) {
@@ -1015,34 +1067,51 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleWrite(provider => action());
 		}
 
-		public K ScheduleWrite<K>(Func<IWalletProvider, K> action) {
-			return this.resourceAccessScheduler.ScheduleWrite(this.walletProvider, action);
+		public K ScheduleWrite<K>(Func<IWalletProvider, K> action, int timeout = 60) {
+			
+			(K result, bool success) = this.RecursiveResourceAccessScheduler.ScheduleWrite(action, timeout);
+
+			if(success) {
+				return result;
+			}
+			throw new ApplicationException("Failed to acquire resource lock");
 		}
 
-		public void ScheduleWrite(Action<IWalletProvider> action) {
-			this.resourceAccessScheduler.ScheduleWrite(this.walletProvider, action);
+		public void ScheduleWrite(Action<IWalletProvider> action, int timeout = 60) {
+			bool success = this.RecursiveResourceAccessScheduler.ScheduleWrite(action, timeout);
+
+			if(!success) {
+				throw new ApplicationException("Failed to acquire resource lock");
+			}
 		}
 
 		public void ScheduleWrite(Action action) {
 			this.ScheduleWrite(provider => action());
 		}
 
-		private void KeyedAction(Action action, Action preloadKeys = null) {
+		private void KeyedAction(Action action, Action preloadKeys = null, Action failed = null) {
 
 			ITaskStasher taskStasher = TaskContextRegistry.Instance.GetTaskRoutingTaskRoutingContext();
 			CorrelationContext correlationContext = TaskContextRegistry.Instance.GetTaskRoutingCorrelationContext();
 
 			BlockchainEventException walletEventException = null;
 
+			
 			bool initialized = false;
 
 			int attempt = 0;
-
+			int exceptionsCount = 0;
+			
+			void SetException(BlockchainEventException exception) {
+				walletEventException = exception;
+				exceptionsCount++;
+			}
 			do {
 
-				attempt++;
-
-				if(attempt > 3) {
+				if(attempt > 3 || exceptionsCount > 3) {
+					
+					failed?.Invoke();
+					
 					if(walletEventException != null) {
 						throw walletEventException;
 					}
@@ -1065,10 +1134,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					if(walletEventException is WalletDecryptionException walletDecryptionException) {
 						// decryption failed, lets reset the passphrase
 						this.walletProvider.ClearWalletPassphrase();
+						this.walletProvider.CaptureWalletPassphrase(correlationContext, attempt);
 					}
 
 					if(walletEventException is KeyFileMissingException keyFileMissingException) {
-						this.walletProvider.EnsureKeyFileIsPresent(keyFileMissingException.AccountUuid, keyFileMissingException.KeyName, attempt);
+						this.walletProvider.RequestCopyKeyFile(correlationContext, keyFileMissingException.AccountUuid, keyFileMissingException.KeyName, attempt);
 					}
 
 					if(walletEventException is KeyPassphraseMissingException keyPassphraseMissingException) {
@@ -1078,6 +1148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					if(walletEventException is KeyDecryptionException keyDecryptionException) {
 						// decryption failed, lets reset the passphrase
 						this.walletProvider.ClearWalletKeyPassphrase(keyDecryptionException.AccountUuid, keyDecryptionException.KeyName);
+						this.walletProvider.CaptureKeyPassphrase(correlationContext, keyDecryptionException.AccountUuid, keyDecryptionException.KeyName, attempt);
 					}
 
 					taskStasher?.CompleteStash();
@@ -1091,228 +1162,252 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						initialized = true;
 					}
 
+					attempt++;
 					action();
 
 					break;
 
 				} catch(WalletFileMissingException ex) {
-
-					walletEventException = ex;
+					SetException(ex);
 				} catch(WalletPassphraseMissingException ex) {
 
-					walletEventException = ex;
+					SetException(ex);
 				} catch(WalletDecryptionException ex) {
-
-					walletEventException = ex;
+					SetException(ex);
 				} catch(KeyFileMissingException ex) {
 
-					walletEventException = ex;
+					SetException(ex);
 				} catch(KeyPassphraseMissingException ex) {
 
-					walletEventException = ex;
+					SetException(ex);
 				} catch(KeyDecryptionException ex) {
-
-					walletEventException = ex;
+					SetException(ex);
 				}
 
 			} while(true);
 		}
 
-		public K ScheduleKeyedRead<K>(Func<IWalletProvider, K> action, Action prepareAction = null) {
+		public K ScheduleKeyedRead<K>(Func<IWalletProvider, K> action, Action prepareAction = null, Action failure = null) {
 			K result = default;
 
 			this.KeyedAction(() => {
 
 				result = this.ScheduleRead(action);
-			}, prepareAction);
+			}, prepareAction, failure);
 
 			return result;
 		}
 
-		public K ScheduleKeyedRead<K>(Func<K> action, Action prepareAction = null) {
-			return this.ScheduleKeyedRead(provider => action(), prepareAction);
+		public K ScheduleKeyedRead<K>(Func<K> action, Action prepareAction = null, Action failure = null) {
+			return this.ScheduleKeyedRead(provider => action(), prepareAction, failure);
 		}
 
-		public void ScheduleKeyedRead(Action<IWalletProvider> action, Action prepareAction = null) {
+		public void ScheduleKeyedRead(Action<IWalletProvider> action, Action prepareAction = null, Action failure = null) {
 			this.KeyedAction(() => {
 
 				this.ScheduleRead(action);
-			}, prepareAction);
+			}, prepareAction, failure);
 		}
 
-		public void ScheduleKeyedRead(Action action, Action prepareAction = null) {
+		public void ScheduleKeyedRead(Action action, Action prepareAction = null, Action failure = null) {
 
-			this.ScheduleKeyedRead(provider => action(), prepareAction);
+			this.ScheduleKeyedRead(provider => action(), prepareAction, failure);
 		}
 
-		public K ScheduleKeyedWrite<K>(Func<IWalletProvider, K> action, Action prepareAction = null) {
+		public K ScheduleKeyedWrite<K>(Func<IWalletProvider, K> action, Action prepareAction = null, Action failure = null) {
 			K result = default;
 
 			this.KeyedAction(() => {
 
 				result = this.ScheduleWrite(action);
-			}, prepareAction);
+			}, prepareAction, failure);
 
 			return result;
 		}
 
-		public K ScheduleKeyedWrite<K>(Func<K> action, Action prepareAction = null) {
-			return this.ScheduleKeyedWrite(provider => action(), prepareAction);
+		public K ScheduleKeyedWrite<K>(Func<K> action, Action prepareAction = null, Action failure = null) {
+			return this.ScheduleKeyedWrite(provider => action(), prepareAction, failure);
 		}
 
-		public void ScheduleKeyedWrite(Action<IWalletProvider> action, Action prepareAction = null) {
+		public void ScheduleKeyedWrite(Action<IWalletProvider> action, Action prepareAction = null, Action failure = null) {
 			this.KeyedAction(() => {
 
 				this.ScheduleWrite(action);
-			}, prepareAction);
+			}, prepareAction, failure);
 		}
 
-		public void ScheduleKeyedWrite(Action action, Action prepareAction = null) {
-			this.ScheduleKeyedWrite(provider => action(), prepareAction);
+		public void ScheduleKeyedWrite(Action action, Action prepareAction = null, Action failure = null) {
+			this.ScheduleKeyedWrite(provider => action(), prepareAction, failure);
 		}
 
-		public K ScheduleTransactionalKeyedRead<K>(Func<IWalletProvider, CancellationToken, K> action, Action prepareAction = null) {
+		public K ScheduleTransactionalKeyedRead<K>(Func<IWalletProvider, CancellationToken, K> action, Action prepareAction = null, Action failure = null) {
 			K result = default;
 
-			return this.ScheduleTransaction(action, 60, prepareAction);
+			return this.ScheduleTransaction(action, 60, prepareAction, failure);
 		}
 
-		public K ScheduleTransactionalKeyedRead<K>(Func<CancellationToken, K> action, Action prepareAction = null) {
-			return this.ScheduleTransactionalKeyedRead((provider, token) => action(token), prepareAction);
+		public K ScheduleTransactionalKeyedRead<K>(Func<CancellationToken, K> action, Action prepareAction = null, Action failure = null) {
+			return this.ScheduleTransactionalKeyedRead((provider, token) => action(token), prepareAction, failure);
 		}
 
-		public K ScheduleTransaction<K>(Func<IWalletProvider, CancellationToken, K> action, int timeout = 60, Action prepareAction = null) {
+		public K ScheduleTransaction<K>(Func<IWalletProvider, CancellationToken, K> action, int timeout = 60, Action prepareAction = null, Action failure = null) {
 			K result = default;
+			
+			using(CancellationTokenSource tokenSource = new CancellationTokenSource()) {
 
-			void RunTransaction(Func<IWalletProvider, CancellationToken, K> action2, CancellationToken token) {
-
-				if(this.walletProvider.TransactionInProgress) {
-					// we are in a transaction, just go through
+				void PerformContent() {
 					this.KeyedAction(() => {
-						result = action2(this.walletProvider, token);
-					}, prepareAction);
+						result = action(this.walletProvider, tokenSource.Token);
+					}, prepareAction, failure);
+				}
+				
+				if(this.TransactionInProgress) {
+					// we are in a transaction, just go through
+					PerformContent();
 				} else {
 					// we must create a transaction first...
-					this.walletProvider.PerformWalletTransaction((prov, t) => {
-						this.KeyedAction(() => {
-							result = action2(this.walletProvider, t);
-						}, prepareAction);
-					}, token, (prov, a, t) => {
-						this.resourceAccessScheduler.ScheduleWrite(prov, a);
-					}, (prov, b, t) => {
-						this.resourceAccessScheduler.ScheduleWrite(prov, b);
-					});
-				}
-			}
+					try {
 
-			if(this.resourceAccessScheduler.ThreadLockInProgress && this.resourceAccessScheduler.TheadAllowed) {
-				// we are already in a treadlock and we have access
-				RunTransaction(action, this.resourceAccessScheduler.ActiveToken);
-			} else {
-				// we have to request access too
-				this.resourceAccessScheduler.PerformThreadLock(this.walletProvider, (prov, t) => {
-					RunTransaction(action, t);
-				}, timeout);
+						var token = tokenSource.Token;
+						this.RecursiveResourceAccessScheduler.ScheduleWrite(wp => {
+							this.walletProvider.PerformWalletTransaction((prov, t) => {
+								PerformContent();
+							}, token, (prov, a, t) => {
+								a(prov);
+									
+								lock(this.transactionalLocker) {
+									if(this.transactionalSuccessActions.Any()) {
+										IndependentActionRunner.Run(this.transactionalSuccessActions.ToArray());
+									}
+								}
+							}, (prov, b, t) => {
+								b(prov);
+							});
+						}, TimeSpan.FromSeconds(timeout));
+						
+					} finally {
+						lock(this.transactionalLocker) {
+							this.transactionalSuccessActions.Clear();
+						}
+					}
+				}
 			}
 
 			return result;
 		}
 
-		public K ScheduleTransaction<K>(Func<CancellationToken, K> action, int timeout = 60, Action prepareAction = null) {
-			return this.ScheduleTransaction((provider, token) => action(token), timeout, prepareAction);
+		public K ScheduleTransaction<K>(Func<CancellationToken, K> action, int timeout = 60, Action prepareAction = null, Action failure = null) {
+			return this.ScheduleTransaction((provider, token) => action(token), timeout, prepareAction, failure);
 		}
 
-		public void ScheduleTransaction(Func<IWalletProvider, CancellationToken, Task> action, int timeout = 60, Action prepareAction = null) {
+		public void ScheduleTransaction(Func<IWalletProvider, CancellationToken, Task> action, int timeout = 60, Action prepareAction = null, Action failure = null) {
 
-			async void RunTransaction(Func<IWalletProvider, CancellationToken, Task> action2, CancellationToken token) {
-				if(this.walletProvider.TransactionInProgress) {
+			using(CancellationTokenSource tokenSource = new CancellationTokenSource()) {
+				
+				if(this.TransactionInProgress) {
 					// we are in a transaction, just go through
 					this.KeyedAction(async () => {
-						await action2(this.walletProvider, token);
+						await action(this.walletProvider, tokenSource.Token);
+					}, prepareAction, failure);
+				} else {
+					// we must create a transaction first...
+
+					try {
+						var token = tokenSource.Token;
+						this.KeyedAction(async () => {
+							
+							this.RecursiveResourceAccessScheduler.ScheduleWrite(wp => {
+								this.walletProvider.PerformWalletTransaction(action, token, (prov, a, t) => {
+									a(prov);
+									
+									lock(this.transactionalLocker) {
+										if(this.transactionalSuccessActions.Any()) {
+											IndependentActionRunner.Run(this.transactionalSuccessActions.ToArray());
+										}
+									}
+								}, (prov, b, t) => {
+									b(prov);
+								});
+							}, TimeSpan.FromSeconds(timeout));
+						}, prepareAction);
+						
+					} finally {
+						lock(this.transactionalLocker) {
+							this.transactionalSuccessActions.Clear();
+						}
+					}
+				}
+			}
+		}
+
+		public void ScheduleTransaction(Action<IWalletProvider, CancellationToken> action, int timeout = 60, Action prepareAction = null, Action failure = null) {
+			
+			using(CancellationTokenSource tokenSource = new CancellationTokenSource()) {
+
+				if(this.TransactionInProgress) {
+					// we are in a transaction, just go through
+					this.KeyedAction(() => {
+						action(this.walletProvider, tokenSource.Token);
 					}, prepareAction);
 				} else {
 					// we must create a transaction first...
-					this.KeyedAction(async () => {
-						this.walletProvider.PerformWalletTransaction(action2, token, (prov, a, t) => {
-							this.resourceAccessScheduler.ScheduleWrite(prov, a);
-						}, (prov, b, t) => {
-							this.resourceAccessScheduler.ScheduleWrite(prov, b);
-						});
-					}, prepareAction);
-				}
-			}
 
-			if(this.resourceAccessScheduler.ThreadLockInProgress && this.resourceAccessScheduler.TheadAllowed) {
-				// we are already in a treadlock and we have access
-				RunTransaction(action, this.resourceAccessScheduler.ActiveToken);
-			} else {
-				// we have to request access too
-				this.resourceAccessScheduler.PerformThreadLock(this.walletProvider, (prov, t) => {
-					RunTransaction(action, t);
-				}, timeout);
+					try {
+						var token = tokenSource.Token;
+						this.KeyedAction(() => {
+							
+							this.RecursiveResourceAccessScheduler.ScheduleWrite(wp => {
+								this.walletProvider.PerformWalletTransaction(action, token, (prov, a, t) => {
+									a(prov);
+
+									lock(this.transactionalLocker) {
+										if(this.transactionalSuccessActions.Any()) {
+											IndependentActionRunner.Run(this.transactionalSuccessActions.ToArray());
+										}
+									}
+								}, (prov, b, t) => {
+									b(prov);
+								});
+								
+							}, TimeSpan.FromSeconds(timeout));
+							
+						}, prepareAction, failure);
+					} finally {
+						lock(this.transactionalLocker) {
+							this.transactionalSuccessActions.Clear();
+						}
+					}
+				}
 			}
 		}
 
-		public void ScheduleTransaction(Action<IWalletProvider, CancellationToken> action, int timeout = 60, Action prepareAction = null) {
-			void RunTransaction(Action<IWalletProvider, CancellationToken> action2, CancellationToken token) {
-				if(this.walletProvider.TransactionInProgress) {
-					// we are in a transaction, just go through
-					this.KeyedAction(() => {
-						action2(this.walletProvider, token);
-					}, prepareAction);
-				} else {
-					// we must create a transaction first...
-					this.KeyedAction(() => {
-						this.walletProvider.PerformWalletTransaction(action2, token, (prov, a, t) => {
-							this.resourceAccessScheduler.ScheduleWrite(prov, a);
-						}, (prov, b, t) => {
-							this.resourceAccessScheduler.ScheduleWrite(prov, b);
-						});
-					}, prepareAction);
-				}
-			}
-
-			if(this.resourceAccessScheduler.ThreadLockInProgress && this.resourceAccessScheduler.TheadAllowed) {
-				// we are already in a treadlock and we have access
-				RunTransaction(action, this.resourceAccessScheduler.ActiveToken);
-			} else {
-				// we have to request access too
-				this.resourceAccessScheduler.PerformThreadLock(this.walletProvider, (prov, t) => {
-					RunTransaction(action, t);
-				}, timeout);
-			}
-		}
+		private readonly object transactionalLocker = new object();
+		private readonly ConcurrentBag<Action> transactionalSuccessActions = new ConcurrentBag<Action>();
 		
-		public void ScheduleChildTransactionalThread(Action action) {
-			this.resourceAccessScheduler.AllowChildThreadLock(action);
+		/// <summary>
+		/// add a list of events to execute only when the current transactions successfully completes. if not in a transaction, it will execute right away
+		/// </summary>
+		/// <param name="actions"></param>
+		public void AddTransactionSuccessActions(List<Action> transactionalSuccessActions) {
+			if(this.TransactionInProgress) {
+				lock(this.transactionalLocker) {
+					foreach(var entry in transactionalSuccessActions) {
+						this.transactionalSuccessActions.Add(entry);
+					}
+				}
+			} else {
+				// the wallet trnasaction is a success. lets run the confirmation events
+				IndependentActionRunner.Run(transactionalSuccessActions.ToArray());
+			}
 		}
 
 		public bool IsActiveTransactionThread(int threadId) {
-			return this.resourceAccessScheduler.ThreadLockInProgress && (this.resourceAccessScheduler.CurrentActiveThread == threadId);
+			return this.RecursiveResourceAccessScheduler.ThreadLockInProgress && (this.RecursiveResourceAccessScheduler.IsActiveTransactionThread(threadId));
 		}
+		
 
-		/// <summary>
-		///     Run the operation as a friend thread. If a transaction is active, the code will be allowed to run. use with
-		///     caution!
-		/// </summary>
-		/// <param name="action"></param>
-		public void RequestFriendlyAccess(Action action) {
-			this.resourceAccessScheduler.RequestFriendlyAccess(action);
-		}
+		public bool IsActiveTransaction => this.RecursiveResourceAccessScheduler.IsCurrentActiveTransactionThread;
 
-		/// <summary>
-		///     Explicitely whitelist a friendly thread in a transaction.
-		/// </summary>
-		/// <param name="threadId"></param>
-		public void WhitelistFriendlyThread(int threadId) {
-			this.resourceAccessScheduler.WhitelistFriendlyThread(threadId);
-		}
-
-		public void RemoveFriendlyThread(int threadId) {
-			this.resourceAccessScheduler.RemoveFriendlyThread(threadId);
-		}
-
-		public bool IsActiveTransaction => this.resourceAccessScheduler.ThreadLockInProgress;
 
 	#endregion
 
@@ -1326,7 +1421,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		private void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				this.resourceAccessScheduler.Stop();
+				this.walletProvider.Dispose();
+				this.RecursiveResourceAccessScheduler.Dispose();
 			}
 			this.IsDisposed = true;
 		}
@@ -1339,5 +1435,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#endregion
 
+		public void Pause() {
+			this.walletProvider.Pause();
+		}
+
+		public void Resume() {
+			this.walletProvider.Resume();
+		}
+
+		public bool TransactionInProgress => this.walletProvider.TransactionInProgress;
 	}
 }

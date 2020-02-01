@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
@@ -19,64 +20,56 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		private IPAddress cacheAdjustedV6Address;
 		public bool Locked { get; set; }
-		
-		public NodeAddressInfo(string ip, int port, Enums.PeerTypes peerType, Dictionary<BlockchainType, ChainSettings> chainSettings, bool locked = false) : this(ip, (int?) port, peerType, chainSettings, locked) {
 
-		}
-
-		public NodeAddressInfo(string ip, int? port, Enums.PeerTypes peerType, Dictionary<BlockchainType, ChainSettings> chainSettings, bool locked = false) : this(ip, port, peerType, locked) {
-			this.ChainSettings = chainSettings;
-		}
-
-		public NodeAddressInfo(string ip, int port, Enums.PeerTypes peerType, bool locked = false) {
+		public NodeAddressInfo(string ip, int port, NodeInfo peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = port == 0 ? null : (int?) port;
-			this.PeerType = this.PeerType;
+			this.PeerInfo = peerType;
 			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(string ip, int? port, Enums.PeerTypes peerType, bool locked = false) {
+		public NodeAddressInfo(string ip, int? port, NodeInfo peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = port;
-			this.PeerType = this.PeerType;
+			this.PeerInfo = peerType;
 			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(string ip, Enums.PeerTypes peerType, bool locked = false) {
+		public NodeAddressInfo(string ip, NodeInfo peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = null;
-			this.PeerType = this.PeerType;
+			this.PeerInfo = peerType;
 			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(IPAddress ip, int port, Enums.PeerTypes peerType, bool locked = false) {
+		public NodeAddressInfo(IPAddress ip, int port, NodeInfo peerType, bool locked = false) {
 			this.Address = ip;
 			this.Port = port == 0 ? null : (int?) port;
-			this.PeerType = this.PeerType;
+			this.PeerInfo = peerType;
 			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(IPAddress ip, int? port, Enums.PeerTypes peerType, bool locked = false) {
+		public NodeAddressInfo(IPAddress ip, int? port, NodeInfo peerType, bool locked = false) {
 			this.Address = ip;
 			this.Port = port;
-			this.PeerType = this.PeerType;
+			this.PeerInfo = peerType;
 			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
 		}
 
-		public NodeAddressInfo(IPAddress ip, Enums.PeerTypes peerType, bool locked = false) {
+		public NodeAddressInfo(IPAddress ip, NodeInfo peerType, bool locked = false) {
 			this.Address = ip;
 			this.Port = null;
-			this.PeerType = this.PeerType;
+			this.PeerInfo = peerType;
 			this.Locked = locked;
 
 			this.UpdateNetworkEndPoint();
@@ -84,6 +77,16 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		private NodeAddressInfo() {
 
+		}
+		
+		/// <summary>
+		/// Get the node type info for the selected blockchain
+		/// </summary>
+		/// <param name="blockchainType"></param>
+		/// <returns></returns>
+		public NodeType GetNodeShareType(BlockchainType blockchainType) {
+
+			return this.PeerInfo.GetNodeShareType(blockchainType);
 		}
 
 		/// <summary>
@@ -93,10 +96,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public NetworkEndPoint NetworkEndPoint { get; private set; }
 
-		/// <summary>
-		///     Here we store the calculated concensus between all peers and the data they sent us. hopefully they all agree!
-		/// </summary>
-		public Dictionary<BlockchainType, ChainSettings> ChainSettings { get; private set; } = new Dictionary<BlockchainType, ChainSettings>();
 
 		public string AdjustedIp => this.AdjustedAddress.ToString();
 
@@ -144,9 +143,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public bool IsIpV4 => IsAddressIpV4(this.address);
 		public bool IsIpv4MappedToIpV6 => IsAddressIpv4MappedToIpV6(this.address);
 
-		public Enums.PeerTypes PeerType { get; set; }
-
-		public bool IsPeerTypeKnown => this.PeerType != Enums.PeerTypes.Unknown;
+		public NodeInfo PeerInfo { get; set; } = new NodeInfo();
+		
+		public bool IsPeerTypeKnown => this.PeerInfo.IsKnown;
 
 		/// <summary>
 		///     here we ensure to always return the actual port, never null
@@ -173,39 +172,20 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public string ScoppedAdjustedIp => $"[{this.AdjustedIp}]:{this.RealPort}";
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
-			dehydrator.Write(this.Ip);
+			dehydrator.Write(IPUtils.IPtoGuid(this.Ip));
 			dehydrator.Write(this.Port);
-			dehydrator.Write((byte) this.PeerType);
+			this.PeerInfo.Dehydrate(dehydrator);
 			dehydrator.Write(this.IsConnectable);
 
-			// now the chain optionsBase
-			dehydrator.Write(this.ChainSettings.Count);
-
-			foreach(var chainSetting in this.ChainSettings) {
-				dehydrator.Write(chainSetting.Key.Value);
-
-				chainSetting.Value.Dehydrate(dehydrator);
-			}
+			
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
-			this.Ip = rehydrator.ReadString();
+			this.Ip = IPUtils.GuidToIPstring(rehydrator.ReadGuid());
 			this.Port = rehydrator.ReadNullableInt();
-			this.PeerType = (Enums.PeerTypes) rehydrator.ReadByte();
+			this.PeerInfo.Rehydrate(rehydrator);
 			this.IsConnectable = rehydrator.ReadBool();
-
-			this.ChainSettings.Clear();
-			int chainSettingCount = rehydrator.ReadInt();
-
-			for(int j = 0; j < chainSettingCount; j++) {
-				BlockchainType chainId = rehydrator.ReadUShort();
-
-				ChainSettings chainSetting = new ChainSettings();
-				chainSetting.Rehydrate(rehydrator);
-
-				this.ChainSettings.Add(chainId, chainSetting);
-			}
-
+			
 			this.UpdateNetworkEndPoint();
 		}
 
@@ -336,7 +316,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public void SetChainSettings(Dictionary<BlockchainType, ChainSettings> chainSettings) {
 
-			this.ChainSettings = chainSettings;
+			this.PeerInfo.SetChainSettings(chainSettings);
 		}
 	}
 }

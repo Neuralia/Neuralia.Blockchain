@@ -1,21 +1,13 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using MoreLinq.Extensions;
 using Neuralia.Blockchains.Tools.Cryptography;
 
 namespace Neuralia.Blockchains.Core.Extensions {
 	public static class CollectionExtensions {
-		public static void Shuffle<T>(this IList<T> list) {
-			int n = list.Count;
-
-			while(n > 1) {
-				n--;
-				int k = GlobalRandom.GetNext(n + 1);
-				T value = list[k];
-				list[k] = list[n];
-				list[n] = value;
-			}
-		}
+		
 
 		public static T[] Concat<T>(this T[] x, T[] y) {
 			if(x == null) {
@@ -32,6 +24,40 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 			return x;
 		}
+		
+		public static ConcurrentDictionary<KEY, ENTRY> ToConcurrentDictionary<SOURCE, KEY, ENTRY>(this IEnumerable<SOURCE> source, Func<SOURCE, KEY> keySelector, Func<SOURCE, ENTRY> elementSelector) {
+			if (source == null)
+			{
+				throw new ArgumentNullException(nameof(source));
+			}
+
+			if (keySelector == null)
+			{
+				throw new ArgumentNullException(nameof(keySelector));
+			}
+
+			if (elementSelector == null)
+			{
+				throw new ArgumentNullException(nameof(elementSelector));
+			}
+
+			if (source is ICollection<SOURCE> collection)
+			{
+				if (collection.Count == 0)
+				{
+					return new ConcurrentDictionary<KEY, ENTRY>();
+				}
+			}
+
+			var d = new ConcurrentDictionary<KEY, ENTRY>();
+			foreach (SOURCE element in source)
+			{
+				d.AddSafe(keySelector(element), elementSelector(element));
+			}
+
+			return d;
+		}
+		
 
 		/// <summary>
 		///     This method will find the consecutive elements in the array and return them in groups.
@@ -84,5 +110,18 @@ namespace Neuralia.Blockchains.Core.Extensions {
 				return entry2.Key.Equals(addIndex(b, index));
 			}).Last()).Where(seq => seq.Count() >= minSequenceCount).Select(seq => seq.OrderBy(entry => entry.Key));
 		}
+		
+		
+		/// <summary>
+		///     this method will wipe a stream with 0s.
+		/// </summary>
+		/// <param name="stream"></param>
+		public static void AddDictionary<T, U>(this Dictionary<T, U> collection, IDictionary<T, U> other) {
+
+			foreach((T key, U value) in other) {
+				collection.Add(key, value);
+			}
+		}
+		
 	}
 }

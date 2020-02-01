@@ -19,12 +19,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public FileSpecs DataFile => this.fileSpecs[DATA_FILE];
 
-		protected override void ResetAllFileSpecs(uint adjustedBlockId, (int index, long startingBlockId) blockIndex) {
+		protected override void ResetAllFileSpecs(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			this.fileSpecs.Add(DATA_FILE, new FileSpecs(this.GetFile(adjustedBlockId, blockIndex), this.fileSystem));
 		}
 
-		public string GetFile(uint adjustedBlockId, (int index, long startingBlockId) blockIndex) {
+		public string GetFile(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return Path.Combine(this.GetBlocksIndexFolderPath(blockIndex.index), this.GetFileName(adjustedBlockId));
 		}

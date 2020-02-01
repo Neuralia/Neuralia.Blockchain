@@ -4,8 +4,10 @@ using System.IO.Pipelines;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Network.ReadingContexts;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Pipelines.Sockets.Unofficial;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
 	public class TcpDuplexConnection : TcpConnection<PipelineReadingContext> {
@@ -22,23 +24,25 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected override void SocketNewlyConnected() {
-			if(this.clientPipe == null) {
-				//TODO: ensure that this buffer is the right size. for now, default multiplied by 9 seems to be a good value
-				// lets set our options. We first increase the buffer size to 294912 BYTES
-				int minimumSegmentSize = PipeOptions.Default.MinimumSegmentSize * 9;
-
-				// reverse determine it from this calculation. usually, it will be equal to 16 as per source code.
-				int segmentPoolSize = (int) PipeOptions.Default.PauseWriterThreshold / PipeOptions.Default.MinimumSegmentSize;
-
-				int defaultResumeWriterThreshold = (minimumSegmentSize * segmentPoolSize) / 2;
-				int defaultPauseWriterThreshold = minimumSegmentSize * segmentPoolSize;
-				this.receiveBufferSize = defaultPauseWriterThreshold;
-
-				PipeOptions receivePipeOptions = new PipeOptions(null, null, null, defaultPauseWriterThreshold, defaultResumeWriterThreshold, minimumSegmentSize);
-				PipeOptions sendPipeOptions = new PipeOptions(null, null, null, PipeOptions.Default.PauseWriterThreshold, PipeOptions.Default.ResumeWriterThreshold, PipeOptions.Default.MinimumSegmentSize, PipeOptions.Default.UseSynchronizationContext);
-
-				this.clientPipe = SocketConnection.Create(this.socket, sendPipeOptions, receivePipeOptions);
+			if(this.clientPipe != null) {
+				return;
 			}
+
+			//TODO: ensure that this buffer is the right size. for now, default multiplied by 9 seems to be a good value
+			// lets set our options. We first increase the buffer size to 294912 BYTES
+			int minimumSegmentSize = PipeOptions.Default.MinimumSegmentSize * 9;
+
+			// reverse determine it from this calculation. usually, it will be equal to 16 as per source code.
+			int segmentPoolSize = (int) PipeOptions.Default.PauseWriterThreshold / PipeOptions.Default.MinimumSegmentSize;
+
+			int defaultResumeWriterThreshold = (minimumSegmentSize * segmentPoolSize) / 2;
+			int defaultPauseWriterThreshold = minimumSegmentSize * segmentPoolSize;
+			this.receiveBufferSize = defaultPauseWriterThreshold;
+
+			PipeOptions receivePipeOptions = new PipeOptions(null, null, null, defaultPauseWriterThreshold, defaultResumeWriterThreshold, minimumSegmentSize);
+			PipeOptions sendPipeOptions = new PipeOptions(null, null, null, PipeOptions.Default.PauseWriterThreshold, PipeOptions.Default.ResumeWriterThreshold, PipeOptions.Default.MinimumSegmentSize, PipeOptions.Default.UseSynchronizationContext);
+			const SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.ZeroLengthReads; 
+			this.clientPipe = SocketConnection.Create(this.socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions);
 		}
 
 		/// <summary>
@@ -46,7 +50,6 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// </summary>
 		/// <param name="message"></param>
 		protected override void WritePart(in ReadOnlySpan<byte> message) {
-
 			this.clientPipe.Output.Write(message);
 		}
 
@@ -60,7 +63,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected static ValueTask<bool> Flush(PipeWriter writer) {
-			bool GetResult(FlushResult flush) {
+			static bool GetResult(FlushResult flush) {
 				return !(flush.IsCanceled || flush.IsCompleted);
 			}
 
@@ -82,16 +85,14 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected override void DisposeSocket() {
+
 			try {
-
-				this.clientPipe?.Input.CancelPendingRead();
-				this.clientPipe?.Output.CancelPendingFlush();
-
-				this.clientPipe?.Input.Complete();
-				this.clientPipe?.Output.Complete();
-			} catch {
+				this.CompleteWrite().Wait(TimeSpan.FromSeconds(3));
+			}catch {
 				// do nothing, we tried
 			}
+
+			base.DisposeSocket();
 
 			try {
 				this.clientPipe?.Dispose();
@@ -105,29 +106,5 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 	}
 
-	public struct PipelineReadingContext : ITcpReadingContext {
-
-		public readonly ReadResult readResult;
-		public readonly PipeReader reader;
-
-		public PipelineReadingContext(ReadResult readResult, PipeReader reader) {
-			this.readResult = readResult;
-			this.reader = reader;
-		}
-
-		public bool IsCanceled => this.readResult.IsCanceled;
-		public bool IsCompleted => this.readResult.IsCompleted;
-		public bool IsEmpty => this.readResult.Buffer.IsEmpty;
-		public long Length => this.readResult.Buffer.Length;
-
-		public void DataRead(int amount) {
-			this.reader.AdvanceTo(this.readResult.Buffer.GetPosition(amount));
-		}
-
-		public void CopyTo(in Span<byte> dest, int srcOffset, int destOffset, int length) {
-			this.readResult.Buffer.Slice(srcOffset, length).CopyTo(dest.Slice(destOffset, length));
-		}
-
-		public byte this[int i] => this.readResult.Buffer.Slice(i, 1).First.Span[0];
-	}
+	
 }

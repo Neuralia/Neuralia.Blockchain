@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Neuralia.Blockchains.Core.Network.ReadingContexts;
 
 namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 	public abstract class AdaptiveNumber<T> : ITreeHashable, IBinarySerializable, IEquatable<AdaptiveNumber<T>>, IComparable<T>, IComparable<AdaptiveNumber<T>>
@@ -62,15 +63,15 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			}
 		}
 
-		public void Dehydrate(IDataDehydrator dehydrator) {
+		public virtual void Dehydrate(IDataDehydrator dehydrator) {
 
 			var data = this.GetShrunkBytes();
 			dehydrator.WriteRawArray(data);
 		}
 
-		public void Rehydrate(IDataRehydrator rehydrator) {
+		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.ReadData(() => rehydrator.ReadByte(), (in Span<byte> longbytes, int start, int length) => rehydrator.ReadBytes(longbytes, start, length));
+			this.ReadData(rehydrator.ReadByte, (in Span<byte> longbytes, int start, int length) => rehydrator.ReadBytes(longbytes, start, length));
 		}
 
 		public int CompareTo(AdaptiveNumber<T> other) {

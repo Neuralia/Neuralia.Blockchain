@@ -10,15 +10,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 
 		public XMSSExecutionContext(Func<IDigest> digestFactory, SecureRandom random) {
 			this.DigestFactory = digestFactory;
-			this.DigestPool = new ObjectPool<IDigest>(() => this.DigestFactory());
+			this.DigestPool = new ObjectPool<IDigest>(() => this.DigestFactory(), 0, 2);
 
 			IDigest digest = this.DigestPool.GetObject();
 			this.DigestSize = digest.GetDigestSize();
 			this.DigestPool.PutObject(digest);
 
-			this.OtsHashAddressPool = new ObjectPool<OtsHashAddress>(() => new OtsHashAddress());
-			this.LTreeAddressPool = new ObjectPool<LTreeAddress>(() => new LTreeAddress());
-			this.HashTreeAddressPool = new ObjectPool<HashTreeAddress>(() => new HashTreeAddress());
+			this.OtsHashAddressPool = new ObjectPool<OtsHashAddress>(() => new OtsHashAddress(), 0, 2);
+			this.LTreeAddressPool = new ObjectPool<LTreeAddress>(() => new LTreeAddress(), 0, 2);
+			this.HashTreeAddressPool = new ObjectPool<HashTreeAddress>(() => new HashTreeAddress(), 0, 2);
 
 			this.Random = random;
 		}

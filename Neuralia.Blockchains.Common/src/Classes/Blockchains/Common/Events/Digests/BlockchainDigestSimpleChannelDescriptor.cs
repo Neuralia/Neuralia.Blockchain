@@ -37,12 +37,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 		public long TotalEntries { get; set; }
 		public long LastEntryId { get; set; }
+		public ushort ChannelType { get; set; }
 
-		public new ComponentVersion<DigestChannelType> Version { get; set; }
-
+		public void SetVersion(ComponentVersion<DigestChannelType> version) {
+			this.Version = version;
+		}
+		
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
+			this.ChannelType = rehydrator.ReadUShort();
 			this.GroupSize = rehydrator.ReadInt();
 			this.TotalEntries = rehydrator.ReadLong();
 			this.LastEntryId = rehydrator.ReadLong();
@@ -51,6 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
+			dehydrator.Write(this.ChannelType);
 			dehydrator.Write(this.GroupSize);
 			dehydrator.Write(this.TotalEntries);
 			dehydrator.Write(this.LastEntryId);

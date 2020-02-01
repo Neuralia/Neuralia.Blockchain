@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.Base;
 using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages;
 using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Serilog;
 
@@ -26,18 +27,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			var serverPeerListReply = this.MessageFactory.CreateServerPeerListRequestSet(this.triggerMessage.Header);
 
 			Log.Verbose($"Received peer list request from peer {this.ClientConnection.ScoppedAdjustedIp}");
-
-			ConnectionStore.PeerSelectionHeuristic heuristic = ConnectionStore.PeerSelectionHeuristic.Any;
-
-			//TODO: review this to ensure proper selection
-			if(this.triggerMessage.Message.PeerTypeSupport.HasValue) {
-				if(this.triggerMessage.Message.PeerTypeSupport.Value.HasFlag(Enums.PeerTypeSupport.GossipBasic)) {
-					heuristic = ConnectionStore.PeerSelectionHeuristic.Powers;
-				}
-			}
-
+			
 			// lets send the server our list of nodeAddressInfo IPs
-			serverPeerListReply.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(heuristic, new[] {this.ClientConnection.NodeAddressInfoInfo}.ToList(), 20));
+			serverPeerListReply.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(this.triggerMessage.Message.NodeInfo, this.triggerMessage.Message.NodeInfo.GetSupportedBlockchains(), NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {this.ClientConnection.NodeAddressInfo}.ToList(), 20));
 
 			if(!this.Send(serverPeerListReply)) {
 				Log.Verbose($"Connection with peer  {this.ClientConnection.ScoppedAdjustedIp} was terminated");
@@ -45,7 +37,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 				return;
 			}
 
-			Log.Verbose($"We sent {serverPeerListReply.Message.nodes.Select(n => n.Value.Nodes.Count).Sum()} other peers to peer {this.ClientConnection.ScoppedAdjustedIp} request");
+			Log.Verbose($"We sent {serverPeerListReply.Message.nodes.Nodes.Count} other peers to peer {this.ClientConnection.ScoppedAdjustedIp} request");
 		}
 
 		protected override PeerListRequestMessageFactory<R> CreateMessageFactory() {

@@ -16,8 +16,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		TransactionId CreateTransactionId(long accountSequenceId, Enums.AccountTypes accountType, DateTime chainInception);
 		TransactionId CreateTransactionId(AccountId accountId, long timestamp);
 		TransactionId CreateTransactionId(long accountSequenceId, Enums.AccountTypes accountType, long timestamp);
-		Guid GetTransactionGuid(TransactionId transactionId);
-		TransactionId ParseTransactionGuid(Guid transactionGuid);
+
 	}
 
 	public class BlockchainGuidService : GuidService, IBlockchainGuidService {
@@ -48,65 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 			return new TransactionId(accountSequenceId, accountType, timestamp, this.GetValidScope(timestamp));
 		}
-
-		/// <summary>
-		///     Parse a transction Guid and return a transaction Scope object
-		/// </summary>
-		/// <param name="transactionGuid"></param>
-		/// <returns></returns>
-		public TransactionId ParseTransactionGuid(Guid transactionGuid) {
-			Span<byte> guidSpan = stackalloc byte[16];
-
-#if (NETSTANDARD2_0)
-			Span<byte> tempspan = transactionGuid.ToByteArray();
-			tempspan.CopyTo(guidSpan);
-#else
-			transactionGuid.TryWriteBytes(guidSpan);
-#endif
-
-			Span<byte> span = stackalloc byte[8];
-			guidSpan.Slice(0, 8).CopyTo(span);
-			TypeSerializer.Deserialize(span, out long accountSequenceId);
-
-			Enums.AccountTypes accountType = (Enums.AccountTypes) guidSpan[8];
-
-			span = stackalloc byte[8];
-			guidSpan.Slice(9, 6).CopyTo(span);
-			TypeSerializer.Deserialize(span, out long timestamp);
-
-			byte scope = guidSpan[15];
-
-			return new TransactionId(accountSequenceId, accountType, timestamp, scope);
-		}
-
-		/// <summary>
-		///     Here we create a guid from our transaction information
-		/// </summary>
-		/// <param name="transactionId"></param>
-		/// <returns></returns>
-		public Guid GetTransactionGuid(TransactionId transactionId) {
-			Span<byte> guidSpan = stackalloc byte[16];
-
-			Span<byte> span = stackalloc byte[8];
-			TypeSerializer.Serialize(transactionId.Account.ToLongRepresentation(), span);
-			span.CopyTo(guidSpan.Slice(0, 8));
-
-			guidSpan[8] = transactionId.Account.AccountTypeRaw;
-
-			span = stackalloc byte[6];
-			TypeSerializer.Serialize(transactionId.Timestamp.Value, span);
-			span.CopyTo(guidSpan.Slice(9, 6));
-
-			guidSpan[15] = transactionId.Scope;
-
-#if (NETSTANDARD2_0)
-			return new Guid(guidSpan.ToArray());
-#else
-			return new Guid(guidSpan);
-#endif
-
-		}
-
+		
 		public AccountId CreateTemporaryAccountId(Enums.AccountTypes accountType) {
 			return this.CreateTemporaryAccountId(this.Create(), accountType);
 		}

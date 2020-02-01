@@ -32,6 +32,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public readonly TransactionType ACCREDITATION_CERTIFICATE;
 		public readonly TransactionType DEBUG;
+		public readonly TransactionType DEBUG_KEYED;
+		
 		public readonly TransactionType GENESIS;
 		public readonly TransactionType JOINT_PRESENTATION;
 		public readonly TransactionType KEY_CHANGE;
@@ -49,6 +51,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public readonly TransactionType SET_ACCOUNT_CORRELATION_ID;
 		public readonly TransactionType SIMPLE_PRESENTATION;
 
+		public readonly TransactionType GATED_JUDGEMENT_TRANSACTION;
+		
 		static TransactionTypes() {
 		}
 
@@ -62,6 +66,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.SET_ACCOUNT_RECOVERY = this.CreateBaseConstant();
 			this.SET_ACCOUNT_CORRELATION_ID = this.CreateBaseConstant();
 
+			this.GATED_JUDGEMENT_TRANSACTION = this.CreateBaseConstant();
+
 			this.SetOffset(1_000);
 
 			this.MODERATION_KEY_CHANGE = this.CreateBaseConstant();
@@ -71,8 +77,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.MODERATION_PRESENTATION = this.CreateBaseConstant();
 			this.MODERATION_OPERATING_RULES = this.CreateBaseConstant();
 			this.MODERATION_ELECTION_POOL_PRESENTATION = this.CreateBaseConstant();
+			
+			
 
 			this.DEBUG = this.CreateBaseConstant();
+			this.DEBUG_KEYED = this.CreateBaseConstant();
 			this.NONE = this.CreateBaseConstant();
 		}
 

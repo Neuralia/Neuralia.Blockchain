@@ -22,10 +22,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
 		protected readonly SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet;
-		private IStandardPresentationTransaction presentationTransaction;
+		private IStandardPresentationTransaction PresentationTransaction => (IStandardPresentationTransaction)this.transaction;
 		private Guid? accountUuId;
 		
-		public CreatePresentationTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext, Guid? accountUuId) : base(centralCoordinator, null, correlationContext) {
+		public CreatePresentationTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, CorrelationContext correlationContext, Guid? accountUuId) : base(centralCoordinator, expiration, null, correlationContext) {
 			this.accountPublicationStepSet = new SystemEventGenerator.AccountPublicationStepSet();
 			this.accountUuId = accountUuId;
 
@@ -34,12 +34,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected override int Timeout => 60 * 10; // this can be a long process, 10 minutes might be required.
 
 		protected override void PreTransaction() {
-			this.presentationTransaction = this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GeneratePresentationTransaction(this.accountPublicationStepSet, this.correlationContext, this.accountUuId);
+			this.transaction = this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GeneratePresentationTransaction(this.accountPublicationStepSet, this.correlationContext, this.accountUuId, this.expiration);
 
 		}
 
 		protected override ITransactionEnvelope AssembleEvent() {
-			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GeneratePresentationEnvelope(this.presentationTransaction, this.accountPublicationStepSet, this.correlationContext);
+			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GeneratePresentationEnvelope(this.PresentationTransaction, this.accountPublicationStepSet, this.correlationContext, this.expiration);
+		}
+		
+		protected override void ProcessEnvelope(ITransactionEnvelope envelope) {
+			// we already have the transction, no need to do anything here.
 		}
 
 		protected override ValidationResult ValidateContents(ITransactionEnvelope envelope) {
@@ -96,10 +100,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			}
 		}
 
-		protected override List<IRoutedTask> EventValidated(ITransactionEnvelope envelope) {
+		protected override void EventGenerationCompleted(ITransactionEnvelope envelope) {
 
-			var tasks = new List<IRoutedTask>();
-			tasks.AddRange(base.EventValidated(envelope));
+			base.EventGenerationCompleted(envelope);
 
 			//ok, now we mark this account as in process of being published
 
@@ -107,11 +110,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			IWalletAccount account = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();
 
 			account.Status = Enums.PublicationStatus.Dispatched;
-			account.PresentationTransactionId = envelope.Contents.Uuid.SimpleTransactionId;
+			account.PresentationTransactionId = envelope.Contents.Uuid;
+			account.PresentationTransactionTimeout = this.GetTransactionExpiration();
 
 			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet();
-
-			return tasks;
 		}
 	}
 }

@@ -15,8 +15,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public PassiveRepresentativeBallotingRules() {
 
 		}
+		
+		public PassiveRepresentativeBallotingRules(ushort firstTierTotal, ushort secondTierTotal, ushort thirdTierTotal) : base(firstTierTotal, secondTierTotal, thirdTierTotal) {
 
-		public PassiveRepresentativeBallotingRules(ushort amount) : base(amount) {
 		}
 
 		public override HashNodeList GetStructuresArray() {

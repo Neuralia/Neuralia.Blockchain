@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 	public interface IComponentType<T> : IComponentType
 		where T : SimpleUShort<T>, new() {
-		new T Value { get; set; }
+
 	}
 
 	public class ComponentType<T> : AdaptiveShort1_2, IComponentType<T>

@@ -1,4 +1,7 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
@@ -12,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 	/// <summary>
 	///     A secret key is QTesla key we keep secret and use only once.
 	/// </summary>
-	public class SecretDoubleWalletKey : SecretComboWalletKey, ISecretDoubleWalletKey {
+	public abstract class SecretDoubleWalletKey : SecretComboWalletKey, ISecretDoubleWalletKey {
 
 		public QTeslaWalletKey SecondKey { get; set; }
 
@@ -23,5 +26,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 			return nodeList;
 		}
+		
+		public override void Dehydrate(IDataDehydrator dehydrator) {
+			base.Dehydrate(dehydrator);
+			
+			dehydrator.Write(this.SecondKey == null);
+
+			if(this.SecondKey !=  null) {
+				this.SecondKey.Dehydrate(dehydrator);
+			}
+		}
+
+		public override void Rehydrate(IDataRehydrator rehydrator) {
+			base.Rehydrate(rehydrator);
+			
+			bool isNull = rehydrator.ReadBool();
+
+			if(isNull == false) {
+
+				WalletKeyHelper walletKeyHelper = this.CreateWalletKeyHelper();
+				this.SecondKey = walletKeyHelper.CreateKey<QTeslaWalletKey>(rehydrator);
+				this.SecondKey.Rehydrate(rehydrator);
+			}
+		}
+		
+		protected abstract WalletKeyHelper CreateWalletKeyHelper();
 	}
 }

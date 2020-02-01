@@ -7,7 +7,31 @@ using Neuralia.Blockchains.Core.General.Types.Simple;
 namespace Neuralia.Blockchains.Core {
 
 	public class BlockchainType : SimpleUShort<BlockchainType> {
+		public override bool Equals(BlockchainType other) {
 
+			if(ReferenceEquals(null, other)) {
+				return false;
+			}
+
+			return base.Equals(other);
+		}
+
+		public override bool Equals(object obj) {
+			if(ReferenceEquals(null, obj)) {
+				return false;
+			}
+
+			if(ReferenceEquals(this, obj)) {
+				return true;
+			}
+
+			if(obj.GetType() != this.GetType()) {
+				return false;
+			}
+
+			return Equals((BlockchainType) obj);
+		}
+		
 		public BlockchainType() {
 		}
 
@@ -36,12 +60,14 @@ namespace Neuralia.Blockchains.Core {
 		private readonly List<IBlockchainTypeNameProvider> blockchainTypeNameProviders = new List<IBlockchainTypeNameProvider>();
 
 		public readonly BlockchainType None;
+		public readonly BlockchainType All;
 
 		static BlockchainTypes() {
 		}
 
 		protected BlockchainTypes() : base(1000) {
 			this.None = 0;
+			this.All = this.CreateBaseConstant();
 		}
 
 		public static BlockchainTypes Instance { get; } = new BlockchainTypes();

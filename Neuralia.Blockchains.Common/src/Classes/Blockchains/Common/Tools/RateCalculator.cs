@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using MoreLinq.Extensions;
@@ -6,13 +7,13 @@ using MoreLinq.Extensions;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 	public class RateCalculator {
 		
-		private readonly Queue<SyncHistory> insertionHistory = new Queue<SyncHistory>();
+		private readonly ConcurrentQueue<SyncHistory> insertionHistory = new ConcurrentQueue<SyncHistory>();
 
 		public void AddHistoryEntry(long blockId) {
 			this.insertionHistory.Enqueue(new SyncHistory {blockId = blockId, timestamp = DateTime.UtcNow});
 
 			while(this.insertionHistory.Count > 100) {
-				this.insertionHistory.Dequeue();
+				this.insertionHistory.TryDequeue(out var item);
 			}
 		}
 

@@ -29,23 +29,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		}
 
-		protected override List<IRoutedTask> EventValidated(IMessageEnvelope envelope) {
+		protected override void EventGenerationCompleted(IMessageEnvelope envelope) {
+
 			//  we add it to our trusted cache, until it gets confirmed.
-			var messageDispatchTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<int>();
 
-			messageDispatchTask.SetAction((blockchainService, subTaskRouter) => {
-
-				blockchainService.DispatchNewMessage(envelope, this.correlationContext);
-			}, (subResults, subTaskRouter) => {
-				if(subResults.Success) {
-					Log.Information("Dispatch of miner registration blockchain message completed");
-				} else {
-					//TODO: what do we do here?
-					Log.Error(subResults.Exception, "Failed to dispatch miner registration blockchain message");
-				}
-			});
-
-			return new List<IRoutedTask> {messageDispatchTask};
+			try {
+				this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.DispatchNewMessage(envelope, this.correlationContext);
+				Log.Information("Dispatch of miner registration blockchain message completed");
+			} catch(Exception ex) {
+				Log.Error(ex, "Failed to dispatch miner registration blockchain message");
+			}
 		}
 
 		protected override void ValidationFailed(IMessageEnvelope envelope, ValidationResult results) {

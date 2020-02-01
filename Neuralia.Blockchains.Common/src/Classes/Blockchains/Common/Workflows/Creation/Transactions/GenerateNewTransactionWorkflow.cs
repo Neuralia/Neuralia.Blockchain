@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions.Validation;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
@@ -29,53 +31,56 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
 		protected readonly string note;
-
-		public GenerateNewTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, string note, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
+		protected ITransaction transaction;
+		protected readonly byte expiration;
+		public GenerateNewTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, string note, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
 			this.note = note;
+			this.expiration = expiration;
 		}
 
-		protected override List<IRoutedTask> EventValidated(ITransactionEnvelope envelope) {
-			var transactionInsertTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<int>();
+		protected override void EventGenerationCompleted(ITransactionEnvelope envelope) {
+			
+			this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertLocalTransaction(envelope, this.note, this.correlationContext);
+		}
 
-			transactionInsertTask.SetAction((blockchainService, subTaskRouter) => {
+		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
+			
+			try {
+				base.PerformWork(workflow, taskRoutingContext);
+				
+				Log.Information("Insertion of transaction into blockchain completed");
+			} catch(Exception ex) {
+				string message = "Failed to insert transaction into blockchain";
+				Log.Error(ex, message);
+				
+				throw;
+			}
+			
+		}
 
-				blockchainService.InsertLocalTransaction(envelope, this.note, this.correlationContext);
-			}, (subresults, subTaskRouter) => {
-				if(subresults.Success) {
-					Log.Information("Insertion of transaction into blockchain completed");
-
-					//TODO: do we need a transaction created event? we already sent a "TransactionSent" event inside the InsertLocalTransaction method.
-				} else {
-					string message = "Failed to insert transaction into blockchain";
-					Log.Error(subresults.Exception, message);
-
-					if(subresults.Exception is EventValidationException eventValidationException) {
-
-						this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionError(envelope.Contents.Uuid.SimpleTransactionId, eventValidationException.Result.ErrorCodes));
-					}
-
-				}
-			});
-
-			this.RoutedTaskReceiver.DispatchTaskSync(transactionInsertTask);
-
-			return new List<IRoutedTask>();
+		protected override void ProcessEnvelope(ITransactionEnvelope envelope) {
+			this.transaction = envelope.Contents.RehydratedTransaction;
 		}
 
 		protected override void ValidationFailed(ITransactionEnvelope envelope, ValidationResult results) {
 			base.ValidationFailed(envelope, results);
-
-			if(results is TransactionValidationResult transactionValidationResult) {
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.TransactionError(envelope.Contents.Uuid.SimpleTransactionId, transactionValidationResult.ErrorCodes), this.correlationContext);
-			}
 		}
 
 		protected override void ExceptionOccured(Exception ex) {
 			base.ExceptionOccured(ex);
 
-			if(ex is EventGenerationException evex && evex.Envelope is ITransactionEnvelope envelope) {
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.TransactionError(envelope.Contents.Uuid.SimpleTransactionId, null), this.correlationContext);
+			ITransactionEnvelope envelope = null;
+
+			if(ex is AggregateException agex) {
+				if(agex.InnerException is EventGenerationException evex2 && evex2.Envelope is ITransactionEnvelope envelope2) {
+					envelope = envelope2;
+				}
 			}
+			if(ex is EventGenerationException evex && evex.Envelope is ITransactionEnvelope envelope3) {
+				envelope = envelope3;
+			}
+			
+			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.TransactionError(envelope?.Contents.Uuid, null), this.correlationContext);
 		}
 
 		protected override void PerformSanityChecks() {
@@ -92,6 +97,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 				throw new EventGenerationException($"Failed to create transaction. We do not have enough peers. we need a minimum of {chainConfiguration.MinimumDispatchPeerCount}");
 			}
 
+		}
+
+		protected DateTime GetTransactionExpiration() {
+			return this.envelope.GetExpirationTime(this.centralCoordinator.BlockchainServiceSet.TimeService, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
 		}
 	}
 }

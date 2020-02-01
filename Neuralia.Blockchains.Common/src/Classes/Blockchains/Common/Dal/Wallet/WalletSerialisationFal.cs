@@ -114,6 +114,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		protected readonly string ChainFilesDirectoryPath;
 
+		protected readonly bool compressFiles;
+
+		protected readonly ICompression walletCompressor;
+		
 		public WalletSerialisationFal(CENTRAL_COORDINATOR centralCoordinator, string chainFilesDirectoryPath, IFileSystem fileSystem) {
 			this.ChainFilesDirectoryPath = chainFilesDirectoryPath;
 
@@ -121,6 +125,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			this.TransactionalFileSystem = new WalletSerializationTransactionalLayer(this.GetWalletFolderPath(), exclusions, fileSystem);
 
 			this.centralCoordinator = centralCoordinator;
+			this.compressFiles = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.CompressWallet;
+
+			if(this.compressFiles) {
+				this.walletCompressor = new BrotliCompression();
+			} else {
+				this.walletCompressor = new NullCompression();
+			}
 		}
 
 		public WalletSerializationTransactionalLayer TransactionalFileSystem { get; }
@@ -287,15 +298,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				SafeArrayHandle encryptedBytes = null;
 
 				try {
+					//  a temporary holder, do not dispose.
+					SafeArrayHandle activeBytes = null;
+
 					if(encryptionInfo.Encrypt) {
 
 						if(encryptionInfo.EncryptionParameters == null) {
 							throw new ApplicationException("Encryption parameters were null. can not encrypt");
 						}
 
-						compressedBytes = Compressors.WalletCompressor.Compress(databaseBytes);
+						if(this.compressFiles) {
+							compressedBytes = this.walletCompressor.Compress(databaseBytes);
+							activeBytes = compressedBytes;
+						} else {
+							activeBytes = databaseBytes;
+						}
 
-						encryptedBytes = FileEncryptor.Encrypt(compressedBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters);
+						encryptedBytes = FileEncryptor.Encrypt(activeBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters);
 
 						if(wrapEncryptedBytes) {
 							// wrap the encrypted byes with the flag marker
@@ -309,9 +328,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						this.TransactionalFileSystem.OpenWrite(filename, encryptedBytes);
 
 					} else {
-						compressedBytes = Compressors.WalletCompressor.Compress(databaseBytes);
+						if(this.compressFiles) {
+							compressedBytes = this.walletCompressor.Compress(databaseBytes);
+							activeBytes = compressedBytes;
+						} else {
+							activeBytes = databaseBytes;
+						}
 
-						this.TransactionalFileSystem.OpenWrite(filename, compressedBytes);
+						this.TransactionalFileSystem.OpenWrite(filename, activeBytes);
 					}
 				} finally {
 					if(compressedBytes != null) {
@@ -362,13 +386,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					using(SafeArrayHandle decryptedWalletBytes = FileEncryptor.Decrypt(encryptedWalletFileBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters)) {
 
-						return Compressors.WalletCompressor.Decompress(decryptedWalletBytes);
+						if(!this.compressFiles) {
+							return decryptedWalletBytes.Branch();
+						}
+						return this.walletCompressor.Decompress(decryptedWalletBytes);
 					}
 				}
 
-				using(ByteArray walletSimpleBytes = ByteArray.WrapAndOwn(this.TransactionalFileSystem.ReadAllBytes(filename))) {
+				using(SafeArrayHandle walletSimpleBytes = ByteArray.WrapAndOwn(this.TransactionalFileSystem.ReadAllBytes(filename))) {
 
-					return Compressors.WalletCompressor.Decompress(walletSimpleBytes);
+					if(!this.compressFiles) {
+						return walletSimpleBytes.Branch();
+					}
+					return this.walletCompressor.Decompress(walletSimpleBytes);
 				}
 
 			} catch(Exception e) {
@@ -440,7 +470,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				this.centralCoordinator.FileSystem.File.Delete(zipFile);
 			}
 
-			return (resultsFile, ((ByteArray) encryptionParameters.Salt).ToBase58(), encryptionParameters.Iterations);
+			return (resultsFile, encryptionParameters.Salt.Entry.ToBase58(), encryptionParameters.Iterations);
 		}
 
 		public virtual string GetWalletAccountsContentsFolderPath(Guid AccountUuid) {

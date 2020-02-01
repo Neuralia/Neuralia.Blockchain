@@ -26,16 +26,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected readonly AccountId candidateAccountID;
 
 		protected readonly ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo;
-		protected readonly ChainConfigurations.RegistrationMethods registrationMethod;
+		protected readonly AppSettingsBase.ContactMethods registrationMethod;
 
-		public SendElectionsRegistrationMessageWorkflow(AccountId candidateAccountID, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, ChainConfigurations.RegistrationMethods registrationMethod, CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
+		public SendElectionsRegistrationMessageWorkflow(AccountId candidateAccountID, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, AppSettingsBase.ContactMethods registrationMethod, CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
 			this.electionsCandidateRegistrationInfo = electionsCandidateRegistrationInfo;
 			this.registrationMethod = registrationMethod;
 			this.candidateAccountID = candidateAccountID;
 		}
 
 		protected override IMessageEnvelope AssembleEvent() {
-			if(this.registrationMethod == ChainConfigurations.RegistrationMethods.Gossip) {
+			if(this.registrationMethod == AppSettingsBase.ContactMethods.Gossip) {
 
 				return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateOnChainElectionsRegistrationMessage(this.candidateAccountID, this.electionsCandidateRegistrationInfo);
 			} else {

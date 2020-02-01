@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 		/// <summary>
 		///     The IP of the miner
 		/// </summary>
-		public string Ip { get; set; }
+		public Guid Ip { get; set; }
 
 		/// <summary>
 		///     The IP of the miner
@@ -33,6 +33,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 		///     The password to be offered up to begin a confirmation exchange
 		/// </summary>
 		public long Password { get; set; }
+		
+		public Enums.MiningTiers MiningTier { get; set; }
 
 		public byte[] Autograph { get; set; }
 
@@ -53,6 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 			dehydrator.Write(this.Port);
 			dehydrator.Write(this.Password);
 			dehydrator.Write(this.Timestamp);
+			dehydrator.Write((byte)this.MiningTier);
 
 			return dehydrator.ToArray();
 		}
@@ -64,10 +67,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 			this.DelegateAccountId = rehydrator.ReadRehydratable<AccountId>();
 
 			this.ChainType = rehydrator.ReadUShort();
-			this.Ip = rehydrator.ReadString();
+			this.Ip = rehydrator.ReadGuid();
 			this.Port = rehydrator.ReadInt();
 			this.Password = rehydrator.ReadLong();
 			this.Timestamp = rehydrator.ReadDateTime();
+			this.MiningTier = (Enums.MiningTiers)rehydrator.ReadByte();
 		}
 	}
 }

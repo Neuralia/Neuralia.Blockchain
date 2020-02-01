@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -6,16 +7,15 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.DataAccess {
-#if (NETSTANDARD2_0)
-			public interface IEntityFrameworkContext : IDisposableExtended, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbQueryCache, IDbContextPoolable{
-#else
+
+	
+	
 	public interface IEntityFrameworkContext : IDisposableExtended, IAsyncDisposable, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbContextPoolable {
-			
-#endif
 
 		DbContext Context { get; }
 
@@ -23,7 +23,14 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		void EnsureCreated();
 		void ForceFieldModified(object entity, string property);
 
+		DbSet<DBVersion> Versions { get; set; }
+		
 		int SaveChanges();
+		
+	}
+
+	public interface IEntityFrameworkContextInternal: IEntityFrameworkContext {
+		void EnsureVersionCreated(SoftwareVersion softwareVersion);
 	}
 
 	public static class EntityFrameworkContext {
@@ -49,10 +56,11 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		}
 	}
 
-	public abstract class EntityFrameworkContext<TContext> : DbContext, IEntityFrameworkContext
+	public abstract class EntityFrameworkContext<TContext> : DbContext, IEntityFrameworkContext,IEntityFrameworkContextInternal
 		where TContext : DbContext {
 
 		private readonly object locker = new object();
+		public DbSet<DBVersion> Versions { get; set; }
 
 		public EntityFrameworkContext() {
 		}
@@ -132,6 +140,22 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 
 			return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+		}
+
+		public void EnsureVersionCreated(SoftwareVersion softwareVersion) {
+			if(!this.Versions.Any()) {
+				var version = new DBVersion();
+
+				version.Id = 1;
+				version.Major = softwareVersion.Major;
+				version.Minor = softwareVersion.Minor;
+				version.Revision = softwareVersion.Revision;
+				version.LastUpdate = DateTime.UtcNow;
+
+				this.Versions.Add(version);
+
+				this.SaveChanges();
+			}
 		}
 	}
 }

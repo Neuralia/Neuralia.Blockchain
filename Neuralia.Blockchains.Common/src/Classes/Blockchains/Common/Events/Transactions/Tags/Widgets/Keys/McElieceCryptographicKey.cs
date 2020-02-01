@@ -1,3 +1,4 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -54,14 +55,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.JsonDehydrate(jsonDeserializer);
 
 			//
-			jsonDeserializer.SetProperty("McElieceCipherMode", this.McElieceCipherMode);
-			jsonDeserializer.SetProperty("McElieceHashMode", this.McElieceHashMode);
+			jsonDeserializer.SetProperty("McElieceCipherMode", this.McElieceCipherMode.ToString());
+			jsonDeserializer.SetProperty("McElieceHashMode", this.McElieceHashMode.ToString());
 			jsonDeserializer.SetProperty("m", this.M);
 			jsonDeserializer.SetProperty("t", this.T);
 		}
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.MCELIECE;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is IMcElieceWalletKey mcElieceWalletKey) {
+				this.McElieceCipherMode = mcElieceWalletKey.McElieceCipherMode;
+				this.McElieceHashMode = mcElieceWalletKey.McElieceHashMode;
+				this.M = mcElieceWalletKey.M;
+				this.T = mcElieceWalletKey.T;
+			}
 		}
 	}
 }

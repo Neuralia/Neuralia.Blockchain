@@ -79,9 +79,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 							// if we are inside a wallet transaction and we were sent here by the owner of the thread, then we want to pass on the thread access to this child thread.
 							if(currentService.TaskRouter.IsWalletProviderTransaction(task)) {
 								// ok, we are in a wallet transaction. we must pass on the active thread Id to this one
-								currentService.TaskRouter.ScheduleWalletproviderChildTransactionalThread(() => {
-									task.TriggerBaseAction(currentService);
-								});
+								//TODO: what to do here?
+								throw new ApplicationException();
 							} else {
 								// this is a regular call
 								task.TriggerBaseAction(currentService);

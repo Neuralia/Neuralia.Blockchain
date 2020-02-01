@@ -3,41 +3,36 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.Signatures;
 using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Digests;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 	public abstract class XMSSProviderBase : SignatureProviderBase {
 		protected XMSSExecutionContext excutionContext;
 		protected Enums.ThreadMode threadMode;
 
+		public enum hashAlgos{Sha2,Sha3,Blake2}
 		protected int treeHeight;
 
+		public const int BITS_256 = 256;
+		public const int BITS_512 = 512;
+		
 		protected XMSSProviderBase(Enums.KeyHashBits hashBits, int treeHeight, Enums.ThreadMode threadMode) {
 			this.HashBitsEnum = hashBits;
 			this.threadMode = threadMode;
 
-			if(hashBits == Enums.KeyHashBits.SHA3_256) {
-				this.HashBits = 256;
-				this.sha3 = true;
+			if(hashBits.HasFlag((Enums.KeyHashBits)Enums.SHA2)) {
+				this.hashAlgo = hashAlgos.Sha2;
 			}
-
-			if(hashBits == Enums.KeyHashBits.SHA3_384) {
-				this.HashBits = 384;
-				this.sha3 = true;
+			else if(hashBits.HasFlag((Enums.KeyHashBits)Enums.SHA3)) {
+				this.hashAlgo = hashAlgos.Sha3;
 			}
-
-			if(hashBits == Enums.KeyHashBits.SHA3_512) {
-				this.HashBits = 512;
-				this.sha3 = true;
+			else if(hashBits.HasFlag((Enums.KeyHashBits)Enums.BLAKE2)) {
+				this.hashAlgo = hashAlgos.Blake2;
 			}
-
-			if(hashBits == Enums.KeyHashBits.SHA2_256) {
-				this.HashBits = 256;
-				this.sha3 = false;
-			}
-
-			if(hashBits == Enums.KeyHashBits.SHA2_512) {
-				this.HashBits = 512;
-				this.sha3 = false;
+			
+			this.HashBits = BITS_256;
+			if(hashBits.HasFlag((Enums.KeyHashBits)Enums.HASH512)) {
+				this.HashBits = BITS_512;
 			}
 
 			this.treeHeight = treeHeight;
@@ -45,9 +40,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 
 		public abstract int MaximumHeight { get; }
 
-		public int HashBits { get; } = 256;
-		private bool sha3 { get; } = true;
-
+		public int HashBits { get; } = BITS_256;
+		private hashAlgos hashAlgo { get; }= hashAlgos.Sha3;
+		
 		public Enums.KeyHashBits HashBitsEnum { get; } = Enums.KeyHashBits.SHA3_256;
 
 		public int TreeHeight {
@@ -60,16 +55,20 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		}
 
 		protected IDigest GenerateNewDigest() {
+			
+			if(this.hashAlgo == hashAlgos.Sha2) {
+				if(this.HashBits == BITS_256) {
+					return new Sha256DotnetDigest();
+				}
 
-			if(this.sha3) {
-				return new Sha3ExternalDigest(this.HashBits);
+				return new Sha512DotnetDigest();
 			}
 
-			if(this.HashBits == 256) {
-				return new Sha256DotnetDigest();
+			if(this.hashAlgo == hashAlgos.Blake2) {
+				return new Blake2bDigest(this.HashBits);
 			}
 
-			return new Sha512DotnetDigest();
+			return new Sha3ExternalDigest(this.HashBits);
 		}
 
 		public int GetKeyUseThreshold(float percentage) {

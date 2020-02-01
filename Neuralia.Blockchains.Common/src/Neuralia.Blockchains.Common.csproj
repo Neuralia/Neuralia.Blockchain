@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Neuralia.Blockchains.Common</RootNamespace>
     <AssemblyName>Neuralia.Blockchains.Common</AssemblyName>
-    <TargetFrameworks>netstandard2.0;netcoreapp3.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;netcoreapp3.1</TargetFrameworks>
     <PackageId>Neuralia.Blockchains.Common</PackageId>
     <VersionPrefix>1.0.0</VersionPrefix>
   </PropertyGroup>
@@ -25,18 +25,7 @@
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     
     <DebugType>none</DebugType>
-  </PropertyGroup>
-  <!-- code to copy only our dlls to another folder -->
-  <!--<ItemGroup>-->
-    <!--<ModuleFiles Include="$(TargetDir)*.dll;$(TargetDir)*.json;$(TargetDir)*.config" Exclude="$(TargetDir)System*.dll;$(TargetDir)Microsoft*.dll" DestinationPath="$(ProjectDir)bin/Debug/dockercopy/%(Filename)%(Extension)">-->
-    <!--</ModuleFiles>-->
-  <!--</ItemGroup>-->
-  <!--<Target Name="PublishModule" AfterTargets="PostBuildEvent" Inputs="@(ModuleFiles)" Outputs="@(ModuleFiles->'%(DestinationPath)')">-->
-    <!--<Delete Files="$(ProjectDir)bin/Debug/dockercopy/**/*" />-->
-    <!--<WriteLinesToFile File="$(ProjectDir)bin/Debug/netcoreapp2.1/app_offline.htm" />-->
-    <!--<Copy SourceFiles="@(ModuleFiles)" DestinationFiles="@(ModuleFiles->'%(DestinationPath)')" />-->
-    <!--<Delete Files="$(ProjectDir)bin/Debug/netcoreapp2.1/app_offline.htm" />-->
-  <!--</Target>-->
+</PropertyGroup>
   <ItemGroup>
 
     <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.0" />
@@ -45,29 +34,25 @@
     <PackageReference Include="Neuralia.Data.HashFunction.xxHash" Version="1.0.0" />
 
 
-     <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.3.0" />
-    <PackageReference Include="morelinq" Version="3.2.0" />
-    <PackageReference Include="CommandLineParser" Version="2.6.0" />
+     <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.3.2" />
+
+    <PackageReference Include="morelinq" Version="3.3.2" />
+    <PackageReference Include="CommandLineParser" Version="2.7.82" />
     <PackageReference Include="LiteDB" Version="4.1.4" />
-    <PackageReference Include="RestSharp" Version="106.6.10" />
+    <PackageReference Include="RestSharp" Version="106.10.1" />
     <PackageReference Include="RT.Comb" Version="2.3.0" />
     <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0" />
-    <PackageReference Include="Serilog.Exceptions" Version="5.3.1" />
+    <PackageReference Include="Serilog.Exceptions" Version="5.4.0" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="3.0.0" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="3.1.0" />
     <PackageReference Include="Serilog.Sinks.Async" Version="1.4.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="4.1.0" />
-    <PackageReference Include="System.IO.Abstractions" Version="7.0.7" />
-    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="7.0.7" />
+    <PackageReference Include="System.IO.Abstractions" Version="8.0.3" />
+    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="8.0.3" />
     <PackageReference Include="System.Linq.Expressions" Version="4.3.0" />
   </ItemGroup> 
-<ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.0' ">
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="3.0.0" />
-  </ItemGroup>
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="2.2.6" />
-  </ItemGroup>
+
   <ItemGroup>
     <Compile Remove="bin\**" />
   </ItemGroup>
@@ -85,8 +70,5 @@
     <ProjectReference Include="..\..\Neuralia.Blockchains.Core\src\Neuralia.Blockchains.Core.csproj" />
   </ItemGroup>
   
-    <PropertyGroup Condition="'$(SolutionDir)' == '' or&#xA;                     '$(SolutionDir)' == '*undefined*'">
-    <SolutionDir>..\..\</SolutionDir>
-  </PropertyGroup>
-  <Import Project="$(SolutionDir)CommonSettings.targets" />
+   <Import Project="$(MSBuildProjectDirectory)/../../CommonSettings.targets" />
 </Project>

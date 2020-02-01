@@ -101,7 +101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		///     a special method that will load the current starting index from the idnex file, if it is there
 		/// </summary>
 		/// <param name="blockIndex"></param>
-		public void LoadStartingId(uint blockId, (int index, long startingBlockId) blockIndex) {
+		public void LoadStartingId(uint blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 			if(this.StartingId == null) {
 
 				FileSpecs L1FileSpecs = this.CreateL1FileSpec(blockIndex);
@@ -122,7 +122,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			}
 		}
 
-		protected override void ResetAllFileSpecs(uint adjustedBlockId, (int index, long startingBlockId) blockIndex) {
+		protected override void ResetAllFileSpecs(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			base.ResetAllFileSpecs(adjustedBlockId, blockIndex);
 
@@ -131,7 +131,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.fileSpecs.Add(L3_INDEX_BASE_NAME, new FileSpecs(this.GetBlocksL3IndexFile(blockIndex), this.fileSystem));
 		}
 
-		private FileSpecs CreateL1FileSpec((int index, long startingBlockId) blockIndex) {
+		private FileSpecs CreateL1FileSpec((long index, long startingBlockId, long endingBlockId) blockIndex) {
 			return new FileSpecs(this.GetBlocksL1IndexFile(blockIndex), this.fileSystem);
 		}
 
@@ -153,7 +153,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			try {
 				uint adjustedBlockId = this.adjustedBlockId.Value;
-				(int index, long startingBlockId) blockIndex = this.blockIndex;
 
 				bool isFirst = false;
 
@@ -637,7 +636,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				bytes = this.L3_FileSpec.ReadBytes(l3RelativeSize, l3Length);
 
 				if((bytes != null) && bytes.HasData) {
-					DataRehydrator rehydrator = new DataRehydratorV1(bytes, false);
+					IDataRehydrator rehydrator = new DataRehydratorV1(bytes, false);
 
 					AdaptiveInteger2_5 value = new AdaptiveInteger2_5();
 
@@ -688,7 +687,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				}
 			}
 			else {
-				throw new ApplicationException("Failed to load indicies from disk.");
+				//throw new BlockLoadException("Failed to load indicies from disk.");
 			}
 
 			return results;
@@ -698,7 +697,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			var indices = this.QueryIndex(adjustedBlockId);
 
 			if(indices == null) {
-				throw new ApplicationException("Failed to load indicies from disk.");
+				//throw new BlockLoadException("Failed to load indicies from disk.");
+				return null;
 			}
 			var results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
 
@@ -716,20 +716,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return results;
 		}
 
-		public override SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
+		public override SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int masterTransactionIndex) {
 			var indices = this.QueryIndex(adjustedBlockId);
 
 			if(indices == null) {
-				throw new ApplicationException("Failed to load indicies from disk.");
+				//throw new BlockLoadException("Failed to load indicies from disk.");
+				return null;
 			}
 			
 			if(!indices.Entries.Any()) {
 				return null;
 			}
 
-			(long start, int end) index = indices[BlockChannelUtils.BlockChannelTypes.Keys];
+			(long start, int end) = indices[BlockChannelUtils.BlockChannelTypes.Keys];
 
-			return this.KeyedIndexProvider.DataFile.ReadBytes(index.start, index.end);
+			return this.KeyedIndexProvider.DataFile.ReadBytes(start, end);
 		}
 
 		public override ChannelsEntries<long> QueryProviderFileSizes() {
@@ -757,17 +758,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return (l1Index, adjustedL2Id, l2Index);
 		}
 
-		public string GetBlocksL1IndexFile((int index, long startingBlockId) blockIndex) {
+		public string GetBlocksL1IndexFile((long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return Path.Combine(this.GetBlocksIndexFolderPath(blockIndex.index), this.GetL1IndexFileName());
 		}
 
-		public string GetBlocksL2IndexFile((int index, long startingBlockId) blockIndex) {
+		public string GetBlocksL2IndexFile((long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return Path.Combine(this.GetBlocksIndexFolderPath(blockIndex.index), this.GetL2IndexFileName());
 		}
 
-		public string GetBlocksL3IndexFile((int index, long startingBlockId) blockIndex) {
+		public string GetBlocksL3IndexFile((long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return Path.Combine(this.GetBlocksIndexFolderPath(blockIndex.index), this.GetL3IndexFileName());
 		}

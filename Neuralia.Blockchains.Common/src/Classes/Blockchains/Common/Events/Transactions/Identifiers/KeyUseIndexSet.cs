@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Neuralia.Blockchains.Common.Classes.General.Json.Converters;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
@@ -34,14 +35,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.Ordinal = ordinal;
 		}
 
-		public KeyUseIndexSet(string version) : this(version.Replace("[", "").Replace("]", "").Split(',')) {
+		public KeyUseIndexSet(string version) : this(version?.Replace("[", "")?.Replace("]", "")?.Split(',')?.Select(e => e?.Trim())?.ToArray()) {
 
 		}
 
 		public KeyUseIndexSet(string[] version) {
-			this.KeyUseSequenceId = long.Parse(version[0]);
-			this.KeyUseIndex = long.Parse(version[1]);
-			this.Ordinal = byte.Parse(version[2]);
+			if(version == null) {
+				return;
+			}
+
+			if(version.Length >= 1) {
+				if(!string.IsNullOrWhiteSpace(version[0])) {
+					if(long.TryParse(version[0], out long sequenceId)) {
+						this.KeyUseSequenceId = sequenceId;
+					}
+				}
+			}
+			if(version.Length >= 2) {
+				if(!string.IsNullOrWhiteSpace(version[1])) {
+					if(long.TryParse(version[1], out long useIndex)) {
+						this.KeyUseIndex = useIndex;
+					}
+				}
+			}
+			if(version.Length >= 3) {
+				if(!string.IsNullOrWhiteSpace(version[2])) {
+					if(byte.TryParse(version[2], out byte ordinalId)) {
+						this.Ordinal = ordinalId;
+					}
+				}
+			}
 		}
 
 		public KeyUseIndexSet(int keyUseSequenceId, int keyUseIndex, byte ordinal) : this(keyUseSequenceId, (long) keyUseIndex, ordinal) {
@@ -50,7 +73,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public KeyUseIndexSet(KeyUseIndexSet other) : this(other.KeyUseSequenceId, other.KeyUseIndex, other.Ordinal) {
 
 		}
-
+		
 		[JsonIgnore]
 		public KeyUseIndexSet Clone => new KeyUseIndexSet(this);
 
@@ -140,7 +163,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public override string ToString() {
-			return $"[{this.KeyUseSequenceId.Value},{this.KeyUseIndex.Value}, {this.Ordinal}]";
+			return $"[{this.KeyUseSequenceId.Value},{this.KeyUseIndex.Value},{this.Ordinal}]";
 		}
 
 		public override bool Equals(object obj) {

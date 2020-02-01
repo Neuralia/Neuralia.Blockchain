@@ -93,8 +93,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			return this.ConfirmKeyLogEntry(confirmationBlockId.ToString(), Enums.BlockchainEventTypes.Block, confirmationBlockId, null);
 		}
 
-		public bool ConfirmKeyLogTransactionEntry(TransactionIdExtended transactionId, long confirmationBlockId) {
-			return this.ConfirmKeyLogEntry(transactionId.ToEssentialString(), Enums.BlockchainEventTypes.Transaction, confirmationBlockId, transactionId.KeyUseIndex);
+		public bool ConfirmKeyLogTransactionEntry(TransactionId transactionId, KeyUseIndexSet keyUseIndexSet, long confirmationBlockId) {
+			return this.ConfirmKeyLogEntry(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction, confirmationBlockId, keyUseIndexSet);
 		}
 
 		public bool ConfirmKeyLogEntry(string eventId, Enums.BlockchainEventTypes eventType, long confirmationBlockId, KeyUseIndexSet keyUseIndexSet) {
@@ -154,9 +154,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			return this.KeyLogEntryIsConfirmed(blockId.ToString(), Enums.BlockchainEventTypes.Block);
 		}
 
-		public bool KeyLogTransactionIsConfirmed(TransactionIdExtended transactionId) {
+		public bool KeyLogTransactionIsConfirmed(TransactionId transactionId) {
 
-			return this.KeyLogEntryIsConfirmed(transactionId.ToEssentialString(), Enums.BlockchainEventTypes.Transaction);
+			return this.KeyLogEntryIsConfirmed(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction);
 		}
 
 		public bool KeyLogEntryIsConfirmed(string eventId, Enums.BlockchainEventTypes eventType) {

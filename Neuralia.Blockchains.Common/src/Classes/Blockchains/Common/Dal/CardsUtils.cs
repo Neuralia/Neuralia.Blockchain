@@ -1,6 +1,7 @@
 using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Core.General.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
@@ -12,7 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		void Copy(IJointAccountSnapshot source, IJointAccountSnapshot destination);
 		void Copy(IStandardAccountSnapshot source, IStandardAccountSnapshot destination);
 		void Copy(IAccountSnapshot source, IAccountSnapshot destination);
-		void Copy(IAccountFeature source, IAccountFeature destination);
+		void Copy(IAccountAttribute source, IAccountAttribute destination);
 		void Copy(ISnapshot source, ISnapshot destination);
 		void Copy(IJointMemberAccount source, IJointMemberAccount destination);
 
@@ -23,9 +24,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		IJointAccountSnapshot Clone(IJointAccountSnapshot source);
 		IStandardAccountSnapshot Clone(IStandardAccountSnapshot source);
 		IAccountSnapshot Clone(IAccountSnapshot source);
-		IAccountFeature Clone(IAccountFeature source);
+		IAccountAttribute Clone(IAccountAttribute source);
 		ISnapshot Clone(ISnapshot source);
 		IJointMemberAccount Clone(IJointMemberAccount source);
+		
+		
+		
+		// account keys utils
+		string GenerateCompositeKey(AccountId accountId, byte ordinal);
+		string GenerateCompositeKey(long accountId, byte ordinal);
+		string GenerateCompositeKey(IAccountKeysSnapshot accountKey);
 	}
 
 	public abstract class CardsUtils : ICardUtils {
@@ -35,6 +43,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			destination.MinimumWarningVersionAllowed = source.MinimumWarningVersionAllowed;
 			destination.MinimumVersionAllowed = source.MinimumVersionAllowed;
 			destination.MaxBlockInterval = source.MaxBlockInterval;
+			destination.AllowGossipPresentations = source.AllowGossipPresentations;
 		}
 
 		public virtual void Copy(IAccreditationCertificateSnapshot source, IAccreditationCertificateSnapshot destination) {
@@ -90,26 +99,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			destination.AccountId = source.AccountId;
 			destination.InceptionBlockId = source.InceptionBlockId;
 			destination.CorrelationId = source.CorrelationId;
+			destination.TrustLevel = source.TrustLevel;
 
 			this.CopyArray(source, destination);
 		}
 
-		public virtual void Copy(IAccountFeature source, IAccountFeature destination) {
-			destination.CertificateId = source.CertificateId;
-			destination.FeatureType = source.FeatureType;
-			destination.Options = source.Options;
-
+		public virtual void Copy(IAccountAttribute source, IAccountAttribute destination) {
+			destination.CorrelationId = source.CorrelationId;
+			destination.AttributeType = source.AttributeType;
+			
 			destination.Start = source.Start;
-			destination.End = source.End;
+			destination.Expiration = source.Expiration;
 
-			byte[] newData = null;
+			destination.Context = null;
 
-			if(source.Data != null) {
-				newData = new byte[source.Data.Length];
-				Buffer.BlockCopy(source.Data, 0, newData, 0, newData.Length);
+			if(source.Context != null) {
+				destination.Context = new byte[source.Context.Length];
+				Buffer.BlockCopy(source.Context, 0, destination.Context, 0, destination.Context.Length);
 			}
-
-			destination.Data = newData;
 		}
 
 		public virtual void Copy(IJointMemberAccount source, IJointMemberAccount destination) {
@@ -129,7 +136,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				this.Copy(castedSource4, castedDestination4);
 			} else if(source is IChainOptionsSnapshot castedSource5 && destination is IChainOptionsSnapshot castedDestination5) {
 				this.Copy(castedSource5, castedDestination5);
-			} else if(source is IAccountFeature castedSource6 && destination is IAccountFeature castedDestination6) {
+			} else if(source is IAccountAttribute castedSource6 && destination is IAccountAttribute castedDestination6) {
 				this.Copy(castedSource6, castedDestination6);
 			} else if(source is IJointMemberAccount castedSource7 && destination is IJointMemberAccount castedDestination7) {
 				this.Copy(castedSource7, castedDestination7);
@@ -164,7 +171,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			return this.CopyClone(source);
 		}
 
-		public virtual IAccountFeature Clone(IAccountFeature source) {
+		public virtual IAccountAttribute Clone(IAccountAttribute source) {
 			return this.CopyClone(source);
 		}
 
@@ -197,7 +204,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				return this.Clone(castedOptionsSource);
 			}
 
-			if(source is IAccountFeature castedSource6) {
+			if(source is IAccountAttribute castedSource6) {
 				return this.Clone(castedSource6);
 			}
 
@@ -237,6 +244,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 				destination.AddCollectionEntry(newEntry);
 			}
+		}
+
+
+		public string GenerateCompositeKey(AccountId accountId, byte ordinal) {
+			return this.GenerateCompositeKey(accountId.ToLongRepresentation(), ordinal);
+		}
+		
+		public string GenerateCompositeKey(long accountId, byte ordinal) {
+			return accountId.ToString() + ordinal.ToString();
+		}
+		public string GenerateCompositeKey(IAccountKeysSnapshot accountKey) {
+			return this.GenerateCompositeKey(accountKey.AccountId, accountKey.OrdinalId);
 		}
 	}
 }

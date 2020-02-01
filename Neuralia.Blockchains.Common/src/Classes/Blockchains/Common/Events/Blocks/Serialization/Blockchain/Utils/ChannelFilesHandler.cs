@@ -7,17 +7,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		protected readonly Dictionary<string, FileSpecs> fileSpecs = new Dictionary<string, FileSpecs>();
 		protected readonly IFileSystem fileSystem;
 
-		protected readonly string folderPath;
+		public string FolderPath { get; set; }
 
 		protected uint? adjustedBlockId;
-		protected (int index, long startingBlockId) blockIndex;
+		protected (long index, long startingBlockId, long endingBlockId) blockIndex;
 
 		public ChannelFilesHandler(string folderPath, IFileSystem fileSystem) {
-			this.folderPath = folderPath;
+			this.FolderPath = folderPath;
 			this.fileSystem = fileSystem;
 		}
 
-		public void ResetFileSpecs(uint adjustedBlockId, (int index, long startingBlockId) blockIndex) {
+		public void ResetFileSpecs(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			this.adjustedBlockId = adjustedBlockId;
 			this.blockIndex = blockIndex;
@@ -29,7 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.EnsureFilesCreated();
 		}
 
-		protected abstract void ResetAllFileSpecs(uint adjustedBlockId, (int index, long startingBlockId) blockIndex);
+		protected abstract void ResetAllFileSpecs(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex);
 
 		public virtual void EnsureFilesCreated() {
 
@@ -38,9 +38,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			}
 		}
 
-		protected virtual string GetBlocksIndexFolderPath(int index) {
+		protected virtual string GetBlocksIndexFolderPath(long index) {
 
-			return Path.Combine(this.folderPath, $"{index}");
+			return Path.Combine(this.FolderPath, $"{index}");
 		}
 	}
 }

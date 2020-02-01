@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using LiteDB;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations;
@@ -11,18 +12,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.
 	public interface IWalletJointAccountSnapshot : IJointAccountSnapshot, IWalletAccountSnapshot {
 	}
 
-	public interface IWalletJointAccountSnapshot<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE> : IJointAccountSnapshot<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE>, IWalletAccountSnapshot<ACCOUNT_FEATURE>, IWalletJointAccountSnapshot
-		where ACCOUNT_FEATURE : IAccountFeature
+	public interface IWalletJointAccountSnapshot<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE> : IJointAccountSnapshot<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE>, IWalletAccountSnapshot<ACCOUNT_ATTRIBUTE>, IWalletJointAccountSnapshot
+		where ACCOUNT_ATTRIBUTE : IAccountAttribute
 		where JOINT_MEMBER_FEATURE : IJointMemberAccount {
 	}
 
-	public abstract class WalletJointAccountSnapshot<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE> : WalletAccountSnapshot<ACCOUNT_FEATURE>, IWalletJointAccountSnapshot<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE>
-		where ACCOUNT_FEATURE : AccountFeature, new()
+	public abstract class WalletJointAccountSnapshot<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE> : WalletAccountSnapshot<ACCOUNT_ATTRIBUTE>, IWalletJointAccountSnapshot<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE>
+		where ACCOUNT_ATTRIBUTE : AccountAttribute, new()
 		where JOINT_MEMBER_FEATURE : JointMemberAccount, new() {
 
 		public int RequiredSignatures { get; set; }
+		public ImmutableList<IJointMemberAccount> MemberAccountsBase => this.MemberAccounts.Cast<IJointMemberAccount>().ToImmutableList();
 		public List<JOINT_MEMBER_FEATURE> MemberAccounts { get; set; } = new List<JOINT_MEMBER_FEATURE>();
 
+		void ITypedCollectionExposure<IJointMemberAccount>.ClearCollection() {
+			this.MemberAccounts.Clear();
+		}
+		
 		public void CreateNewCollectionEntry(out IJointMemberAccount result) {
 			TypedCollectionExposureUtil<IJointMemberAccount>.CreateNewCollectionEntry(this.MemberAccounts, out result);
 		}

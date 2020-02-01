@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Abstractions;
+using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
@@ -23,7 +24,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 					// Buffer the size of a sector.
 					var buffer = new byte[1024];
 
-					SecureRandom random = new SecureRandom();
+					SecureRandom random = new BetterSecureRandom();
 
 					Stream inputStream = fileSystem.FileStream.Create(filename, FileMode.Open);
 

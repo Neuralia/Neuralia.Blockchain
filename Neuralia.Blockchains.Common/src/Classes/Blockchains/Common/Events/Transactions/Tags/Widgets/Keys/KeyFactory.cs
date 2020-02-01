@@ -1,4 +1,5 @@
 using System;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -95,6 +96,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			byte id = rehydrator.ReadByte();
 
 			cryptographicKey.Rehydrate(id, rehydrator);
+
+			return cryptographicKey;
+		}
+
+		private static ICryptographicKey CreateFromWalletKey(IWalletKey walletKey) {
+
+			switch(walletKey.KeyType) {
+				case Enums.KeyTypes.MCELIECE:
+					return new McElieceCryptographicKey();
+				case Enums.KeyTypes.NTRU:
+					return new NtruCryptographicKey();
+				case Enums.KeyTypes.QTESLA:
+					return new QTeslaCryptographicKey();
+				case Enums.KeyTypes.XMSS:
+					return new XmssCryptographicKey();
+				case Enums.KeyTypes.XMSSMT:
+					return new XmssmtCryptographicKey();
+				case Enums.KeyTypes.Secret:
+					return new SecretCryptographicKey();
+				case Enums.KeyTypes.SecretCombo:
+					return new SecretComboCryptographicKey();
+				case Enums.KeyTypes.SecretDouble:
+					return new SecretDoubleCryptographicKey();
+				case Enums.KeyTypes.SecretPenta:
+					return new SecretPentaCryptographicKey();
+				default:
+					throw new ArgumentException();
+			}
+		}
+
+		public static ICryptographicKey ConvertWalletKey(IWalletKey walletKey) {
+
+			ICryptographicKey cryptographicKey = CreateFromWalletKey(walletKey);
+			cryptographicKey.SetFromWalletKey(walletKey);
 
 			return cryptographicKey;
 		}

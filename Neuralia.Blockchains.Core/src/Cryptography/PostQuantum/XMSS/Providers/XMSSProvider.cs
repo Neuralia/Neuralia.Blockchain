@@ -40,10 +40,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		}
 
 		public (ByteArray privateKey, ByteArray publicKey) GenerateKeys(Action<int> progressCallback = null) {
-			(XMSSPrivateKey privateKey, XMSSPublicKey publicKey) xmssKeys = this.xmss.GenerateKeys(progressCallback);
+			(XMSSPrivateKey xmssPrivateKey, XMSSPublicKey xmssPublicKey) = this.xmss.GenerateKeys(progressCallback);
 
-			ByteArray publicKey = xmssKeys.publicKey.SaveKey();
-			ByteArray privateKey = xmssKeys.privateKey.SaveKey();
+			ByteArray publicKey = xmssPublicKey.SaveKey();
+			ByteArray privateKey = xmssPrivateKey.SaveKey();
 
 			return (privateKey, publicKey);
 		}

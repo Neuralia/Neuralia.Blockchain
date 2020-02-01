@@ -14,7 +14,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 
 		public byte Version => 1;
 
-		public IElectionQuestion Question { get; set; }
+		public IElectionBlockQuestion SecondTierQuestion { get; set; }
+		public IElectionDigestQuestion DigestQuestion { get; set; }
+		public IElectionBlockQuestion FirstTierQuestion { get; set; }
 
 		public IValidatorRequest Rehydrate(IDataRehydrator rehydrator) {
 
@@ -25,7 +27,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 			bool isQuestionSet = rehydrator.ReadBool();
 
 			if(isQuestionSet) {
-				this.Question = ElectionQuestionRehydrator.Rehydrate(rehydrator);
+				this.SecondTierQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionBlockQuestion;
+			}
+			
+			isQuestionSet = rehydrator.ReadBool();
+
+			if(isQuestionSet) {
+				this.DigestQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionDigestQuestion;
+			}
+			
+			isQuestionSet = rehydrator.ReadBool();
+
+			if(isQuestionSet) {
+				this.FirstTierQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionBlockQuestion;
 			}
 
 			return this;

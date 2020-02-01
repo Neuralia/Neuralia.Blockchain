@@ -12,7 +12,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 		public AccountId AccountId { get; set; } = new AccountId();
 		public ResponseType Response { get; set; }
 
-		public AdaptiveLong1_9 Answer { get; set; }
+		public AdaptiveLong1_9 SecondTierAnswer { get; set; }
+		public AdaptiveLong1_9 FirstTierAnswer { get; set; }
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
@@ -20,12 +21,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 			this.Response = (ResponseType) rehydrator.ReadByte();
 			this.AccountId.Rehydrate(rehydrator);
 
-			this.Answer = null;
+			this.SecondTierAnswer = null;
 			bool isAnswerSet = rehydrator.ReadBool();
 
 			if(isAnswerSet) {
-				this.Answer = new AdaptiveLong1_9();
-				this.Answer.Rehydrate(rehydrator);
+				this.SecondTierAnswer = new AdaptiveLong1_9();
+				this.SecondTierAnswer.Rehydrate(rehydrator);
+			}
+			
+			this.FirstTierAnswer = null;
+			isAnswerSet = rehydrator.ReadBool();
+
+			if(isAnswerSet) {
+				this.FirstTierAnswer = new AdaptiveLong1_9();
+				this.FirstTierAnswer.Rehydrate(rehydrator);
 			}
 		}
 
@@ -38,10 +47,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 
 			this.AccountId.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.Answer != null);
+			dehydrator.Write(this.SecondTierAnswer != null);
 
-			if(this.Answer != null) {
-				this.Answer.Dehydrate(dehydrator);
+			if(this.SecondTierAnswer != null) {
+				this.SecondTierAnswer.Dehydrate(dehydrator);
+			}
+			
+			dehydrator.Write(this.FirstTierAnswer != null);
+
+			if(this.FirstTierAnswer != null) {
+				this.FirstTierAnswer.Dehydrate(dehydrator);
 			}
 			
 			return dehydrator.ToArray();

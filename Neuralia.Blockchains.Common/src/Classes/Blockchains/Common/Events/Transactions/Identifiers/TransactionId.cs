@@ -34,26 +34,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		}
 
-		public TransactionId(long accountSequenceId, Enums.AccountTypes accountType, long timestamp, byte scope) {
+		public TransactionId(long accountSequenceId, Enums.AccountTypes accountType, long timestamp, short scope) {
 			this.Account = new AccountId(accountSequenceId, accountType);
 			this.Timestamp = new TransactionTimestamp(timestamp);
-			this.Scope = scope;
+			this.Scope = new TransactionScope(scope);
 		}
 
-		public TransactionId(AccountId accountId, long timestamp, byte scope) {
+		public TransactionId(AccountId accountId, long timestamp, short scope) {
 			this.Account = new AccountId(accountId);
 			this.Timestamp = new TransactionTimestamp(timestamp);
-			this.Scope = scope;
+			this.Scope = new TransactionScope(scope);
 		}
 
 		public TransactionId(AccountId accountId, long timestamp) : this(accountId, timestamp, 0) {
 
 		}
 
-		public TransactionId(long timestamp, byte scope) {
+		public TransactionId(long timestamp, short scope) {
 			this.Account = new AccountId();
 			this.Timestamp = new TransactionTimestamp(timestamp);
-			this.Scope = scope;
+			this.Scope = new TransactionScope(scope);
 
 		}
 
@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.Parse(transactionId);
 		}
 
-		public TransactionId(TransactionId other) : this(other.Account, other.Timestamp.Value, other.Scope) {
+		public TransactionId(TransactionId other) : this(other.Account, other.Timestamp.Value, other.Scope.Value) {
 
 		}
 
@@ -72,7 +72,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public TransactionTimestamp Timestamp { get; set; }
 
-		public byte Scope { get; set; }
+		public TransactionScope Scope { get; set; }
+		
+		public static TransactionId Empty => new TransactionId();
 
 		public int CompareTo(TransactionId other) {
 			if(ReferenceEquals(this, other)) {
@@ -95,7 +97,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				return timestampComparison;
 			}
 
-			return this.Scope.CompareTo(other.Scope);
+			int scopeComparison = Comparer<TransactionScope>.Default.Compare(this.Scope, other.Scope);
+
+			return scopeComparison;
 		}
 		
 		public void Dehydrateheader(IDataDehydrator dehydrator) {
@@ -143,15 +147,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.Account = new AccountId(items[0]);
 			this.Timestamp = new TransactionTimestamp(items[1]);
 
-			this.Scope = 0;
+			this.Scope = new TransactionScope();
 
 			if((items.Length == 3) && !string.IsNullOrWhiteSpace(items[2])) {
-				this.Scope = byte.Parse(items[2]);
+				this.Scope = new TransactionScope(items[2]);
 			}
 		}
 
-		public Tuple<long, long, byte> ToTuple() {
-			return new Tuple<long, long, byte>(this.Account.ToLongRepresentation(), this.Timestamp.Value, this.Scope);
+		public Tuple<long, long, short> ToTuple() {
+			return new Tuple<long, long, short>(this.Account.ToLongRepresentation(), this.Timestamp.Value, this.Scope.Value);
 		}
 
 		public string ToCompositeKey() {
@@ -159,11 +163,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 		
 		protected virtual void DehydrateTail(IDataDehydrator dehydrator) {
-			dehydrator.Write(this.Scope);
+			this.Scope.Dehydrate(dehydrator);
 		}
 
 		protected virtual void RehydrateTail(IDataRehydrator rehydrator) {
-			this.Scope = rehydrator.ReadByte();
+			this.Scope.Rehydrate(rehydrator);
 		}
 
 		public void DehydrateRelative(IDataDehydrator dehydrator) {
@@ -192,8 +196,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			return !(a == b);
 		}
 
-		protected bool Equals(TransactionId other) {
-			return Equals(this.Account, other.Account) && Equals(this.Timestamp, other.Timestamp) && (this.Scope == other.Scope);
+		private bool Equals(TransactionId other) {
+			return Equals(this.Account, other.Account) && Equals(this.Timestamp, other.Timestamp) && Equals(this.Scope, other.Scope);
 		}
 
 		public override bool Equals(object obj) {
@@ -216,7 +220,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			unchecked {
 				int hashCode = this.Account != null ? this.Account.GetHashCode() : 0;
 				hashCode = (hashCode * 397) ^ (this.Timestamp != null ? this.Timestamp.GetHashCode() : 0);
-				hashCode = (hashCode * 397) ^ this.Scope.GetHashCode();
+				hashCode = (hashCode * 397) ^ (this.Scope != null ? this.Scope.GetHashCode() : 0);
 
 				return hashCode;
 			}
@@ -227,7 +231,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			string transactionId = $"{this.Account}{SEPARATOR}{this.Timestamp}";
 
 			// we only display the scope if it is noy zero. otherwise it is ont put, and thus assumed to be 0
-			if(this.Scope != 0) {
+			if(this.Scope.IsNotZero) {
 				transactionId += $"{SEPARATOR}{SEPARATOR}{this.Scope}";
 			}
 
@@ -251,9 +255,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			string transactionId = $"{accountId}{COMPACT_SEPARATOR}{timeStamp}";
 
 			// we only display the scope if it is noy zero. otherwise it is ont put, and thus assumed to be 0
-			if(this.Scope != 0) {
-
-				transactionId += $"{COMPACT_SEPARATOR}{ByteArray.Wrap(new[] {this.Scope}).ToBase94()}";
+			if(this.Scope.IsNotZero) {
+				buffer = stackalloc byte[sizeof(short)];
+				TypeSerializer.Serialize(this.Scope.Value, buffer);
+				
+				string scope = ByteArray.Wrap(buffer.TrimEnd().ToArray()).ToBase94();
+				transactionId += $"{COMPACT_SEPARATOR}{scope}";
 			}
 
 			return transactionId;
@@ -276,13 +283,70 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			TypeSerializer.Deserialize(fullbuffer, out long timestamp);
 
-			byte scope = 0;
+			short scope = 0;
 
 			if((items.Length == 3) && !string.IsNullOrWhiteSpace(items[2])) {
-				scope = ByteArray.FromBase94(items[2])[0];
+				buffer = ByteArray.FromBase94(items[2]);
+				fullbuffer = stackalloc byte[sizeof(short)];
+				buffer.Entry.CopyTo(fullbuffer);
+
+				TypeSerializer.Deserialize(fullbuffer, out scope);
 			}
 
 			return new TransactionId(accountId, timestamp, scope);
+		}
+
+
+		/// <summary>
+		///     Parse a transction Guid and return a transaction Scope object
+		/// </summary>
+		/// <param name="transactionGuid"></param>
+		/// <returns></returns>
+		public static TransactionId FromGuid(Guid transactionGuid) {
+			Span<byte> guidSpan = stackalloc byte[16];
+			
+			transactionGuid.TryWriteBytes(guidSpan);
+			Span<byte> span = stackalloc byte[8];
+			guidSpan.Slice(0, 8).CopyTo(span);
+			TypeSerializer.Deserialize(span, out long accountSequenceId);
+			
+			span = stackalloc byte[8];
+			guidSpan.Slice(8, 6).CopyTo(span);
+			TypeSerializer.Deserialize(span, out long timestamp);
+
+			span = stackalloc byte[2];
+			guidSpan.Slice(14, 2).CopyTo(span);
+			TypeSerializer.Deserialize(span, out short scope);
+
+			return new TransactionId(accountSequenceId.ToAccountId(), timestamp, scope);
+		}
+
+		/// <summary>
+		///     Here we create a guid from our transaction information
+		/// </summary>
+		/// <param name="transactionId"></param>
+		/// <returns></returns>
+		public static Guid TransactionIdToGuid(TransactionId transactionId) {
+			Span<byte> guidSpan = stackalloc byte[16];
+
+			Span<byte> span = stackalloc byte[8];
+			TypeSerializer.Serialize(transactionId.Account.ToLongRepresentation(), span);
+			span.CopyTo(guidSpan.Slice(0, 8));
+			
+			span = stackalloc byte[8];
+			TypeSerializer.Serialize(transactionId.Timestamp.Value, span);
+			span.Slice(0, 6).CopyTo(guidSpan.Slice(8, 6));
+
+			span = stackalloc byte[2];
+			TypeSerializer.Serialize(transactionId.Scope.Value, span);
+			span.CopyTo(guidSpan.Slice(14, 2));
+			
+			return new Guid(guidSpan);
+
+		}
+
+		public Guid ToGuid() {
+			return TransactionIdToGuid(this);
 		}
 	}
 }

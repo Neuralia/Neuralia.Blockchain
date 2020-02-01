@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Core.General.Versions;
+﻿using System.Diagnostics;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Simple {
@@ -10,6 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	///     a simple block with nothing fancy. Only accepted and rejected transactions.
 	/// </summary>
 	/// <typeparam name="REHYDRATION_FACTORY"></typeparam>
+	[DebuggerDisplay("BlockId: {BlockId}")]
 	public abstract class SimpleBlock : Block, ISimpleBlock {
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

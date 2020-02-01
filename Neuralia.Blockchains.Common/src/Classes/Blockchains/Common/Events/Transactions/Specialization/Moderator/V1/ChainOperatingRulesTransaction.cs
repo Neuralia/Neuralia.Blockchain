@@ -1,6 +1,9 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
+﻿using System.Collections.Generic;
+using System.Collections.Immutable;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -12,6 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		SoftwareVersion MinimumWarningVersionAllowed { get; set; }
 		SoftwareVersion MinimumVersionAllowed { get; set; }
 		int MaxBlockInterval { get; set; }
+		bool AllowGossipPresentations { get; set; }
 	}
 
 	/// <summary>
@@ -43,7 +47,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// <summary>
 		///     The maximum time distance in seconds between each block. if this limit is passed, we could say something is wrong.
 		/// </summary>
-		public int MaxBlockInterval { get; set; }
+		public int MaxBlockInterval { get; set; } = 60 * 3;
+
+		/// <summary>
+		/// are presentation transactions allowed on gossip protocol?
+		/// </summary>
+		public bool AllowGossipPresentations { get; set; } = false;
 
 		public override HashNodeList GetStructuresArray() {
 
@@ -53,7 +62,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			nodeList.Add(this.MinimumWarningVersionAllowed);
 			nodeList.Add(this.MinimumVersionAllowed);
 			nodeList.Add(this.MaxBlockInterval);
-
+			nodeList.Add(this.AllowGossipPresentations);
+			
 			return nodeList;
 		}
 
@@ -71,6 +81,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			//
 			jsonDeserializer.SetProperty("MaxBlockInterval", this.MaxBlockInterval);
+			
+			jsonDeserializer.SetProperty("AllowGossipPresentations", this.AllowGossipPresentations);
 		}
 
 		protected override void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {
@@ -81,6 +93,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.MinimumVersionAllowed.Rehydrate(dataChannels.ContentsData);
 
 			this.MaxBlockInterval = dataChannels.ContentsData.ReadInt();
+			this.AllowGossipPresentations = dataChannels.ContentsData.ReadBool();
 		}
 
 		protected override void DehydrateContents(ChannelsEntries<IDataDehydrator> dataChannels) {
@@ -91,10 +104,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.MinimumVersionAllowed.Dehydrate(dataChannels.ContentsData);
 
 			dataChannels.ContentsData.Write(this.MaxBlockInterval);
+			dataChannels.ContentsData.Write(this.AllowGossipPresentations);
 		}
 
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (OPERATING_RULES: TransactionTypes.Instance.MODERATION_OPERATING_RULES, 1, 0);
 		}
+		
+		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
 	}
 }

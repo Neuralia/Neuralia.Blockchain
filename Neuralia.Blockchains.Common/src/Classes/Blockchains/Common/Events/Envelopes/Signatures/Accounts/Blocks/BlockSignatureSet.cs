@@ -144,11 +144,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			throw new ApplicationException("Not a secret key");
 		}
+		
+		public IXmssmtCryptographicKey ConvertToXmssKey() {
+			if(((this.NextAccountSignatureType == BlockSignatureTypes.XmssMT)) && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature xmssBlockNextAccountSignature) {
+				return SignatureUtils.ConvertToXmssMTKey(xmssBlockNextAccountSignature, this.NextModeratorKey);
+			}
+
+			throw new ApplicationException("Not a secret key");
+		}
 
 		public SafeArrayHandle ConvertToDehydratedKey() {
 
 			if(((this.NextAccountSignatureType == BlockSignatureTypes.Genesis) || (this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential)) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature) {
 				var key = this.ConvertToSecretKey();
+				return SignatureUtils.ConvertToDehydratedKey(key);
+			}
+			else if(((this.NextAccountSignatureType == BlockSignatureTypes.XmssMT)) && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature) {
+				var key = this.ConvertToXmssKey();
 				return SignatureUtils.ConvertToDehydratedKey(key);
 			}
 

@@ -5,11 +5,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.
 	public interface IWalletStandardAccountSnapshot : IStandardAccountSnapshot, IWalletAccountSnapshot {
 	}
 
-	public interface IWalletStandardAccountSnapshot<ACCOUNT_FEATURE> : IStandardAccountSnapshot<ACCOUNT_FEATURE>, IWalletAccountSnapshot<ACCOUNT_FEATURE>, IWalletStandardAccountSnapshot
-		where ACCOUNT_FEATURE : IAccountFeature {
+	public interface IWalletStandardAccountSnapshot<ACCOUNT_ATTRIBUTE> : IStandardAccountSnapshot<ACCOUNT_ATTRIBUTE>, IWalletAccountSnapshot<ACCOUNT_ATTRIBUTE>, IWalletStandardAccountSnapshot
+		where ACCOUNT_ATTRIBUTE : IAccountAttribute {
 	}
 
-	public abstract class WalletStandardAccountSnapshot<ACCOUNT_FEATURE> : WalletAccountSnapshot<ACCOUNT_FEATURE>, IWalletStandardAccountSnapshot<ACCOUNT_FEATURE>
-		where ACCOUNT_FEATURE : AccountFeature, new() {
+	public abstract class WalletStandardAccountSnapshot<ACCOUNT_ATTRIBUTE> : WalletAccountSnapshot<ACCOUNT_ATTRIBUTE>, IWalletStandardAccountSnapshot<ACCOUNT_ATTRIBUTE>
+		where ACCOUNT_ATTRIBUTE : AccountAttribute, new() {
 	}
 }

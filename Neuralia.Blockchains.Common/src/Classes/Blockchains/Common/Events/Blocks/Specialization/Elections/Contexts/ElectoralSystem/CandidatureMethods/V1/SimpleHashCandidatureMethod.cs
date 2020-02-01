@@ -1,4 +1,5 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
+using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
@@ -8,11 +9,9 @@ using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.CandidatureMethods.V1 {
 	public class SimpleHashCandidatureMethod : CandidatureMethod {
-
-		private static readonly Sha512Hasher hasher = new Sha512Hasher();
-
+		
 		public SafeArrayHandle DetermineCandidacy(BlockElectionDistillate blockElectionDistillate, AccountId miningAccount) {
-			return hasher.HashTwo(blockElectionDistillate.blockHash, miningAccount.ToLongRepresentation());
+			return HashingUtils.HashSha512(hasher => hasher.HashTwo(blockElectionDistillate.blockHash, miningAccount.ToLongRepresentation()));
 		}
 
 		protected override ComponentVersion<CandidatureMethodType> SetIdentity() {

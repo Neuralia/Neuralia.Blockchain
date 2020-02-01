@@ -34,6 +34,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.W
 		public readonly RejectionCode ACCOUNT_TOO_YOUNG;
 		public readonly RejectionCode INVALID_ACCOUNT;
 		public readonly RejectionCode INVALID_RECIPIENT;
+		public readonly RejectionCode CORRELATION_ID_ALREADY_SET;
+		
+		public readonly RejectionCode INVALID_CERTIFICATE;
+		
 
 		public readonly RejectionCode NONE;
 
@@ -49,6 +53,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.W
 			this.ACCOUNT_EMPTY = this.CreateBaseConstant();
 			this.INVALID_RECIPIENT = this.CreateBaseConstant();
 			this.INVALID_ACCOUNT = this.CreateBaseConstant();
+			this.CORRELATION_ID_ALREADY_SET = this.CreateBaseConstant();
+			this.INVALID_CERTIFICATE = this.CreateBaseConstant();
 		}
 
 		public static RejectionCodes Instance { get; } = new RejectionCodes();

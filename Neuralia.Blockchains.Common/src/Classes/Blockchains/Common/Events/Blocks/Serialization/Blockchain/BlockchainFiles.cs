@@ -121,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return channelIndexSet;
 		}
 
-		protected uint PrepareContext(long blockId, (int index, long startingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
+		protected uint PrepareContext(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
 			// now we adjust the id, 0 based blockId
 			var returnedId = this.AdjustBlockId(blockId, blockIndex, channelIndexSet);
@@ -138,7 +138,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return adjustedBlockId;
 		}
 
-		public bool SaveBlockBytes(long blockId, (int index, long startingBlockId) blockIndex, ChannelsEntries<SafeArrayHandle> blockData, SafeArrayHandle keyedOffsets) {
+		public bool SaveBlockBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelsEntries<SafeArrayHandle> blockData, SafeArrayHandle keyedOffsets) {
 			return this.SaveBlockBytes(blockId, blockIndex, this.CreateChannelSet(), blockData, keyedOffsets);
 		}
 
@@ -147,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// </summary>
 		/// <exception cref="ApplicationException"></exception>
 		/// <remarks>This method is absolutely NOT thread safe.</remarks>
-		public bool SaveBlockBytes(long blockId, (int index, long startingBlockId) blockIndex, ChannelIndexSet channelIndexSet, ChannelsEntries<SafeArrayHandle> blockData, SafeArrayHandle keyedOffsets) {
+		public bool SaveBlockBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet, ChannelsEntries<SafeArrayHandle> blockData, SafeArrayHandle keyedOffsets) {
 
 			uint adjustedBlockId = this.PrepareContext(blockId, blockIndex, channelIndexSet);
 
@@ -164,39 +164,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return true;
 		}
 
-		public SafeArrayHandle QueryBlockHighHeaderBytes(long blockId, (int index, long startingBlockId) blockIndex) {
+		public SafeArrayHandle QueryBlockHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader)).HighHeaderData;
 		}
 
-		public SafeArrayHandle QueryBlockLowHeaderBytes(long blockId, (int index, long startingBlockId) blockIndex) {
+		public SafeArrayHandle QueryBlockLowHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.LowHeader)).LowHeaderData;
 		}
 
-		public (SafeArrayHandle high, SafeArrayHandle low) QueryBlockWholeHeaderBytes(long blockId, (int index, long startingBlockId) blockIndex) {
+		public (SafeArrayHandle high, SafeArrayHandle low) QueryBlockWholeHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			var channels = this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader | BlockChannelUtils.BlockChannelTypes.LowHeader));
 
 			return (channels.HighHeaderData, channels.LowHeaderData);
 		}
 
-		public SafeArrayHandle QueryBlockContentsBytes(long blockId, (int index, long startingBlockId) blockIndex) {
+		public SafeArrayHandle QueryBlockContentsBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Contents)).ContentsData;
 		}
 
-		public SafeArrayHandle QueryBlockErasablesBytes(long blockId, (int index, long startingBlockId) blockIndex) {
+		public SafeArrayHandle QueryBlockErasablesBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Erasables)).ErasablesData;
 		}
 
-		public SafeArrayHandle QueryBlockSlotsBytes(long blockId, (int index, long startingBlockId) blockIndex) {
+		public SafeArrayHandle QueryBlockSlotsBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Slots)).SlotsData;
 		}
 
-		public ChannelsEntries<SafeArrayHandle> QueryBlockBytes(long blockId, (int index, long startingBlockId) blockIndex) {
+		public ChannelsEntries<SafeArrayHandle> QueryBlockBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet());
 		}
@@ -208,7 +208,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <param name="l3FileSize"></param>
 		/// <param name="l3BlockFileSize"></param>
 		/// <returns></returns>
-		public ChannelsEntries<SafeArrayHandle> QueryBlockBytes(long blockId, (int index, long startingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
+		public ChannelsEntries<SafeArrayHandle> QueryBlockBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
 			uint adjustedBlockId = this.PrepareContext(blockId, blockIndex, channelIndexSet);
 
@@ -224,11 +224,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <param name="l3BlockFileSize"></param>
 		/// <param name="l3ContentsFileSize"></param>
 		/// <returns></returns>
-		public bool BlockExists(long blockId, (int index, long startingBlockId) blockIndex) {
+		public bool BlockExists(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 			return this.BlockExists(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader));
 		}
 
-		public bool BlockExists(long blockId, (int index, long startingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
+		public bool BlockExists(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
 			if((channelIndexSet.ChannelTypes.Count > 1) || (channelIndexSet.ChannelTypes.First() != BlockChannelUtils.BlockChannelTypes.HighHeader)) {
 				channelIndexSet = this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader);
@@ -239,7 +239,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result.Entries.Any();
 		}
 
-		private uint? AdjustBlockId(long blockId, (int index, long startingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
+		private uint? AdjustBlockId(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
 			// all block Ids are zero based here
 			uint zeroBlockId = (uint) blockId - 1;
@@ -273,7 +273,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <param name="l3ContentsFileSize"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		public SafeArrayHandle QueryPartialBlockHighHeaderBytes(long blockId, (int index, long startingBlockId) blockIndex, int offset, int length) {
+		public SafeArrayHandle QueryPartialBlockHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length) {
 
 			return this.QueryPartialBlockBytes(blockId, blockIndex, new ChannelsEntries<(int offset, int length)>(BlockChannelUtils.BlockChannelTypes.HighHeader, (offset, length)), this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader)).HighHeaderData;
 		}
@@ -283,55 +283,55 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <param name="blockIndex"></param>
-		/// <param name="keyedTransactionIndex"></param>
+		/// <param name="masterTransactionIndex"></param>
 		/// <returns></returns>
-		public SafeArrayHandle QueryBlockKeyedTransactionOffsets(long blockId, (int index, long startingBlockId) blockIndex, int keyedTransactionIndex) {
+		public SafeArrayHandle QueryBlockMasterTransactionOffsets(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int masterTransactionIndex) {
 			ChannelIndexSet channelIndexSet = this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Keys);
 
 			uint adjustedBlockId = this.PrepareContext(blockId, blockIndex, channelIndexSet);
 
-			return channelIndexSet.QueryKeyedTransactionOffsets(adjustedBlockId, keyedTransactionIndex);
+			return channelIndexSet.QueryMasterTransactionOffsets(adjustedBlockId, masterTransactionIndex);
 		}
 
-		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(long blockId, (int index, long startingBlockId) blockIndex, ChannelsEntries<(int offset, int length)> offsets) {
+		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelsEntries<(int offset, int length)> offsets) {
 			return this.QueryPartialBlockBytes(blockId, blockIndex, offsets, this.CreateChannelSet());
 		}
 
-		public SafeArrayHandle QueryPartialBlockContentBytes(long blockId, (int index, long startingBlockId) blockIndex, int offset, int length) {
+		public SafeArrayHandle QueryPartialBlockContentBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length) {
 
 			return this.QueryPartialBlockBytes(blockId, blockIndex, new ChannelsEntries<(int offset, int length)>(BlockChannelUtils.BlockChannelTypes.Contents, (offset, length)), this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Contents)).ContentsData;
 		}
 
-		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(long blockId, (int index, long startingBlockId) blockIndex, ChannelsEntries<(int offset, int length)> offsets, ChannelIndexSet channelIndexSet) {
+		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelsEntries<(int offset, int length)> offsets, ChannelIndexSet channelIndexSet) {
 
 			uint adjustedBlockId = this.PrepareContext(blockId, blockIndex, channelIndexSet);
 
 			return channelIndexSet.QueryPartialBlockBytes(adjustedBlockId, offsets);
 		}
 
-		public int? QueryBlockHighHeaderSize(long blockId, (int index, long startingBlockId) blockIndex) {
+		public int? QueryBlockHighHeaderSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockSize(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader)).HighHeaderData;
 		}
 
-		public int? QueryBlockLowHeaderSize(long blockId, (int index, long startingBlockId) blockIndex) {
+		public int? QueryBlockLowHeaderSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockSize(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.LowHeader)).LowHeaderData;
 		}
 
-		public int? QueryBlockWholeHeaderSize(long blockId, (int index, long startingBlockId) blockIndex) {
+		public int? QueryBlockWholeHeaderSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			var results = this.QueryBlockSize(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Headers));
 
 			return results.HighHeaderData + results.LowHeaderData;
 		}
 
-		public int? QueryBlockContentsSize(long blockId, (int index, long startingBlockId) blockIndex) {
+		public int? QueryBlockContentsSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockSize(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Contents)).ContentsData;
 		}
 
-		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? QueryFullBlockSizeAndHash(long blockId, (int index, long startingBlockId) blockIndex, int hashOffset, int hashLength) {
+		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? QueryFullBlockSizeAndHash(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int hashOffset, int hashLength) {
 			return this.QueryFullBlockSizeAndHash(blockId, blockIndex, hashOffset, hashLength, this.CreateChannelSet());
 		}
 
@@ -345,7 +345,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <param name="indexFileInfos"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? QueryFullBlockSizeAndHash(long blockId, (int index, long startingBlockId) blockIndex, int hashOffset, int hashLength, ChannelIndexSet channelIndexSet) {
+		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? QueryFullBlockSizeAndHash(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int hashOffset, int hashLength, ChannelIndexSet channelIndexSet) {
 
 			var sizes = this.QueryBlockSize(blockId, blockIndex, channelIndexSet);
 
@@ -354,12 +354,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return (sizes, hashBytes);
 		}
 
-		public ChannelsEntries<int> QueryBlockSize(long blockId, (int index, long startingBlockId) blockIndex) {
+		public ChannelsEntries<int> QueryBlockSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			return this.QueryBlockSize(blockId, blockIndex, this.CreateChannelSet());
 		}
 
-		public ChannelsEntries<int> QueryBlockSize(long blockId, (int index, long startingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
+		public ChannelsEntries<int> QueryBlockSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
 			var entries = new ChannelsEntries<int>(channelIndexSet.ChannelTypes);
 
@@ -373,7 +373,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return entries;
 		}
 
-		public ChannelsEntries<(long blockStart, int blockEnd)> QueryBlockIndex(long blockId, (int index, long startingBlockId) blockIndex) {
+		public ChannelsEntries<(long blockStart, int blockEnd)> QueryBlockIndex(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 			return this.QueryBlockIndex(blockId, blockIndex, this.CreateChannelSet());
 		}
 
@@ -384,14 +384,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <param name="l3FileSize"></param>
 		/// <param name="l3BlockFileSize"></param>
 		/// <returns></returns>
-		public ChannelsEntries<(long blockStart, int blockEnd)> QueryBlockIndex(long blockId, (int index, long startingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
+		public ChannelsEntries<(long blockStart, int blockEnd)> QueryBlockIndex(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
 			uint adjustedBlockId = this.PrepareContext(blockId, blockIndex, channelIndexSet);
 
 			return channelIndexSet.QueryIndex(adjustedBlockId);
 		}
 
-		public ChannelsEntries<long> GetBlockChannelFileSize((int index, long startingBlockId) blockIndex, BlockChannelUtils.BlockChannelTypes channelTypes) {
+		public ChannelsEntries<long> GetBlockChannelFileSize((long index, long startingBlockId, long endingBlockId) blockIndex, BlockChannelUtils.BlockChannelTypes channelTypes) {
 
 			ChannelIndexSet channelIndexSet = this.CreateChannelSet(channelTypes);
 

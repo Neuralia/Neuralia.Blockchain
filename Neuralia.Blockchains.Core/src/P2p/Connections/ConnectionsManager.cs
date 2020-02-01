@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
+using System.Runtime.Serialization;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.P2p.Messages.Components;
@@ -9,9 +11,12 @@ using Neuralia.Blockchains.Core.P2p.Workflows;
 using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
 
@@ -30,6 +35,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 	public class ConnectionsManager<R> : LoopThread<ConnectionsManager<R>>, IConnectionsManager<R>
 		where R : IRehydrationFactory {
 
+		private const decimal LOW_CONNECTION_PCT = 0.4M;
+
+		private const decimal CRITICAL_LOW_CONNECTION_PCT = 0.2M;
+		
 		private const decimal MaxNullChainNodesPercent = 0.1M; // maximum of 10% null chain nodes.  mode than that, we will disconnect.
 
 		private const int MaxConnectionAttemptCount = 3; // maximum of times we try a peer
@@ -280,6 +289,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected override void ProcessLoop() {
+
+
 			try {
 				this.CheckShouldCancel();
 
@@ -327,9 +338,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					//-------------------------------------------------------------------------------
 					// phase 2: search for more connections if we dont have enough
 
-					decimal CRITICAL_LOW_CONNECTION_PCT = 0.2M;
-					decimal LOW_CONNECTION_PCT = 0.4M;
-
 					decimal averagePerCount = GlobalSettings.ApplicationSettings.AveragePeerCount;
 
 					int criticalLowConnectionLevel = (int) Math.Ceiling(averagePerCount * CRITICAL_LOW_CONNECTION_PCT);
@@ -341,14 +349,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 						// get the list of IPs that we can connect to
 						var availableNodes = this.GetAvailableNodesList(activeConnections, true);
-
-						if(!availableNodes.Any()) {
-							// lets go a bit deeper
-							availableNodes = this.GetAvailableNodesList(activeConnections, false);
-						}
-
-						// pick nodes not already connecting
-						availableNodes = availableNodes.Where(n => !this.peerActivityInfo.ContainsKey(n.ScoppedIp) || !this.peerActivityInfo[n.ScoppedIp].inProcess).ToList();
 
 						if(this.explicitConnectionRequests.Any() && (activeConnectionsCount >= Math.Max(GlobalSettings.ApplicationSettings.MaxPeerCount - 2, 0))) {
 							// ok, no choice, we will have to cut loose some connections to make room for now ones
@@ -484,19 +484,97 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		protected virtual void ContactHubs() {
 			if(GlobalSettings.ApplicationSettings.EnableHubs && (this.nextHubContact < DateTime.UtcNow)) {
-				try {
-					NodeAddressInfoList entries = this.connectionStore.GetHubNodes();
+				
 
-					if((entries != null) && entries.Nodes.Any()) {
-						this.CreateConnectionAttempt(entries.Nodes.First());
+				bool useWeb = GlobalSettings.ApplicationSettings.HubContactMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
+				bool useGossip = GlobalSettings.ApplicationSettings.HubContactMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
+				bool sent = false;
+				
+				if(useWeb) {
+					try {
+						if(this.ContactHubsWeb()) {
+							sent = true;
+						}
+					} catch(Exception ex) {
+						Log.Error(ex, "Failed to contact hubs through web");
 
-						this.nextHubContact = DateTime.UtcNow.AddMinutes(3);
+						// do nothing, we will sent it on chain
+						sent = false;
 					}
-				} catch(Exception ex) {
-					Log.Error(ex, "Failed to query neuralium hubs.");
-
-					throw;
 				}
+
+				if(!sent && useGossip) {
+					this.ContactHubsGossip();
+					sent = true;
+				}
+
+				if(!sent) {
+					throw new ApplicationException("Failed to send contact hubs");
+				}
+			}
+		}
+
+		protected bool ContactHubsWeb() {
+			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+			
+			return Repeater.Repeat(() => {
+
+				Dictionary<string, object> parameters = new Dictionary<string, object>();
+
+				using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+
+					List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, true, true, false);
+					NodeAddressInfoList nodeAddressInfoList = new NodeAddressInfoList(currentAvailableNodes);
+					
+					GlobalSettings.Instance.NodeInfo.Dehydrate(dehydrator);
+					nodeAddressInfoList.Dehydrate(dehydrator);
+					
+					var bytes = dehydrator.ToArray();
+					parameters.Add("data", bytes.Entry.ToBase64());
+					bytes.Return();
+				}
+				
+				string url = GlobalSettings.ApplicationSettings.HubsWebAddress;
+				string action = "hub/query";
+
+				var result = restUtility.Post(url, action, parameters);
+				result.Wait();
+
+				if(!result.IsFaulted) {
+
+					// ok, check the result
+					if(result.Result.StatusCode == HttpStatusCode.OK) {
+						// ok, all good
+
+						using(var rehydrator = DataSerializationFactory.CreateRehydrator(ByteArray.FromBase64(result.Result.Content))) {
+
+							NodeAddressInfoList infoList = new NodeAddressInfoList();
+							infoList.Rehydrate(rehydrator);
+							
+							this.connectionStore.AddAvailablePeerNodes(infoList, true);
+						}
+
+						return true;
+					}
+				}
+
+				throw new ApplicationException("Failed to register transaction through web");
+			});
+		}
+
+		protected void ContactHubsGossip() {
+			try {
+				NodeAddressInfoList entries = this.connectionStore.GetHubNodes();
+
+				if((entries != null) && entries.Nodes.Any()) {
+					this.CreateConnectionAttempt(entries.Nodes.First());
+
+					this.nextHubContact = DateTime.UtcNow.AddMinutes(3);
+				}
+			} catch(Exception ex) {
+				Log.Error(ex, "Failed to query neuralium hubs.");
+
+				throw;
 			}
 		}
 
@@ -506,15 +584,19 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		protected virtual List<NodeAddressInfo> GetAvailableNodesList(List<PeerConnection> activeConnections, bool onlyConnectables = true) {
 
-			var availableNodes = this.connectionStore.GetAvailablePeerNodes(null, false, true, onlyConnectables);
+			List<NodeAddressInfo> GetAvailableNodes() {
+				List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, false, true, onlyConnectables);
 
-			// lets get a list of connected IPs
-			var connectedIps = activeConnections.Select(c => c.ScoppedIp).ToList();
+				// lets get a list of connected IPs
+				var connectedIps = activeConnections.Select(c => c.ScoppedIp).ToList();
 
-			// lets make sure we remove the ones we are already connected to.
-			availableNodes = availableNodes.Where(an => !connectedIps.Contains(an.ScoppedIp)).ToList();
+				// lets make sure we remove the ones we are already connected to.
+				return currentAvailableNodes.Where(an => !connectedIps.Contains(an.ScoppedIp)).ToList();
+			}
 
-			if((availableNodes.Count == 0) && this.ShouldAct(ref this.nextUpdateNodeCountAction)) {
+			List<NodeAddressInfo> availableNodes = GetAvailableNodes();
+
+			if(!availableNodes.Any() && this.ShouldAct(ref this.nextUpdateNodeCountAction)) {
 				// thats bad, we have no more available nodes to connect to. might have emptied our list. 
 				if(this.connectionStore.ActiveConnectionsCount == 0) {
 					// no choice, lets reload from our static sources
@@ -525,36 +607,34 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// ok, we have some peers, lets request their lists
 					// first, lets reload the ones they already provided us
 
-					var startNodes = new Dictionary<Enums.PeerTypes, NodeAddressInfoList>();
+					var startNodes = new NodeAddressInfoList();
 
 					foreach(PeerConnection conn in activeConnections) {
 
-						foreach(var entry in conn.PeerNodes) {
-							if(!startNodes.ContainsKey(entry.Key)) {
-								startNodes.Add(entry.Key, new NodeAddressInfoList(entry.Key));
-							}
-
-							startNodes[entry.Key].AddNodes(entry.Value.Nodes);
-						}
+						startNodes.AddNodes(conn.PeerNodes.Nodes);
 					}
 
 					// make sure we remove ourselves otherwise it gives false positives
-					foreach(var entry in startNodes) {
+					var filteredNodes = new NodeAddressInfoList();
+					filteredNodes.SetNodes(startNodes.Nodes.Distinct().Where(n => !this.connectionStore.IsOurAddress(n)));
 
-						entry.Value.SetNodes(entry.Value.Nodes.Distinct().Where(n => !this.connectionStore.IsOurAddress(n)));
-					}
-
-					if(startNodes.Count == 0) {
+					if(filteredNodes.Empty) {
 						// no choice, lets query new lists
 						this.RequestPeerLists();
 					} else {
 
-						this.connectionStore.AddAvailablePeerNodes(startNodes, false);
+						this.connectionStore.AddAvailablePeerNodes(filteredNodes, false);
 					}
 				}
 
+				availableNodes = GetAvailableNodes();
+				
 				// lets take a while before we attempt this again
-				this.nextUpdateNodeCountAction = DateTime.UtcNow.AddSeconds(60);
+				if(!availableNodes.Any()) {
+					this.nextUpdateNodeCountAction = DateTime.UtcNow.AddSeconds(60);
+
+					return availableNodes;
+				}
 			}
 
 			// get the list of connection attemps that are really too fresh to contact again. also, 
@@ -580,7 +660,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 			} 
 			
-			
+			// pick nodes not already connecting
+			reducedAvailableNodes = reducedAvailableNodes.Where(n => !this.peerActivityInfo.ContainsKey(n.ScoppedIp) || !this.peerActivityInfo[n.ScoppedIp].inProcess).ToList();
+
 			// mix up the list to ensure a certain randomness from times to times
 			reducedAvailableNodes.Shuffle();
 			

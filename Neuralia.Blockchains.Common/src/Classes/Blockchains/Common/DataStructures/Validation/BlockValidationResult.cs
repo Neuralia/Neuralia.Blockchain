@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 	public class BlockValidationErrorCodes : EventValidationErrorCodes {
 		public readonly BlockValidationErrorCode GENESIS_HASH_SET;
-		public readonly BlockValidationErrorCode GENESIS_SATURN_HASH_VERIFICATION_FAILED;
+		public readonly BlockValidationErrorCode GENESIS_PTAH_HASH_VERIFICATION_FAILED;
 		public readonly BlockValidationErrorCode INVALID_BLOCK_KEY_CORRELATION_TYPE;
 
 		public readonly BlockValidationErrorCode INVALID_BLOCK_SIGNATURE_TYPE;
@@ -43,7 +43,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 			this.LAST_BLOCK_HEIGHT_INVALID = this.CreateChildConstant();
 			this.INVALID_DIGEST_KEY = this.CreateChildConstant();
 			this.GENESIS_HASH_SET = this.CreateChildConstant();
-			this.GENESIS_SATURN_HASH_VERIFICATION_FAILED = this.CreateChildConstant();
+			this.GENESIS_PTAH_HASH_VERIFICATION_FAILED = this.CreateChildConstant();
 			this.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED = this.CreateChildConstant();
 
 			this.INVALID_BLOCK_SIGNATURE_TYPE = this.CreateChildConstant();

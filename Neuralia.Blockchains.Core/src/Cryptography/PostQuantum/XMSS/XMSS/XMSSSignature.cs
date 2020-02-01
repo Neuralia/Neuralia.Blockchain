@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 		public XMSSTreeSignature XmssTreeSignature { get; }
 
-		public void Load(ByteArray signature, WotsPlusEngine wotsPlusProvider, int height) {
+		public void Load(ByteArray signature, WotsPlus wotsPlusProvider, int height) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature);
 
 			this.Rehydrate(rehydrator, wotsPlusProvider, height);
@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			this.XmssTreeSignature.Rehydrate(rehydrator, wotsPlusProvider, height);
 		}
 
-		protected virtual void Rehydrate(IDataRehydrator rehydrator, WotsPlusEngine wotsPlusProvider, int height) {
+		protected virtual void Rehydrate(IDataRehydrator rehydrator, WotsPlus wotsPlusProvider, int height) {
 
 			int major = rehydrator.ReadByte();
 			int minor = rehydrator.ReadByte();
@@ -108,7 +108,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				}
 			}
 
-			public void Rehydrate(IDataRehydrator rehydrator, WotsPlusEngine wotsPlusProvider, int height) {
+			public void Rehydrate(IDataRehydrator rehydrator, WotsPlus wotsPlusProvider, int height) {
 
 				int n = this.xmssExecutionContext.DigestSize;
 				int totalSigs = wotsPlusProvider.Len;

@@ -49,6 +49,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 	public interface IDigestRehydrationFactory : ICommonRehydrationFactory {
 		IBlockchainDigest CreateDigest(IDehydratedBlockchainDigest dehydratedDigest);
 		IBlockchainDigestChannelFactory CreateDigestChannelfactory();
+
+		void PrepareDigest(IBlockchainDigest digest);
 	}
 
 	public interface IMessageRehydrationFactory : ICommonRehydrationFactory {
@@ -62,7 +64,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 		IOperation CreateTransactionOperation(IDataRehydrator rehydrator);
 
 		ITransaction CreateTransaction(IDehydratedTransaction dehydratedTransaction);
-		IKeyedTransaction CreateKeyedTransaction(IDehydratedTransaction dehydratedTransaction);
+		IMasterTransaction CreateMasterTransaction(IDehydratedTransaction dehydratedTransaction);
 	}
 
 	public interface IBlockchainEventsRehydrationFactory : IBlockRehydrationFactory, IMessageRehydrationFactory, ITransactionRehydrationFactory, IEnvelopeRehydrationFactory, IDigestRehydrationFactory {
@@ -85,7 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 
 		public abstract BlockChannelUtils.BlockChannelTypes CompressedBlockchainChannels { get; }
 
-		public abstract IKeyedTransaction CreateKeyedTransaction(IDehydratedTransaction dehydratedTransaction);
+		public abstract IMasterTransaction CreateMasterTransaction(IDehydratedTransaction dehydratedTransaction);
 
 		//		public abstract TransactionSerializationMap CreateTransactionDehydrationMap(byte type, byte major, byte minor, ByteArray keyLengths);
 
@@ -95,6 +97,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 
 		public abstract IBlockchainDigest CreateDigest(IDehydratedBlockchainDigest dehydratedDigest);
 		public abstract IBlockchainDigestChannelFactory CreateDigestChannelfactory();
+		public void PrepareDigest(IBlockchainDigest digest) {
+			if(digest != null) {
+				// let's restore the actual time of the digest
+				digest.FullTimestamp = this.centralCoordinator.BlockchainServiceSet.BlockchainTimeService.GetTransactionDateTime(digest.Timestamp, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
+			}
+		}
 
 		public abstract IBlock CreateBlock(IDataRehydrator bodyRehydrator);
 		public abstract IBlock CreateBlock(IDehydratedBlock dehydratedBlock);

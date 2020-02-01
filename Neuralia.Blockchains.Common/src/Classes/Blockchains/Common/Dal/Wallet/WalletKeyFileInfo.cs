@@ -35,8 +35,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			get {
 				lock(this.locker) {
 					if(this.key == null) {
-						KeyData keyData = new KeyData(this.account.AccountUuid, this.KeyName);
-						this.key = this.RunQueryDbOperation(litedbDal => litedbDal.Any<IWalletKey>() ? litedbDal.GetSingle<IWalletKey>() : null, keyData);
+						//KeyData keyData = new KeyData(this.account.AccountUuid, this.KeyName);
+
+						this.key = this.LoadKey<IWalletKey>(this.account.AccountUuid, this.KeyName);
+						//this.key = this.RunQueryDbOperation(litedbDal => litedbDal.Any<IWalletKey>() ? litedbDal.GetSingle<IWalletKey>() : null, keyData);
 					}
 				}
 
@@ -44,22 +46,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
+		protected const string NEXT_KEY_SUFFIX = "-NEXT";
 		protected string KeyTypeName => this.keyType.Name;
-
-		public bool IsNextKeySet => this.Key?.NextKey != null;
+		protected string KeyTypeNextName => $"{this.KeyTypeName}{NEXT_KEY_SUFFIX}";
+		
 
 		public string KeyName { get; }
 
 		public byte OrdinalId { get; }
 
-		public override void CreateEmptyFile(IWalletKey entry) {
-
+		public void CreateEmptyFile(IWalletKey entry, IWalletKey nextKey) {
 			// ensure the key is of the expected type
 			if(!this.keyType.IsInstanceOfType(entry)) {
 				throw new ApplicationException($"Invalid key type. Not of expected type {this.keyType.FullName}");
 			}
 
 			base.CreateEmptyFile(entry);
+
+			if(nextKey != null) {
+				this.SetNextKey(nextKey);
+			}
+		}
+
+		public override void CreateEmptyFile(IWalletKey entry) {
+			this.CreateEmptyFile(entry, null);
 		}
 
 		/// <summary>
@@ -130,7 +140,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				}
 
 				if(data is KeyData keyData) {
-					throw new KeyDecryptionException(keyData.accountUuid, keyData.name, dex);
+					throw new KeyDecryptionException(keyData.AccountUuid, keyData.Name, dex);
 				}
 
 				throw new WalletDecryptionException(dex);
@@ -155,7 +165,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				}
 
 				if(data is KeyData keyData) {
-					throw new KeyDecryptionException(keyData.accountUuid, keyData.name, dex);
+					throw new KeyDecryptionException(keyData.AccountUuid, keyData.Name, dex);
 				}
 
 				throw new WalletDecryptionException(dex);
@@ -175,13 +185,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			where T : class
 			where K : IWalletKey {
 
+			return this.LoadKey<K, T>(selector, accountUuid, name, false);
+		}
+		
+		public T LoadKey<T>(Guid accountUuid, string name)
+			where T : class, IWalletKey {
+
+			return this.LoadKey<T, T>(e => e, accountUuid, name, false);
+		}
+
+		public T LoadNextKey<T>(Guid accountUuid, string name)
+			where T : class, IWalletKey {
+
+			return this.LoadKey<T, T>(e => e, accountUuid, name, true);
+		}
+		
+		protected T LoadKey<K, T>(Func<K, T> selector, Guid accountUuid, string name, bool nextKey)
+			where T : class
+			where K : IWalletKey {
+
 			KeyData keyData = new KeyData(accountUuid, name);
 
 			return this.RunQueryDbOperation(litedbDal => {
 
-				string keyName = this.KeyTypeName;
+				string keyName = nextKey?this.KeyTypeNextName:this.KeyTypeName;
 
-				if(!litedbDal.CollectionExists<K>()) {
+				if(!litedbDal.CollectionExists<K>(keyName)) {
 					// ok, we did not find it. lets see if it has another name, and the type is assignable
 					var collectionNames = litedbDal.GetCollectionNames();
 
@@ -192,6 +221,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					Type basicType = typeof(K);
 					bool foundMatch = false;
 
+					if(nextKey) {
+						collectionNames = collectionNames.Where(n => n.EndsWith(NEXT_KEY_SUFFIX)).ToList();
+					} else {
+						collectionNames = collectionNames.Where(n => !n.EndsWith(NEXT_KEY_SUFFIX)).ToList();
+					}
 					foreach(string collection in collectionNames) {
 
 						// see if we can find the key matching type
@@ -217,6 +251,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					throw new ApplicationException("Failed to load wallet key from file");
 				}
 
+				if(!nextKey) {
+					this.key = loadedKey;
+				}
+				
 				T result = selector(loadedKey);
 
 				// if we selected a subset of the key, we dispose of the key
@@ -227,56 +265,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				return result;
 			}, keyData);
 		}
-
-		public void SetNextKey(KeyInfo keyInfo, IWalletKey nextKey) {
-
-			KeyData keyData = new KeyData(nextKey.AccountUuid, nextKey.Name);
-
-			this.RunDbOperation(litedbDal => {
-				if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
-					using(IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => k.KeyAddress.OrdinalId == keyInfo.Ordinal, this.KeyTypeName)) {
-
-						if(currentKey.NextKey != null) {
-							throw new ApplicationException("A key is already set to be our next key. Since it may already be promised, we can not overwrite it.");
-						}
-
-						// increment the sequence
-						nextKey.KeySequenceId = currentKey.KeySequenceId + 1;
-
-						currentKey.NextKey = nextKey;
-
-						litedbDal.Update(currentKey, this.KeyTypeName);
-					}
-				}
-
-			}, keyData);
-
-			this.SaveFile(false, keyData);
-		}
-
-		public void UpdateNextKey(KeyInfo keyInfo, IWalletKey nextKey) {
-
-			KeyData keyData = new KeyData(nextKey.AccountUuid, nextKey.Name);
-
-			this.RunDbOperation(litedbDal => {
-				if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
-					using(IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => k.KeyAddress.OrdinalId == keyInfo.Ordinal, this.KeyTypeName)) {
-
-						// increment the sequence
-						nextKey.KeySequenceId = currentKey.KeySequenceId + 1;
-
-						currentKey.NextKey = nextKey;
-
-						litedbDal.Update(currentKey, this.KeyTypeName);
-					}
-				}
-
-			}, keyData);
-
-			this.SaveFile(false, keyData);
-
-		}
-
+		
+		
 		public void UpdateKey(IWalletKey key) {
 			KeyData keyData = new KeyData(key.AccountUuid, key.Name);
 
@@ -289,24 +279,92 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				this.SaveFile(false, keyData);
 			}
-
 		}
 
-		public void SwapNextKey(IWalletKey key) {
-			KeyData keyData = new KeyData(key.AccountUuid, key.Name);
+		public bool IsNextKeySet => this.LoadNextKey<IWalletKey>(this.Key.AccountUuid, this.Key.Name) != null;
+
+		public void SetNextKey(IWalletKey nextKey) {
+
+			KeyData keyData = new KeyData(nextKey.AccountUuid, nextKey.Name);
+
+			this.RunDbOperation(litedbDal => {
+
+				if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
+					using(IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && k.KeyAddress.OrdinalId == nextKey.KeyAddress.OrdinalId, this.KeyTypeName)) {
+
+						// increment the sequence
+						nextKey.KeySequenceId = currentKey.KeySequenceId + 1;
+					}
+				} else {
+					throw new ArgumentException("key does not exist");
+				}
+				
+				if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeNextName)) {
+					if(litedbDal.Exists<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && k.KeyAddress.OrdinalId == nextKey.KeyAddress.OrdinalId, this.KeyTypeNextName)) {
+						throw new ApplicationException("A key is already set to be our next key. Since it may already be promised, we can not overwrite it.");
+					}
+				}
+
+				litedbDal.Insert(nextKey, this.KeyTypeNextName, k => k.Id);
+			}, keyData);
+
+			this.SaveFile(false, keyData);
+		}
+
+		public void UpdateNextKey(KeyInfo keyInfo, IWalletKey nextKey) {
+
+			KeyData keyData = new KeyData(nextKey.AccountUuid, keyInfo.Name);
+
+			this.RunDbOperation(litedbDal => {
+
+				if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
+					using(IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && k.KeyAddress.OrdinalId == keyInfo.Ordinal, this.KeyTypeName)) {
+
+						// increment the sequence
+						nextKey.KeySequenceId = currentKey.KeySequenceId + 1;
+					}
+				} else {
+					throw new ArgumentException("key does not exist");
+				}
+
+				bool insert = false;
+				if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeNextName)) {
+					if(litedbDal.Exists<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && k.KeyAddress.OrdinalId == keyInfo.Ordinal, this.KeyTypeNextName)) {
+						
+						litedbDal.Update(nextKey, this.KeyTypeNextName);
+					} else {
+						insert = true;
+					}
+				} else {
+					insert = true;
+				}
+				
+				if(insert) {
+					litedbDal.Insert(nextKey, this.KeyTypeNextName, k => k.Id);
+				}
+
+			}, keyData);
+
+			this.SaveFile(false, keyData);
+		}
+
+		public void SwapNextKey( KeyInfo keyInfo,  Guid accountUuid) {
+			KeyData keyData = new KeyData(accountUuid, keyInfo.Name);
 
 			lock(this.locker) {
 				this.RunDbOperation(litedbDal => {
-					IWalletKey nextKey = key.NextKey;
 
 					if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
-						litedbDal.Remove<IWalletKey>(k => (k.AccountUuid == key.AccountUuid) && (k.Name == key.Name), this.KeyTypeName);
+						litedbDal.Remove<IWalletKey>(k => (k.AccountUuid == accountUuid) && (k.Name == keyInfo.Name), this.KeyTypeName);
 					}
-
-					litedbDal.Insert(nextKey, this.KeyTypeName, k => k.Id);
-
-					key.Dispose();
-					nextKey.Dispose();
+					
+					using(IWalletKey nextKey = litedbDal.GetOne<IWalletKey>(k =>  (k.AccountUuid == accountUuid) && k.KeyAddress.OrdinalId == keyInfo.Ordinal, this.KeyTypeNextName)) {
+						
+						litedbDal.Insert(nextKey, this.KeyTypeName, k => k.Id);
+					}
+					
+					litedbDal.Remove<IWalletKey>(k => (k.AccountUuid == accountUuid) && (k.Name == keyInfo.Name), this.KeyTypeNextName);
+					
 				}, keyData);
 
 				this.SaveFile(false, keyData);
@@ -315,12 +373,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		protected class KeyData {
-			public Guid accountUuid;
-			public string name;
+			public Guid AccountUuid;
+			public readonly string Name;
 
 			public KeyData(Guid accountUuid, string name) {
-				this.accountUuid = accountUuid;
-				this.name = name;
+				this.AccountUuid = accountUuid;
+				this.Name = name;
 			}
 		}
 	}

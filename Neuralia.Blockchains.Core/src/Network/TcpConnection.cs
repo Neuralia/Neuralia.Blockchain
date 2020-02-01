@@ -11,9 +11,11 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.Network.Protocols;
+using Neuralia.Blockchains.Core.Network.ReadingContexts;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
@@ -21,7 +23,7 @@ using Serilog;
 namespace Neuralia.Blockchains.Core.Network {
 
 	public interface ITcpConnection : IDisposableExtended {
-		
+
 		EndPoint RemoteEndPoint { get; }
 		IPMode IPMode { get; }
 		NetworkEndPoint EndPoint { get; }
@@ -35,7 +37,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		event EventHandler<DisconnectedEventArgs> Disconnected;
 		event Action Connected;
 		event Action Disposing;
-		
+
 		event Action<Guid> ConnectedUuidProvided;
 
 		void Close();
@@ -108,7 +110,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		///     set this to false.
 		/// </summary>
 		private bool alertExceptions = true;
-		
+
 		protected Task dataReceptionTask;
 
 		protected readonly SafeArrayHandle handshakeBytes = SafeArrayHandle.Create();
@@ -131,7 +133,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// a timestamp to know when we should check the connection for keepalive
 		/// </summary>
 		private DateTime NextConnectedAliveCheck { get; set; } = DateTime.MinValue;
-		
+
 		/// <summary>
 		/// a timer that will periodically check if connections are still active
 		/// </summary>
@@ -146,9 +148,9 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 		}, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(10));
-		
+
 		protected Guid ConnectionId { get; } = Guid.NewGuid();
-		
+
 		private static readonly ConcurrentDictionary<Guid, TcpConnection<READING_CONTEXT>> connectionStates = new ConcurrentDictionary<Guid, TcpConnection<READING_CONTEXT>>();
 
 		private static void AddConnectionState(TcpConnection<READING_CONTEXT> connection) {
@@ -171,7 +173,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			this.tokenSource = new CancellationTokenSource();
-			
+
 			AddConnectionState(this);
 		}
 
@@ -192,7 +194,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			this.socket = socket;
 			this.socket.NoDelay = true;
-			
+
 			this.SocketNewlyConnected();
 
 			this.State = ConnectionState.Connected;
@@ -225,7 +227,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			this.socket.InitializeSocketParameters();
-			
+
 			AddConnectionState(this);
 		}
 
@@ -279,13 +281,32 @@ namespace Neuralia.Blockchains.Core.Network {
 		public bool CheckConnected(bool force = false) {
 
 			if(this.NextConnectedAliveCheck < DateTime.Now || force) {
-				this.NextConnectedAliveCheck = DateTime.Now + TimeSpan.FromSeconds(20); 
-				
-				if(!this.socket.IsReallyConnected()) {
+				this.NextConnectedAliveCheck = DateTime.Now + TimeSpan.FromSeconds(20);
+
+				if(this.State == ConnectionState.NotConnected) {
+					return false;
+				}
+
+				bool connected = false;
+
+				lock(this.locker) {
+					if(this.IsDisposed || this.IsDisposing) {
+						return false;
+					}
+
+					connected = this.socket.IsReallyConnected();
+				}
+				if(!connected) {
 					// yes, we try twice, just in case...
 					Thread.Sleep(300);
-
-					if(!this.socket.IsReallyConnected()) {
+					lock(this.locker) {
+						
+						if(this.IsDisposed || this.IsDisposing) {
+							return false;
+						}
+						connected = this.socket.IsReallyConnected();
+					}
+					if(!connected) {
 						// ok, we give up, connection is disconnected
 						this.State = ConnectionState.NotConnected;
 
@@ -296,8 +317,7 @@ namespace Neuralia.Blockchains.Core.Network {
 						return false;
 					}
 				}
-				
-				
+
 			}
 
 			return true;
@@ -333,7 +353,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 		}
 
-		public bool IsDisposed { get; set; }
+		public bool IsDisposed { get; private set; }
 
 		public event TcpConnection.MessageBytesReceived DataReceived;
 		public event EventHandler<DisconnectedEventArgs> Disconnected;
@@ -379,11 +399,10 @@ namespace Neuralia.Blockchains.Core.Network {
 					throw new SocketException((int) SocketError.TimedOut);
 				}
 
-
 				if(this.socket.IsReallyConnected()) {
 
 					this.Connected?.Invoke();
-					
+
 					this.SocketNewlyConnected();
 				} else {
 					this.Dispose();
@@ -417,7 +436,9 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				throw new TcpApplicationException("Timedout waiting for a proper connection handshake.");
 			}
-			this.resetEvent.Reset();;
+
+			this.resetEvent.Reset();
+			;
 		}
 
 		/// <summary>
@@ -463,12 +484,13 @@ namespace Neuralia.Blockchains.Core.Network {
 				} catch {
 					// do nothing, we got our answer
 				}
+
 				try {
 					counterSocket?.Dispose();
 				} catch {
 					// do nothing, we got our answer
 				}
-				
+
 			}
 
 			return false;
@@ -502,7 +524,6 @@ namespace Neuralia.Blockchains.Core.Network {
 				messageInstance = this.protocolFactory.WrapMessage(bytes, this.protocolMessageFilters);
 			}
 
-
 			this.SendMessage(messageInstance);
 		}
 
@@ -512,10 +533,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected virtual void SocketNewlyConnected() {
-			
+
 		}
 
-		protected virtual void SocketClosed() {
+		protected void SocketClosed() {
 
 		}
 
@@ -562,6 +583,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				if(this.handshakeStatus == HandshakeStatuses.Completed) {
 					this.resetEvent.Set();
 				}
+
 				await this.ReadMessage(bytes => {
 
 					if(handshakeCallback != null) {
@@ -576,7 +598,7 @@ namespace Neuralia.Blockchains.Core.Network {
 						this.InvokeDataReceived(bytes);
 					}
 				}, ct);
-				
+
 			} catch(InvalidPeerException ipex) {
 				// ok, we got an invalid peer. we dont need to do anything, lost let it go and disconnect
 				this.alertExceptions = false;
@@ -586,11 +608,11 @@ namespace Neuralia.Blockchains.Core.Network {
 				this.alertExceptions = false;
 			} catch(OperationCanceledException opex) {
 				this.alertExceptions = false;
-			}catch(ObjectDisposedException ode) {
+			} catch(ObjectDisposedException ode) {
 				// do nothing
 				this.alertExceptions = false;
-			}catch(Exception ex) {
-				
+			} catch(Exception ex) {
+
 				Log.Verbose(ex, "Error occured on the connection");
 			} finally {
 				// disconnected
@@ -625,7 +647,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		/// <summary>
-		///     Write to the socket, but dont sent it. amke sure you call CompleteWrite()
+		///     Write to the socket, but dont sent it. make sure you call CompleteWrite()
 		/// </summary>
 		/// <param name="message"></param>
 		protected abstract void WritePart(in ReadOnlySpan<byte> message);
@@ -640,21 +662,23 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			bool dataRead = false;
 			READING_CONTEXT read = default;
-			
-			DateTime timeout = DateTime.Now+TimeSpan.FromSeconds(30);
+
+			DateTime timeout = DateTime.Now + TimeSpan.FromSeconds(30);
+
 			do {
 				if(timeout < DateTime.Now) {
 					throw new ApplicationException("Timeout out getting handshake");
 				}
-				
-				read = await this.ReadDataFrame(default, cancellationNeuralium); 
+
+				read = await this.ReadDataFrame(default, cancellationNeuralium);
 
 				if(read.IsCanceled || read.IsCompleted) {
 					this.ReadTaskCancelled();
 
 					throw new TaskCanceledException();
 				}
-				dataRead = !read.IsEmpty; 
+
+				dataRead = !read.IsEmpty;
 
 				if(!dataRead) {
 					read.DataRead(0);
@@ -727,7 +751,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			Span<byte> header = stackalloc byte[ProtocolFactory.HANDSHAKE_PROTOCOL_SIZE];
 			read.CopyTo(header, 0, 0, header.Length);
 
-			return this.protocolFactory.ParseVersion(header);
+			return ProtocolFactory.ParseVersion(header);
 		}
 
 		protected abstract Task<READING_CONTEXT> ReadDataFrame(READING_CONTEXT previous, CancellationToken ct);
@@ -778,7 +802,7 @@ namespace Neuralia.Blockchains.Core.Network {
 							sizeByteSize = this.receiveByteShrinker.ReadBytes(read);
 							messageSize = (int) this.receiveByteShrinker.Value;
 
- 							// yup, we will need this so lets not make it clearable
+							// yup, we will need this so lets not make it clearable
 							mainBuffer = SafeArrayHandle.Create(messageSize);
 
 							read.DataRead(sizeByteSize);
@@ -822,7 +846,7 @@ namespace Neuralia.Blockchains.Core.Network {
 							read.DataRead(usefulBufferLength);
 
 							if(bytesCopied == mainBuffer.Length) {
-								
+
 								IMessageEntry messageEntry = null;
 
 								//we expect to read the header to start. if the header is corrupted, this will break and thats it.
@@ -834,11 +858,10 @@ namespace Neuralia.Blockchains.Core.Network {
 								IMessageEntry entry = messageEntry;
 								sizeByteSize = 0;
 								messageSize = 0;
-								
 
 								// free the message entry for another message
 								var releasedMainBuffer = mainBuffer;
-								
+
 								mainBuffer = null;
 
 								if(cancellationNeuralium.IsCancellationRequested) {
@@ -852,6 +875,7 @@ namespace Neuralia.Blockchains.Core.Network {
 								await Task.Run(() => {
 
 									var localMainBuffer = releasedMainBuffer;
+
 									using(localMainBuffer) {
 										using(IDataRehydrator bufferRehydrator = DataSerializationFactory.CreateRehydrator(localMainBuffer)) {
 
@@ -957,59 +981,71 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		private void Dispose(bool disposing) {
+
 			bool disposingChanged = false;
 
+			lock(this.locker) {
+				
+				if(this.IsDisposed || !disposing || this.IsDisposing) {
+					return;
+
+				}
+				
+				if(!this.IsDisposed && !this.IsDisposing) {
+					this.IsDisposing = true;
+					disposingChanged = true;
+				}
+				
+			}
+			
+			// good to sleep a little, give it some time
+			//note this wait seems to be required for the buffer to have time to clear. if we dont wait, sometimes it seems to close while data remains to be sent.
+			// this happens despite lingering and Diconnect and wait.
+			Thread.Sleep(100);
+
+			
 			if(connectionStates.ContainsKey(this.ConnectionId)) {
 				connectionStates.RemoveSafe(this.ConnectionId);
 			}
-			
-			if(this.IsDisposed || !disposing || this.IsDisposing) {
-				return;
-
-			}
 
 			try {
-				lock(this.locker) {
-					if(!this.IsDisposed && !this.IsDisposing) {
-						this.IsDisposing = true;
-						disposingChanged = true;
-					}
-				}
 
 				if(!this.IsDisposed || disposingChanged) {
-					
+
 					this.DisposeAll();
-					
+
 					this.Disposing?.Invoke();
 				}
 			} finally {
 				this.IsDisposed = true;
 				this.IsDisposing = false;
 			}
+
 		}
 
 		~TcpConnection() {
 			this.Dispose(false);
 		}
-		
+
 		protected virtual void DisposeAll() {
 
 			// give it a chance to stop cleanly by cancellation
+
+			try {
+				this.DisposeSocket();
+
+			} catch {
+
+			}
 
 			try {
 				this.tokenSource?.Cancel();
 			} catch {
 
 			}
-			
+
 			try {
 				this.resetEvent?.Dispose();
-			} catch {
-
-			}
-
-			try {
-				this.dataReceptionTask?.Wait(5000);
 			} catch {
 
 			}
@@ -1024,8 +1060,6 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.State = ConnectionState.NotConnected;
 
 			try {
-				this.DisposeSocket();
-
 				this.SocketClosed();
 			} finally {
 
@@ -1036,14 +1070,21 @@ namespace Neuralia.Blockchains.Core.Network {
 		protected virtual void DisposeSocket() {
 			try {
 				if(this.socket?.Connected ?? false) {
-					this.socket?.Shutdown(SocketShutdown.Both);
-					this.socket?.Close();
+					try {
+						this.socket?.Shutdown(SocketShutdown.Both);
+					} catch {
+						// do nothing, we tried
+					} finally {
+						Thread.Sleep(500);
+						this.socket?.Disconnect(false);
+					}
 				}
 			} finally {
 				this.socket?.Dispose();
 			}
 		}
 
+		
 		protected enum HandshakeStatuses {
 			NotStarted,
 			VersionSentNoBytes,
@@ -1053,15 +1094,4 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 	}
 
-	public interface ITcpReadingContext {
-		bool IsCanceled { get; }
-		bool IsCompleted { get; }
-		bool IsEmpty { get; }
-		long Length { get; }
-
-		byte this[int i] { get; }
-		void DataRead(int amount);
-
-		void CopyTo(in Span<byte> dest, int srcOffset, int destOffset, int length);
-	}
 }

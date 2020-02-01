@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Acco
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AccountSnapshots.Storage {
@@ -26,7 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : AccreditationCertificateSnapshotSqliteEntry<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : AccreditationCertificateSnapshotAccountSqliteEntry {
 
-		protected AccreditationCertificateSnapshotSqliteDal(long groupSize, string folderPath, ServiceSet serviceSet, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(groupSize, folderPath, serviceSet, chainDalCreationFactory.CreateAccreditationCertificateSnapshotContext<ACCREDITATION_CERTIFICATE_CONTEXT>, serializationType) {
+		protected AccreditationCertificateSnapshotSqliteDal(int groupSize, string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(groupSize, folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateAccreditationCertificateSnapshotContext<ACCREDITATION_CERTIFICATE_CONTEXT>, serializationType) {
 		}
 
 		public ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccreditationCertificate(Func<ACCREDITATION_CERTIFICATE_CONTEXT, ACCREDITATION_CERTIFICATE_SNAPSHOT> operation, int certificateId) {
@@ -41,15 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		public List<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificates(Func<ACCREDITATION_CERTIFICATE_CONTEXT, List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> operation, List<int> certificateIds) {
 			return this.QueryAll(operation, certificateIds.Cast<long>().ToList());
 		}
-
-		public void Clear() {
-			foreach(string file in this.GetAllFileGroups()) {
-				if(File.Exists(file)) {
-					File.Delete(file);
-				}
-			}
-		}
-
+		
 		public void UpdateSnapshotDigestFromDigest(Action<ACCREDITATION_CERTIFICATE_CONTEXT> operation, ACCREDITATION_CERTIFICATE_SNAPSHOT accountSnapshotEntry) {
 
 			this.PerformOperation(operation, this.GetKeyGroup(accountSnapshotEntry.CertificateId));

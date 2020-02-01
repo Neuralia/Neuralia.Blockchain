@@ -18,7 +18,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 					electionQuestion = new BlockTransactionIdElectionQuestion();
 				}
 			}
+			
+			if(version.Type == ElectionQuestionTypes.Instance.BlockByteset) {
+				if((version.Major == 1) && (version.Minor == 0)) {
+					electionQuestion = new BlockBytesetElectionQuestion();
+				}
+			}
 
+			if(version.Type == ElectionQuestionTypes.Instance.DigestByteset) {
+				if((version.Major == 1) && (version.Minor == 0)) {
+					electionQuestion = new DigestBytesetElectionQuestion();
+				}
+			}
+			
 			if(electionQuestion == null) {
 				throw new ApplicationException("Invalid election question type");
 			}

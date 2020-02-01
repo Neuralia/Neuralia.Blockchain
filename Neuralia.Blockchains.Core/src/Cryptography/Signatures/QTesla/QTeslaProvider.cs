@@ -2,6 +2,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
+using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
@@ -45,7 +46,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 
 				QTESLAKeyPairGenerator kpGen = new QTESLAKeyPairGenerator();
 
-				kpGen.init(new QTESLAKeyGenerationParameters(this.securityCategory, new SecureRandom()));
+				kpGen.init(new QTESLAKeyGenerationParameters(this.securityCategory, new BetterSecureRandom()));
 
 				AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
@@ -59,7 +60,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 
 			QTESLASigner signer = new QTESLASigner();
 
-			signer.init(true, new ParametersWithRandom(QTESLAPrivateKeyParameters.Rehydrate(privateKey), new SecureRandom()));
+			signer.init(true, new ParametersWithRandom(QTESLAPrivateKeyParameters.Rehydrate(privateKey), new BetterSecureRandom()));
 
 			return ByteArray.WrapAndOwn(signer.generateSignature(content.ToExactByteArray()));
 		}

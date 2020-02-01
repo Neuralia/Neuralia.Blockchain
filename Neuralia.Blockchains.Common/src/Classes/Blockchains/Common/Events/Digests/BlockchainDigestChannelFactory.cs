@@ -27,32 +27,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 		public virtual T CreateCreateDigestChannels<T>(BlockchainDigestSimpleChannelDescriptor channelDescriptor, string folder)
 			where T : class, IDigestChannel {
-			if(channelDescriptor.Version == DigestChannelTypes.Instance.StandardAccountSnapshot) {
-				if(channelDescriptor.Version == (1, 0)) {
+			if(channelDescriptor.ChannelType == DigestChannelTypes.Instance.StandardAccountSnapshot) {
+				if(channelDescriptor.Version == (0, 1)) {
 					return (T) this.CreateStandardAccountSnapshotDigestChannel(channelDescriptor.GroupSize, folder);
 				}
 			}
 
-			if(channelDescriptor.Version == DigestChannelTypes.Instance.JointAccountSnapshot) {
-				if(channelDescriptor.Version == (1, 0)) {
+			if(channelDescriptor.ChannelType == DigestChannelTypes.Instance.JointAccountSnapshot) {
+				if(channelDescriptor.Version == (0, 1)) {
 					return (T) this.CreateJointAccountSnapshotDigestChannel(channelDescriptor.GroupSize, folder);
 				}
 			}
 
-			if(channelDescriptor.Version == DigestChannelTypes.Instance.StandardAccountKeys) {
-				if(channelDescriptor.Version == (1, 0)) {
+			if(channelDescriptor.ChannelType == DigestChannelTypes.Instance.StandardAccountKeys) {
+				if(channelDescriptor.Version == (0, 1)) {
 					return (T) this.CreateStandardAccountKeysDigestChannel(channelDescriptor.GroupSize, folder);
 				}
 			}
 
-			if(channelDescriptor.Version == DigestChannelTypes.Instance.AccreditationCertificates) {
-				if(channelDescriptor.Version == (1, 0)) {
+			if(channelDescriptor.ChannelType == DigestChannelTypes.Instance.AccreditationCertificates) {
+				if(channelDescriptor.Version == (0, 1)) {
 					return (T) this.CreateAccreditationCertificateDigestChannel(folder);
 				}
 			}
 
-			if(channelDescriptor.Version == DigestChannelTypes.Instance.ChainOptions) {
-				if(channelDescriptor.Version == (1, 0)) {
+			if(channelDescriptor.ChannelType == DigestChannelTypes.Instance.ChainOptions) {
+				if(channelDescriptor.Version == (0, 1)) {
 					return (T) this.CreateChainOptionsDigestChannel(folder);
 				}
 			}

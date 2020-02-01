@@ -14,6 +14,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages;
 using Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.V1;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
@@ -75,7 +76,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			var gossipConnections = this.networkingService.ConnectionStore.BasicGossipConnectionsList;
 
 			// if its a block, then we send it only to the full types of nodes
-			if(gossipMessageSet.MinimumNodeTypeSupport.HasFlag(Enums.PeerTypeSupport.FullGossip)) {
+			if(gossipMessageSet.MinimumNodeGossipSupport == Enums.GossipSupportTypes.Full) {
 				gossipConnections = this.networkingService.ConnectionStore.FullGossipConnectionsList;
 			}
 
@@ -120,13 +121,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 		///     make sure that we update our peer message queues to reflect any new peer connection we may have now
 		/// </summary>
 		private void UpdatePeerConnections() {
-			var connections = this.networkingService.ConnectionStore.AllConnections.Select(c => (c.Key, c.Value.ClientUuid)).ToList();
+			var connections = this.networkingService.ConnectionStore.BasicGossipConnections.Select(c => (c.Key, c.Value.ClientUuid)).ToList();
 
 			foreach((Guid key, Guid clientUuid) in connections) {
 
 				if(!this.peerMessageQueues.ContainsKey(clientUuid)) {
 					PeerMessageQueue peerMessageQueue = new PeerMessageQueue();
-					peerMessageQueue.Connection = this.networkingService.ConnectionStore.AllConnections[key];
+					peerMessageQueue.Connection = this.networkingService.ConnectionStore.BasicGossipConnections[key];
 
 					this.peerMessageQueues.AddSafe(clientUuid, peerMessageQueue);
 				}
@@ -227,7 +228,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 			this.loop = false;
 			this.autoResetEvent.Set();
-			this.CancelTokenSource.Cancel(); 
+			this.CancelTokenSource?.Cancel(); 
 			
 			base.Stop();
 		}
@@ -381,7 +382,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 					}
 					
 					// make sure the peer supports these gossip messages
-					messageSendSession.messages.AddRange(messages.Where(m => Enums.DoesPeerTypeSupport(messageSendSession.Connection.PeerType, m.MinimumNodeTypeSupport)));
+					messageSendSession.messages.AddRange(messages.Where(m => NodeInfo.DoesPeerTypeSupport(messageSendSession.Connection.NodeInfo, m.MinimumNodeGossipSupport)));
 
 					if(!messageSendSession.messages.Any()) {
 						return;
@@ -481,7 +482,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			///     messages that are waiting to be processed and sent out
 			/// </summary>
 			/// <returns></returns>
-			public readonly BlockingCollection<IGossipMessageSet> outboundMessagesQueue = new BlockingCollection<IGossipMessageSet>();
+			public readonly ConcurrentBag<IGossipMessageSet> outboundMessagesQueue = new ConcurrentBag<IGossipMessageSet>();
 			
 			public readonly ConcurrentDictionary<uint, MessageSendSession> sentSessions = new ConcurrentDictionary<uint, MessageSendSession>();
 			

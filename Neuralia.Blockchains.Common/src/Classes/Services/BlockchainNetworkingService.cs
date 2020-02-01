@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Services {
@@ -95,6 +96,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 			public long Password { get; set; }
 			public AccountId AccountId { get; set; }
 			public AccountId DelegateAccountId { get; set; }
+			public SafeArrayHandle Autograph { get; } = new SafeArrayHandle();
 		}
 	}
 }

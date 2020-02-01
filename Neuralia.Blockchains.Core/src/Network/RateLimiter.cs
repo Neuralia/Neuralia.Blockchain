@@ -4,6 +4,7 @@ using System.Dynamic;
 using System.Linq;
 using System.Net;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Core.Types;
 
 namespace Neuralia.Blockchains.Core.Network {
 	
@@ -39,7 +40,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <returns></returns>
 		public bool CheckEntryCanConnect(IPAddress address) {
 
-			NodeAddressInfo info = new NodeAddressInfo(address, Enums.PeerTypes.Unknown);
+			NodeAddressInfo info = new NodeAddressInfo(address, NodeInfo.Unknown);
 			string ip = info.Ip;
 			
 			bool connetable = false;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 
@@ -79,6 +80,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.EnsureSnapshots(new[] {key}.ToList());
 
 			if(this.snapshotCache.ContainsKey(key)) {
+				if(!this.snapshotCache[key].Any()) {
+					return null;
+				}
 				EntryDetails entry = this.snapshotCache[key].Last();
 
 				if(entry.status == SnapshotCache.EntryStatus.Deleted) {
@@ -149,6 +153,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			}
 
 			this.CreateEntry(key, entry, SnapshotCache.EntryStatus.New, this.snapshotCache[key]);
+		}
+
+		/// <summary>
+		/// Get the last entry IF it was a new entry, so we can keep adding to it
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public T LastNew(KEY key) {
+			
+			if(!this.snapshotCache.ContainsKey(key)) {
+				return null;
+			}
+			
+			if(!this.snapshotCache[key].Any()) {
+				return null;
+			}
+
+			var entry = this.snapshotCache[key].Last.Value;
+			
+			if(entry.status == SnapshotCache.EntryStatus.New) {
+				return entry.entry;
+			}
+
+			return null;
 		}
 
 		public void AddEntry(KEY key, KEY subkey, T entry) {

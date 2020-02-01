@@ -1,9 +1,10 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards {
 
-	public interface IAccountSnapshot : ISnapshot, ITypedCollectionExposure<IAccountFeature> {
+	public interface IAccountSnapshot : ISnapshot, ITypedCollectionExposure<IAccountAttribute> {
 		long AccountId { get; set; }
 
 		/// <summary>
@@ -17,12 +18,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		byte TrustLevel { get; set; }
 		
 		long? CorrelationId { get; set; }
+
+		public ImmutableList<IAccountAttribute> AppliedAttributesBase { get; }
+
 	}
 
-	public interface IAccountSnapshot<ACCOUNT_FEATURE> : IAccountSnapshot
-		where ACCOUNT_FEATURE : IAccountFeature {
+	public interface IAccountSnapshot<ACCOUNT_ATTRIBUTE> : IAccountSnapshot
+		where ACCOUNT_ATTRIBUTE : IAccountAttribute {
 
-		List<ACCOUNT_FEATURE> AppliedFeatures { get; }
+		List<ACCOUNT_ATTRIBUTE> AppliedAttributes { get; }
 	}
 
 }

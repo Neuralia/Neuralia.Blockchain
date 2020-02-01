@@ -38,16 +38,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		public void AddFile(string filepath) {
 			
-#if (NETSTANDARD2_0)
-
-			string basePathAdjusted = this.basepath + Path.DirectorySeparatorChar;
-
-			string relativeFile = filepath.Replace(basePathAdjusted, "");
-			this.files.Add(relativeFile);
-			
-#else
 			this.files.Add(Path.GetRelativePath(this.basepath, filepath));
-#endif
 		}
 
 		public bool Package(string outpath) {

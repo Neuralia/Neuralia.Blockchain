@@ -110,7 +110,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Simple {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool Equals(T b) {
+		public virtual bool Equals(T b) {
 			if(ReferenceEquals(null, b)) {
 				return false;
 			}

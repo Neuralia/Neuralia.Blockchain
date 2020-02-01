@@ -31,13 +31,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 		public Dictionary<int, XMSSSignature> Signatures { get; } = new Dictionary<int, XMSSSignature>();
 
-		public void Load(ByteArray signature, WotsPlusEngine wotsPlusProvider, int height, int layers) {
+		public void Load(ByteArray signature, WotsPlus wotsPlusProvider, int height, int layers) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature);
 
 			this.Rehydrate(rehydrator, wotsPlusProvider, height, layers);
 		}
 
-		protected virtual void Rehydrate(IDataRehydrator rehydrator, WotsPlusEngine wotsPlusProvider, int height, int layers) {
+		protected virtual void Rehydrate(IDataRehydrator rehydrator, WotsPlus wotsPlusProvider, int height, int layers) {
 
 			int type = rehydrator.ReadByte();
 			int major = rehydrator.ReadByte();

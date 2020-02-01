@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using MoreLinq;
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
 
@@ -11,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public TopLowestHashesRepresentativeBallotingSelector(TopLowestHashesRepresentativeBallotingRules representativeBallotingRules) : base(representativeBallotingRules) {
 		}
 
-		public override Dictionary<AccountId, IPassiveElectedChoice> SelectRepresentatives(Dictionary<AccountId, IPassiveElectedChoice> elected) {
+		public override Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> SelectRepresentatives<U>(Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> elected) {
 			if(this.RepresentativeBallotingRules.Version == PassiveRepresentativeBallotingMethodTypes.Instance.TopLowestHashes) {
 				return this.PerformTopLowestHashesRepresentativeSelection(elected);
 			}
@@ -19,22 +22,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			throw new ApplicationException("Invalid context type");
 		}
 
-		protected Dictionary<AccountId, IPassiveElectedChoice> PerformTopLowestHashesRepresentativeSelection(Dictionary<AccountId, IPassiveElectedChoice> elected) {
+		protected Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> PerformTopLowestHashesRepresentativeSelection<U>(Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> electedTiers) where U : IPassiveElectedChoice {
 
-			var representatives = new Dictionary<AccountId, IPassiveElectedChoice>();
+			var representativesTiers = new Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>>();
 
 			// this will give us the X lowest hashes among X elected
-			var primeRepresentatives = elected.Select(r => (r.Key, hash: new BigInteger(r.Value.ElectionHash.ToExactByteArrayCopy()))).OrderBy(v => v.hash).Take(this.RepresentativeBallotingRules.Amount).Select(r => r.Key);
+			foreach(var tier in electedTiers) {
+				var primeRepresentatives = tier.Value.Select(r => (r.Key, hash: HashDifficultyUtils.GetBigInteger(r.Value.ElectionHash))).OrderBy(v => v.hash).Take(this.RepresentativeBallotingRules.GetTotal(tier.Key)).Select(r => r.Key);
 
-			// let's select our up to X prime elected
-			foreach(var elect in elected.Where(r => primeRepresentatives.Contains(r.Key))) {
-				var entry  = new PassiveElectedChoice {TransactionIds = elect.Value.TransactionIds, PeerShareType = elect.Value.PeerShareType, DelegateAccountId = elect.Value.DelegateAccountId};
-				entry.ElectionHash.Entry = elect.Value.ElectionHash.Entry;
-				
-				representatives.Add(elect.Key, entry);
+				// let's select our up to X prime elected
+				representativesTiers.Add(tier.Key, tier.Value.Where(r => primeRepresentatives.Contains(r.Key)).ToDictionary());
 			}
 
-			return representatives;
+			return representativesTiers;
 		}
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

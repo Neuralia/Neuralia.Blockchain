@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public SqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base("", baseFolder, scopeFolder, enabledBands, fileSystem) {
 			this.BandType = enabledBands;
 			this.keyDeclaration = keyDeclaration;
-			this.bandName = bandName;
+			this.bandName = bandName.ToLower();
 		}
 
 		public CHANEL_BANDS BandType { get; }
@@ -48,6 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		protected abstract NAMING_PROVIDER CreateNamingProvider();
 
 		public override DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> QueryCard(INPUT_QUERY_KEY key) {
+
 
 			//			var adjustedKey = this.AdjustAccountId(key.accountId);
 			//

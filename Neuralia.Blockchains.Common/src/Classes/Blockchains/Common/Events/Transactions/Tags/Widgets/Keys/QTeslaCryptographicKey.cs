@@ -1,3 +1,4 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
@@ -44,6 +45,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.QTESLA;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is IQTeslaWalletKey qTeslaWalletKey) {
+				this.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) qTeslaWalletKey.SecurityCategory;
+			}
 		}
 	}
 }

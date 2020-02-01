@@ -5,6 +5,7 @@ using System.IO.Abstractions;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
@@ -20,14 +21,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		private readonly int sizeSize = 64;
 
 		private Stream fileStream;
+		private readonly object locker = new object();
 		
-		public FileStreamSliceHashNodeList(string filename, IFileSystem fileSystem, int sizeSize = 64) {
-			this.filename = filename;
-			this.fileSystem = fileSystem;
-			this.sizeSize = sizeSize;
-			this.fileSize = fileSystem.FileInfo.FromFileName(filename).Length;
-			this.Count = (int) Math.Ceiling((double) this.fileSize / this.sizeSize);
-			this.buffer = new byte[this.sizeSize];
+		public FileStreamSliceHashNodeList(string filename, IFileSystem fileSystem, int sizeSize = 64): this(filename, fileSystem.FileInfo.FromFileName(filename).Length, fileSystem, sizeSize){
+
 		}
 
 		public FileStreamSliceHashNodeList(string filename, long fileSize, IFileSystem fileSystem, int sizeSize = 64) {
@@ -35,23 +32,33 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			this.fileSystem = fileSystem;
 			this.sizeSize = sizeSize;
 			this.fileSize = fileSize;
-			this.Count = (int) Math.Ceiling((double) this.fileSize / this.sizeSize);
+			this.Count = (int) Math.Ceiling((double) this.fileSize / this.sizeSize)+1;
 			this.buffer = new byte[this.sizeSize];
 		}
 
 		public SafeArrayHandle this[int i] {
 			get {
 
-				if(this.fileStream == null) {
+				lock(this.locker) {
+					if(this.fileStream == null) {
 
-					this.fileStream = this.fileSystem.FileStream.Create(this.filename, FileMode.Open, FileAccess.Read);
+						this.fileStream = this.fileSystem.FileStream.Create(this.filename, FileMode.Open, FileAccess.Read);
+					}
 				}
 
 				if(i >= this.Count) {
 					throw new IndexOutOfRangeException();
 				}
 
-				int length = (int) (this.fileSize - (i * this.sizeSize));
+				if(i == 0) {
+					// return the file size
+					ByteArray size = ByteArray.Create(sizeof(long));
+					TypeSerializer.Serialize(this.sizeSize, size.Span);
+
+					return size;
+				}
+				
+				int length = (int) (this.fileSize - ((i-1) * this.sizeSize));
 
 				if(length > this.sizeSize) {
 					length = this.sizeSize;
@@ -63,9 +70,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					localBuffer = new byte[length];
 				}
 
-				this.fileStream.Seek(i * this.sizeSize, SeekOrigin.Begin);
+				lock(this.locker) {
+					this.fileStream.Seek((i - 1) * this.sizeSize, SeekOrigin.Begin);
 
-				this.fileStream.Read(localBuffer, 0, length);
+					this.fileStream.Read(localBuffer, 0, length);
+				}
 
 				var result = ByteArray.Create(localBuffer.Length);
 				result.CopyFrom(localBuffer.AsSpan());

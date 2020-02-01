@@ -1,4 +1,7 @@
-﻿using Neuralia.Blockchains.Core.Cryptography.Trees;
+﻿using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -44,5 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			this.AssignedAccountId.Dehydrate(dehydrator);
 		}
+		
+		public override ImmutableList<AccountId> TargetAccounts => new [] {this.AssignedAccountId}.ToImmutableList();
 	}
 }

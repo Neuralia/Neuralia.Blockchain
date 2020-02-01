@@ -51,6 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			var results = new DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS>();
 
 			foreach(var index in this.BandIndices.Values) {
+
 				var subResults = index.QueryCard(key);
 
 				if(subResults != null) {

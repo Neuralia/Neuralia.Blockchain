@@ -4,6 +4,8 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Speci
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.PrimariesBallotingMethods;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.General.Types.Specialized;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools;
@@ -15,7 +17,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		byte Maturity { get; set; }
 		byte Publication { get; set; }
-		ushort MaximumElectedTransactionCount { get; set; }
+		AdaptiveShort1_2 FirstTierMaximumElectedTransactionCount { get; set; }
+		AdaptiveShort1_2 SecondTierMaximumElectedTransactionCount { get; set; }
+		AdaptiveShort1_2 ThirdTierMaximumElectedTransactionCount { get; set; }
 
 		ICandidatureMethod CandidatureMethod { get; set; }
 		IPrimariesBallotingMethod PrimariesBallotingMethod { get; set; }
@@ -41,7 +45,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <summary>
 		///     This is the maximum amount of transactions an elected can select
 		/// </summary>
-		public ushort MaximumElectedTransactionCount { get; set; }
+		public AdaptiveShort1_2 FirstTierMaximumElectedTransactionCount { get; set; } = new AdaptiveShort1_2();
+		
+		/// <summary>
+		///     This is the maximum amount of transactions an elected can select
+		/// </summary>
+		public AdaptiveShort1_2 SecondTierMaximumElectedTransactionCount { get; set; } = new AdaptiveShort1_2();
+		
+		/// <summary>
+		///     This is the maximum amount of transactions an elected can select
+		/// </summary>
+		public AdaptiveShort1_2 ThirdTierMaximumElectedTransactionCount { get; set; } = new AdaptiveShort1_2();
 
 		// election components
 
@@ -71,7 +85,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			this.Maturity = rehydrator.ReadByte();
 			this.Publication = rehydrator.ReadByte();
-			this.MaximumElectedTransactionCount = rehydrator.ReadUShort();
+			this.FirstTierMaximumElectedTransactionCount.Rehydrate(rehydrator);
+			this.SecondTierMaximumElectedTransactionCount.Rehydrate(rehydrator);
+			this.ThirdTierMaximumElectedTransactionCount.Rehydrate(rehydrator);
 
 			this.CandidatureMethod = CandidatureMethodRehydrator.Rehydrate(rehydrator);
 			this.PrimariesBallotingMethod = PrimariesBallotingMethodRehydrator.Rehydrate(rehydrator);
@@ -83,7 +99,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			nodeList.Add(this.Maturity);
 			nodeList.Add(this.Publication);
-			nodeList.Add(this.MaximumElectedTransactionCount);
+			
+			nodeList.Add(this.FirstTierMaximumElectedTransactionCount);
+			nodeList.Add(this.SecondTierMaximumElectedTransactionCount);
+			nodeList.Add(this.ThirdTierMaximumElectedTransactionCount);
 
 			nodeList.Add(this.CandidatureMethod);
 			nodeList.Add(this.PrimariesBallotingMethod);
@@ -97,7 +116,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			jsonDeserializer.SetProperty("Maturity", this.Maturity);
 			jsonDeserializer.SetProperty("Publish", this.Publication);
 
-			jsonDeserializer.SetProperty("MaximumTransactionCount", this.MaximumElectedTransactionCount);
+			jsonDeserializer.SetProperty("FirstTierMaximumElectedTransactionCount", this.FirstTierMaximumElectedTransactionCount);
+			jsonDeserializer.SetProperty("SecondTierMaximumElectedTransactionCount", this.SecondTierMaximumElectedTransactionCount);
+			jsonDeserializer.SetProperty("ThirdTierMaximumElectedTransactionCount", this.ThirdTierMaximumElectedTransactionCount);
 
 			jsonDeserializer.SetProperty("CandidatureMethod", this.CandidatureMethod);
 			jsonDeserializer.SetProperty("PrimariesBallotingMethod", this.PrimariesBallotingMethod);

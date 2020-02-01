@@ -10,13 +10,14 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards {
 
-	public interface IJointAccountSnapshotDigestChannelCard : IAccountSnapshotDigestChannelCard, IJointAccountSnapshot<IAccountFeature, IJointMemberAccount> {
+	public interface IJointAccountSnapshotDigestChannelCard : IAccountSnapshotDigestChannelCard, IJointAccountSnapshot<IAccountAttribute, IJointMemberAccount> {
 		void ConvertToSnapshotEntry(IJointAccountSnapshot other, ICardUtils cardUtils);
 	}
 
 	public abstract class JointAccountSnapshotDigestChannelCard : AccountSnapshotDigestChannelCard, IJointAccountSnapshotDigestChannelCard {
 
 		public int RequiredSignatures { get; set; }
+		public ImmutableList<IJointMemberAccount> MemberAccountsBase => this.MemberAccounts.ToImmutableList();
 		public List<IJointMemberAccount> MemberAccounts { get; set; } = new List<IJointMemberAccount>();
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
@@ -43,6 +44,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			AccountIdGroupSerializer.Dehydrate(this.MemberAccounts.ToDictionary(e => e.AccountId), dehydrator, true);
 		}
 
+		void ITypedCollectionExposure<IJointMemberAccount>.ClearCollection() {
+			this.MemberAccounts.Clear();
+		}
+		
 		public void ConvertToSnapshotEntry(IJointAccountSnapshot other, ICardUtils cardUtils) {
 			cardUtils.Copy(this, other);
 		}

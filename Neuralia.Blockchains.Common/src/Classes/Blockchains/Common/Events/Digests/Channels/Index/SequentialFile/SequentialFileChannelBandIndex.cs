@@ -13,6 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where CHANEL_BANDS : struct, Enum, IConvertible {
 
 		protected readonly ImmutableList<CHANEL_BANDS> EnabledBands;
+		protected CHANEL_BANDS ChannelBand => this.Providers.Single().Key;
 
 		protected SequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
 

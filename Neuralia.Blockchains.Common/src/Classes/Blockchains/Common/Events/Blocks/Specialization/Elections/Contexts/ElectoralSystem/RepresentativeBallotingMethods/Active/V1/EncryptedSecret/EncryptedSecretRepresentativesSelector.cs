@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using MoreLinq;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
 
@@ -11,9 +13,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public EncryptedSecretRepresentativeBallotingSelector(EncryptedSecretRepresentativeBallotingRules representativeBallotingRules) : base(representativeBallotingRules) {
 		}
 
-		public override Dictionary<AccountId, IActiveElectedChoice> SelectRepresentatives(Dictionary<AccountId, IActiveElectedChoice> elected, IActiveRepresentativeBallotingProof proof) {
+		public override Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> SelectRepresentatives(Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> electedTiers, IActiveRepresentativeBallotingProof proof) {
 			if(this.RepresentativeBallotingRules.Version == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-				return this.PerformEncryptedSecretRepresentativeSelection(elected, proof);
+				return this.PerformEncryptedSecretRepresentativeSelection(electedTiers, proof);
 			}
 
 			throw new ApplicationException("Invalid context type");
@@ -27,22 +29,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			return application;
 		}
+		
+		protected Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> PerformEncryptedSecretRepresentativeSelection(Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> electedTiers, IActiveRepresentativeBallotingProof proof) {
 
-		protected Dictionary<AccountId, IActiveElectedChoice> PerformEncryptedSecretRepresentativeSelection(Dictionary<AccountId, IActiveElectedChoice> elected, IActiveRepresentativeBallotingProof proof) {
-
-			var representatives = new Dictionary<AccountId, IActiveElectedChoice>();
+			var representativesTiers = new Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>>();
 
 			// this will give us the X lowest hashes among X elected
-			var primeRepresentatives = elected.Select(r => (r.Key, hash: new BigInteger(r.Value.ElectionHash.ToExactByteArrayCopy()))).OrderBy(v => v.hash).Take(this.RepresentativeBallotingRules.Amount).Select(r => r.Key);
+			foreach(var tier in electedTiers) {
+				var primeRepresentatives = tier.Value.Select(r => (r.Key, hash: new BigInteger(r.Value.ElectionHash.ToExactByteArrayCopy()))).OrderBy(v => v.hash).Take(this.RepresentativeBallotingRules.GetTotal(tier.Key)).Select(r => r.Key);
 
-			// let's select our up to X prime elected
-			foreach(var elect in elected.Where(r => primeRepresentatives.Contains(r.Key))) {
-				var entry = new ActiveElectedChoice {TransactionIds = elect.Value.TransactionIds, PeerShareType = elect.Value.PeerShareType, DelegateAccountId = elect.Value.DelegateAccountId};
-				entry.ElectionHash.Entry = elect.Value.ElectionHash.Entry;
-				representatives.Add(elect.Key, entry);
+				// let's select our up to X prime elected
+				representativesTiers.Add(tier.Key, tier.Value.Where(r => primeRepresentatives.Contains(r.Key)).ToDictionary());
 			}
 
-			return representatives;
+			return representativesTiers;
 		}
 
 		private void PrepareRepresentativeBallotingApplication() {

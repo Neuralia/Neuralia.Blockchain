@@ -1,7 +1,7 @@
 ﻿using Neuralia.Blockchains.Common.Classes.Configuration;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
-	public interface IChainConfigurationProvider {
+	public interface IChainConfigurationProvider : IChainProvider{
 		BlockChainConfigurations ChainConfiguration { get; }
 
 		BlockChainConfigurations GetChainConfiguration();

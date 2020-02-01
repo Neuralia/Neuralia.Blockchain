@@ -12,17 +12,16 @@ namespace Neuralia.Blockchains.Core.Services {
 		DateTime CurrentRealTime { get; }
 
 		long CurrentRealTimeTicks { get; }
-
-		TimeSpan GetAcceptableRange { get; }
+		
 		void InitTime();
 
 		DateTime GetDateTime(long ticks);
 
 		TimeSpan GetTimeDifference(long timestamp, DateTime time, DateTime chainInception);
 
-		bool WithinAcceptableRange(DateTime timestamp);
+		bool WithinAcceptableRange(DateTime timestamp, TimeSpan acceptableTimeRange);
 
-		bool WithinAcceptableRange(long timestamp, DateTime chainInception);
+		bool WithinAcceptableRange(long timestamp, DateTime chainInception, TimeSpan acceptableTimeRange);
 
 		DateTime GetTransactionDateTime(long timestamp, DateTime chainInception);
 
@@ -136,18 +135,17 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		/// <param name="timestamp"></param>
 		/// <returns></returns>
-		public bool WithinAcceptableRange(DateTime timestamp) {
+		public bool WithinAcceptableRange(DateTime timestamp, TimeSpan acceptableTimeRange) {
 			DateTime utcTimestamp = timestamp.ToUniversalTime();
 			
-			return ((this.CurrentRealTime - this.GetAcceptableRange) < utcTimestamp) && (utcTimestamp < (this.CurrentRealTime + this.GetAcceptableRange));
+			return ((this.CurrentRealTime - acceptableTimeRange) < utcTimestamp) && (utcTimestamp < (this.CurrentRealTime + acceptableTimeRange));
 
 		}
 
-		public TimeSpan GetAcceptableRange => TimeSpan.FromMinutes(GlobalSettings.ApplicationSettings.AcceptableTimeRange);
 
-		public bool WithinAcceptableRange(long timestamp, DateTime chainInception) {
+		public bool WithinAcceptableRange(long timestamp, DateTime chainInception, TimeSpan acceptableTimeRange) {
 
-			return this.WithinAcceptableRange(this.GetTimestampDateTime(timestamp, chainInception));
+			return this.WithinAcceptableRange(this.GetTimestampDateTime(timestamp, chainInception), acceptableTimeRange);
 		}
 
 		public DateTime CurrentRealTime => DateTime.UtcNow.Add(this.timeDelta);

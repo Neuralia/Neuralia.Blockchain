@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using Neuralia.Blockchains.Core.Services;
 
 namespace Neuralia.Blockchains.Core {
 	public static class FileUtilities {
-		public const string DEFAULT_SYSTEM_FILES_FOLDER_NAME = ".neuralium";
 
 		public static string getUserHomePath() {
 			if((Environment.OSVersion.Platform == PlatformID.Unix) || (Environment.OSVersion.Platform == PlatformID.MacOSX)) {
@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Core {
 		}
 
 		public static string GetSystemFilesPath() {
-			return Path.Combine(getUserHomePath(), DEFAULT_SYSTEM_FILES_FOLDER_NAME);
+			return Path.Combine(getUserHomePath(), GlobalsService.DEFAULT_SYSTEM_FILES_FOLDER_NAME);
 		}
 	}
 }

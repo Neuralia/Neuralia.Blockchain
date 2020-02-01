@@ -11,18 +11,33 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
-	public interface IAccreditationCertificateProvider {
+	public interface IAccreditationCertificateProvider: IChainProvider {
 
 		bool IsTransactionCertificateValid(int accreditationCertificate, TransactionId transactionId, Enums.CertificateApplicationTypes applicationType);
 		bool IsAnyTransactionCertificateValid(List<int> accreditationCertificate, TransactionId transactionId, Enums.CertificateApplicationTypes applicationType);
 		(ImmutableList<AccountId> validDelegates, ImmutableList<AccountId> invalidDelegates) ValidateDelegateAccounts(ImmutableList<AccountId> potentialDelegateAccounts, Enums.CertificateApplicationTypes applicationType);
+		
+		IAccreditationCertificateSnapshotEntry GetAccountAccreditationCertificateBase(int certificateId);
+
 	}
 
-	public interface IAccreditationCertificateProvider<ACCREDITATION_CERTIFICATE_DAL, ACCREDITATION_CERTIFICATE_CONTEXT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT> : IAccreditationCertificateProvider
+	public interface IAccreditationCertificateProvider<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT> : IAccreditationCertificateProvider
+		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
+		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccountEntry {
+
+		ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccountAccreditationCertificate(int certificateId);
+		ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccountAccreditationCertificate(AccountId accountId, AccreditationCertificateType accreditationCertificateType, Enums.CertificateApplicationTypes certificateApplicationType);
+		ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccountAccreditationCertificate(AccountId accountId, AccreditationCertificateType accreditationCertificateType);
+
+	}
+
+	
+	public interface IAccreditationCertificateProvider<ACCREDITATION_CERTIFICATE_DAL, ACCREDITATION_CERTIFICATE_CONTEXT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT> :  IAccreditationCertificateProvider<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_DAL : class, IAccreditationCertificatesSnapshotDal<ACCREDITATION_CERTIFICATE_CONTEXT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_CONTEXT : class, IAccreditationCertificatesSnapshotContext<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccountEntry {
+		
 	}
 
 	/// <summary>
@@ -104,6 +119,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (potentialDelegateAccounts.Where(a => !invalidDelegates.Contains(a)).ToImmutableList(), invalidDelegates.ToImmutableList());
 		}
 
+		public ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccountAccreditationCertificate(AccountId accountId, AccreditationCertificateType accreditationCertificateType) {
+
+			return this.GetAccountAccreditationCertificate(accountId, accreditationCertificateType, Enums.CertificateApplicationTypes.Abstract);
+		}
+		
+		public ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccountAccreditationCertificate(AccountId accountId, AccreditationCertificateType accreditationCertificateType, Enums.CertificateApplicationTypes certificateApplicationType) {
+
+			return this.SnapshotProvider.GetAccreditationCertificates(accountId, accreditationCertificateType, certificateApplicationType).SingleOrDefault();
+		}
+
+		public IAccreditationCertificateSnapshotEntry GetAccountAccreditationCertificateBase(int certificateId) {
+			return this.GetAccountAccreditationCertificate(certificateId);
+		}
+		
+		public ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccountAccreditationCertificate(int certificateId){
+
+			return this.SnapshotProvider.GetAccreditationCertificate(certificateId);
+		}
+	
 		protected virtual ACCREDITATION_CERTIFICATE_SNAPSHOT CreateNewEntry() {
 			ACCREDITATION_CERTIFICATE_SNAPSHOT sqliteEntry = new ACCREDITATION_CERTIFICATE_SNAPSHOT();
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -12,6 +13,7 @@ using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
 using Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools;
@@ -43,6 +45,10 @@ namespace Neuralia.Blockchains.Core.Services {
 		void Start();
 
 		void Stop();
+		
+		void Pause(bool cutConnections = false);
+
+		void Resume();
 
 		void Initialize();
 
@@ -59,6 +65,8 @@ namespace Neuralia.Blockchains.Core.Services {
 		bool IsChainVersionValid(BlockchainType blockchainType, SoftwareVersion version);
 
 		event Action Started;
+
+		event Action IpAddressChanged;
 	}
 
 	public interface INetworkingService<R> : INetworkingService
@@ -116,6 +124,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.ServiceSet = this.CreateServiceSet();
 		}
 
+		public event Action IpAddressChanged;
 		public event Action Started;
 		public event Action<int> PeerConnectionsCountUpdated;
 
@@ -150,12 +159,21 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.connectionListener.NewConnectionRequestReceived += connection => {
 
 				// when the server gets a new connection, register for this event to check their uuid
-				NodeAddressInfo nodeAddressInfo = ConnectionStore<R>.GetEndpointInfoNode(connection.EndPoint, Enums.PeerTypes.Unknown);
+				NodeAddressInfo nodeAddressInfo = ConnectionStore<R>.GetEndpointInfoNode(connection.EndPoint, (NodeInfo.Unknown));
 				this.connectionStore.SetConnectionUuidExistsCheck(connection, nodeAddressInfo);
 			};
 
 			this.PrepareGeneralSettings();
 
+		}
+
+		/// <summary>
+		/// triggered when we have an IP address change
+		/// </summary>
+		/// <param name="sender"></param>
+		/// <param name="e"></param>
+		private void NetworkChangeOnNetworkAddressChanged(object sender, EventArgs e) {
+			this.IpAddressChanged?.Invoke();
 		}
 
 		protected virtual void PrepareGeneralSettings() {
@@ -164,10 +182,9 @@ namespace Neuralia.Blockchains.Core.Services {
 			// set the public chain settingsBase
 			this.GeneralSettings.GossipEnabled = true;
 
-			if(GlobalSettings.ApplicationSettings.MobileMode) {
+			if(GlobalSettings.ApplicationSettings.SynclessMode) {
 				
-				//TODO: double check that
-				this.GeneralSettings.GossipEnabled = GlobalSettings.Instance.PeerType == Enums.PeerTypes.PowerMobile;
+				this.GeneralSettings.GossipEnabled = GlobalSettings.Instance.NodeInfo.GossipAccepted;
 			}
 		}
 
@@ -182,6 +199,9 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				this.StartWorkers();
 
+				// ensure we know when our IP changes
+				NetworkChange.NetworkAddressChanged += this.NetworkChangeOnNetworkAddressChanged;
+				
 				this.IsStarted = true;
 
 				this.Started?.Invoke();
@@ -195,6 +215,12 @@ namespace Neuralia.Blockchains.Core.Services {
 			try {
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Stoped;
 				
+				try {
+					NetworkChange.NetworkAddressChanged -= this.NetworkChangeOnNetworkAddressChanged;
+				} catch(Exception ex) {
+
+				}
+				
 				this.connectionListener?.Dispose();
 
 				this.IsStarted = false;
@@ -205,6 +231,24 @@ namespace Neuralia.Blockchains.Core.Services {
 			} finally {
 				this.StopWorkers();
 			}
+		}
+		
+		public void Pause(bool cutConnections = false) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled && this.NetworkingStatus == NetworkingService.NetworkingStatuses.Active) {
+
+				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Paused;
+
+				if(cutConnections) {
+					this.connectionStore.DisconnectAll();
+				}
+			} 
+		}
+
+		public void Resume() {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled && this.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
+
+				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
+			} 
 		}
 
 		public void PostNetworkMessage(SafeArrayHandle data, PeerConnection connection) {
@@ -254,6 +298,9 @@ namespace Neuralia.Blockchains.Core.Services {
 			// and the ability to confirm chain versions
 			chainInfo.versionValidationCallback = versionValidationCallback;
 
+			if(this.supportedChains.ContainsKey(chainType)) {
+				this.supportedChains.Remove(chainType);
+			}
 			this.supportedChains.Add(chainType, chainInfo);
 			this.messageFactory.RegisterChainMessageFactory(chainType, mainChainMessageFactory);
 		}
@@ -478,6 +525,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		protected virtual void Dispose(bool disposing) {
 			if(disposing && !this.IsDisposed) {
 			
+				
 				try {
 					this.Stop();
 				} catch(Exception ex) {

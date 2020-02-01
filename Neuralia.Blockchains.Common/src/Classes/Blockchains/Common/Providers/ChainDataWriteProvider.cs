@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Ident
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
@@ -14,6 +15,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Serializ
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Configuration;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -21,6 +23,7 @@ using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
 using Org.BouncyCastle.Crypto;
@@ -34,11 +37,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void SaveDigestChannelDescription(int digestId, BlockchainDigestDescriptor blockchainDigestDescriptor);
 
+		void WriteDigestFile(DigestChannelSet digestChannelSet, DigestChannelType channelId, int indexId, int fileId, uint partIndex, SafeArrayHandle data);
 		void UpdateCurrentDigest(int digestId, long blockHeight);
+		DigestChannelSet RecreateDigestChannelSet(int digestId, BlockchainDigestSimpleChannelSetDescriptor blockchainDigestDescriptor);
 		void UpdateCurrentDigest(IBlockchainDigest digest);
-		
 		void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader);
-		void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal);
+		void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal);
 
 		void CacheUnvalidatedBlockGossipMessage(IBlockEnvelope unvalidatedBlockEnvelope, long xxHash);
 		void ClearCachedUnvalidatedBlockGossipMessage(long blockId);
@@ -62,22 +66,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public abstract class ChainDataWriteProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataWriteProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
-
-		/// <summary>
-		///     We want to ensure we have a single isntance of this provider, so we use this as the marker
-		/// </summary>
-		private static bool instantiated;
-
+		
 		//TODO: review ALL locks to optimize. I did this quickly and its surely not optimal
 		private readonly object writeLocker = new object();
 		
 		protected ChainDataWriteProvider(CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator) {
-			if(instantiated && !GlobalSettings.TestingMode) {
-				throw new ApplicationException("Cannot instantiate more than one of this provider");
-			}
 
-			// thats it
-			instantiated = true;
 		}
 
 		private IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainDataLoadProvider => this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase;
@@ -96,7 +90,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				//1. ok, there we go. first step, lets make sure this block is not already serialized
 
-				(int index, long startingBlockId) index = this.FindBlockIndex(dehydratedBlock.BlockId.Value);
+				(long index, long startingBlockId, long endingBlockId) index = this.FindBlockIndex(dehydratedBlock.BlockId.Value);
 
 				//2. now, we will determine where it should physically go, and insert it in the block index
 
@@ -105,7 +99,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				bool inserted = false;
 
 				try {
-					inserted = this.BlockchainEventSerializationFal.InsertBlockEntry(dehydratedBlock.BlockId.Value, index, dehydratedBlock.GetEssentialDataChannels(), dehydratedBlock.RehydratedBlock.KeyedOffsets);
+					inserted = this.BlockchainEventSerializationFal.InsertBlockEntry(dehydratedBlock.BlockId.Value, index, dehydratedBlock.GetEssentialDataChannels(), dehydratedBlock.RehydratedBlock.MasterOffsets);
 				} catch(Exception ex) {
 					Log.Error(ex, $"Failed to insert the block id {dehydratedBlock.BlockId} into the blockchain filesystem");
 
@@ -163,22 +157,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public void UpdateCurrentDigest(IBlockchainDigest digest) {
 			this.UpdateCurrentDigest(digest.DigestId, digest.BlockId.Value);
 		}
+		
 		public void UpdateCurrentDigest(int digestId, long blockHeight) {
 			lock(this.writeLocker) {
-				bool deletePreviousBlocks = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().BlockSavingMode == AppSettingsBase.BlockSavingModes.DigestsThenBlocks;
-				(int index, long startingBlockId)? blockGroupIndex = null;
+				bool deletePreviousBlocks = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().NodeShareType().PartialBlocks;
+				(long index, long startingBlockId, long endingBlockId)? blockGroupIndex = null;
 
 				if(deletePreviousBlocks) {
 					blockGroupIndex = this.FindBlockIndex(blockHeight);
 				}
 
-				this.BlockchainEventSerializationFal.UpdateCurrentDigest(this.GetDigestsScoppedFolderPath(digestId), deletePreviousBlocks, blockGroupIndex);
+				this.BlockchainEventSerializationFal.UpdateCurrentDigest(blockHeight, this.GetDigestsScoppedFolderPath(digestId), deletePreviousBlocks, blockGroupIndex);
 			}
+		}
+
+		public DigestChannelSet RecreateDigestChannelSet(int digestId, BlockchainDigestSimpleChannelSetDescriptor blockchainDigestDescriptor) {
+			return this.BlockchainEventSerializationFal.RecreateDigestChannelSet(this.GetDigestsScoppedFolderPath(digestId), blockchainDigestDescriptor);
+		}
+		
+		public void WriteDigestFile(DigestChannelSet digestChannelSet, DigestChannelType channelId, int indexId, int fileId, uint partIndex, SafeArrayHandle data) {
+			this.BlockchainEventSerializationFal.WriteDigestFile(digestChannelSet, channelId, indexId, fileId, partIndex, data);
 		}
 
 		public void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader) {
 			lock(this.writeLocker) {
-				this.BlockchainEventSerializationFal.SaveDigestHeader(this.GetDigestsScoppedFolderPath(digestId), digestHeader);
+				this.BlockchainEventSerializationFal.SaveDigestHeader(this.GetDigestsHeaderFilePath(digestId), digestHeader);
 			}
 		}
 
@@ -197,7 +200,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="fileSizes"></param>
 		public void TruncateBlockFileSizes(long blockId, Dictionary<string, long> fileSizes) {
 			lock(this.writeLocker) {
-				(int index, long startingBlockId) index = this.FindBlockIndex(blockId);
+				(long index, long startingBlockId, long endingBlockId) index = this.FindBlockIndex(blockId);
 
 				string folderPath = this.BlockchainEventSerializationFal.GetBlockPath(index.index);
 
@@ -309,7 +312,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		
 		
-		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, byte hashBits, byte ordinal) {
+		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal) {
 
 			lock(this.writeLocker) {
 				void Action() {

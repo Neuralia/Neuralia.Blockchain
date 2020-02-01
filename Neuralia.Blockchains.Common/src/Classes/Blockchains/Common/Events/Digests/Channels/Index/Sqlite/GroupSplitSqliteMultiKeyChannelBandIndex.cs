@@ -34,9 +34,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public override DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> QueryCard((long accountId, B ordinal) key) {
 
-			(uint adjustedAccountId, uint index) adjustedKey = this.AdjustAccountId(key.accountId);
+			(uint adjustedAccountId, uint groupIndex) adjustedKey = this.AdjustAccountId(key.accountId);
 
-			string extractedFilename = this.EnsureFilesetExtracted(adjustedKey.index);
+			string extractedFilename = this.EnsureFilesetExtracted(adjustedKey.groupIndex);
 
 			this.InterpretationProvider.SetActiveFilename(Path.GetFileName(extractedFilename), Path.GetDirectoryName(extractedFilename));
 

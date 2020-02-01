@@ -12,7 +12,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization {
 
 	public interface IDehydratedTransaction : IDehydrateBlockchainEvent {
-		TransactionIdExtended Uuid { get; set; }
+		TransactionId Uuid { get; set; }
 		SafeArrayHandle Header { get; }
 		ChannelsEntries<SafeArrayHandle> DataChannels { get; }
 
@@ -33,7 +33,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public BlockChannelUtils.BlockChannelTypes HeaderChannel => BlockChannelUtils.BlockChannelTypes.LowHeader;
 
-		public TransactionIdExtended Uuid { get; set; }
+		public TransactionId Uuid { get; set; }
 		public SafeArrayHandle Header => this.DataChannels[this.HeaderChannel];
 		public ChannelsEntries<SafeArrayHandle> DataChannels { get; } = new ChannelsEntries<SafeArrayHandle>();
 
@@ -105,7 +105,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public void RehydrateHeader(IDataRehydrator rehydrator, AccountId accountId, TransactionTimestamp timestamp) {
 
 			// peek in the header, extract the transaction id
-			this.Uuid = new TransactionIdExtended();
+			this.Uuid = new TransactionId();
 			var rehydratedVersion = Transaction.RehydrateTopHeader(rehydrator, this.Uuid, accountId, timestamp);
 		}
 

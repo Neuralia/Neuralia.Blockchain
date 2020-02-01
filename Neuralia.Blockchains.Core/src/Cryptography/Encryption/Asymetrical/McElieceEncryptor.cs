@@ -3,7 +3,9 @@ using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Parameters;
 using org.bouncycastle.pqc.crypto.mceliece;
 using Org.BouncyCastle.Security;
@@ -22,7 +24,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 			Sha256 = 1,
 			Sha512 = 2,
 			Sha3_256 = 3,
-			Sha3_512 = 4
+			Sha3_512 = 4,
+			Blake2_256 = 5,
+			Blake2_512 = 6
 		}
 
 		public const int DEFAULT_M = 13;
@@ -35,7 +39,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 			McElieceCCA2PublicKeyParameters pub = new McElieceCCA2PublicKeyParameters();
 			pub.Rehydrate(DataSerializationFactory.CreateRehydrator(publicKey));
 
-			ParametersWithRandom parameters = new ParametersWithRandom(pub, new SecureRandom());
+			ParametersWithRandom parameters = new ParametersWithRandom(pub, new BetterSecureRandom());
 
 			IMcElieceCipher mcElieceCipher = this.GetCypher(cipherMode);
 			mcElieceCipher.init(true, parameters);
@@ -76,6 +80,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 					return new Sha3ExternalDigest(256);
 				case Utils.SHA3_512:
 					return new Sha3ExternalDigest(512);
+				case Utils.BLAKE2_256:
+					return new Blake2bDigest(256);
+				case Utils.BLAKE2_512:
+					return new Blake2bDigest(512);
 				default:
 					throw new ArgumentException();
 			}

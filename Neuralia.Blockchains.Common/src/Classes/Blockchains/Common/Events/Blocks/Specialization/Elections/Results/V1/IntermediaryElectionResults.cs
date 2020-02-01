@@ -12,28 +12,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public interface IIntermediaryElectionResults : IElectionResult {
 		
 		IElectedResults CreateElectedResult();
-		IElectionQuestion SimpleQuestion { get; set; }
-		IElectionQuestion HardQuestion { get; set; }
+		IElectionBlockQuestion SecondTierQuestion { get; set; }
+		IElectionDigestQuestion DigestQuestion { get; set; }
+		IElectionBlockQuestion FirstTierQuestion { get; set; }
 	}
 
 	public abstract class IntermediaryElectionResults : ElectionResult, IIntermediaryElectionResults {
 
-		public IElectionQuestion SimpleQuestion { get; set; }
-		public IElectionQuestion HardQuestion { get; set; }
+		public IElectionBlockQuestion SecondTierQuestion { get; set; }
+		public IElectionDigestQuestion DigestQuestion { get; set; }
+		public IElectionBlockQuestion FirstTierQuestion { get; set; }
 
 		public override void Rehydrate(IDataRehydrator rehydrator, Dictionary<int, TransactionId> transactionIndexesTree) {
 			base.Rehydrate(rehydrator, transactionIndexesTree);
 
-			bool simpleQuestionSet = rehydrator.ReadBool();
+			bool questionSet = rehydrator.ReadBool();
 
-			if(simpleQuestionSet) {
-				this.SimpleQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator);
+			if(questionSet) {
+				this.SecondTierQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionBlockQuestion;
 			}
 			
-			bool hardQuestionSet = rehydrator.ReadBool();
+			questionSet = rehydrator.ReadBool();
 
-			if(hardQuestionSet) {
-				this.HardQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator);
+			if(questionSet) {
+				this.DigestQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionDigestQuestion;
+			}
+			
+			questionSet= rehydrator.ReadBool();
+
+			if(questionSet) {
+				this.FirstTierQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionBlockQuestion;
 			}
 		}
 
@@ -42,12 +50,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
 			
+			jsonDeserializer.SetProperty("SecondTierQuestion", this.SecondTierQuestion);
+			jsonDeserializer.SetProperty("FirstTierQuestion", this.FirstTierQuestion);
 		}
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
-			
 
+			nodeList.Add(this.SecondTierQuestion);
+			nodeList.Add(this.FirstTierQuestion);
+			
 			return nodeList;
 		}
 	}

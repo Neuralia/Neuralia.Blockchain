@@ -46,24 +46,16 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 		public static void OpenWrite(string filename, in Span<byte> bytes) {
 			using(Stream fileStream = File.Open(filename, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) {
-#if (NETSTANDARD2_0)
-				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
 
-#else
 				fileStream.Write(bytes);
-				
-#endif
+
 			}
 		}
 
 		public static void OpenWrite(string filename, in Span<byte> bytes, IFileSystem fileSystem) {
 			using(Stream fileStream = fileSystem.File.Open(filename, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) {
-#if (NETSTANDARD2_0)
-				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
 
-#else
 				fileStream.Write(bytes);
-#endif
 			}
 		}
 
@@ -108,26 +100,15 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 		public static void OpenAppend(string filename, in Span<byte> bytes) {
 			using(Stream fileStream = File.Open(filename, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) {
-#if (NETSTANDARD2_0)
-				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
 
-#else
 				fileStream.Write(bytes);
-				
-#endif
 
 			}
 		}
 
 		public static void OpenAppend(string filename, in Span<byte> bytes, IFileSystem fileSystem) {
 			using(Stream fileStream = fileSystem.File.Open(filename, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) {
-#if (NETSTANDARD2_0)
-				fileStream.Write(bytes.ToArray(), 0, bytes.Length);
-
-#else
 				fileStream.Write(bytes);
-				
-#endif
 			}
 		}
 

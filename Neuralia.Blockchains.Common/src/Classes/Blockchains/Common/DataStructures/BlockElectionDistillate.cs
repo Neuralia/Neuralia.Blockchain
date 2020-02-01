@@ -12,6 +12,7 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Neuralia.Blockchains.Core;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures {
 
@@ -44,16 +45,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public void RehydrateElectionContext(IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			if((this.ElectionContext == null) && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
 
-				SafeArrayHandle compressed = ByteArray.WrapAndOwn(Convert.FromBase64String(this.DehydratedElectionContext));
+				using(SafeArrayHandle compressed = ByteArray.FromBase64(this.DehydratedElectionContext)) {
 
-				GzipCompression compressor = new GzipCompression();
-				SafeArrayHandle bytes = compressor.Decompress(compressed);
+					BrotliCompression compressor = new BrotliCompression();
+					using(SafeArrayHandle bytes = compressor.Decompress(compressed)) {
 
-				IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
-				this.ElectionContext = electionContextRehydrationFactory.CreateElectionContext(bytes);
-
-				compressed.Return();
-				bytes.Return();
+						IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
+						this.ElectionContext = electionContextRehydrationFactory.CreateElectionContext(bytes);
+					}
+				}
 			}
 
 			// if(dehydrateElectionContext) {
@@ -72,8 +72,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 	public abstract class IntermediaryElectionContextDistillate {
 
-		public ElectionQuestionDistillate SimpleQuestion;
-		public ElectionQuestionDistillate HardQuestion;
+		public int BlockOffset;
+		
+		public ElectionBlockQuestionDistillate SecondTierQuestion;
+		public ElectionDigestQuestionDistillate DigestQuestion;
+		public ElectionBlockQuestionDistillate FirstTierQuestion;
 		
 		public PassiveElectionContextDistillate PassiveElectionContextDistillate;
 	}
@@ -86,6 +89,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 	public abstract class PassiveElectionContextDistillate : ElectionContextDistillate {
 
 		public long electionBlockId;
+		public Enums.MiningTiers MiningTier = Enums.MiningTiers.ThirdTier;
 	}
 
 	public abstract class FinalElectionResultDistillate : ElectionContextDistillate {
@@ -99,9 +103,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public ElectionModes ElectionMode;
 
-		public long? simpleAnswer;
-		public long? hardAnswer;
+		public long? secondTierAnswer;
+		public long? digestAnswer;
+		public long? firstTierAnswer;
 
+		public Enums.MiningTiers MiningTier = Enums.MiningTiers.ThirdTier;
 		public ComponentVersion<BlockType> MatureBlockType;
 		public ComponentVersion MatureElectionContextVersion;
 		public int MaturityBlockHash;
@@ -114,11 +120,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		
 	}
 	
-	public class QuestionTransactionSectionDistillate : ElectionQuestionDistillate{
+	public abstract class ElectionBlockQuestionDistillate : ElectionQuestionDistillate {
+		
+	}
+	
+	public abstract class ElectionDigestQuestionDistillate : ElectionQuestionDistillate {
+		
+	}
+	
+	public class BlockTransactionSectionQuestionDistillate : ElectionBlockQuestionDistillate{
 		public long BlockId { get; set; } 
 		public int? TransactionIndex { get; set; }
 
 		public byte SelectedTransactionSection{ get; set; }
 		public byte SelectedComponent{ get; set; }
+	}
+	
+	public class BlockBytesetQuestionDistillate : ElectionBlockQuestionDistillate{
+		public long BlockId { get; set; } 
+		public int Offset { get; set; }
+		public byte Length { get; set; }
+	}
+	
+	public class DigestBytesetQuestionDistillate : ElectionDigestQuestionDistillate{
+		public int DigestID { get; set; } 
+		public int Offset { get; set; }
+		public byte Length { get; set; }
 	}
 }

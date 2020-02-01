@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
@@ -12,6 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		string Banner { get; set; }
 	}
 
+	[DebuggerDisplay("BlockId: {BlockId}")]
 	public abstract class GenesisBlock : Block, IGenesisBlock {
 
 		public DateTime Inception { get; set; }
@@ -32,7 +34,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return (BlockTypes.Instance.Genesis, 1, 0);
 		}
 
-		protected override void RehydrateBody(IDataRehydrator rehydratorBody, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		protected override void RehydrateBody(IDataRehydrator rehydratorBody, IBlockRehydrationFactory rehydrationFactory) {
 			this.Inception = rehydratorBody.ReadDateTime();
 			this.Name = rehydratorBody.ReadString();
 			this.Moto = rehydratorBody.ReadString();

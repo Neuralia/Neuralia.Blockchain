@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public ErasableFileChannelProvider(string filename, string folderPath, IFileSystem fileSystem) : base(filename, folderPath, fileSystem) {
 		}
 
-		protected override string GetBlocksIndexFolderPath(int index) {
+		protected override string GetBlocksIndexFolderPath(long index) {
 
 			return Path.Combine(base.GetBlocksIndexFolderPath(index), "erasables");
 		}

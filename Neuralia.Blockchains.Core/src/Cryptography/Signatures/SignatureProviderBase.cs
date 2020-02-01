@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Security;
 using Serilog;
 
@@ -37,17 +38,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
 
 		protected SecureRandom GetRandom() {
 
-			SecureRandom keyRandom = new SecureRandom();
-
-			using(RNGCryptoServiceProvider provider = new RNGCryptoServiceProvider()) {
-				using(ByteArray seed = ByteArray.Create(4096)) {
-					provider.GetBytes(seed.Bytes, seed.Offset, seed.Length);
-
-					keyRandom.SetSeed(seed.ToExactByteArrayCopy());
-
-					return keyRandom;
-				}
-			}
+			return new BetterSecureRandom();
 		}
 
 		public abstract bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey);

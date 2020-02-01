@@ -290,7 +290,14 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		protected virtual ITcpConnection CreateTcpConnection(Socket socket, TcpConnection.ExceptionOccured exceptionCallback, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) {
 
-			return new TcpDuplexConnection(socket, exceptionCallback, true, protocolMessageFilters);
+			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Duplex) {
+				return new TcpDuplexConnection(socket, exceptionCallback, true, protocolMessageFilters);
+			}
+			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Stream) {
+				return new TcpStreamConnection(socket, exceptionCallback, true, protocolMessageFilters);
+			}
+			
+			throw new ApplicationException("Invalid socket type");
 		}
 
 		private void Dispose(bool disposing) {

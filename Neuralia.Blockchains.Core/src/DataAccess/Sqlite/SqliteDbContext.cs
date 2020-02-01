@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.EntityFrameworkCore;
+
+using Neuralia.Blockchains.Core.General.Versions;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
@@ -8,6 +12,8 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		string FolderPath { get; set; }
 
 		string GetDbPath();
+		
+		
 	}
 
 	public abstract class SqliteDbContext : EntityFrameworkContext<DbContext>, ISqliteDbContext {
@@ -16,6 +22,8 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 		public string FolderPath { get; set; } = null;
 
+		public List<Action<ModelBuilder>> ModelBuilders { get; } = new List<Action<ModelBuilder>>();
+		
 		public string GetDbPath() {
 			return Path.Combine(this.FolderPath, this.FormatFilename());
 		}
@@ -36,6 +44,19 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 		protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) {
 			optionsBuilder.UseSqlite($"Data Source={this.GetDbPath()}");
+		}
+
+		protected override void OnModelCreating(ModelBuilder modelBuilder) {
+			base.OnModelCreating(modelBuilder);
+			
+			modelBuilder.Entity<DBVersion>(eb => {
+				eb.HasKey(c => c.Id);
+				eb.ToTable("Version");
+			});
+
+			foreach(var builder in this.ModelBuilders) {
+				builder?.Invoke(modelBuilder);
+			}
 		}
 	}
 }

@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Core;
+﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
@@ -14,6 +15,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.NTRU;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is INtruWalletKey ntruWalletKey) {
+
+			}
 		}
 	}
 }

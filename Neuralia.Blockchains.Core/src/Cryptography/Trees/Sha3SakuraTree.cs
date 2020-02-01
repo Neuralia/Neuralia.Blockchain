@@ -4,51 +4,28 @@ using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
-	public class Sha3SakuraTree : SakuraTree , IDisposableExtended{
+	public class Sha3SakuraTree : SakuraTree<Sha3ExternalDigest>{
 		
-
-		private readonly Sha3ExternalDigest digest;
-		
-		public Sha3SakuraTree() : this(512) {
+		private readonly int digestBitLength;
+		public Sha3SakuraTree(Enums.ThreadMode threadMode = Enums.ThreadMode.ThreeQuarter) : this(512,threadMode) {
 			
 		}
 
-		public Sha3SakuraTree(int digestBitLength) {
-			this.digest = new Sha3ExternalDigest(digestBitLength);
+		public Sha3SakuraTree(int digestBitLength, Enums.ThreadMode threadMode = Enums.ThreadMode.ThreeQuarter) : base(threadMode) {
+			this.digestBitLength = digestBitLength;
 		}
 
-		protected override SafeArrayHandle GenerateHash(SafeArrayHandle hopeBytes) {
-			
-			this.digest.BlockUpdate(hopeBytes);
-			this.digest.DoFinalReturn(out SafeArrayHandle hash);
+		protected override Sha3ExternalDigest DigestFactory() {
+
+			return new Sha3ExternalDigest(this.digestBitLength);;
+		}
+		protected override SafeArrayHandle GenerateHash(SafeArrayHandle hopeBytes, Sha3ExternalDigest hasher) {
+
+			hasher.BlockUpdate(hopeBytes);
+			hasher.DoFinalReturn(out SafeArrayHandle hash);
 
 			return hash;
 		}
 		
-	#region Dispose
-
-		public bool IsDisposed { get; private set; }
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		private void Dispose(bool disposing) {
-			
-
-			if(disposing && !this.IsDisposed) {
-
-				this.digest?.Dispose();
-			}
-			
-			this.IsDisposed = true;
-		}
-
-		~Sha3SakuraTree() {
-			this.Dispose(false);
-		}
-
-	#endregion
 	}
 }

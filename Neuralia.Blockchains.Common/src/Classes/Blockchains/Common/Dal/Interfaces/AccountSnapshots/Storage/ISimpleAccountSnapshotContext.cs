@@ -6,12 +6,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 	public interface IStandardAccountSnapshotContext : IAccountSnapshotContext {
 	}
 
-	public interface IStandardAccountSnapshotContext<ACCOUNT_SNAPSHOT, ACCOUNT_FEATURE_SNAPSHOT> : IStandardAccountSnapshotContext
-		where ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<ACCOUNT_FEATURE_SNAPSHOT>, new()
-		where ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new() {
+	public interface IStandardAccountSnapshotContext<ACCOUNT_SNAPSHOT, ACCOUNT_ATTRIBUTE_SNAPSHOT> : IStandardAccountSnapshotContext
+		where ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<ACCOUNT_ATTRIBUTE_SNAPSHOT>, new()
+		where ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new() {
 
 		DbSet<ACCOUNT_SNAPSHOT> StandardAccountSnapshots { get; set; }
-		DbSet<ACCOUNT_FEATURE_SNAPSHOT> StandardAccountSnapshotAttributes { get; set; }
+		DbSet<ACCOUNT_ATTRIBUTE_SNAPSHOT> StandardAccountSnapshotAttributes { get; set; }
 	}
 
 }

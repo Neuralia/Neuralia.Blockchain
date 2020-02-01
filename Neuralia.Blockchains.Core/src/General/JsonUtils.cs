@@ -11,9 +11,13 @@ namespace Neuralia.Blockchains.Core.General {
 	public static class JsonUtils {
 
 		public static string Serialize(object entry) {
-			return JsonSerializer.Serialize(entry, CreateBlockSerializerSettings());
+			return Serialize(entry, CreateBlockSerializerSettings());
 		}
 
+		public static string Serialize(object entry, JsonSerializerOptions serializerOptions) {
+			return JsonSerializer.Serialize(entry, serializerOptions);
+		}
+		
 		public static JsonSerializerOptions CreateSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
 			JsonSerializerOptions settings = new JsonSerializerOptions();
 			settings.WriteIndented = false;

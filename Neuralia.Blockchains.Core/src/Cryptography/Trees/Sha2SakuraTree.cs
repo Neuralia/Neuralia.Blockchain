@@ -6,52 +6,32 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	
-	public class Sha2SakuraTree : SakuraTree, IDisposableExtended {
+	public class Sha2SakuraTree : SakuraTree<HashAlgorithm> {
 
-		private readonly HashAlgorithm sha2;
+		private readonly int digestBitLength;
 
-		public Sha2SakuraTree() : this(512) {
+		public Sha2SakuraTree(Enums.ThreadMode threadMode = Enums.ThreadMode.ThreeQuarter) : this(512, threadMode) {
 
 		}
 
-		public Sha2SakuraTree(int digestBitLength) {
-			if(digestBitLength == 256) {
-				this.sha2 = SHA256.Create();
+		public Sha2SakuraTree(int digestBitLength, Enums.ThreadMode threadMode = Enums.ThreadMode.ThreeQuarter) : base(threadMode) {
+			this.digestBitLength = digestBitLength;
+		}
+
+		protected override HashAlgorithm DigestFactory() {
+			if(this.digestBitLength == 256) {
+				return SHA256.Create();
 			}
 
-			if(digestBitLength == 512) {
-				this.sha2 = SHA512.Create();
+			if(this.digestBitLength == 512) {
+				return SHA512.Create();
 			}
+
+			return null;
 		}
 
-		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry) {
-			return ByteArray.WrapAndOwn(this.sha2.ComputeHash(entry.Bytes, entry.Offset, entry.Length));
+		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry, HashAlgorithm hasher) {
+			return ByteArray.WrapAndOwn(hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length));
 		}
-		
-	#region Dispose
-
-		public bool IsDisposed { get; private set; }
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		private void Dispose(bool disposing) {
-			
-
-			if(disposing && !this.IsDisposed) {
-
-				this.sha2?.Dispose();
-			}
-			
-			this.IsDisposed = true;
-		}
-
-		~Sha2SakuraTree() {
-			this.Dispose(false);
-		}
-
-	#endregion
 	}
 }

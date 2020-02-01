@@ -10,7 +10,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.V1 {
 
 	public interface IPassiveElectionContext : IElectionContext {
-		List<IPassiveRepresentativeBallotingRules> RepresentativeBallotingRules { get; }
+		List<IRepresentativeBallotingRules> RepresentativeBallotingRules { get; }
 	}
 
 	public class PassiveElectionContext : ElectionContext, IPassiveElectionContext {
@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <summary>
 		///     How do we perform the subsequent representatives elections
 		/// </summary>
-		public List<IPassiveRepresentativeBallotingRules> RepresentativeBallotingRules { get; } = new List<IPassiveRepresentativeBallotingRules>();
+		public List<IRepresentativeBallotingRules> RepresentativeBallotingRules { get; } = new List<IRepresentativeBallotingRules>();
 
 		public override void Rehydrate(IDataRehydrator rehydrator, IElectionContextRehydrationFactory electionContextRehydrationFactory) {
 
@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			nodeList.Add(this.RepresentativeBallotingRules.Count);
 
-			foreach(IPassiveRepresentativeBallotingRules ballot in this.RepresentativeBallotingRules) {
+			foreach(IRepresentativeBallotingRules ballot in this.RepresentativeBallotingRules) {
 				nodeList.Add(ballot);
 			}
 

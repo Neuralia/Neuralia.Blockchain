@@ -26,6 +26,10 @@ namespace Neuralia.Blockchains.Core.Services {
 		private DIService() {
 		}
 
+		public static void Reset() {
+			instance = null;
+		}
+		
 		public static IDIService Instance {
 			get {
 				if(instance == null) {
@@ -67,7 +71,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				return null;
 			} catch {
-				Log.Warning($"Failed to fin service {typeof(T).FullName} for chain {chainType}");
+				Log.Warning($"Failed to find service {typeof(T).FullName} for chain {chainType}");
 			}
 
 			return null;

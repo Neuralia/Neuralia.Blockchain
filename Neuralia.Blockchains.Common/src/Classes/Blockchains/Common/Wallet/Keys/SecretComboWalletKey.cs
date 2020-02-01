@@ -1,4 +1,5 @@
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
@@ -27,6 +28,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			nodeList.Add(this.PromisedNonce2);
 
 			return nodeList;
+		}
+		
+		public override void Dehydrate(IDataDehydrator dehydrator) {
+			base.Dehydrate(dehydrator);
+			
+			
+			dehydrator.Write(this.PromisedNonce1);
+			dehydrator.Write(this.PromisedNonce2);
+		}
+
+		public override void Rehydrate(IDataRehydrator rehydrator) {
+			base.Rehydrate(rehydrator);
+			
+			this.PromisedNonce1 = rehydrator.ReadLong();
+			this.PromisedNonce2 = rehydrator.ReadLong();
 		}
 	}
 }

@@ -4,11 +4,11 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions
 using Neuralia.Blockchains.Core.General.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1 {
-	public interface IPresentationTransaction : ITransaction, IPresentation, IRateLimitedTransaction {
+	public interface IPresentationTransaction : IMasterTransaction, IPresentation {
 		AccountId AssignedAccountId { get; set; }
 
 		long? CorrelationId { get; set; }
 
-		List<ITransactionAccountFeature> Features { get; }
+		List<ITransactionAccountAttribute> Attributes { get; }
 	}
 }

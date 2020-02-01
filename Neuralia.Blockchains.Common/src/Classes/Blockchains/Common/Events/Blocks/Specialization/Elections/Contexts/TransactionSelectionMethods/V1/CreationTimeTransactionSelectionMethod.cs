@@ -4,8 +4,11 @@ using MoreLinq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Configuration.TransactionSelectionStrategies;
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Core.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.TransactionSelectionMethods.V1 {
 
@@ -16,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private readonly CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings;
 
-		public CreationTimeTransactionSelectionMethod(long blockId, IWalletProvider walletProvider, ushort maximumTransactionCount, CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings) : base(blockId, walletProvider, maximumTransactionCount) {
+		public CreationTimeTransactionSelectionMethod(long blockId, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings, NodeShareType nodeShareType) : base(blockId, chainStateProvider, walletProvider, electionContext, nodeShareType) {
 			this.creationTimeTransactionSelectionStrategySettings = creationTimeTransactionSelectionStrategySettings;
 		}
 
@@ -43,7 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		protected override List<TransactionId> SelectSelection(List<TransactionId> transactionIds) {
-			return transactionIds.OrderByDescending(t => t.Timestamp).Take(this.maximumTransactionCount).ToList();
+			return transactionIds.OrderByDescending(t => t.Timestamp).Take(this.MaximumTransactionCount).ToList();
 		}
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Seria
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Published;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
@@ -18,10 +19,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 	public interface IBlockchainDigest : IBlockchainEvent<IDehydratedBlockchainDigest, IDigestRehydrationFactory, BlockchainDigestsType> {
 
 		int DigestId { get; set; }
-
+		int GroupingSize { get; set; }
+		
 		TransactionTimestamp Timestamp { get; set; }
+		DateTime FullTimestamp { get; set; }
 		SafeArrayHandle Hash { get; }
 		SafeArrayHandle PreviousDigestHash { get; }
+		
+		BlockSignatureSet BlockSignatureSet { get; set; }
 
 		SafeArrayHandle GenesisBlockHash { get; }
 		SafeArrayHandle BlockHash { get;  }
@@ -39,14 +44,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 	/// </summary>
 	public abstract class BlockchainDigest : BlockchainEvent<IDehydratedBlockchainDigest, DehydratedBlockchainDigest, IDigestRehydrationFactory, BlockchainDigestsType>, IBlockchainDigest {
 
+		public const int DIGEST_GROUPS_SIZE = 100_000;
+
 		//TODO: make this work so we can link back to the genesis block
 		public List<ITransactionEnvelope> KeyHistory { get; } = new List<ITransactionEnvelope>();
 
 		public int DigestId { get; set; }
+		public int GroupingSize { get; set; }
 
 		public BlockId BlockId { get; set; } = new BlockId();
 		public TransactionTimestamp Timestamp { get; set; } = new TransactionTimestamp();
-
+		public DateTime FullTimestamp { get; set; }
+		
+		public BlockSignatureSet BlockSignatureSet { get; set; } = new BlockSignatureSet();
+		
 		public IPublishedAccountSignature Signature { get; } = new PublishedAccountSignature();
 		public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
 		public SafeArrayHandle PreviousDigestHash { get;  } = SafeArrayHandle.Create();
@@ -63,7 +74,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 			HashNodeList nodeList = base.GetStructuresArray();
 
 			nodeList.Add(this.DigestId);
-
+			nodeList.Add(this.GroupingSize);
+			
 			nodeList.Add(this.BlockId);
 			nodeList.Add(this.BlockHash);
 
@@ -87,11 +99,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 			this.Version.EnsureEqual(rehydratedVersion);
 
 			this.DigestId = rehydrator.ReadInt();
+			this.GroupingSize = rehydrator.ReadInt();
 			this.Hash.Entry = rehydrator.ReadNonNullableArray();
 
 			this.BlockId.Rehydrate(rehydrator);
 			this.BlockHash.Entry = rehydrator.ReadNonNullableArray();
 
+			this.BlockSignatureSet.Rehydrate(rehydrator);
+			
 			this.PreviousDigestHash.Entry = rehydrator.ReadArray();
 			this.GenesisBlockHash.Entry = rehydrator.ReadNonNullableArray();
 
@@ -113,7 +128,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 			//				
 			//				this.Files.Add(type, file);
 			//			}
+
+			rehydrationFactory.PrepareDigest(this);
 		}
+		
 
 		public override IDehydratedBlockchainDigest Dehydrate(BlockChannelUtils.BlockChannelTypes activeChannels) {
 			// do nothing here, we really never dehydrate a block

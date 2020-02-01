@@ -43,7 +43,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 			}
 		}
 
-		public V Version { get; }
+		public V Version { get; protected set; }
 
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 

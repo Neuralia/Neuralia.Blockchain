@@ -10,6 +10,7 @@ using System.Numerics;
 using System.Threading;
 using MoreLinq;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Network.Exceptions;
@@ -18,6 +19,7 @@ using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.Components;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
@@ -36,22 +38,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		Dictionary<Guid, PeerConnection> AllConnections { get; }
 		int AllConnectionsCount { get; }
 
-		int SimpleConnectionsCount { get; }
-		List<PeerConnection> SimpleConnectionsList { get; }
-		Dictionary<Guid, PeerConnection> SimpleConnections { get; }
+		int SimpleConnectionsCount(BlockchainType blockchainType);
+		List<PeerConnection> SimpleConnectionsList(BlockchainType blockchainType);
+		Dictionary<Guid, PeerConnection> SimpleConnections(BlockchainType blockchainType);
 
-		int SyncingConnectionsCount { get; }
-		List<PeerConnection> SyncingConnectionsList { get; }
-		Dictionary<Guid, PeerConnection> SyncingConnections { get; }
+		int SyncingConnectionsCount(BlockchainType blockchainType);
+		List<PeerConnection> SyncingConnectionsList(BlockchainType blockchainType);
+		Dictionary<Guid, PeerConnection> SyncingConnections(BlockchainType blockchainType);
 
 		int BasicGossipConnectionsCount { get; }
 		List<PeerConnection> BasicGossipConnectionsList { get; }
 		Dictionary<Guid, PeerConnection> BasicGossipConnections { get; }
-
-		int CompleteConnectionsCount { get; }
-		List<PeerConnection> CompleteConnectionsList { get; }
-		Dictionary<Guid, PeerConnection> CompleteConnections { get; }
-
+		
 		int FullGossipConnectionsCount { get; }
 		List<PeerConnection> FullGossipConnectionsList { get; }
 		Dictionary<Guid, PeerConnection> FullGossipConnections { get; }
@@ -93,8 +91,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		void FreeSomeIgnorePeers();
 
-		NodeActivityInfo RemoveAvailablePeerNode(NodeAddressInfo node);
-		void AddAvailablePeerNodes(Dictionary<Enums.PeerTypes, NodeAddressInfoList> nodes, bool force);
+		NodeActivityInfo RemoveAvailablePeerNode(NodeAddressInfo node, bool includeLocked = false);
+		void AddAvailablePeerNodes(NodeAddressInfoList nodes, bool force);
 		void AddAvailablePeerNode(NodeAddressInfo node, bool force);
 		void AddAvailablePeerNode(NodeActivityInfo nodeActivityInfo, bool force);
 		void AddIgnorePeerNodes(List<NodeAddressInfo> nodes);
@@ -108,15 +106,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="connection"></param>
 		/// <param name="nodes"></param>
 		void UpdatePeerNodes(PeerConnection connection, NodeAddressInfoList nodes);
-
-		void UpdatePeerNodes(PeerConnection connection, Dictionary<Enums.PeerTypes, NodeAddressInfoList> nodes);
-
+		
 		/// <summary>
 		///     return our list of peer nodes for network messages
 		/// </summary>
 		/// <param name="limit">the max amount of peers to return, in case we have too much</param>
 		/// <returns></returns>
-		Dictionary<Enums.PeerTypes, NodeAddressInfoList> GetPeerNodeList(ConnectionStore.PeerSelectionHeuristic selectionHeuristic, List<NodeAddressInfo> excludeAddresses, int? limit = null);
+		NodeAddressInfoList GetPeerNodeList(NodeInfo nodeInfo, List<BlockchainType> blockchainTypes, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic, List<NodeAddressInfo> excludeAddresses, int? limit = null);
 
 		List<NodeAddressInfo> GetAvailablePeerNodes(List<NodeAddressInfo> excludeAddresses, bool onlyShareable, bool excludeConnected, bool onlyConnectable, int? limit = null);
 
@@ -139,7 +135,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		void FullyConfirmConnection(PeerConnection connection);
 		void LoadStaticStartNodes();
 
-		void SetConnectionUuidExistsCheck(ITcpConnection tcpConnection, NodeAddressInfo nodeAddressInfoInfo);
+		void SetConnectionUuidExistsCheck(ITcpConnection tcpConnection, NodeAddressInfo nodeAddressInfo);
+
+		void DisconnectAll();
 	}
 
 	public static class ConnectionStore {
@@ -147,12 +145,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public enum ConnectionTieResults {
 			Challenger,
 			Existing
-		}
-
-		public enum PeerSelectionHeuristic {
-			Any,
-			Powers,
-			Simple
 		}
 
 		public enum PublicIpSource {
@@ -195,7 +187,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected readonly List<IPV4CIDRRange> localCIDRV4ranges = new List<IPV4CIDRRange>();
 		protected readonly List<IPV6CIDRRange> localCIDRV6ranges = new List<IPV6CIDRRange>();
 
-		private readonly object locker = new object();
+		protected readonly object locker = new object();
 
 		private readonly HashSet<IPAddress> ourAddresses = new HashSet<IPAddress>();
 
@@ -245,31 +237,49 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			// here we prepare the connection poller that will periodically check connections to ensure they are still active
 
-			TimeSpan waitTime = TimeSpan.FromSeconds(3);
+			TimeSpan waitTime = TimeSpan.FromSeconds(10);
 
 			int counter = 0;
 
+			long acting = 0;
+			
 			this.connectionPollingTimer = new Timer(state => {
 
-				List<KeyValuePair<Guid, PeerConnection>> connections = null;
-
-				lock(this.locker) {
-					connections = this.AllConnections.ToList();
+				if(Interlocked.Read(ref acting) != 0) {
+					return;
 				}
 
-				foreach(var connection in connections) {
-					connection.Value.connection.CheckConnected();
+				Interlocked.Increment(ref acting);
+
+				try {
+					List<KeyValuePair<Guid, PeerConnection>> connections = null;
+
+					lock(this.locker) {
+						connections = this.AllConnections.ToList();
+					}
+
+					foreach(var connection in connections) {
+						connection.Value.connection.CheckConnected();
+					}
+
+					counter++;
+
+					if(counter == 100) {
+						this.CleanIgnoredPeers();
+						counter = 0;
+					}
+				} finally {
+					Interlocked.Decrement(ref acting);
 				}
 
-				counter++;
-
-				if(counter == 100) {
-					this.CleanIgnoredPeers();
-					counter = 0;
-				}
+				this.PoolLoop();
 			}, this, waitTime, waitTime);
 		}
 
+		protected virtual void PoolLoop() {
+			
+		}
+		
 		/// <summary>
 		///     this contains connections that are in the process of confirming their connection. they may be valid, or not. but
 		///     they are in the process of negociating
@@ -296,30 +306,43 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public List<NodeAddressInfo> IgnorePeerNodesCopy => this.ignorePeerNodes.Values.ToArray().Select(n => n.Node).ToList();
 
-		public virtual List<PeerConnection> AllConnectionsList => this.Connections.Values.ToList();
-		public virtual Dictionary<Guid, PeerConnection> AllConnections => this.Connections.ToDictionary(c => c.Key, c => c.Value);
-		public virtual int AllConnectionsCount => this.Connections.Count;
+		public List<PeerConnection> AllConnectionsList => this.Connections.Values.ToList();
+		public Dictionary<Guid, PeerConnection> AllConnections => this.Connections.ToDictionary();
+		public int AllConnectionsCount => this.Connections.Count;
 		public int ActiveConnectionsCount => this.Connections.Count;
 
-		public virtual int SimpleConnectionsCount => this.Connections.Count(c => Enums.SimplePeerTypes.Contains(c.Value.PeerType));
-		public virtual List<PeerConnection> SimpleConnectionsList => this.Connections.Values.Where(c => Enums.SimplePeerTypes.Contains(c.PeerType)).ToList();
-		public virtual Dictionary<Guid, PeerConnection> SimpleConnections => this.Connections.Where(c => Enums.SimplePeerTypes.Contains(c.Value.PeerType)).ToDictionary(c => c.Key, c => c.Value);
-
-		public virtual int SyncingConnectionsCount => this.SyncingConnections.Count;
-		public virtual List<PeerConnection> SyncingConnectionsList => this.SyncingConnections.Values.ToList();
-		public virtual Dictionary<Guid, PeerConnection> SyncingConnections => this.Connections.Where(c => c.Value.IsFullyConfirmed && Enums.SyncingPeerTypes.Contains(c.Value.PeerType) && (this.FilterSyncingIp?.Invoke(c.Value) ?? true)).ToDictionary(c => c.Key, c => c.Value);
-
-		public virtual int BasicGossipConnectionsCount => this.Connections.Count(c => Enums.BasicGossipPeerTypes.Contains(c.Value.PeerType));
-		public virtual List<PeerConnection> BasicGossipConnectionsList => this.Connections.Values.Where(c => Enums.BasicGossipPeerTypes.Contains(c.PeerType)).ToList();
-		public virtual Dictionary<Guid, PeerConnection> BasicGossipConnections => this.Connections.Where(c => Enums.BasicGossipPeerTypes.Contains(c.Value.PeerType)).ToDictionary(c => c.Key, c => c.Value);
-
-		public virtual int FullGossipConnectionsCount => this.Connections.Count(c => Enums.FullGossipPeerTypes.Contains(c.Value.PeerType));
-		public virtual List<PeerConnection> FullGossipConnectionsList => this.Connections.Values.Where(c => Enums.FullGossipPeerTypes.Contains(c.PeerType)).ToList();
-		public virtual Dictionary<Guid, PeerConnection> FullGossipConnections => this.Connections.Where(c => Enums.FullGossipPeerTypes.Contains(c.Value.PeerType)).ToDictionary(c => c.Key, c => c.Value);
-
-		public virtual int CompleteConnectionsCount => this.Connections.Count(c => Enums.CompletePeerTypes.Contains(c.Value.PeerType));
-		public virtual List<PeerConnection> CompleteConnectionsList => this.Connections.Values.Where(c => Enums.CompletePeerTypes.Contains(c.PeerType)).ToList();
-		public virtual Dictionary<Guid, PeerConnection> CompleteConnections => this.Connections.Where(c => Enums.CompletePeerTypes.Contains(c.Value.PeerType)).ToDictionary(c => c.Key, c => c.Value);
+		public virtual int SimpleConnectionsCount(BlockchainType blockchainType) {
+			return this.Connections.Count(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false);
+		}
+		public virtual List<PeerConnection> SimpleConnectionsList(BlockchainType blockchainType) {
+			return this.Connections.Values.Where(c => c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false).ToList();
+		}
+		public virtual Dictionary<Guid, PeerConnection> SimpleConnections(BlockchainType blockchainType) {
+			return this.Connections.Where(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false).ToDictionary();
+		}
+		
+		public virtual int SyncingConnectionsCount(BlockchainType blockchainType) {
+			return this.Connections.Count(c => c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false) && (this.FilterSyncingIp?.Invoke(c.Value) ?? true));
+		}
+		public virtual List<PeerConnection> SyncingConnectionsList(BlockchainType blockchainType) {
+			return this.Connections.Values.Where(c => c.IsFullyConfirmed && (c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false) && (this.FilterSyncingIp?.Invoke(c) ?? true)).ToList();
+		}
+		public virtual Dictionary<Guid, PeerConnection> SyncingConnections(BlockchainType blockchainType) {
+			return this.Connections.Where(c => c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false) && (this.FilterSyncingIp?.Invoke(c.Value) ?? true)).ToDictionary(c => c.Key, c => c.Value);
+		}
+		
+		public virtual int BasicGossipConnectionsCount => this.Connections.Count(c => c.Value.NodeInfo.GossipAccepted);
+		
+		public virtual List<PeerConnection> BasicGossipConnectionsList => this.Connections.Values.Where(c => c.NodeInfo.GossipAccepted).ToList();
+		
+		public virtual Dictionary<Guid, PeerConnection> BasicGossipConnections => this.Connections.Where(c => c.Value.NodeInfo.GossipAccepted).ToDictionary();
+		
+		
+		public virtual int FullGossipConnectionsCount => this.Connections.Count(c => c.Value.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full);
+		
+		public virtual List<PeerConnection> FullGossipConnectionsList => this.Connections.Values.Where(c => c.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToList();
+		
+		public virtual Dictionary<Guid, PeerConnection> FullGossipConnections => this.Connections.Where(c => c.Value.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToDictionary(c => c.Key, c => c.Value);
 
 		public IPAddress PublicIp { get; private set; }
 
@@ -339,11 +362,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <returns></returns>
 		public bool ConnectionsSaturated => this.ActiveConnectionsCount >= GlobalSettings.ApplicationSettings.MaxPeerCount;
-
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
 
 		public event Action<SafeArrayHandle, PeerConnection, IEnumerable<Type>> DataReceived;
 		public event Action<int> PeerConnectionsCountUpdated;
@@ -377,7 +395,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				lock(this.locker) {
 
 					// the ReportedUuid is still empty here. so we must use the scopped ip and an identifier
-					NodeAddressInfo node = new NodeAddressInfo(GetEndpointIp(cn.EndPoint), Enums.PeerTypes.Unknown);
+					NodeAddressInfo node = new NodeAddressInfo(GetEndpointIp(cn.EndPoint), NodeInfo.Unknown);
 
 					if(!this.errorCounts.ContainsKey(node.ScoppedIp)) {
 						this.errorCounts.Add(node.ScoppedIp, 0);
@@ -401,13 +419,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}));
 		}
 
-		public NodeActivityInfo RemoveAvailablePeerNode(NodeAddressInfo node) {
+		public NodeActivityInfo RemoveAvailablePeerNode(NodeAddressInfo node, bool includeLocked = false) {
 			NodeActivityInfo nai = null;
 
 			lock(this.locker) {
 				if(this.availablePeerNodes.ContainsKey(node.ScoppedIp)) {
 					// remove only nodes that are not locked
-					if(!this.availablePeerNodes[node.ScoppedIp].Node.Locked) {
+					if(includeLocked || !this.availablePeerNodes[node.ScoppedIp].Node.Locked) {
 						nai = this.availablePeerNodes.RemoveSafe(node.ScoppedIp);
 
 						Log.Verbose($"removing peer ip from available list: {node.ScoppedAdjustedIp}.");
@@ -437,13 +455,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.AddAvailablePeerNode(nodeActivityInfo.Node, force);
 		}
 
-		public void AddAvailablePeerNodes(Dictionary<Enums.PeerTypes, NodeAddressInfoList> nodes, bool force) {
+		public void AddAvailablePeerNodes(NodeAddressInfoList nodes, bool force) {
 			// make sure none of the IPS are ours
-			foreach(var entry in nodes) {
-				foreach(NodeAddressInfo node in this.FilterIps(entry.Value.Nodes.ToList())) {
+			foreach(NodeAddressInfo node in this.FilterIps(nodes.Nodes.ToList())) {
 
-					this.AddAvailablePeerNode(node, force);
-				}
+				this.AddAvailablePeerNode(node, force);
 			}
 		}
 
@@ -525,23 +541,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="nodes"></param>
 		public void UpdatePeerNodes(PeerConnection connection, NodeAddressInfoList nodes) {
 			lock(this.locker) {
-				connection.PeerNodes[nodes.PeerType] = new NodeAddressInfoList(nodes.PeerType, nodes);
+				connection.PeerNodes = new NodeAddressInfoList(nodes);
 
 				//we got new peer nodes. lets do something with his/her peers. we collect them
 				this.NewPeersReceived(connection);
 			}
 		}
-
-		public void UpdatePeerNodes(PeerConnection connection, Dictionary<Enums.PeerTypes, NodeAddressInfoList> nodes) {
-			lock(this.locker) {
-				foreach(var entry in nodes) {
-					connection.PeerNodes[entry.Key] = new NodeAddressInfoList(entry.Key, entry.Value);
-				}
-
-				this.NewPeersReceived(connection);
-			}
-		}
-
+		
 		/// <summary>
 		///     return our list of peer nodes available for connection
 		/// </summary>
@@ -585,45 +591,14 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <param name="limit">the max amount of peers to return, in case we have too much</param>
 		/// <returns></returns>
-		public Dictionary<Enums.PeerTypes, NodeAddressInfoList> GetPeerNodeList(ConnectionStore.PeerSelectionHeuristic selectionHeuristic, List<NodeAddressInfo> excludeAddresses, int? limit = null) {
+		public NodeAddressInfoList GetPeerNodeList(NodeInfo nodeInfo, List<BlockchainType> blockchainTypes, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic, List<NodeAddressInfo> excludeAddresses, int? limit = null) {
 
+			List<NodeAddressInfo> nodes = null;
 			lock(this.locker) {
-				var nodes = this.GetAvailablePeerNodes(excludeAddresses, true, false, false);
-
-				// we may want a certain limited amount
-				if(limit.HasValue) {
-
-					int actualLimit = limit.Value;
-
-					if(selectionHeuristic == ConnectionStore.PeerSelectionHeuristic.Any) {
-						nodes = nodes.Take(limit.Value).ToList();
-					} else {
-						int powers = 0;
-						int simples = 0;
-
-						if(selectionHeuristic == ConnectionStore.PeerSelectionHeuristic.Powers) {
-							// take more of the powerful nodes
-							powers = (int) (actualLimit * 0.75);
-							simples = (int) (actualLimit * 0.25);
-
-						} else if(selectionHeuristic == ConnectionStore.PeerSelectionHeuristic.Simple) {
-							// take mode of the simple nodes
-							powers = (int) (actualLimit * 0.25);
-							simples = (int) (actualLimit * 0.75);
-						}
-
-						var adjustedNodes = new List<NodeAddressInfo>();
-
-						adjustedNodes.AddRange(nodes.Where(n => Enums.CompletePeerTypes.Contains(n.PeerType)).Take(powers));
-						adjustedNodes.AddRange(nodes.Where(n => !Enums.CompletePeerTypes.Contains(n.PeerType)).Take(simples));
-
-						nodes = adjustedNodes;
-
-					}
-				}
-
-				return this.GetSortedNodeAddressInfoLists(nodes.Distinct().ToList());
+				nodes = this.GetAvailablePeerNodes(excludeAddresses, true, false, false);
 			}
+
+			return NodeSelectionHeuristicTools.SelectNodes(nodeInfo, nodes, blockchainTypes, heuristic, excludeAddresses, limit);
 		}
 
 		public PeerConnection AddNewIncomingConnection(ITcpConnection tcpConnection) {
@@ -665,7 +640,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							}
 
 							// lets add this connection back into our list of known peers, we may connect to it later again
-							this.AddAvailablePeerNode(connection.NodeAddressInfoInfo, false);
+							this.AddAvailablePeerNode(connection.NodeAddressInfo, false);
 						}
 					}
 
@@ -724,16 +699,16 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.RemoveConnectingConnection(connection.connection);
 
 				NodeAddressInfo nodeSpecs = GetEndpointInfoNode(connection);
-				connection.NodeAddressInfoInfo.Ip = nodeSpecs.Ip;
-				connection.NodeAddressInfoInfo.RealPort = nodeSpecs.RealPort;
+				connection.NodeAddressInfo.Ip = nodeSpecs.Ip;
+				connection.NodeAddressInfo.RealPort = nodeSpecs.RealPort;
 
 				if(GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.DebugNetworkMode) {
 					// for testing purposes, we allow to connect to our same ip
-					if(this.IsOurAddress(connection.NodeAddressInfoInfo) && (connection.NodeAddressInfoInfo.RealPort == this.LocalPort)) {
+					if(this.IsOurAddress(connection.NodeAddressInfo) && (connection.NodeAddressInfo.RealPort == this.LocalPort)) {
 						throw new ApplicationException("We cannot connect to ourselves. connection refused.");
 					}
 				} else {
-					if(this.IsOurAddress(connection.NodeAddressInfoInfo)) {
+					if(this.IsOurAddress(connection.NodeAddressInfo)) {
 						throw new ApplicationException("We cannot connect to ourselves. connection refused.");
 					}
 				}
@@ -745,7 +720,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// time we accepted this connection
 				connection.ConnectionTime = this.timeService.CurrentRealTime;
 
-				Log.Information($"accepting connection from peer {connection.ClientUuid} with scopped ip {connection.NodeAddressInfoInfo.ScoppedAdjustedIp}");
+				Log.Information($"accepting connection from peer {connection.ClientUuid} with scopped ip {connection.NodeAddressInfo.ScoppedAdjustedIp}");
 
 				NodeAddressInfo nodeInfo = GetEndpointInfoNode(connection);
 
@@ -775,7 +750,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <returns></returns>
 		public bool IsNeuraliumHub(PeerConnection peerConnection) {
 			lock(this.locker) {
-				return this.neuraliumHubAddresses?.Nodes.Any(n => n.EqualsIp(peerConnection.NodeAddressInfoInfo)) ?? false;
+				return this.neuraliumHubAddresses?.Nodes.Any(n => n.EqualsIp(peerConnection.NodeAddressInfo)) ?? false;
 			}
 		}
 
@@ -844,12 +819,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.ourAddresses.Clear();
 
 				if(this.PublicIp != null) {
-					NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(this.PublicIp, Enums.PeerTypes.FullNode);
+					NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(this.PublicIp, NodeInfo.Full);
 					this.OurAddresses.Add(nodeAddressInfo.Address);
 				}
 
 				foreach(IPAddress localIp in this.localIps) {
-					NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(localIp, Enums.PeerTypes.FullNode);
+					NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(localIp, NodeInfo.Full);
 
 					if(!this.ourAddresses.Contains(nodeAddressInfo.Address)) {
 						this.ourAddresses.Add(nodeAddressInfo.Address);
@@ -894,11 +869,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						foreach(string entry in this.globalsService.HardcodedNodes) {
 
 							try {
-								this.hardcodedNodes.Add(new NodeAddressInfo(Dns.GetHostAddresses(entry).First(), Enums.PeerTypes.FullNode));
+								this.hardcodedNodes.Add(new NodeAddressInfo(Dns.GetHostAddresses(entry).First(), NodeInfo.Full));
 							} catch(Exception ex) {
 								// lets try it as text only
 								try {
-									this.hardcodedNodes.Add(new NodeAddressInfo(entry, Enums.PeerTypes.FullNode));
+									this.hardcodedNodes.Add(new NodeAddressInfo(entry, NodeInfo.Full));
 								} catch(Exception ex2) {
 									// lets just die silently if it fails
 								}
@@ -921,13 +896,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 
 				// first thing we do it gather every possible list of peers we can find and add them to our peer list. we will need this to start
-				var startNodes = new Dictionary<Enums.PeerTypes, NodeAddressInfoList>();
+				var startNodes = new NodeAddressInfoList();
 
 				//lets start with the hardcoded ones, best possible start
-				startNodes[Enums.PeerTypes.FullNode] = new NodeAddressInfoList(Enums.PeerTypes.FullNode, this.HardcodedNodes.Distinct().Where(node => !this.IsOurAddress(node)));
+				startNodes.AddNodes(this.HardcodedNodes.Distinct().Where(node => !this.IsOurAddress(node)));
 
 				// lets collect the extra nodes provided by configuration
-				startNodes[Enums.PeerTypes.Unknown] = new NodeAddressInfoList(Enums.PeerTypes.Unknown, GlobalSettings.ApplicationSettings.Nodes.Select(n => new NodeAddressInfo(n.Ip, n.Port, Enums.PeerTypes.Unknown)).Distinct().Where(node => !this.IsOurAddress(node)));
+				startNodes.AddNodes(GlobalSettings.ApplicationSettings.Nodes.Select(n => new NodeAddressInfo(n.Ip, n.Port, NodeInfo.Unknown)).Distinct().Where(node => !this.IsOurAddress(node)));
 
 				// here we go. just make sure we oursevles are not in this list and lets go forward
 				this.AddAvailablePeerNodes(startNodes, true);
@@ -952,7 +927,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="adress"></param>
 		public void AddLocalAddress(IPAddress address) {
 			lock(this.locker) {
-				NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(address, Enums.PeerTypes.FullNode);
+				NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(address, NodeInfo.Full);
 				this.OurAddresses.Add(nodeAddressInfo.Address);
 			}
 		}
@@ -994,8 +969,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 			// both are still connected. we will determine the lowest hash which will get to be the one connecting to the other
-			BigInteger challengerId = new BigInteger(contendedConnection.ReportedUuid.ToByteArray().Concat(new byte[] {0}).ToArray());
-			BigInteger localId = new BigInteger(this.MyClientUuid.ToByteArray().Concat(new byte[] {0}).ToArray());
+			BigInteger challengerId = HashDifficultyUtils.GetBigInteger(contendedConnection.ReportedUuid.ToByteArray());
+			BigInteger localId =  HashDifficultyUtils.GetBigInteger(this.MyClientUuid.ToByteArray());
 
 			// ok, let's apply our tie breaker
 			PeerConnection.Directions dominantDirection = localId < challengerId ? PeerConnection.Directions.Outgoing : PeerConnection.Directions.Incoming;
@@ -1011,9 +986,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     register for a UUid exists event
 		/// </summary>
 		/// <param name="tcpConnection"></param>
-		/// <param name="nodeAddressInfoInfo"></param>
+		/// <param name="nodeAddressInfo"></param>
 		/// <exception cref="InvalidPeerException"></exception>
-		public void SetConnectionUuidExistsCheck(ITcpConnection tcpConnection, NodeAddressInfo nodeAddressInfoInfo) {
+		public void SetConnectionUuidExistsCheck(ITcpConnection tcpConnection, NodeAddressInfo nodeAddressInfo) {
 			if(!tcpConnection.IsConnectedUuidProvidedSet) {
 				tcpConnection.ConnectedUuidProvided += reportedUuid => {
 
@@ -1030,8 +1005,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected virtual bool? IsIPLocalAddress(IPAddress publicIp) {
 
 			if(this.PublicIp != null) {
-				NodeAddressInfo node = new NodeAddressInfo(publicIp, Enums.PeerTypes.Unknown);
-				NodeAddressInfo ourNode = new NodeAddressInfo(this.PublicIp, Enums.PeerTypes.Unknown);
+				NodeAddressInfo node = new NodeAddressInfo(publicIp, NodeInfo.Unknown);
+				NodeAddressInfo ourNode = new NodeAddressInfo(this.PublicIp, NodeInfo.Unknown);
 
 				if(ourNode == node) {
 					return true;
@@ -1060,7 +1035,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <returns></returns>
 		protected virtual bool IsIPLocalNetwork(IPAddress publicIp) {
 
-			NodeAddressInfo node = new NodeAddressInfo(publicIp, Enums.PeerTypes.Unknown);
+			NodeAddressInfo node = new NodeAddressInfo(publicIp, NodeInfo.Unknown);
 
 			if(node.IsIpV4) {
 				foreach(IPV4CIDRRange range in this.localCIDRV4ranges) {
@@ -1121,7 +1096,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected void QueryHubIps() {
 			lock(this.locker) {
 				if(this.neuraliumHubAddresses == null) {
-					this.neuraliumHubAddresses = new NodeAddressInfoList(Enums.PeerTypes.Hub);
+					this.neuraliumHubAddresses = new NodeAddressInfoList();
 
 					if(GlobalSettings.ApplicationSettings.EnableHubs) {
 
@@ -1129,7 +1104,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						IPHostEntry hosts = null;
 
 						try {
-							string hubsAddress = GlobalSettings.ApplicationSettings.HubsAddress;
+							string hubsAddress = GlobalSettings.ApplicationSettings.HubsGossipAddress;
 
 							hosts = Dns.GetHostEntry(hubsAddress);
 						} catch(Exception ex) {
@@ -1137,7 +1112,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						}
 
 						if((hosts?.AddressList != null) && hosts.AddressList.Any()) {
-							var ips = hosts.AddressList.Select(a => new NodeAddressInfo(a, Enums.PeerTypes.Hub)).ToList();
+							var ips = hosts.AddressList.Select(a => new NodeAddressInfo(a, NodeInfo.Hub)).ToList();
 
 							foreach(NodeAddressInfo entry in ips) {
 								Log.Verbose($"Adding hub IP address: {entry.ScoppedAdjustedIp}");
@@ -1151,16 +1126,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 			}
 		}
-
-		/// <summary>
-		///     Build the dictionary sorted structure from a list
-		/// </summary>
-		/// <param name="nodes"></param>
-		/// <returns></returns>
-		private Dictionary<Enums.PeerTypes, NodeAddressInfoList> GetSortedNodeAddressInfoLists(IEnumerable<NodeAddressInfo> nodes) {
-			return nodes.GroupBy(n => n.PeerType).ToDictionary(g => g.Key, g => new NodeAddressInfoList(g.Key, g));
-		}
-
+		
 		/// <summary>
 		///     Here we determine all the IPS that define US
 		/// </summary>
@@ -1193,7 +1159,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 							foreach(UnicastIPAddressInformation addressInfo in props.UnicastAddresses) {
 
-								NodeAddressInfo node = new NodeAddressInfo(addressInfo.Address, Enums.PeerTypes.Unknown);
+								NodeAddressInfo node = new NodeAddressInfo(addressInfo.Address, NodeInfo.Unknown);
 
 								if(node.IsIpV4) {
 									IPV4CIDRRange range = IPUtils.GenerateCIDRV4Range(node.Address.MapToIPv4(), addressInfo.IPv4Mask);
@@ -1282,7 +1248,16 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected virtual ITcpConnection CreateTcpConnection(NetworkEndPoint remoteEndPoint, TcpConnection.ExceptionOccured exceptionCallback, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) {
-			return new TcpDuplexConnection(remoteEndPoint, exceptionCallback);
+		
+			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Duplex) {
+				return new TcpDuplexConnection(remoteEndPoint, exceptionCallback);
+			}
+			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Stream) {
+				return new TcpStreamConnection(remoteEndPoint, exceptionCallback);
+			}
+			
+			throw new ApplicationException("Invalid socket type");
+			
 		}
 
 		protected PeerConnection AddNewConnection(ITcpConnection tcpConnection, PeerConnection.Directions direction) {
@@ -1309,7 +1284,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// set various details about the connection
 				NodeAddressInfo nodeSpecs = GetEndpointInfoNode(connection);
 
-				NodeAddressInfo node = new NodeAddressInfo(nodeSpecs.Ip, nodeSpecs.RealPort, Enums.PeerTypes.Unknown);
+				NodeAddressInfo node = new NodeAddressInfo(nodeSpecs.Ip, nodeSpecs.RealPort, NodeInfo.Unknown);
 
 				connection.NodeActivityInfo = this.GetNodeActivityInfo(node);
 
@@ -1326,7 +1301,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					if(direction == PeerConnection.Directions.Outgoing) {
 						// we know it can connect
 						node.IsConnectable = true;
-						connection.NodeAddressInfoInfo.IsConnectable = true;
+						connection.NodeAddressInfo.IsConnectable = true;
 					}
 				};
 
@@ -1341,7 +1316,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				};
 
 				// validate the connection
-				this.SetConnectionUuidExistsCheck(connection.connection, connection.NodeAddressInfoInfo);
+				this.SetConnectionUuidExistsCheck(connection.connection, connection.NodeAddressInfo);
 
 				return connection;
 			}
@@ -1364,11 +1339,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="nodes"></param>
 		protected virtual void NewPeersReceived(PeerConnection connection) {
 			lock(this.locker) {
-				var uniques = new Dictionary<Enums.PeerTypes, NodeAddressInfoList>();
+				var uniques = new NodeAddressInfoList();
 
-				foreach(var entry in connection.PeerNodes) {
-					if(!uniques.ContainsKey(entry.Key)) {
-						uniques.Add(entry.Key, new NodeAddressInfoList(entry.Key, entry.Value.Nodes));
+				foreach(var entry in connection.PeerNodes.Nodes) {
+					if(!uniques.Nodes.Contains(entry)){
+						uniques.AddNode(entry);
 					}
 				}
 
@@ -1377,6 +1352,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+		
 		private void Dispose(bool disposing) {
 			lock(this.locker) {
 				if(disposing && !this.IsDisposed) {
@@ -1387,15 +1367,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
-		protected virtual void DisposeAll() {
-
-			this.connectionPollingTimer?.Dispose();
-
+		public void DisconnectAll() {
 			// release other disposable objects  
 			foreach(PeerConnection connectionInfo in this.Connections.Values.ToArray()) {
 				connectionInfo.Dispose();
 			}
+		}
+		protected virtual void DisposeAll() {
 
+			this.connectionPollingTimer?.Dispose();
+
+
+			this.DisconnectAll();
 		}
 
 		~ConnectionStore() {
@@ -1428,7 +1411,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		public static (IPAddress IPAddress, int? port) GetEndpointInfo(PeerConnection peerConnection) {
-			return (GetEndpointIp(GetEndpoint(peerConnection)), peerConnection.NodeAddressInfoInfo.RealPort);
+			return (GetEndpointIp(GetEndpoint(peerConnection)), peerConnection.NodeAddressInfo.RealPort);
 		}
 
 		/// <summary>
@@ -1437,7 +1420,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <param name="endpoint"></param>
 		/// <returns></returns>
-		public static NodeAddressInfo GetEndpointInfoNode(NetworkEndPoint endpoint, Enums.PeerTypes peerType) {
+		public static NodeAddressInfo GetEndpointInfoNode(NetworkEndPoint endpoint, NodeInfo peerType) {
 			return new NodeAddressInfo(GetEndpointIp(endpoint), GetEndpointPort(endpoint), peerType);
 		}
 
@@ -1446,13 +1429,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			int? port = null;
 
-			if(peerConnection.NodeAddressInfoInfo != null) {
-				port = peerConnection.NodeAddressInfoInfo.RealPort;
+			if(peerConnection.NodeAddressInfo != null) {
+				port = peerConnection.NodeAddressInfo.RealPort;
 			} else {
 				port = GetEndpointPort(endpoint);
 			}
 
-			return new NodeAddressInfo(GetEndpointIp(endpoint), port, peerConnection.PeerType);
+			return new NodeAddressInfo(GetEndpointIp(endpoint), port, peerConnection.NodeInfo);
 		}
 
 		public static NetworkEndPoint CreateEndpoint(PeerConnection peerConnection) {
@@ -1509,7 +1492,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			ChainSettings consensusSettings = new ChainSettings();
 
 			// ensure we get the concensus value
-			consensusSettings.BlockSavingMode = this.GetPropertyConsensus(allSettings, c => c.BlockSavingMode);
+			consensusSettings.ShareType = this.GetPropertyConsensus(allSettings, c => c.ShareType);
 
 			if(this.chainSettingsConsensus.ContainsKey(chain)) {
 				this.chainSettingsConsensus[chain] = consensusSettings;

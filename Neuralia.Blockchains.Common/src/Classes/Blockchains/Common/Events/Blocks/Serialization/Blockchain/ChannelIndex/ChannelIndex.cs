@@ -11,14 +11,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public interface IChannelIndex {
 		List<BlockChannelUtils.BlockChannelTypes> ChannelTypes { get; }
 		void WriteEntry(ChannelsEntries<SafeArrayHandle> blockData);
-		void ResetFileSpecs(uint adjustedBlockId, (int index, long startingBlockId) blockIndex);
+		void ResetFileSpecs(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex);
 		void EnsureFilesCreated();
 
 		ChannelsEntries<(long start, int end)> QueryIndex(uint adjustedBlockId);
 		ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId);
 
 		ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
-		SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
+		SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
 
 		ChannelsEntries<long> QueryProviderFileSizes();
 	}
@@ -57,11 +57,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public abstract ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId);
 
 		public abstract ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
-		public abstract SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
+		public abstract SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
 
 		public abstract ChannelsEntries<long> QueryProviderFileSizes();
 
-		protected override void ResetAllFileSpecs(uint adjustedBlockId, (int index, long startingBlockId) blockIndex) {
+		protected override void ResetAllFileSpecs(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
 			foreach(T providerFileSpec in this.Providers.Values) {
 				providerFileSpec.ResetFileSpecs(adjustedBlockId, blockIndex);

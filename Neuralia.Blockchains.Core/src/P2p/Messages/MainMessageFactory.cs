@@ -62,6 +62,9 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 		}
 
 		public void RegisterChainMessageFactory(BlockchainType chainType, IGossipMessageFactory<R> messageFactory) {
+			if(this.messageFactories.ContainsKey(chainType)) {
+				this.messageFactories.Remove(chainType);
+			}
 			this.messageFactories.Add(chainType, messageFactory);
 		}
 

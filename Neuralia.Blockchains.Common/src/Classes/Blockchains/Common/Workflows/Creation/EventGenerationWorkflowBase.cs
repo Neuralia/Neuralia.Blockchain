@@ -27,6 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		where ENVELOPE_TYPE : class, IEnvelope {
 
 		protected readonly CorrelationContext correlationContext;
+		protected ENVELOPE_TYPE envelope;
 
 		public EventGenerationWorkflowBase(CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator) {
 			// we make creations sequential
@@ -46,12 +47,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		}
 
-		protected abstract List<IRoutedTask> EventValidated(ENVELOPE_TYPE envelope);
+		protected abstract void EventGenerationCompleted(ENVELOPE_TYPE envelope);
 
 		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
-
-			ENVELOPE_TYPE envelope = null;
-
+			
 			try {
 				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
 
@@ -64,11 +63,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 						token.ThrowIfCancellationRequested();
 
-						envelope = this.AssembleEvent();
+						this.envelope = this.AssembleEvent();
+						this.ProcessEnvelope(this.envelope);
 
 						token.ThrowIfCancellationRequested();
 
-						ValidationResult result = this.ValidateContents(envelope);
+						ValidationResult result = this.ValidateContents(this.envelope);
 
 						if(result.Invalid) {
 							throw result.GenerateException();
@@ -81,7 +81,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 							token.ThrowIfCancellationRequested();
 
-							this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(envelope, validationResult => {
+							this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(this.envelope, false, validationResult => {
 								result = validationResult;
 							});
 							
@@ -100,24 +100,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 						this.PostProcess();
 
 					} catch(Exception e) {
-						throw new EventGenerationException(envelope, e);
+						throw new EventGenerationException(this.envelope, e);
 					}
+					
+					// we just validated and is completed, lets see if we want to do anything
+					this.EventGenerationCompleted(this.envelope);
+					
 				}, this.Timeout);
 			} catch(EventValidationException vex) {
-				this.ValidationFailed(envelope, vex.Result);
+				this.ValidationFailed(this.envelope, vex.Result);
 
 				throw;
 			}
+		}
 
-			//TODO: we leave this out of the wallet transaction. perhaps the new Event should be saved somewhere?
-			// we just validated, lets see if we want to do anything
-			var extraRedirects = this.EventValidated(envelope);
-
-			if(extraRedirects.Any()) {
-				foreach(IRoutedTask task in extraRedirects) {
-					this.DispatchTaskSync(task);
-				}
-			}
+		protected virtual void ProcessEnvelope(ENVELOPE_TYPE envelope) {
+			
 		}
 
 		protected override void Initialize(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {

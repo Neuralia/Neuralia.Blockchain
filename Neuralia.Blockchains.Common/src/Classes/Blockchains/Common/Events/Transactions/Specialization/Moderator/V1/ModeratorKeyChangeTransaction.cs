@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -6,7 +7,7 @@ using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Moderator.V1 {
-	public interface IModeratorKeyChangeTransaction : IModerationKeyedTransaction {
+	public interface IModeratorKeyChangeTransaction : IModerationKeyedTransaction, IKeychange {
 
 		ICryptographicKey NewCryptographicKey { get; }
 		Enums.KeyTypes KeyType { get; }

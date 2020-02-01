@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.BouncyCastle.extra.security;
+using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
@@ -48,10 +49,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 		}
 
 		public bool VerifyHash(SafeArrayHandle message, SafeArrayHandle signature, X509Certificate2 certificate) {
-
-			Sha3_512Hasher hasher = new Sha3_512Hasher();
-
-			SafeArrayHandle hash = hasher.Hash(message);
+			
+			SafeArrayHandle hash = HashingUtils.HashSha3_512(hasher => hasher.Hash(message));;
 
 			using(RSA csp = certificate.GetRSAPublicKey()) {
 				// verify the hash
@@ -96,7 +95,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 		public X509Certificate2 GenerateSelfSignedCertificate(string subjectName, string issuerName, AsymmetricKeyParameter issuerPrivKey) {
 			// Generating Random Numbers
 			CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
-			SecureRandom random = new SecureRandom(randomGenerator);
+			SecureRandom random = new BetterSecureRandom(randomGenerator);
 
 			// The Certificate Generator
 			X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
@@ -148,21 +147,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 
 			RsaPrivateKeyStructure rsa = new RsaPrivateKeyStructure(seq);
 			RsaPrivateCrtKeyParameters rsaparams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1, rsa.Exponent2, rsa.Coefficient);
-
-#if (NETSTANDARD2_0)
-
-			//TODO: do it with bouncycastle (DotNetUtilities.)
-			throw new NotImplementedException();
-#else
+			
 			return x509.CopyWithPrivateKey(DotNetUtilitiesExtensions.ToRSA(rsaparams));
-#endif
-
 		}
 
 		public X509Certificate2 GenerateCACertificate(string subjectName, ref AsymmetricKeyParameter CaPrivateKey) {
 			// Generating Random Numbers
 			CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
-			SecureRandom random = new SecureRandom(randomGenerator);
+			SecureRandom random = new BetterSecureRandom(randomGenerator);
 
 			// The Certificate Generator
 			X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();

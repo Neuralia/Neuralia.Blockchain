@@ -3,7 +3,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Acco
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards {
 
-	public interface IStandardAccountSnapshotDigestChannelCard : IAccountSnapshotDigestChannelCard, IStandardAccountSnapshot<IAccountFeature> {
+	public interface IStandardAccountSnapshotDigestChannelCard : IAccountSnapshotDigestChannelCard, IStandardAccountSnapshot<IAccountAttribute> {
 		void ConvertToSnapshotEntry(IStandardAccountSnapshot other, ICardUtils cardUtils);
 	}
 

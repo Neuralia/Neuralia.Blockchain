@@ -10,16 +10,16 @@ namespace Neuralia.Blockchains.Core.Tools {
 		/// <param name="groupingSize"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		public static (int index, long startingGroupId) ComputeIndex(long id, long groupingSize) {
+		public static (long groupIndex, long startingBlockId, long endBlockId) ComputeIndex(long id, int groupingSize) {
 
 			if(id <= 0) {
 				throw new ApplicationException("Id cannot be 0.");
 			}
 
-			int index = (int) Math.Ceiling((decimal) id / groupingSize);
+			long index = (long) Math.Ceiling((decimal) id / groupingSize);
 			long startingBlockId = ((index - 1) * groupingSize) + 1;
 
-			return (index, startingBlockId);
+			return (index, startingBlockId, (startingBlockId + groupingSize)-1);
 		}
 	}
 }

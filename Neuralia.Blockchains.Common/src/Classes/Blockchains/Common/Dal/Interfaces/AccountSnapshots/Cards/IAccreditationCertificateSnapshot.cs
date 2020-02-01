@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core;
@@ -27,6 +28,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 
 		Enums.CertificateAccountPermissionTypes CertificateAccountPermissionType { get; set; }
 		int PermittedAccountCount { get; set; }
+		
+		ImmutableList<IAccreditationCertificateSnapshotAccount> PermittedAccountsBase { get; }
 	}
 
 	public interface IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT> : IAccreditationCertificateSnapshot

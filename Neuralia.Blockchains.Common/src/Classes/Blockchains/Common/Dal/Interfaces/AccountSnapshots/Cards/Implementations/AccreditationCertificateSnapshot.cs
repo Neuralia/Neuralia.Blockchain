@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core;
@@ -24,6 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		public string Url { get; set; }
 		public Enums.CertificateAccountPermissionTypes CertificateAccountPermissionType { get; set; }
 		public int PermittedAccountCount { get; set; }
+		public ImmutableList<IAccreditationCertificateSnapshotAccount> PermittedAccountsBase => this.PermittedAccounts.Cast<IAccreditationCertificateSnapshotAccount>().ToImmutableList();
 		public List<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT> PermittedAccounts { get; } = new List<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT>();
 
 		public void ClearCollection() {

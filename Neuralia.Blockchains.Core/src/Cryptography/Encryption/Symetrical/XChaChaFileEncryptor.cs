@@ -5,9 +5,11 @@ using System.Text;
 using Neuralia.Blockchains.Core.Cryptography.crypto.Engines;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Macs;
@@ -47,45 +49,43 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 			try {
 				using(Rfc2898DeriveBytes rfc2898DeriveBytes = new Rfc2898DeriveBytes(password.ToExactByteArrayCopy(), this.parameters.Salt.ToExactByteArrayCopy(), this.parameters.Iterations)) {
-
-					ByteArray Key = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(256 / 8));
-					ByteArray IV = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(192 / 8));
-
-					cipher.Init(forEncryption, new ParametersWithIV(new KeyParameter(Key.ToExactByteArrayCopy()), IV.ToExactByteArrayCopy()));
+					
+					cipher.Init(forEncryption, new ParametersWithIV(new KeyParameter(rfc2898DeriveBytes.GetBytes(256 / 8)), rfc2898DeriveBytes.GetBytes(192 / 8)));
 				}
 			} finally {
 				// hopefully this will clear the password from memory (we hope but most probably wont)
 				GC.Collect();
 			}
 
-			SafeArrayHandle startingBlock = ByteArray.Create(64);
-			cipher.ProcessBytes(startingBlock.Bytes, startingBlock.Offset, startingBlock.Length, startingBlock.Bytes, startingBlock.Offset);
+			using(SafeArrayHandle startingBlock = ByteArray.Create(64)) {
+				cipher.ProcessBytes(startingBlock.Bytes, startingBlock.Offset, startingBlock.Length, startingBlock.Bytes, startingBlock.Offset);
 
-			// NOTE: The BC implementation puts 'r' after 'k'
-			Buffer.BlockCopy(startingBlock.Bytes, startingBlock.Offset, startingBlock.Bytes, 32, 16);
+				// NOTE: The BC implementation puts 'r' after 'k'
+				Buffer.BlockCopy(startingBlock.Bytes, startingBlock.Offset, startingBlock.Bytes, 32, 16);
 
-			KeyParameter macKey = new KeyParameter(startingBlock.ToExactByteArrayCopy(), 16, 32);
-			Poly1305KeyGenerator.Clamp(macKey.GetKey());
+				KeyParameter macKey = new KeyParameter(startingBlock.ToExactByteArrayCopy(), 16, 32);
+				Poly1305KeyGenerator.Clamp(macKey.GetKey());
 
-			return macKey;
+				return macKey;
+			}
 		}
 
 		public static XChachaEncryptorParameters GenerateEncryptionParameters(int saltLength = 500, ChachaRounds rounds = ChachaRounds.XCHACHA_40) {
-
-			SecureRandom rnd = new SecureRandom();
-
+			
 			ByteArray salt = ByteArray.Create(saltLength);
 
 			// get a random salt
-			salt.FillSafeRandom();
+			GlobalRandom.GetNextBytes(salt);
 
 			EncryptorParameters.SymetricCiphers cipherType = EncryptorParameters.SymetricCiphers.XCHACHA_40;
 
 			if(rounds == ChachaRounds.XCHACHA_20) {
 				cipherType = EncryptorParameters.SymetricCiphers.XCHACHA_20;
 			}
-
-			return new XChachaEncryptorParameters(cipherType) {Salt = salt, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			
+			var entry = new XChachaEncryptorParameters(cipherType) {Iterations = GlobalRandom.GetNext(1000, short.MaxValue), KeyBitLength = 256};
+			entry.Salt.Entry = salt;
+			return entry;
 		}
 
 		public SafeArrayHandle Encrypt(SafeArrayHandle plain, SecureString password) {

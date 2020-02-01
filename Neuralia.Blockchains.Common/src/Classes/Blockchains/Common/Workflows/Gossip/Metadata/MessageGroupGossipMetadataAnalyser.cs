@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 
 			if(gossipGroupMessageInfo.GossipMessageMetadata?.GossipMessageMetadataDetails is BlockGossipMessageMetadataDetails blockGossipMessageMetadataDetails) {
 
-				if(GlobalSettings.ApplicationSettings.MobileMode) {
+				if(GlobalSettings.ApplicationSettings.SynclessMode) {
 
 					// mobile apps do not take blocks
 					return false;
@@ -34,7 +34,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 
 				return (blockGossipMessageMetadataDetails.BlockId > currentBlockHeight) && (blockGossipMessageMetadataDetails.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel));
 			}
+			else if(gossipGroupMessageInfo.GossipMessageMetadata?.GossipMessageMetadataDetails is TransactionGossipMessageMetadataDetails transactionGossipMessageMetadataDetails) {
 
+				if(!transactionGossipMessageMetadataDetails.IsPresentation == false) {
+					// its a regular transcation, jsut take it
+					return true;
+				}
+				
+				// ok, its a presentation transaction. accept it only if we really want to
+				return this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations;
+			}
+			
 			return true;
 		}
 	}

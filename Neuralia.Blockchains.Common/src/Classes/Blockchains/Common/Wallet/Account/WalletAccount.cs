@@ -57,6 +57,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <returns></returns>
 		Enums.PublicationStatus Status { get; set; }
 
+		DateTime? PresentationTransactionTimeout { get; set; }
+		
 		List<KeyInfo> Keys { get; set; }
 
 		IEncryptorParameters KeyLogFileEncryptionParameters { get; set; }
@@ -162,6 +164,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <returns></returns>
 		public Enums.PublicationStatus Status { get; set; }
 
+		public DateTime? PresentationTransactionTimeout { get; set; }
+		
 		public virtual void InitializeNew(string name, BlockchainServiceSet serviceSet, Enums.AccountTypes accountType) {
 			IBlockchainGuidService guidService = serviceSet.BlockchainGuidService;
 

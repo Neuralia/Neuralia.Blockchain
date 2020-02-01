@@ -1,6 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-
     <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
     <NoWarn>NU1605</NoWarn>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
@@ -8,54 +7,31 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Neuralia.Blockchains.Core</RootNamespace>
     <AssemblyName>Neuralia.Blockchains.Core</AssemblyName>
-    <TargetFrameworks>netstandard2.0;netcoreapp3.0</TargetFrameworks>
     <PackageId>Neuralia.Blockchains.Core</PackageId>
     <VersionPrefix>1.0.0</VersionPrefix>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-
-
-    <!--<DefineConstants>DETERMINISTIC_DEBUG</DefineConstants> -->
-    <!--    <DefineConstants>PARALLEL_1</DefineConstants>-->
-    <!--    <DefineConstants>PARALLEL_2</DefineConstants>-->
-  </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    
-    <DebugType>none</DebugType>
-  </PropertyGroup>
+    <TargetFrameworks>netstandard2.1;netcoreapp3.1</TargetFrameworks>
+</PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.0" />
     <PackageReference Include="Neuralia.BouncyCastle" Version="1.0.0" />
     <PackageReference Include="Neuralia.STUN" Version="1.0.0" />
     <PackageReference Include="Neuralia.Data.HashFunction.xxHash" Version="1.0.0" />
 
-        <PackageReference Include="DotNetZip" Version="1.13.4" />
     <PackageReference Include="LiteDB" Version="4.1.4" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="3.0.0" />
-    <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.3.0" />
-    <PackageReference Include="morelinq" Version="3.2.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="3.1.1" />
+    <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.3.2" />
+    <PackageReference Include="morelinq" Version="3.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
-    <PackageReference Include="Pipelines.Sockets.Unofficial" Version="2.1.0" />
-    <PackageReference Include="RestSharp" Version="106.6.10" />
+    <PackageReference Include="Pipelines.Sockets.Unofficial" Version="2.1.1" />
+    <PackageReference Include="RestSharp" Version="106.10.1" />
     <PackageReference Include="RT.Comb" Version="2.3.0" />
     <PackageReference Include="Serilog" Version="2.9.0" />
-    <PackageReference Include="System.IO.Abstractions" Version="7.0.7" />
-    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="7.0.7" />
-    <PackageReference Include="System.Text.Json" Version="4.6.0" />
+    <PackageReference Include="System.IO.Abstractions" Version="8.0.3" />
+    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="8.0.3" />
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.0' ">
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="3.0.0" />
-  </ItemGroup>
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="2.2.6" />
-  </ItemGroup>
 
-  <ItemGroup>
-  </ItemGroup>
+<Import Project="$(MSBuildProjectDirectory)/../../CommonSettings.targets" />
 
-    <PropertyGroup Condition="'$(SolutionDir)' == '' or&#xA;                     '$(SolutionDir)' == '*undefined*'">
-    <SolutionDir>..\..\</SolutionDir>
-  </PropertyGroup>
-  <Import Project="$(SolutionDir)CommonSettings.targets" />
 </Project>

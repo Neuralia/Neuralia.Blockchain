@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.groupSize = groupSize;
 		}
 
-		protected (uint adjustedAccountId, uint index) AdjustAccountId(long accountId) {
+		protected (uint adjustedAccountId, uint groupIndex) AdjustAccountId(long accountId) {
 			// make it 0 based
 			accountId -= 1;
 
@@ -62,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {
 			var results = new Dictionary<int, SafeArrayHandle>();
 
-			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.scopeFolder, new object[] {groupIndex}));
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] {groupIndex}));
 
 			results.Add(this.BandType.ToInt32(null), this.HashFile(archivedFilename));
 
@@ -71,9 +71,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public override SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length) {
 
-			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.scopeFolder, new object[] {partIndex}));
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] {partIndex}));
 
 			return FileExtensions.ReadBytes(archivedFilename, offset, length, this.fileSystem);
+		}
+		
+		public override void WriteFileBytes(int fileId, uint partIndex, SafeArrayHandle data) {
+
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] {partIndex}));
+
+			FileExtensions.EnsureFileExists(archivedFilename, this.fileSystem);
+			FileExtensions.WriteAllBytes(archivedFilename, data, this.fileSystem);
 		}
 
 		public override List<int> GetFileTypes() {
@@ -94,9 +102,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public override DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> QueryCard(long key) {
 
-			(uint adjustedAccountId, uint index) adjustedKey = this.AdjustAccountId(key);
+			(uint adjustedAccountId, uint groupIndex) adjustedKey = this.AdjustAccountId(key);
 
-			string extractedFilename = this.EnsureFilesetExtracted(adjustedKey.index);
+			string extractedFilename = this.EnsureFilesetExtracted(adjustedKey.groupIndex);
 
 			this.InterpretationProvider.SetActiveFilename(Path.GetFileName(extractedFilename), Path.GetDirectoryName(extractedFilename));
 

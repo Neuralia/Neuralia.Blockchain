@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			// take the peer nodes and update our system
 			this.networkingService.ConnectionStore.UpdatePeerNodes(this.peerConnection, serverPeerListRequest.Message.nodes);
 
-			Log.Verbose($"Received {serverPeerListRequest.Message.nodes.Select(n => n.Value.Nodes.Count).Sum()} peers from peer {this.peerConnection.ScoppedAdjustedIp}");
+			Log.Verbose($"Received {serverPeerListRequest.Message.nodes.Nodes.Count} peers from peer {this.peerConnection.ScoppedAdjustedIp}");
 		}
 
 		protected override PeerListRequestMessageFactory<R> CreateMessageFactory() {

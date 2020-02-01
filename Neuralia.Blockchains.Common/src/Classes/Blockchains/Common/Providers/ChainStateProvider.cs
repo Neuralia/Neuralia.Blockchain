@@ -11,12 +11,14 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
-	public interface IChainStateProvider : IChainStateEntryFields {
+	public interface IChainStateProvider : IChainStateEntryFields, IChainProvider {
+		bool IsChainLikelySynchronized { get; }
 		bool IsChainSynced { get; }
 		bool IsChainDesynced { get; }
 
@@ -207,7 +209,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				// finally, if we are a master, we write the block id into the path
-				if(this.IsMaster && BlockchainUtilities.UsesBlocks(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockSavingMode)) {
+				if(this.IsMaster && this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.NodeShareType().HasBlocks) {
 
 					Span<byte> bytes = stackalloc byte[sizeof(long)];
 
@@ -350,11 +352,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
+		public bool AllowGossipPresentations {
+			get { return this.GetField(entry => entry.AllowGossipPresentations); }
+			set {
+				this.UpdateFields(db => {
+					this.chainStateEntry.Value.entry.AllowGossipPresentations = value;
+				});
+			}
+		}
+
 		public long MiningPassword {
 			get { return this.GetField(entry => entry.MiningPassword); }
 			set {
 				this.UpdateFields(db => {
 					this.chainStateEntry.Value.entry.MiningPassword = value;
+				});
+			}
+		}
+
+		public byte[] MiningAutograph {
+			get { return this.GetField(entry => entry.MiningAutograph); }
+			set {
+				this.UpdateFields(db => {
+					this.chainStateEntry.Value.entry.MiningAutograph = value;
 				});
 			}
 		}
@@ -370,6 +390,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public bool IsChainSynced => this.GetChainSyncState() == Enums.ChainSyncState.Synchronized;
 		public bool IsChainDesynced => !this.IsChainSynced;
+		public bool IsChainLikelySynchronized {
+			get {
+				Enums.ChainSyncState state = this.GetChainSyncState();
+
+				return (state == Enums.ChainSyncState.Synchronized) || (state == Enums.ChainSyncState.LikelyDesynchronized);
+			}
+		}
 
 		/// <summary>
 		///     Get the likely synchronization state of the chain
@@ -377,7 +404,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <returns></returns>
 		public Enums.ChainSyncState GetChainSyncState() {
 
-			if(GlobalSettings.ApplicationSettings.GetChainConfiguration(this.centralCoordinator.ChainId).BlockSavingMode == AppSettingsBase.BlockSavingModes.None) {
+			if(GlobalSettings.ApplicationSettings.SynclessMode) {
+				// syncless is always synced
+				return Enums.ChainSyncState.Synchronized;
+			}
+			
+			if(BlockchainUtilities.DoesNotShare(GlobalSettings.ApplicationSettings.GetChainConfiguration(this.centralCoordinator.ChainId).BlockSavingMode)) {
 				// we dont use block, hence we are always synced
 				return Enums.ChainSyncState.Synchronized;
 			}

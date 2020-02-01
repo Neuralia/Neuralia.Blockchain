@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
@@ -6,7 +7,7 @@ using Neuralia.Blockchains.Core.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.RepresentativeBallotingMethods.Active {
 
 	public interface IActiveRepresentativeBallotingSelector : IJsonSerializable {
-		Dictionary<AccountId, IActiveElectedChoice> SelectRepresentatives(Dictionary<AccountId, IActiveElectedChoice> elected, IActiveRepresentativeBallotingProof proof);
+		Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> SelectRepresentatives(Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> tierElected, IActiveRepresentativeBallotingProof proof);
 		IActiveRepresentativeBallotingApplication PrepareRepresentativeBallotingApplication(IActiveRepresentativeBallotingRules ballotRules);
 	}
 
@@ -19,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.RepresentativeBallotingRules = representativeBallotingRules;
 		}
 
-		public abstract Dictionary<AccountId, IActiveElectedChoice> SelectRepresentatives(Dictionary<AccountId, IActiveElectedChoice> elected, IActiveRepresentativeBallotingProof proof);
+		public abstract Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> SelectRepresentatives(Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> tierElected, IActiveRepresentativeBallotingProof proof);
 
 		public abstract IActiveRepresentativeBallotingApplication PrepareRepresentativeBallotingApplication(IActiveRepresentativeBallotingRules ballotRules);
 

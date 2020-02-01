@@ -3,8 +3,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO.Abstractions;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
@@ -66,6 +69,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		event Action WalletSynced;
 		void TriggerWalletSyncedEvent();
 		void TriggerBlockchainSyncedEvent();
+
+		void RequestFullSync(bool force = false);
+		void RequestBlockchainSync(bool force = false);
+		void RequestWalletSync(bool force = false);
+		void RequestWalletSync(IBlock block, bool force = false, bool? allowGrowth = null);
+		
+		void Pause();
+		void Resume();
 	}
 
 	public interface ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ILoopThread<CentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>>, ICentralCoordinator
@@ -76,6 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		IChainDalCreationFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainDalCreationFactory { get; }
 
+		bool IsWalletSynced { get; }
 		bool IsChainSynchronizing { get; }
 
 		bool IsChainSynchronized { get; }
@@ -139,7 +151,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.ColoredRoutedTaskReceiver = new ColoredRoutedTaskReceiver(this.HandleMessages);
 
 			this.ChainId = chainId;
+			
+			// lets make sure we capture and handle important exceptions!!
+			AppDomain.CurrentDomain.FirstChanceException += (object sender, FirstChanceExceptionEventArgs e) => {
 
+				if(e.Exception is UnrecognizedElementException ex && ex.BlockchainType == chainId) {
+					Log.Fatal(ex, ex.Message);
+					this.PostSystemEventImmediate(SystemEventGenerator.RequireNodeUpdate(ex.BlockchainType.Value, ex.ChainName), new CorrelationContext());
+					//TODO: what else. should we stop the chain?
+				}
+			};
 		}
 
 		public event Action BlockchainSynced;
@@ -153,12 +174,63 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.BlockchainSynced?.Invoke();
 		}
 
+		public void RequestFullSync(bool force = false) {
+
+			if(!this.IsChainLikelySynchronized) {
+				this.RequestBlockchainSync(force);
+			}
+			else if(!this.IsWalletSynced) {
+				this.RequestWalletSync(force);
+			}
+		}
+		
+		public void RequestBlockchainSync(bool force = false) {
+			var blockchainTask = this.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+			blockchainTask.SetAction((service, taskRoutingContext2) => {
+				service.SynchronizeBlockchain(force);
+			});
+
+			blockchainTask.Caller = null;
+			this.RouteTask(blockchainTask);
+		}
+
+		public void RequestWalletSync(bool force = false) {
+			var blockchainTask = this.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+			blockchainTask.SetAction((service, taskRoutingContext2) => {
+				service.SynchronizeWallet(force);
+			});
+
+			blockchainTask.Caller = null;
+			this.RouteTask(blockchainTask);
+		}
+
+		public void RequestWalletSync(IBlock block, bool force = false, bool? allowGrowth = null) {
+			var blockchainTask = this.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+			blockchainTask.SetAction((service, taskRoutingContext2) => {
+				service.SynchronizeWallet(block, force, allowGrowth);
+			});
+
+			blockchainTask.Caller = null;
+			this.RouteTask(blockchainTask);
+		}
+
+		public void Pause() {
+			this.ChainComponentProvider.WalletProviderBase.Pause();
+		}
+
+		public void Resume() {
+			this.ChainComponentProvider.WalletProviderBase.Resume();
+		}
+
 		public IChainDalCreationFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainDalCreationFactory => this.ChainComponentProvider.ChainFactoryProviderBase.ChainDalCreationFactoryBase;
 
 		public BlockchainType ChainId { get; }
 		public string ChainName => BlockchainTypes.GetBlockchainTypeName(this.ChainId);
 
-		public CHAIN_COMPONENT_PROVIDER ChainComponentProvider { get; protected set; }
+		public CHAIN_COMPONENT_PROVIDER ChainComponentProvider { get; private set; }
 
 		public ChainConfigurations ChainSettings => this.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
@@ -186,9 +258,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 					if(waitFlags.Any()) {
 						int waitTime = 20;
 
-						Log.Information($"We are preparing to stop chain {BlockchainTypes.GetBlockchainTypeName(this.ChainId)}, but we received {waitFlags.Count()} requests to wait by subscribers. we will wait up to {waitTime} seconds");
+						Log.Information($"We are preparing to stop chain {BlockchainTypes.GetBlockchainTypeName(this.ChainId)}, but we received {waitFlags.Count()} requests to wait by pending services. we will wait up to {waitTime} seconds");
 						Task.WaitAll(waitFlags.ToArray(), TimeSpan.FromSeconds(waitTime));
-						Log.Information($"We are done waiting for subscribers for chain  {BlockchainTypes.GetBlockchainTypeName(this.ChainId)}. Proceeding with shutdown...");
+						Log.Information($"We are done waiting for pending services for chain  {BlockchainTypes.GetBlockchainTypeName(this.ChainId)}. Proceeding with shutdown...");
 					}
 
 					Log.Information($"We are shutting down chain '{BlockchainTypes.GetBlockchainTypeName(this.ChainId)}'...");
@@ -262,20 +334,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		/// <summary>
-		///     Run a task inside a child active transaction
-		/// </summary>
-		/// <param name="action"></param>
-		public void ScheduleWalletproviderChildTransactionalThread(Action action) {
-
-			if(this.ChainComponentProvider.WalletProviderBase.IsActiveTransaction) {
-				this.ChainComponentProvider.WalletProviderBase.ScheduleChildTransactionalThread(action);
-			} else {
-				// no transaction, just run it
-				action();
-			}
-		}
-
-		/// <summary>
 		///     determine if we are in a wallet transaction and if the task is from this very active thread
 		/// </summary>
 		/// <param name="task"></param>
@@ -298,17 +356,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.ChainComponentProvider.ChainNetworkingProviderBase.PostNewGossipMessage(gossipMessageSet);
 		}
 
+		public bool IsWalletSynced {
+			get {
+				var walletSynced = this.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
+
+				return walletSynced.HasValue && walletSynced.Value;
+			}
+
+		}
+		
 		public bool IsChainSynchronizing { get; set; }
 
-		public bool IsChainSynchronized => this.ChainComponentProvider.ChainStateProviderBase.GetChainSyncState() == Enums.ChainSyncState.Synchronized;
+		public bool IsChainSynchronized => this.ChainComponentProvider.ChainStateProviderBase.IsChainSynced;
 
-		public bool IsChainLikelySynchronized {
-			get {
-				Enums.ChainSyncState state = this.ChainComponentProvider.ChainStateProviderBase.GetChainSyncState();
-
-				return (state == Enums.ChainSyncState.Synchronized) || (state == Enums.ChainSyncState.LikelyDesynchronized);
-			}
-		}
+		public bool IsChainLikelySynchronized => this.ChainComponentProvider.ChainStateProviderBase.IsChainLikelySynchronized;
 
 		public virtual void InitializeContents(IChainComponentsInjection<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainComponentsInjection) {
 			if(this.ChainId == BlockchainTypes.Instance.None) {
@@ -332,6 +393,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			if(!ServerMessageGroupManifestWorkflow.ChainRehydrationFactories.ContainsKey(this.ChainId)) {
 				ServerMessageGroupManifestWorkflow.ChainRehydrationFactories.Add(this.ChainId, this.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 			}
+
+			// ensure we track the accounts we need
+			this.ChainComponentProvider.AccountSnapshotsProviderBase.StartTrackingConfigAccounts();
 		}
 
 		/// <summary>
@@ -536,33 +600,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		protected override void ProcessLoop() {
 
 			this.CheckShouldCancel();
-
-			this.CheckShouldCancel();
-
+			
 			this.ColoredRoutedTaskReceiver.CheckTasks();
 		}
 
 		protected override void DisposeAll() {
 
-			this.Dispose();
-
 			this.Stop();
 
-			// dispose them all
-			foreach((IRoutedTaskRoutingThread service, Enums.ServiceExecutionTypes executionType) service in this.services.Values) {
+			// and any providers
+			foreach(var provider in this.ChainComponentProvider.Providers) {
 				try {
-					service.service.Dispose();
+					if(provider is IDisposable disposable) {
+						disposable.Dispose();
+					}
+				} catch {
+					
+				}
+			}
+
+			// dispose them all
+			foreach((IRoutedTaskRoutingThread service, Enums.ServiceExecutionTypes executionType) in this.services.Values) {
+				try {
+					service.Dispose();
 				} catch {
 				}
 			}
 
 			this.workflowCoordinator.Dispose();
-
+			
 		}
 
 		public class MessageReceivedTask : ColoredTask {
 			public readonly PeerConnection Connection;
-			public readonly SafeArrayHandle data = SafeArrayHandle.Create();
+			public readonly SafeArrayHandle data;
 			public readonly IRoutingHeader header;
 
 			public MessageReceivedTask(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection) {

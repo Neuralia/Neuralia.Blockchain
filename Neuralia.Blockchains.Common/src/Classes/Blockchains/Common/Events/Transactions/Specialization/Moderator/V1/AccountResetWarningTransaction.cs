@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -52,5 +53,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.MODERATION_ACCOUNT_RESET_WARNING, 1, 0);
 		}
+		
+		public override ImmutableList<AccountId> TargetAccounts => new []{this.Account}.ToImmutableList();
 	}
 }

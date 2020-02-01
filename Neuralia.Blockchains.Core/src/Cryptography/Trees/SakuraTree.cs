@@ -1,26 +1,43 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
+using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Org.BouncyCastle.Crypto;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	/// <summary>
 	///     A rough implementation of the Sakura tree
 	/// </summary>
-	public abstract class SakuraTree : TreeHasher {
+
+	//TODO: This class desperately needs to be optimized! 
+	public abstract class SakuraTree<T> : TreeHasher, IDisposableExtended
+		where T : class {
+
+		private const int MAXIMUM_SEQUENTIAL_COUNT = 10_000;
+		
+		private readonly ObjectPool<T> hasherPool;
+			
 		private const int HOP_COUNT = 2; // we include 2 regular nodes as chaining hops and add + 1 for the kangourou hop (so 3 each group)
+		
+		private readonly int threadCounts;
+
+		public SakuraTree(Enums.ThreadMode threadMode = Enums.ThreadMode.ThreeQuarter) {
+			this.threadCounts = XMSSCommonUtils.GetThreadCount(threadMode);
+			
+			this.hasherPool = new ObjectPool<T>(this.DigestFactory, 0, this.threadCounts);
+		}
+
+		protected abstract T DigestFactory();
 
 		/// <summary>
-		/// cache for disposing
-		/// </summary>
-		private readonly List<Hop> hopCache = new List<Hop>();
-
-		/// <summary>
-		///  we use this for cleaning up buffers that we created
+		///     we use this for cleaning up buffers that we created
 		/// </summary>
 		protected SafeArrayHandle HashBytes(IHashNodeList nodeList) {
 			SafeArrayHandle result = null;
@@ -32,16 +49,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 				//TODO: convert this to a streaming method, instead of creating all nodes from the start.
 				// convert the byte arrays into our own internal hop structure. they are all lead hops, to start.
-				IHopSet leafHops = new HopSet(nodeList, this.hopCache);
+				IHopSet leafHops = new HopSet(nodeList);
 
 				const int level = 1; // 0 is used by the leaves. here we operate at the next step, so 1.
 
 				result = this.ConcatenateHops(leafHops, level);
 
 			} finally {
-				foreach(var entry in this.hopCache) {
-					entry.Dispose();
-				}
+		
 			}
 
 			return result;
@@ -60,6 +75,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		/// <returns></returns>
 		private SafeArrayHandle ConcatenateHops(IHopSet hops, int level) {
 			while(true) {
+				//TODO: this method can be severely optimized. we can also prepare the entire worklist and loop as fast as possible. see XMSSEngine.TreeHash for an example
+				
 				// now we preppare the next level group
 				int totalHopJump = HOP_COUNT + 1;
 				SubHopSet results = new SubHopSet();
@@ -69,21 +86,34 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					totalHopJump = totalHops;
 				}
 
-				int i = 0;
+				static IEnumerable<int> SteppingList(int start, int end, int step) {
+					for(int i = start; (i + step) <= end; i += step) {
+						yield return i;
+					}
+				}
 
-				for(; (i + totalHopJump) <= totalHops; i += totalHopJump) {
+				int level1 = level;
+
+				IHopSet hops1 = hops;
+
+				// now we add the remainders for later use, they will be combined in further levels
+				int start = totalHopJump * (totalHops / totalHopJump);
+				int end = start + (totalHops % totalHopJump);
+				
+				int GetActualIndex(int index) => index / totalHopJump;
+
+				void RunHop(int index) {
 					ChainingHop chainHop = new ChainingHop();
-					this.hopCache.Add(chainHop);
-					
+
 					// the number if regular hops we include as chaining ones
 					int totalRoundChainingHops = totalHopJump - 1;
 
-					for(int j = i; j < (i + totalRoundChainingHops); j++) {
-						Hop hop = hops[j];
+					for(int j = index; j < (index + totalRoundChainingHops); j++) {
+						Hop hop = hops1[j];
 
 						// should be hashed at this point, lets do it if it was not done yet
 						if(!hop.IsHashed) {
-							this.HashHop(hop, level);
+							this.HashHop(hop, level1);
 						}
 
 						// these are the regular nodes
@@ -91,15 +121,25 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					}
 
 					// now we add the kangourou node (this one should NOT be hashed yet)
-					chainHop.SetKangourouHop(hops[i + totalRoundChainingHops]);
+					chainHop.SetKangourouHop(hops1[index + totalRoundChainingHops]);
 
 					// ok, thats our new hop group
-					results.Add(chainHop);
+					results.Add(GetActualIndex(index), chainHop);
 				}
 
-				// now we add the remainders for later use, they will be combined in further levels
-				for(; i < totalHops; i++) {
-					results.Add(hops[i]);
+				if(totalHops <= MAXIMUM_SEQUENTIAL_COUNT || this.threadCounts == 1) {
+					// for small amounts, its faster to go sequential
+					for(int i = 0; (i + totalHopJump) <= totalHops; i += totalHopJump) {
+						RunHop(i);
+					}
+				} else {
+					Parallel.ForEach(SteppingList(0, totalHops, totalHopJump), new ParallelOptions {MaxDegreeOfParallelism = this.threadCounts}, RunHop);
+				}
+
+
+				int finalIndex = GetActualIndex(start);
+				for(int i = start; i < end; i++) {
+					results.Add(finalIndex+ (i -start), hops[i]);
 				}
 
 				if(results.Count > 1) {
@@ -116,7 +156,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 				this.HashHop(theOne, level);
 
-				return theOne.data.Branch(); // this is the final hash
+				var hash = theOne.data.Branch(); // this is the final hash
+				
+				theOne.Dispose();
+
+				return hash;
 			}
 		}
 
@@ -126,8 +170,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		/// <param name="hop"></param>
 		/// <param name="level"></param>
 		private void HashHop(Hop hop, int level) {
+			if(hop.IsHashed) {
+				return;
+			}
 			SafeArrayHandle hopBytes = hop.GetHopBytes(level);
-			var hash = this.GenerateHash(hopBytes);
+			SafeArrayHandle hash = this.GenerateHash(hopBytes);
 			hop.data.Entry = hash.Entry;
 			hop.IsHashed = true;
 
@@ -135,15 +182,28 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			hopBytes.Dispose();
 		}
 
-		protected abstract SafeArrayHandle GenerateHash(SafeArrayHandle entry);
+		protected SafeArrayHandle GenerateHash(SafeArrayHandle entry) {
+
+			T hasher = null;
+
+			try {
+				hasher = this.hasherPool.GetObject();
+				return this.GenerateHash(entry, hasher);
+			} finally {
+				if(hasher != null) {
+					this.hasherPool.PutObject(hasher);
+				}
+			}
+		}
+		
+		protected abstract SafeArrayHandle GenerateHash(SafeArrayHandle entry, T hasher);
+		
+
 
 	#region internal classes
 
 		public abstract class Hop : IDisposableExtended {
 			public readonly SafeArrayHandle data = SafeArrayHandle.Create();
-			public bool IsHashed { get; set; }
-			public abstract SafeArrayHandle GetHopBytes(int level);
-
 
 			protected Hop(SafeArrayHandle entry) {
 				if(entry != null) {
@@ -157,6 +217,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			protected Hop() : this(null) {
 
 			}
+
+			public bool IsHashed { get; set; }
+			public abstract SafeArrayHandle GetHopBytes(int level);
 
 		#region Disposable
 
@@ -189,6 +252,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			public bool IsDisposed { get; private set; }
 
 		#endregion
+
 		}
 
 		protected class LeafHop : Hop {
@@ -228,10 +292,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		protected class ChainingHop : Hop {
-			private static readonly byte[] CHAIN_HOP_FLAG = {1};
-			private readonly List<Hop> ChainingHops = new List<Hop>();
+			private static readonly byte[] ChainHopFlag = {1};
+			private readonly List<Hop> chainingHops = new List<Hop>();
 
-			private Hop KangourouHop;
+			private Hop kangourouHop;
 			private int totalChainingHopsSize;
 
 			public override SafeArrayHandle GetHopBytes(int level) {
@@ -239,62 +303,76 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					throw new ApplicationException("Hope has already been hashed");
 				}
 
-				if(this.KangourouHop is LeafHop && this.KangourouHop.IsHashed) {
+				if(this.kangourouHop is LeafHop && this.kangourouHop.IsHashed) {
 					throw new ApplicationException("A kangourou hop should not be hashed at this point");
 				}
 
-				using(SafeArrayHandle kangourouBytes = this.KangourouHop.GetHopBytes(level)) {
-					// should not be hashed yet
+				SafeArrayHandle resultBytes = null;
 
-					// out final mega array
-					SafeArrayHandle result = ByteArray.Create(kangourouBytes.Length + this.totalChainingHopsSize + sizeof(int) + sizeof(int) + sizeof(byte));
-					int offset = 0;
+				try {
+					using(SafeArrayHandle kangourouBytes = this.kangourouHop.GetHopBytes(level)) {
+						// should not be hashed yet
 
-					//first we copy the kangourou hop itself
-					result.Entry.CopyFrom(kangourouBytes.Entry, 0, offset, kangourouBytes.Length);
-					offset += kangourouBytes.Length;
+						// out final mega array
+						SafeArrayHandle result = ByteArray.Create(kangourouBytes.Length + this.totalChainingHopsSize + sizeof(int) + sizeof(int) + sizeof(byte));
+						int offset = 0;
 
-					// now the chaining hops are concatenated
-					foreach(var hop in this.ChainingHops) {
-						result.Entry.CopyFrom(hop.data.Entry, 0, offset, hop.data.Length);
-						offset += hop.data.Length;
+						//first we copy the kangourou hop itself
+						result.Entry.CopyFrom(kangourouBytes.Entry, 0, offset, kangourouBytes.Length);
+						offset += kangourouBytes.Length;
+
+						// now the chaining hops are concatenated
+						foreach(Hop hop in this.chainingHops) {
+							result.Entry.CopyFrom(hop.data.Entry, 0, offset, hop.data.Length);
+							offset += hop.data.Length;
+						}
+
+						// now we add the size of the array
+						Span<byte> intBytes = stackalloc byte[sizeof(int)];
+						TypeSerializer.Serialize(this.chainingHops.Count, intBytes);
+						result.Entry.CopyFrom(intBytes, 0, offset, sizeof(int));
+						offset += sizeof(int);
+
+						// the amount of chaining hops
+						TypeSerializer.Serialize(level, intBytes);
+						result.Entry.CopyFrom(intBytes, 0, offset, sizeof(int));
+						offset += sizeof(int);
+
+						// and since this is a chaining hop, we always have a flag of 1
+						result.Entry.CopyFrom(ChainHopFlag.AsSpan(), 0, offset, sizeof(byte));
+
+						resultBytes = result;
 					}
-
-					// now we add the size of the array
-					Span<byte> intBytes = stackalloc byte[sizeof(int)];
-					TypeSerializer.Serialize(this.ChainingHops.Count, intBytes);
-					result.Entry.CopyFrom(intBytes, 0, offset, sizeof(int));
-					offset += sizeof(int);
-
-					// the amount of chaining hops
-					TypeSerializer.Serialize(level, intBytes);
-					result.Entry.CopyFrom(intBytes, 0, offset, sizeof(int));
-					offset += sizeof(int);
-
-					// and since this is a chaining hop, we always have a flag of 1
-					result.Entry.CopyFrom(CHAIN_HOP_FLAG.AsSpan(), 0, offset, sizeof(byte));
-
-					return result;
+				} finally {
+					// these hashing sets can get huge, so lets clear as we go so we dont use up too much RAM.
+					this.ClearHops();
 				}
+				
+				return resultBytes;
 			}
 
 			protected override void DisposeAll() {
 				base.DisposeAll();
 
-				foreach(var hop in this.ChainingHops) {
-					hop.Dispose();
-				}
-
-				this.KangourouHop?.Dispose();
+				this.ClearHops();
 			}
 
+			private void ClearHops() {
+				foreach(Hop hop in this.chainingHops) {
+					hop.Dispose();
+				}
+				this.chainingHops.Clear();
+				this.kangourouHop?.Dispose();
+				this.kangourouHop = null;
+			}
+			
 			public void AddHop(Hop hop) {
 				if(!hop.IsHashed) {
 					throw new ApplicationException("A hop should be already hashed");
 				}
 
 				this.totalChainingHopsSize += hop.data.Length;
-				this.ChainingHops.Add(hop);
+				this.chainingHops.Add(hop);
 			}
 
 			public void SetKangourouHop(Hop hop) {
@@ -302,10 +380,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					throw new ApplicationException("A kangourou hop must not be already hashed");
 				}
 
-				this.KangourouHop = hop;
-			}
-
-			public ChainingHop() : base() {
+				this.kangourouHop = hop;
 			}
 		}
 
@@ -315,24 +390,23 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		private sealed class HopSet : IHopSet {
-			private readonly Dictionary<int, Hop> createdHops = new Dictionary<int, Hop>();
+			private readonly ConcurrentDictionary<int, Hop> createdHops = new ConcurrentDictionary<int, Hop>();
 
 			private readonly IHashNodeList hashNodeList;
-			private readonly List<Hop> hopCache;
 
-			public HopSet(IHashNodeList hashNodeList, List<Hop> hopCache) {
+
+			public HopSet(IHashNodeList hashNodeList) {
 				this.hashNodeList = hashNodeList;
-				this.hopCache = hopCache;
 			}
 
 			public Hop this[int i] {
 				get {
-					if(!this.createdHops.ContainsKey(i)) {
-
-						var hop = new LeafHop(this.hashNodeList[i]);
-						this.hopCache.Add(hop);
-						this.createdHops.Add(i,hop);
+					
+					if(this.createdHops.ContainsKey(i)) {
+						return this.createdHops[i];
 					}
+
+					this.createdHops.AddSafe(i, new LeafHop(this.hashNodeList[i]));
 
 					return this.createdHops[i];
 				}
@@ -343,21 +417,49 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		private sealed class SubHopSet : IHopSet {
 
-			private readonly List<Hop> createdHops = new List<Hop>();
+			private readonly ConcurrentDictionary<int, Hop> createdHops = new ConcurrentDictionary<int, Hop>();
 
 			public Hop this[int i] => this.createdHops[i];
 
 			public int Count => this.createdHops.Count;
 
-			public void Add(Hop hop) {
-				this.createdHops.Add(hop);
+			public void Add(int index, Hop hop) {
+				this.createdHops.AddSafe(index, hop);
 			}
 
 			public Hop Single() {
-				return this.createdHops.Single();
-
+				return this.createdHops.Values.Single();
 			}
 		}
-		#endregion
+
+	#endregion
+
+	#region Dispose
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+			
+			if(disposing && !this.IsDisposed) {
+				this.DisposeAll();
+			}
+			
+			this.IsDisposed = true;
+		}
+
+		protected virtual void DisposeAll() {
+			this.hasherPool.Dispose();
+		}
+		
+		~SakuraTree() {
+			this.Dispose(false);
+		}
+
+	#endregion
 	}
 }

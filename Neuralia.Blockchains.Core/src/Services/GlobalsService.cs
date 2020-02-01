@@ -21,14 +21,39 @@ namespace Neuralia.Blockchains.Core.Services {
 	public sealed class GlobalsService : IGlobalsService {
 
 		/// <summary>
-		///     this is the default port our listener listens to
+		/// The default fodler name where to find the wallet
 		/// </summary>
-		public const int DEFAULT_PORT = 33888;
+#if TESTNET
+		public const string DEFAULT_SYSTEM_FILES_FOLDER_NAME = ".neuralium-testnet";
+#elif DEVNET
+		public const string DEFAULT_SYSTEM_FILES_FOLDER_NAME = ".neuralium-devnet";
+#else
+	    public const string DEFAULT_SYSTEM_FILES_FOLDER_NAME = ".neuralium";
+#endif
+		
 
 		/// <summary>
 		///     this is the default port our listener listens to
 		/// </summary>
-		public const int DEFAULT_RPC_PORT = 12033;
+#if TESTNET
+		public const int DEFAULT_PORT = 33887;
+#elif DEVNET
+		public const int DEFAULT_PORT = 33886;
+#else
+	    public const int DEFAULT_PORT = 33888;
+#endif
+		
+		/// <summary>
+		///     this is the default port our listener listens to
+		/// </summary>
+#if TESTNET
+		public const int DEFAULT_RPC_PORT = 12032;
+#elif DEVNET
+		public const int DEFAULT_RPC_PORT = 12031;
+#else
+	    public const int DEFAULT_RPC_PORT = 12033;
+#endif
+		
 
 		/// <summary>
 		///     The size in bytes of public keys in our system. XMSS keys of course
@@ -68,7 +93,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		public const byte POW_MAX_SOLUTIONS = 3;
 
-		public static readonly ushort POW_DIFFICULTY = (ushort) HashDifficultyUtils.DEFAULT_256_DIFFICULTY;
+		public static readonly ushort POW_DIFFICULTY = (ushort) HashDifficultyUtils.Default256Difficulty;
 		
 		
 		/// <summary>
@@ -84,7 +109,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <summary>
 		/// the timespan delay before a miner times out
 		/// </summary>
-		public static readonly TimeSpan TimeoutMinerDelay = TimeSpan.FromMinutes(GlobalsService.MINING_REGISTRATION_TIMEOUT);
+		public static readonly TimeSpan TimeoutMinerDelay = TimeSpan.FromMinutes(MINING_REGISTRATION_TIMEOUT);
 		
 		/// <summary>
 		/// The delay between each query for mining status

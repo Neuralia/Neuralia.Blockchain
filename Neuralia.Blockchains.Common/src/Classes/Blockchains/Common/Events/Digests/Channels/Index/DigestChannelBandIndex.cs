@@ -22,6 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		List<int> GetFileTypes();
 
 		SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length);
+		void WriteFileBytes(int fileId, uint partIndex, SafeArrayHandle data);
 	}
 
 	public interface IDigestChannelBandIndex<CARD_TYPE, KEY> : IDigestChannelBandIndex
@@ -87,6 +88,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public abstract SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length);
+		public abstract void WriteFileBytes(int fileId, uint partIndex, SafeArrayHandle data);
+
 		public abstract Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex);
 
 		public abstract List<int> GetFileTypes();
@@ -111,40 +114,41 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				}
 
 				// ok, expand the file
-
-				using(Stream input = File.OpenRead(archivedFilename)) {
-					using(Stream output = File.OpenWrite(expandedFilename)) {
-						Compressors.DigestCompressor.Decompress(input, output);
-					}
-				}
+				Compressors.DigestCompressor.Decompress(archivedFilename, expandedFilename);
 			}
 		}
 
 		public string GetExpandedBandName(CHANEL_BANDS band, object[] parameters) {
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(band.ToString(), this.scopeFolder, parameters));
+			string bandName = band.ToString().ToLower();
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName,bandName, this.scopeFolder, parameters));
 
 		}
 
 		public string GetArchivedBandName(CHANEL_BANDS band, object[] parameters) {
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(band.ToString(), this.scopeFolder, parameters));
+			string bandName = band.ToString().ToLower();
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName,bandName, this.scopeFolder, parameters));
 		}
 
 		public string GetExpandedBandName(CHANEL_BANDS band, uint index) {
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(band.ToString(), this.scopeFolder, new object[] {index}));
+			string bandName = band.ToString().ToLower();
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName,bandName, this.scopeFolder, new object[] {index}));
 
 		}
 
 		public string GetArchivedBandName(CHANEL_BANDS band, uint index) {
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(band.ToString(), this.scopeFolder, new object[] {index}));
+			string bandName = band.ToString().ToLower();
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName,bandName, this.scopeFolder, new object[] {index}));
 		}
 
 		public string GetExpandedBandName(CHANEL_BANDS band) {
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(band.ToString(), this.scopeFolder, new object[] { }));
+			string bandName = band.ToString().ToLower();
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName,bandName, this.scopeFolder, new object[] { }));
 
 		}
 
 		public string GetArchivedBandName(CHANEL_BANDS band) {
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(band.ToString(), this.scopeFolder, new object[] { }));
+			string bandName = band.ToString().ToLower();
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName,bandName, this.scopeFolder, new object[] { }));
 		}
 
 		protected List<(string extractedName, CHANEL_BANDS band)> EnsureFilesetExtracted((string bandName, object[] parameters, CHANEL_BANDS band)[] bandNames) {
@@ -165,6 +169,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected SafeArrayHandle HashFile(string filename) {
 
+			if(!this.fileSystem.File.Exists(filename)) {
+				return new SafeArrayHandle();
+			}
 			using(var sliceHashNodes = new FileStreamSliceHashNodeList(filename, this.fileSystem)) {
 				return HashingUtils.Hash3(sliceHashNodes);
 			}

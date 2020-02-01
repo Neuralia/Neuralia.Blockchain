@@ -77,8 +77,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		[Required]
 		public int MaxBlockInterval { get; set; }
+		[Required]
+		public bool AllowGossipPresentations { get; set; }
 
 		public long MiningPassword { get; set; }
+		
+		public byte[] MiningAutograph { get; set; }
 
 		public DateTime? LastMiningRegistrationUpdate { get; set; }
 

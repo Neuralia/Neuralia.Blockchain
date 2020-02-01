@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO.Abstractions;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -10,11 +11,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public interface IAccreditationCertificateDigestChannel : IDigestChannel {
 	}
 
-	public interface IAccreditationCertificateDigestChannel<ACCREDITATION_CARD> : IAccreditationCertificateDigestChannel
+	public interface IAccreditationCertificateDigestChannel<out ACCREDITATION_CARD> : IAccreditationCertificateDigestChannel
 		where ACCREDITATION_CARD : class, IAccreditationCertificateDigestChannelCard {
 		ACCREDITATION_CARD GetAccreditationCertificate(int id);
 
-		List<ACCREDITATION_CARD> GetAccreditationCertificates();
+		ACCREDITATION_CARD[] GetAccreditationCertificates();
 	}
 
 	public abstract class AccreditationCertificateDigestChannel<ACCREDITATION_CARD> : DigestChannel<AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands, ACCREDITATION_CARD, int, int, int>, IAccreditationCertificateDigestChannel<ACCREDITATION_CARD>
@@ -43,16 +44,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return results[AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands.Certificates];
 		}
 
-		public List<ACCREDITATION_CARD> GetAccreditationCertificates() {
+		public ACCREDITATION_CARD[] GetAccreditationCertificates() {
 			// this works because we have only one channel for now
 			var castedIndex = (SingleSqliteChannelBandIndex<AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands, ACCREDITATION_CARD, int, int, int>) this.channelBandIndexSet.BandIndices.Values.Single();
 
-			return castedIndex.QueryCards();
+			return castedIndex.QueryCards().ToArray();
 		}
 
 		protected override void BuildBandsIndices() {
 
-			this.channelBandIndexSet.AddIndex(1, new SingleSqliteChannelBandIndex<AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands, ACCREDITATION_CARD, int, int, int>(CERTIFICATES_BAND_NAME, this.baseFolder, this.scopeFolder, AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands.Certificates, new FileSystem(), key => key));
+			var index = new SingleSqliteChannelBandIndex<AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands, ACCREDITATION_CARD, int, int, int>(CERTIFICATES_BAND_NAME, this.baseFolder, this.scopeFolder, AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands.Certificates, new FileSystem(), key => key);
+			this.InitIndexGenerator(index);
+			
+			this.channelBandIndexSet.AddIndex(1, index);
+		}
+
+		protected virtual void InitIndexGenerator(SingleSqliteChannelBandIndex<AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands, ACCREDITATION_CARD, int, int, int> generator) {
+			generator.ModelBuilder = builder => {
+
+				builder.Entity<ACCREDITATION_CARD>(o => {
+					o.Ignore(e => e.AssignedAccountFull);
+					o.Ignore(e => e.CertificateVersion);
+					
+				});
+
+				builder.Entity<ACCREDITATION_CARD>().ToTable(CERTIFICATES_CHANNEL);
+			};
 		}
 
 		protected override ComponentVersion<DigestChannelType> SetIdentity() {

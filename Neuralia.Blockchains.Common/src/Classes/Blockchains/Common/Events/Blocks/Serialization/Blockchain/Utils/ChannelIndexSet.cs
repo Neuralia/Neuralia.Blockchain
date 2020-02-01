@@ -8,7 +8,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public class ChannelIndexSet {
 
 		private uint? adjustedBlockId;
-		private (int index, long startingBlockId) blockIndex;
+		private (long index, long startingBlockId, long endingBlockId) blockIndex;
 		public SharedChannelIndex MainChannelIndex { get; private set; }
 
 		public List<IChannelIndex> ChannelIndices { get; } = new List<IChannelIndex>();
@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.ChannelIndices.Add(index);
 		}
 
-		public void Reset(uint adjustedBlockId, (int index, long startingBlockId) blockIndex) {
+		public void Reset(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 			if((this.adjustedBlockId == adjustedBlockId) && (this.blockIndex == blockIndex)) {
 				return;
 			}
@@ -73,44 +73,52 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId) {
 			var result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
 
-			foreach(IChannelIndex index in this.ChannelIndices) {
-				var subResults = index.QueryBytes(adjustedBlockId);
+			try {
+				foreach(IChannelIndex index in this.ChannelIndices) {
+					var subResults = index.QueryBytes(adjustedBlockId);
 
-				subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+				}
+			} catch(BlockLoadException blex) {
+				//TODO: do anything or just retunr null?
 			}
-
+			
 			return result;
 		}
 
 		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
 			var result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
 
-			foreach(IChannelIndex index in this.ChannelIndices) {
-				var subResults = index.QueryPartialBlockBytes(adjustedBlockId, offsets.GetSubset(index.ChannelTypes));
+			try {
+				foreach(IChannelIndex index in this.ChannelIndices) {
+					var subResults = index.QueryPartialBlockBytes(adjustedBlockId, offsets.GetSubset(index.ChannelTypes));
 
-				subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+				}
+			} catch(BlockLoadException blex) {
+				//TODO: do anything or just retunr null?
 			}
 
 			return result;
 		}
 
-		public SafeArrayHandle QueryKeyedTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
-
-			foreach(IChannelIndex index in this.ChannelIndices) {
-
-				return index.QueryKeyedTransactionOffsets(adjustedBlockId, keyedTransactionIndex);
-			}
-
-			return default;
+		public SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int masterTransactionIndex) {
+			
+			return this.MainChannelIndex.QueryMasterTransactionOffsets(adjustedBlockId, masterTransactionIndex);
+			
 		}
 
 		public ChannelsEntries<long> QueryProviderFileSizes() {
 			var result = new ChannelsEntries<long>(this.ChannelTypes);
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
-				var subResults = index.QueryProviderFileSizes();
+				try {
+					var subResults = index.QueryProviderFileSizes();
 
-				subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+				} catch(BlockLoadException blex) {
+					//TODO: do anything or just retunr null?
+				}
 			}
 
 			return result;

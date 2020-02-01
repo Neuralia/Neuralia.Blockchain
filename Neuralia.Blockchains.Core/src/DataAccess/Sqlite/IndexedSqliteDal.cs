@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
@@ -16,18 +18,19 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 	public abstract class IndexedSqliteDal<DBCONTEXT> : SqliteDal<DBCONTEXT>, IIndexedSqliteDal<DBCONTEXT>
 		where DBCONTEXT : DbContext, IIndexedSqliteDbContext {
-		protected readonly long groupSize;
+		protected readonly int groupSize;
 
 		private string groupRoot;
 
-		protected IndexedSqliteDal(long groupSize, string folderPath, ServiceSet serviceSet, Func<AppSettingsBase.SerializationTypes, DBCONTEXT> contextInstantiator, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, contextInstantiator, serializationType) {
+		protected IndexedSqliteDal(int groupSize, string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, Func<AppSettingsBase.SerializationTypes, DBCONTEXT> contextInstantiator, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, softwareVersion, contextInstantiator, serializationType) {
 			this.groupSize = groupSize;
 		}
 
 		protected string GroupRoot {
 			get {
 				if(string.IsNullOrWhiteSpace(this.groupRoot)) {
-					using(DBCONTEXT db = this.CreateContext()) {
+					// create a raw context with no initialization. we only want an instance property value
+					using(DBCONTEXT db = this.CreateRawContext()) {
 						this.groupRoot = db.GroupRoot;
 					}
 				}
@@ -36,7 +39,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			}
 		}
 
-		private (int index, long startingId) FindIndex(long Id) {
+		private (long index, long startingId, long endingBlockId) FindIndex(long Id) {
 
 			if(Id == 0) {
 				throw new ApplicationException("Block Id cannot be 0.");
@@ -50,15 +53,32 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		/// </summary>
 		/// <returns></returns>
 		protected List<string> GetAllFileGroups() {
+			if(!Directory.Exists(this.folderPath)) {
+				return new List<string>();
+			}
 			return Directory.GetFiles(this.folderPath).Where(f => Path.GetFileName(f).StartsWith(this.GroupRoot)).ToList();
 		}
 
+		public override void Clear() {
+			foreach(string file in this.GetAllFileGroups()) {
+				if(File.Exists(file)) {
+					File.Delete(file);
+				}
+			}
+
+			var type = this.GetType();
+
+			if(DbCreatedCache.ContainsKey(type)) {
+				DbCreatedCache[type].Clear();
+			}
+		}
+
 		
-		protected int GetKeyGroup(long key) {
+		protected long GetKeyGroup(long key) {
 			return this.FindIndex(key).index;
 		}
 
-		protected int GetKeyGroup(AccountId key) {
+		protected long GetKeyGroup(AccountId key) {
 			return this.FindIndex(key.SequenceId).index;
 		}
 
@@ -138,6 +158,20 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			return results;
 		}
+		
+		public bool AnyAll(Func<DBCONTEXT, bool> operation, List<long> ids) {
+
+			var groups = ids.GroupBy(this.GetKeyGroup);
+
+			foreach(long index in groups.Select(g => g.Key)) {
+
+				if(this.PerformOperation(operation, index)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
 
 		public List<T> QueryAll<T>(Func<DBCONTEXT, List<T>> operation, List<long> ids) {
 
@@ -145,7 +179,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			var results = new List<T>();
 
-			foreach(int index in groups.Select(g => g.Key)) {
+			foreach(long index in groups.Select(g => g.Key)) {
 
 				results.AddRange(this.PerformOperation(operation, index));
 			}
@@ -160,9 +194,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			base.InitContext(db);
 		}
 
-		protected void InitContext(DBCONTEXT db, int index) {
+		protected void InitContext(DBCONTEXT db, long index) {
 
-			db.SetGroupIndex(index);
+			db.SetGroupIndex(index, this.groupSize);
 
 			base.InitContext(db);
 		}
@@ -197,20 +231,27 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 		protected override void PerformInnerContextOperation(Action<DBCONTEXT> action, params object[] contents) {
 
-			Action<DBCONTEXT> initializer = null;
+			try {
+				Action<DBCONTEXT> initializer = null;
 
-			if(contents[0] is string filename) {
-				initializer = dbx => this.InitContext(dbx, filename);
-			} else if(contents[0] is int index) {
-				initializer = dbx => this.InitContext(dbx, index);
-			}
+				if(contents[0] is string filename) {
+					initializer = dbx => this.InitContext(dbx, filename);
+				} else if(contents[0] is long index) {
+					initializer = dbx => this.InitContext(dbx, index);
+				}
 
-			using(DBCONTEXT db = this.CreateContext(initializer)) {
-				action(db);
+				using(DBCONTEXT db = this.CreateContext(initializer)) {
+					action(db);
+				}
+			} catch(Exception ex) {
+				Log.Error(ex, "exception occured during an indexed Entity Framework action");
+
+				throw;
 			}
+			
 		}
 
-		public (DBCONTEXT db, IDbContextTransaction transaction) BeginHoldingTransaction(int index) {
+		public (DBCONTEXT db, IDbContextTransaction transaction) BeginHoldingTransaction(long index) {
 
 			DBCONTEXT db = this.CreateContext(dbx => this.InitContext(dbx, index));
 

@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	/// </summary>
 	/// <remarks>
 	///     to encode 1 year (31,536,000), we need 25 bits (4 bytes), so there is no point in encoding smaller sizes. we
-	///     will always need 4 or more bytes to store a time offset.
+	///     will always need 4 or more bytes to store a time offset.  we use 6 bytes >> 2 bits for a maximum of 2,229,850 years.
 	/// </remarks>
 	[JsonConverter(typeof(TransactionTimestampJsonConverter))]
 	public class TransactionTimestamp : AdaptiveLong3_6, IComparable<TransactionTimestamp> {

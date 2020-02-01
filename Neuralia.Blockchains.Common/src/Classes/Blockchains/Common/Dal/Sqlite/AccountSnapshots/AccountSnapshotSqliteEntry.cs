@@ -5,8 +5,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 	public interface IAccountSnapshotSqliteEntry : IAccountSnapshotEntry {
 	}
 
-	public interface IAccountSnapshotSqliteEntry<ACCOUNT_FEATURE> : IAccountSnapshotEntry<ACCOUNT_FEATURE>, IAccountSnapshotSqliteEntry
-		where ACCOUNT_FEATURE : IAccountFeatureEntry {
+	public interface IAccountSnapshotSqliteEntry<ACCOUNT_ATTRIBUTE> : IAccountSnapshotEntry<ACCOUNT_ATTRIBUTE>, IAccountSnapshotSqliteEntry
+		where ACCOUNT_ATTRIBUTE : IAccountAttributeEntry {
 	}
 
 }

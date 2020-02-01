@@ -130,7 +130,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				PeerConnection connection = gossipMessageTask.Connection;
 
-				if(GlobalSettings.ApplicationSettings.MobileMode) {
+				if(GlobalSettings.ApplicationSettings.SynclessMode) {
 					if(blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope) {
 						// in mobile mode, we simply do not handle any gossip mesasges
 						Log.Information("Mobile nodes does not handle block gossip messages");
@@ -138,9 +138,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						return;
 					}
 
-					if(!Enums.BasicGossipPeerTypes.Contains(GlobalSettings.Instance.PeerType)) {
-						// in mobile mode, we simply do not handle any gossip mesasges
-						Log.Information("This mobile node does not handle gossip messages");
+					if(!GlobalSettings.Instance.NodeInfo.GossipAccepted) {
+						// some apps do not handle gossip at all
+						Log.Information("This node does not handle gossip messages");
 
 						return;
 					}
@@ -150,7 +150,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				ValidationResult valid = new ValidationResult();
 
-				this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, result => {
+				this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, true, result => {
 					valid = result;
 				});
 
@@ -218,50 +218,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
 					if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage) {
-
-						Action<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, TaskRoutingContext> action = null;
-
+						
 						if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.TRANSACTION_RECEIVED)) {
 
-							action = (blockchainService, taskRoutingContext3) => {
-								try {
-									blockchainService.InsertGossipTransaction((ITransactionEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope);
-								} catch(Exception ex) {
-									Log.Error(ex, "Failed to insert transaction from a received gossip message.");
-								}
-							};
+							this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertGossipTransaction((ITransactionEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope);
+
 						} else if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED)) {
+
 
 							IBlockEnvelope blockEnvelope = (IBlockEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
 
-							action = (blockchainService, taskRoutingContext3) => {
-								try {
-									blockchainService.InsertInterpretBlock(blockEnvelope.Contents.RehydratedBlock, blockEnvelope.Contents, true);
-								} catch(Exception ex) {
-									Log.Error(ex, "Failed to install block from a received gossip message.");
-								}
-							};
+							this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertInterpretBlock(blockEnvelope.Contents.RehydratedBlock, blockEnvelope.Contents, true);
+							
 						} else if((blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.MESSAGE_RECEIVED)) {
 							IMessageEnvelope messageEnvelope = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
 
-							action = (blockchainService, taskRoutingContext3) => {
-								try {
-									blockchainService.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedMessage, messageEnvelope.Contents);
-								} catch(Exception ex) {
-									Log.Error(ex, "Failed to handle message from a received gossip message.");
-								}
-							};
+							this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedMessage, messageEnvelope.Contents);
+							
 						} else {
 							throw new ArgumentOutOfRangeException("Invalid gossip message type");
 						}
-
-						blockchainTask.SetAction(action, (result3, executionContext3) => {
-
-							// clean up when we are done
-							//blockchainGossipMessageSet.BaseMessage.Dispose();
-						});
-
-						this.DispatchTaskNoReturnAsync(blockchainTask);
 
 						// ok , we are done. good job :)
 						Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} was valid and was processed properly.");

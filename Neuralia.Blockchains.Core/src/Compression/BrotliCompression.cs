@@ -8,18 +8,16 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 namespace Neuralia.Blockchains.Core.Compression {
 	public class BrotliCompression : Compression<BrotliCompression> {
 
-		protected override SafeArrayHandle CompressData(SafeArrayHandle data, CompressionLevelByte level) {
+		protected override SafeArrayHandle CompressData(SafeArrayHandle data, CompressionLevelByte level, Action<Stream> preProcessOutput = null) {
 
 			using(RecyclableMemoryStream output = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("compress")) {
 
-#if (NETSTANDARD2_0)
-throw new NotImplementedException();
-#else
-				using(BrotliStream compressor = new BrotliStream(output, this.ConvertCompression(level), true)) {
-					compressor.Write(data.Bytes, data.Offset, data.Length);
+				using(RecyclableMemoryStream input = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("compress", data.Bytes, data.Offset, data.Length)) {
+					
+					preProcessOutput?.Invoke(output);
+					this.CompressData(input, output, level);
+					return ByteArray.Create(output);
 				}
-#endif
-				return ByteArray.Create(output);
 			}
 		}
 
@@ -27,17 +25,25 @@ throw new NotImplementedException();
 			return this.CompressData(data, CompressionLevelByte.Default);
 		}
 
-		protected override SafeArrayHandle DecompressData(SafeArrayHandle data) {
+		protected override void CompressData(Stream input, Stream output, CompressionLevelByte level) {
+
+				using(BrotliStream compressor = new BrotliStream(output, this.ConvertCompression(level), true)) {
+					input.CopyTo(compressor);
+				}
+
+		}
+		
+		protected override SafeArrayHandle DecompressData(SafeArrayHandle data, Action<Stream> preProcessInput = null) {
 
 			using(RecyclableMemoryStream input = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("decompress", data.Bytes, data.Offset, data.Length)) {
 
-				return this.DecompressData(input);
+				return this.DecompressData(input, preProcessInput);
 			}
 		}
 
-		protected override SafeArrayHandle DecompressData(Stream input) {
+		protected override SafeArrayHandle DecompressData(Stream input, Action<Stream> preProcessInput = null) {
 			using(RecyclableMemoryStream output = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("output")) {
-
+				preProcessInput?.Invoke(input);
 				this.DecompressData(input, output);
 
 				return ByteArray.Create(output);
@@ -45,15 +51,11 @@ throw new NotImplementedException();
 		}
 
 		protected override void DecompressData(Stream input, Stream output) {
-
-#if (NETSTANDARD2_0)
-throw new NotImplementedException();
-#else
+			
 			using(BrotliStream decompressor = new BrotliStream(input, CompressionMode.Decompress, true)) {
 
 				decompressor.CopyTo(output);
 			}
-#endif
 		}
 	}
 }

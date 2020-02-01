@@ -10,10 +10,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		void InsertNewJointAccount(AccountId accountId, long inceptionBlockId, long? correlationId);
 	}
 
-	public interface IJointAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT, ACCOUNT_SNAPSHOT, ACCOUNT_FEATURE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT> : IAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT>, IJointAccountSnapshotDal
-		where ACCOUNT_SNAPSHOT_CONTEXT : IJointAccountSnapshotContext<ACCOUNT_SNAPSHOT, ACCOUNT_FEATURE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT>
-		where ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<ACCOUNT_FEATURE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT>, new()
-		where ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new()
+	public interface IJointAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT, ACCOUNT_SNAPSHOT, ACCOUNT_ATTRIBUTE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT> : IAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT>, IJointAccountSnapshotDal
+		where ACCOUNT_SNAPSHOT_CONTEXT : IJointAccountSnapshotContext<ACCOUNT_SNAPSHOT, ACCOUNT_ATTRIBUTE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT>
+		where ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<ACCOUNT_ATTRIBUTE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT>, new()
+		where ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
 		where ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccountEntry, new() {
 
 		void Clear();

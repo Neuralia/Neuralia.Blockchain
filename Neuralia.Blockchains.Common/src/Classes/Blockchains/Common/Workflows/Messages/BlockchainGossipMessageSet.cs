@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			return nodeList;
 		}
 
-		public override Enums.PeerTypeSupport MinimumNodeTypeSupport => Enums.PeerTypeSupport.FullGossip;
+		public override Enums.GossipSupportTypes MinimumNodeGossipSupport => Enums.GossipSupportTypes.Full;
 
 		public new IBlockchainGossipWorkflowTriggerMessage BaseMessage => (IBlockchainGossipWorkflowTriggerMessage) base.BaseMessage;
 	}

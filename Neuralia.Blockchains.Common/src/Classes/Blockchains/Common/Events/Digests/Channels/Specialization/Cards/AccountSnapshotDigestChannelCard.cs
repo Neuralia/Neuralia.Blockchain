@@ -4,15 +4,18 @@ using System.Collections.Immutable;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards {
 
-	public interface IAccountSnapshotDigestChannelCard : IAccountSnapshot<IAccountFeature>, IBinarySerializable {
+	public interface IAccountSnapshotDigestChannelCard : IAccountSnapshot<IAccountAttribute>, IBinarySerializable {
 		AccountId AccountIdFull { get; set; }
 		void ConvertToSnapshotEntry(IAccountSnapshot other, ICardUtils cardUtils);
 	}
@@ -30,37 +33,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public long InceptionBlockId { get; set; }
 		public byte TrustLevel { get; set; }
 		public long? CorrelationId { get; set; }
-		public List<IAccountFeature> AppliedFeatures { get; } = new List<IAccountFeature>();
+		public ImmutableList<IAccountAttribute> AppliedAttributesBase => this.AppliedAttributes.ToImmutableList();
+		public List<IAccountAttribute> AppliedAttributes { get; } = new List<IAccountAttribute>();
 
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
 			// this one must ALWAYS be first
 			this.AccountType = rehydrator.ReadByte();
-
-			this.AccountIdFull.Rehydrate(rehydrator);
-			this.InceptionBlockId = rehydrator.ReadLong();
+			
+			BlockId inceptionBlockId  = new BlockId();
+			inceptionBlockId.Rehydrate(rehydrator);
+			this.InceptionBlockId = inceptionBlockId.Value;
+			
 			this.CorrelationId = rehydrator.ReadNullableLong();
 			
 			this.TrustLevel = rehydrator.ReadByte();
 
-			this.AppliedFeatures.Clear();
+			this.AppliedAttributes.Clear();
 			bool any = rehydrator.ReadBool();
 
 			if(any) {
 				int count = rehydrator.ReadByte();
 
 				for(int i = 0; i < count; i++) {
-					IAccountFeature attribute = this.CreateAccountFeature();
+					IAccountAttribute attribute = this.CreateAccountFeature();
 
-					attribute.CertificateId = rehydrator.ReadInt();
+					AdaptiveLong1_9 certificate = new AdaptiveLong1_9();
+					certificate.Rehydrate(rehydrator);
+					attribute.CorrelationId = (uint)certificate.Value;
+					
+					certificate = new AdaptiveLong1_9();
+					certificate.Rehydrate(rehydrator);
+					attribute.AttributeType = (AccountAttributeType)certificate.Value;
+					
+					attribute.Start = rehydrator.ReadNullableDateTime();
+					attribute.Expiration = rehydrator.ReadNullableDateTime();
 
 					SafeArrayHandle data = rehydrator.ReadNullEmptyArray();
 
 					if(data != null) {
-						attribute.Data = data.ToExactByteArray();
+						attribute.Context = data.ToExactByteArray();
 					}
 
-					this.AppliedFeatures.Add(attribute);
+					this.AppliedAttributes.Add(attribute);
 				}
 			}
 		}
@@ -69,24 +84,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			// this one must ALWAYS be first
 			dehydrator.Write(this.AccountType);
 
-			this.AccountIdFull.Dehydrate(dehydrator);
-			dehydrator.Write(this.InceptionBlockId);
+			BlockId inceptionBlockId = this.InceptionBlockId;
+			inceptionBlockId.Dehydrate(dehydrator);
+
 			dehydrator.Write(this.CorrelationId);
 			
 			dehydrator.Write(this.TrustLevel);
-			
-			dehydrator.Write((byte) this.AppliedFeatures.Count);
 
-			bool any = this.AppliedFeatures.Any();
+			bool any = this.AppliedAttributes.Any();
 			dehydrator.Write(any);
 
 			if(any) {
-				dehydrator.Write((byte) this.AppliedFeatures.Count);
+				dehydrator.Write((byte) this.AppliedAttributes.Count);
 
-				foreach(IAccountFeature entry in this.AppliedFeatures) {
+				foreach(IAccountAttribute entry in this.AppliedAttributes) {
 
-					dehydrator.Write(entry.CertificateId);
-					dehydrator.Write(entry.Data);
+					AdaptiveLong1_9 certificate = new AdaptiveLong1_9();
+					certificate.Value =	entry.CorrelationId;
+					certificate.Dehydrate(dehydrator);
+					
+					certificate.Value =	entry.AttributeType.Value;
+					certificate.Dehydrate(dehydrator);
+					
+					dehydrator.Write(entry.Start);
+					dehydrator.Write(entry.Expiration);
+					
+					dehydrator.Write(entry.Context);
 				}
 			}
 		}
@@ -96,32 +119,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public void ClearCollection() {
-			this.AppliedFeatures.Clear();
+			this.AppliedAttributes.Clear();
 		}
 
-		public void CreateNewCollectionEntry(out IAccountFeature result) {
-			TypedCollectionExposureUtil<IAccountFeature>.CreateNewCollectionEntry(this.AppliedFeatures, out result);
+		public void CreateNewCollectionEntry(out IAccountAttribute result) {
+			TypedCollectionExposureUtil<IAccountAttribute>.CreateNewCollectionEntry(this.AppliedAttributes, out result);
 		}
 
-		public void AddCollectionEntry(IAccountFeature entry) {
-			TypedCollectionExposureUtil<IAccountFeature>.AddCollectionEntry(entry, this.AppliedFeatures);
+		public void AddCollectionEntry(IAccountAttribute entry) {
+			TypedCollectionExposureUtil<IAccountAttribute>.AddCollectionEntry(entry, this.AppliedAttributes);
 		}
 
-		public void RemoveCollectionEntry(Func<IAccountFeature, bool> predicate) {
-			TypedCollectionExposureUtil<IAccountFeature>.RemoveCollectionEntry(predicate, this.AppliedFeatures);
+		public void RemoveCollectionEntry(Func<IAccountAttribute, bool> predicate) {
+			TypedCollectionExposureUtil<IAccountAttribute>.RemoveCollectionEntry(predicate, this.AppliedAttributes);
 		}
 
-		public IAccountFeature GetCollectionEntry(Func<IAccountFeature, bool> predicate) {
-			return TypedCollectionExposureUtil<IAccountFeature>.GetCollectionEntry(predicate, this.AppliedFeatures);
+		public IAccountAttribute GetCollectionEntry(Func<IAccountAttribute, bool> predicate) {
+			return TypedCollectionExposureUtil<IAccountAttribute>.GetCollectionEntry(predicate, this.AppliedAttributes);
 		}
 
-		public List<IAccountFeature> GetCollectionEntries(Func<IAccountFeature, bool> predicate) {
-			return TypedCollectionExposureUtil<IAccountFeature>.GetCollectionEntries(predicate, this.AppliedFeatures);
+		public List<IAccountAttribute> GetCollectionEntries(Func<IAccountAttribute, bool> predicate) {
+			return TypedCollectionExposureUtil<IAccountAttribute>.GetCollectionEntries(predicate, this.AppliedAttributes);
 		}
 
-		public ImmutableList<IAccountFeature> CollectionCopy => TypedCollectionExposureUtil<IAccountFeature>.GetCollection(this.AppliedFeatures);
+		public ImmutableList<IAccountAttribute> CollectionCopy => TypedCollectionExposureUtil<IAccountAttribute>.GetCollection(this.AppliedAttributes);
 
-		protected abstract IAccountFeature CreateAccountFeature();
+		protected abstract IAccountAttribute CreateAccountFeature();
 
 		public static Enums.AccountTypes GetAccountType(IDataRehydrator rehydrator) {
 			rehydrator.SnapshotPosition();

@@ -24,6 +24,11 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		/// </summary>
 		public static readonly Guid PROTOCOL_UUID = Guid.NewGuid();
 
+		/// <summary>
+		/// size below which we just dont compress
+		/// </summary>
+		public const int MAXIMUM_NO_COMPRESSION_SIZE = 15000;
+		
 		private readonly object locker = new object();
 
 		private readonly xxHasher64 xxhasher = new xxHasher64();
@@ -33,7 +38,12 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 		private ProtocolVersion? sharedProtocolVersion;
 
-		private ICompression NetworkMessageCompressor { get; set; } = GzipCompression.Instance;
+		private ICompression NetworkMessageCompressor { get; set; } = BrotliCompression.Instance;
+
+		public enum CompressionFlags : byte {
+			NotCompressed=0,
+			Compressed=1
+		}
 
 		private IMessageFactory MessageFactory {
 			get {
@@ -146,7 +156,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 		}
 
-		public (ProtocolVersion version, ProtocolCompression compression, Guid uuid) ParseVersion(in Span<byte> buffer) {
+		public static (ProtocolVersion version, ProtocolCompression compression, Guid uuid) ParseVersion(in Span<byte> buffer) {
 
 			if(buffer.Length != HANDSHAKE_PROTOCOL_SIZE) {
 				throw new ApplicationException("Invalid handshake buffer size");
@@ -202,7 +212,21 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 			lock(this.locker) {
 
-				return this.NetworkMessageCompressor.Compress(bytes, this.sharedProtocolCompression.Level);
+				if(bytes.Length <= MAXIMUM_NO_COMPRESSION_SIZE) {
+					
+					//TODO: how could we avoid a copy here just to increase by 1 byte?
+					var other = ByteArray.Create(bytes.Length + 1);
+					// move it all by 1 byte for the flag
+					bytes.Entry.CopyTo(other, 0, 1, bytes.Length);
+					other[0] = (byte)CompressionFlags.NotCompressed;
+					
+					return other;
+				}
+				return this.NetworkMessageCompressor.Compress(bytes, this.sharedProtocolCompression.Level, stream => {
+
+					// to indicate that this is compressed
+					stream.WriteByte((byte)CompressionFlags.Compressed);
+				});
 			}
 		}
 
@@ -213,7 +237,19 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 
 			lock(this.locker) {
-				return this.NetworkMessageCompressor.Decompress(compressedMessage);
+
+				if(compressedMessage[0] == (byte)CompressionFlags.NotCompressed) {
+					// skip the first byte. we can just reduce the effective size by moving the offset
+					compressedMessage.Entry.IncreaseOffset(1);
+					
+					return compressedMessage.Branch();
+				} else {
+					return this.NetworkMessageCompressor.Decompress(compressedMessage , stream => {
+
+						// to indicate that this is compressed
+						stream.Position += 1;
+					});
+				}
 			}
 		}
 

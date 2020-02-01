@@ -1,5 +1,6 @@
 using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
+using Neuralia.Blockchains.Core;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 
@@ -11,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	}
 
 	public abstract class StandardAccountSnapshotDigestChannel<ACCOUNT_SNAPSHOT_CARD> : AccountSnapshotDigestChannel<StandardAccountSnapshotDigestChannel.AccountSnapshotDigestChannelBands, ACCOUNT_SNAPSHOT_CARD>, IAccountSnapshotDigestChannel<ACCOUNT_SNAPSHOT_CARD>
-		where ACCOUNT_SNAPSHOT_CARD : class, IStandardAccountSnapshotDigestChannelCard {
+		where ACCOUNT_SNAPSHOT_CARD : class, IStandardAccountSnapshotDigestChannelCard, new() {
 
 		public enum FileTypes {
 			StandardAccounts = 1
@@ -25,6 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public override DigestChannelType ChannelType => DigestChannelTypes.Instance.StandardAccountSnapshot;
+		protected override Enums.AccountTypes AccountType => Enums.AccountTypes.Standard;
 	}
 
 	public static class StandardAccountSnapshotDigestChannel {

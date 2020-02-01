@@ -35,7 +35,18 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 		protected override int MinimumByteCount => 2;
 		protected override int MaximumByteCount => 9;
 
+		public static implicit operator long?(AdaptiveLong1_9 value) {
+			if(value == null) {
+				return null;
+			}
+			return value.Value;
+		}
+		
 		public static implicit operator long(AdaptiveLong1_9 value) {
+			
+			if(value == null) {
+				return 0;
+			}
 			return value.Value;
 		}
 

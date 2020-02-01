@@ -6,27 +6,35 @@ using Serilog;
 
 namespace Neuralia.Blockchains.Core.DataAccess {
 	public static class UnconditionalDbUpdate {
+		
+		private static void LogError(Exception oex, string message) {
+			if(!string.IsNullOrWhiteSpace(message)) {
+				Log.Error(oex, message);
+			}
+		}
+		
 		/// <summary>
 		/// run a DB operation where we dont really care about the errors we can git. shoot and forget
 		/// </summary>
 		/// <param name="action"></param>
 		/// <param name="logError"></param>
 		public static void RunUnconditionalDbUpdate(Action action, string logError) {
+
 			
 			try {
-				Repeater.Repeat(action);
+				Repeater.Repeat(action, 2);
 			} 
 			catch(DbUpdateConcurrencyException bdcex) {
-				Log.Error(bdcex, logError);
+				LogError(bdcex, logError);
 			}
 			catch(SynchronizationLockException syncEx) {
-				Log.Error(syncEx, logError);
+				LogError(syncEx, logError);
 			}
 			catch(DbUpdateException syncEx) {
-				Log.Error(syncEx, logError);
+				LogError(syncEx, logError);
 			}
 			catch(Exception ex) {
-				Log.Error(ex, logError);
+				LogError(ex, logError);
 			}
 		}
 		
@@ -38,17 +46,13 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		public static void RunDbUpdateConcurrent(Action action, string logError = null) {
 			
 			try {
-				Repeater.Repeat(action);
+				Repeater.Repeat(action, 2);
 			} 
 			catch(DbUpdateConcurrencyException bdcex) {
-				if(!string.IsNullOrWhiteSpace(logError)) {
-					Log.Error(bdcex, logError);
-				}
+				LogError(bdcex, logError);
 			}
 			catch(SynchronizationLockException syncEx) {
-				if(!string.IsNullOrWhiteSpace(logError)) {
-					Log.Error(syncEx, logError);
-				}
+				LogError(syncEx, logError);
 			}
 		}
 	}

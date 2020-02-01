@@ -9,8 +9,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public TopLowestHashesRepresentativeBallotingRules() {
 
 		}
-
-		public TopLowestHashesRepresentativeBallotingRules(ushort amount) : base(amount) {
+		
+		public TopLowestHashesRepresentativeBallotingRules(ushort firstTierTotal, ushort secondTierTotal, ushort thirdTierTotal) : base(firstTierTotal, secondTierTotal, thirdTierTotal) {
 
 		}
 

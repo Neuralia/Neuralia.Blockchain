@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Tools;
 using Serilog;
@@ -17,7 +18,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 		public static readonly TimeSpan ExternalMessageLifetime = TimeSpan.FromMinutes(30);
 		public static readonly TimeSpan LocalMessageLifetime = TimeSpan.FromDays(3);
 
-		public MessageRegistrySqliteDal(string folderPath, ServiceSet serviceSet, IDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, st => (MessageRegistrySqliteContext) chainDalCreationFactory.CreateMessageRegistryContext(st), serializationType) {
+		public MessageRegistrySqliteDal(string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, IDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, softwareVersion, st => (MessageRegistrySqliteContext) chainDalCreationFactory.CreateMessageRegistryContext(st), serializationType) {
 
 		}
 

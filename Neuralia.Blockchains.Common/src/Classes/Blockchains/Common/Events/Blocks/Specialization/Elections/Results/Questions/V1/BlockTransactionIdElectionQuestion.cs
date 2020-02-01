@@ -9,17 +9,17 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.Questions.V1 {
 	
-	public interface IBlockTransactionIdElectionQuestion : IElectionQuestion {
+	public interface IBlockTransactionIdElectionQuestion : IElectionBlockQuestion {
 		BlockId BlockId { get; set; }
 		AdaptiveLong1_9 TransactionIndex { get; set; }
 		BlockTransactionIdElectionQuestion.QuestionTransactionSection SelectedTransactionSection { get; set; }
 		BlockTransactionIdElectionQuestion.QuestionTransactionIdComponents SelectedComponent { get; set; }
 	}
 	
-	public class BlockTransactionIdElectionQuestion : ElectionQuestion, IBlockTransactionIdElectionQuestion {
+	public class BlockTransactionIdElectionQuestion : ElectionBlockQuestion, IBlockTransactionIdElectionQuestion {
 		public enum QuestionTransactionSection:byte {
 			
-			ConfirmedKeyedTransactions = 1,
+			ConfirmedMasterTransactions = 1,
 			ConfirmedTransactions = 2,
 			RejectedTransactions = 3,
 			Block = 4

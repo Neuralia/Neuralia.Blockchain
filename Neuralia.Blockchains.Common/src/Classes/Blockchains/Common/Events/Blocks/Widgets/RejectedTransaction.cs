@@ -6,7 +6,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets {
 	public struct RejectedTransaction : ISerializableCombo {
-		public TransactionIdExtended TransactionId { get; set; }
+		public TransactionId TransactionId { get; set; }
 		public RejectionCode Reason { get; set; }
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
@@ -16,7 +16,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.W
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.TransactionId = new TransactionIdExtended();
+			this.TransactionId = new TransactionId();
 			this.TransactionId.Rehydrate(rehydrator);
 			this.Reason = rehydrator.ReadUShort();
 		}

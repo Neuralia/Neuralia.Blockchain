@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -16,9 +17,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 		where R : IRehydrationFactory {
 
 		public readonly SoftwareVersion clientSoftwareVersion = new SoftwareVersion();
-
-		public Dictionary<BlockchainType, ChainSettings> chainSettings = new Dictionary<BlockchainType, ChainSettings>();
-
+		
 		public GeneralSettings generalSettings = new GeneralSettings();
 		
 		/// <summary>
@@ -33,7 +32,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 
 		public long nonce;
 
-		public Enums.PeerTypes peerType;
+		public NodeInfo nodeInfo = new NodeInfo();
 
 		public string PerceivedIP;
 
@@ -44,22 +43,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			dehydrator.Write(this.localTime);
 			dehydrator.Write(this.listeningPort);
 			dehydrator.Write(this.nonce);
-			dehydrator.Write((byte) this.peerType);
-			
+			this.nodeInfo.Dehydrate(dehydrator);
+
 			this.generalSettings.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.PerceivedIP);
 
 			this.clientSoftwareVersion.Dehydrate(dehydrator);
-
-			// now the chain optionsBase
-			dehydrator.Write((byte) this.chainSettings.Count);
-
-			foreach(var chainsetting in this.chainSettings) {
-				dehydrator.Write(chainsetting.Key.Value);
-
-				chainsetting.Value.Dehydrate(dehydrator);
-			}
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator, R rehydrationFactory) {
@@ -69,26 +59,14 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			this.localTime = rehydrator.ReadDateTime();
 			this.listeningPort = rehydrator.ReadInt();
 			this.nonce = rehydrator.ReadLong();
-			this.peerType = (Enums.PeerTypes) rehydrator.ReadByte();
+			
+			this.nodeInfo.Rehydrate(rehydrator);
 			
 			this.generalSettings.Rehydrate(rehydrator);
 			
 			this.PerceivedIP = rehydrator.ReadString();
 
 			this.clientSoftwareVersion.SetVersion(rehydrator.Rehydrate<SoftwareVersion>());
-
-			// now the chain optionsBase
-			this.chainSettings = new Dictionary<BlockchainType, ChainSettings>();
-			int chainSettingCount = rehydrator.ReadByte();
-
-			for(int i = 0; i < chainSettingCount; i++) {
-				BlockchainType chainid = rehydrator.ReadUShort();
-
-				ChainSettings chainSetting = new ChainSettings();
-				chainSetting.Rehydrate(rehydrator);
-
-				this.chainSettings.Add(chainid, chainSetting);
-			}
 		}
 
 		public override HashNodeList GetStructuresArray() {
@@ -99,16 +77,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			nodesList.Add(this.localTime);
 			nodesList.Add(this.listeningPort);
 			nodesList.Add(this.nonce);
-			nodesList.Add((byte) this.peerType);
+			nodesList.Add(this.nodeInfo);
 			nodesList.Add(this.generalSettings);
 			nodesList.Add(this.PerceivedIP);
-
-			foreach(var chainsetting in this.chainSettings.OrderBy(s => s.Key)) {
-				nodesList.Add(chainsetting.Key.Value);
-
-				nodesList.Add(chainsetting.Value);
-			}
-
+			
 			return nodesList;
 		}
 

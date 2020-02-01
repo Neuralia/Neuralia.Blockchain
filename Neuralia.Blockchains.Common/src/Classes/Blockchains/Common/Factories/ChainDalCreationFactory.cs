@@ -31,25 +31,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		CHAIN_POOL_CONTEXT CreateChainPoolContext<CHAIN_POOL_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_POOL_CONTEXT : IChainPoolContext;
 
-		STANDARD_ACCOUNT_SNAPSHOT_DAL CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		STANDARD_ACCOUNT_SNAPSHOT_DAL CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_SNAPSHOT_DAL : IStandardAccountSnapshotDal;
 
 		STANDARD_ACCOUNT_SNAPSHOT_CONTEXT CreateStandardAccountSnapshotContext<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_SNAPSHOT_CONTEXT : IStandardAccountSnapshotContext;
 
-		JOINT_ACCOUNT_SNAPSHOT_DAL CreateJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		JOINT_ACCOUNT_SNAPSHOT_DAL CreateJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where JOINT_ACCOUNT_SNAPSHOT_DAL : IJointAccountSnapshotDal;
 
 		JOINT_ACCOUNT_SNAPSHOT_CONTEXT CreateJointAccountSnapshotContext<JOINT_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where JOINT_ACCOUNT_SNAPSHOT_CONTEXT : IJointAccountSnapshotContext;
 
-		ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL CreateAccreditationCertificateAccountSnapshotDal<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL CreateAccreditationCertificateAccountSnapshotDal<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL : IAccreditationCertificatesSnapshotDal;
 
 		ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT CreateAccreditationCertificateSnapshotContext<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT : IAccreditationCertificatesSnapshotContext;
 
-		STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL CreateStandardAccountKeysSnapshotDal<STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL CreateStandardAccountKeysSnapshotDal<STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL : IAccountKeysSnapshotDal;
 
 		STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT CreateStandardAccountKeysSnapshotContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		CHAIN_OPTIONS_ACCOUNT_SNAPSHOT_CONTEXT CreateChainOptionsSnapshotContext<CHAIN_OPTIONS_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_OPTIONS_ACCOUNT_SNAPSHOT_CONTEXT : IChainOptionsSnapshotContext;
 
-		TRACKED_ACCOUNTS_DAL CreateTrackedAccountsDal<TRACKED_ACCOUNTS_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		TRACKED_ACCOUNTS_DAL CreateTrackedAccountsDal<TRACKED_ACCOUNTS_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where TRACKED_ACCOUNTS_DAL : ITrackedAccountsDal;
 
 		TRACKED_ACCOUNTS_CONTEXT CreateTrackedAccountsContext<TRACKED_ACCOUNTS_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
@@ -104,25 +104,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		public abstract CHAIN_POOL_CONTEXT CreateChainPoolContext<CHAIN_POOL_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_POOL_CONTEXT : IChainPoolContext;
 
-		public abstract STANDARD_ACCOUNT_SNAPSHOT_DAL CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		public abstract STANDARD_ACCOUNT_SNAPSHOT_DAL CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_SNAPSHOT_DAL : IStandardAccountSnapshotDal;
 
 		public abstract STANDARD_ACCOUNT_SNAPSHOT_CONTEXT CreateStandardAccountSnapshotContext<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_SNAPSHOT_CONTEXT : IStandardAccountSnapshotContext;
 
-		public abstract JOINT_ACCOUNT_SNAPSHOT_DAL CreateJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		public abstract JOINT_ACCOUNT_SNAPSHOT_DAL CreateJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where JOINT_ACCOUNT_SNAPSHOT_DAL : IJointAccountSnapshotDal;
 
 		public abstract JOINT_ACCOUNT_SNAPSHOT_CONTEXT CreateJointAccountSnapshotContext<JOINT_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where JOINT_ACCOUNT_SNAPSHOT_CONTEXT : IJointAccountSnapshotContext;
 
-		public abstract ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL CreateAccreditationCertificateAccountSnapshotDal<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		public abstract ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL CreateAccreditationCertificateAccountSnapshotDal<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL : IAccreditationCertificatesSnapshotDal;
 
 		public abstract ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT CreateAccreditationCertificateSnapshotContext<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT : IAccreditationCertificatesSnapshotContext;
 
-		public abstract STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL CreateStandardAccountKeysSnapshotDal<STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		public abstract STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL CreateStandardAccountKeysSnapshotDal<STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL : IAccountKeysSnapshotDal;
 
 		public abstract STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT CreateStandardAccountKeysSnapshotContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
@@ -134,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		public abstract CHAIN_OPTIONS_ACCOUNT_SNAPSHOT_CONTEXT CreateChainOptionsSnapshotContext<CHAIN_OPTIONS_ACCOUNT_SNAPSHOT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_OPTIONS_ACCOUNT_SNAPSHOT_CONTEXT : IChainOptionsSnapshotContext;
 
-		public abstract TRACKED_ACCOUNTS_DAL CreateTrackedAccountsDal<TRACKED_ACCOUNTS_DAL>(long groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+		public abstract TRACKED_ACCOUNTS_DAL CreateTrackedAccountsDal<TRACKED_ACCOUNTS_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where TRACKED_ACCOUNTS_DAL : ITrackedAccountsDal;
 
 		public abstract TRACKED_ACCOUNTS_CONTEXT CreateTrackedAccountsContext<TRACKED_ACCOUNTS_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)

@@ -9,28 +9,34 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.RepresentativeBallotingMethods {
 	public static class RepresentativeBallotingMethodRehydrator {
 
-		public static IActiveRepresentativeBallotingRules RehydrateActiveRules(IDataRehydrator rehydrator) {
+		public static IRepresentativeBallotingRules RehydrateActiveRules(IDataRehydrator rehydrator) {
 
 			var version = rehydrator.RehydrateRewind<ComponentVersion<ActiveRepresentativeBallotingMethodType>>();
 
-			IActiveRepresentativeBallotingRules representativeBallotingRules = null;
+			IRepresentativeBallotingRules representativeBallotingRules = null;
 
-			if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-				if((version.Major == 1) && (version.Minor == 0)) {
-					representativeBallotingRules = new EncryptedSecretRepresentativeBallotingRules();
+			bool isActive = rehydrator.ReadBool();
+
+			if(isActive) {
+				if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
+					if((version.Major == 1) && (version.Minor == 0)) {
+						representativeBallotingRules = new EncryptedSecretRepresentativeBallotingRules();
+					}
 				}
-			}
 
-			if(representativeBallotingRules == null) {
-				throw new ApplicationException("Invalid representative context type");
-			}
+				if(representativeBallotingRules == null) {
+					throw new ApplicationException("Invalid representative context type");
+				}
 
-			representativeBallotingRules.Rehydrate(rehydrator);
+				representativeBallotingRules.Rehydrate(rehydrator);
+			} else {
+				representativeBallotingRules = RehydratePassiveRules(rehydrator);
+			}
 
 			return representativeBallotingRules;
 		}
 
-		public static IPassiveRepresentativeBallotingRules RehydratePassiveRules(IDataRehydrator rehydrator) {
+		public static IRepresentativeBallotingRules RehydratePassiveRules(IDataRehydrator rehydrator) {
 
 			var version = rehydrator.RehydrateRewind<ComponentVersion<PassiveRepresentativeBallotingMethodType>>();
 

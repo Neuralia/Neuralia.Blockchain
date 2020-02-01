@@ -8,7 +8,6 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1.Structures {
 
 	public interface ITransactionJointAccountMember : ISerializableCombo, IJointMemberAccount {
-		TransactionJointAccountMember.Actions Action { get; set; }
 	}
 
 	public abstract class TransactionJointAccountMember : ITransactionJointAccountMember {
@@ -23,6 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			AccountId accountId = new AccountId();
 			accountId.Rehydrate(rehydrator);
+			this.AccountId = accountId.ToLongRepresentation();
 			this.Required = rehydrator.ReadBool();
 
 		}
@@ -44,12 +44,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-			jsonDeserializer.SetProperty("AccountId", this.AccountId);
+			jsonDeserializer.SetProperty("AccountId", this.AccountId.ToAccountId());
 			jsonDeserializer.SetProperty("Required", this.Required);
 		}
 
 		public long AccountId { get; set; }
 		public bool Required { get; set; }
-		public Actions Action { get; set; }
 	}
 }

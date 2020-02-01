@@ -1,6 +1,9 @@
-﻿using Neuralia.Blockchains.Core;
+﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
@@ -48,6 +51,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.SecretCombo;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is ISecretComboWalletKey secretComboWalletKey) {
+				(SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) = BlockchainHashingUtils.HashSecretComboKey(secretComboWalletKey);
+
+				this.NextKeyHashSha2.Entry = sha2.Entry;
+				this.NextKeyHashSha3.Entry = sha3.Entry;
+				this.NonceHash = nonceHash;
+			}
 		}
 	}
 }

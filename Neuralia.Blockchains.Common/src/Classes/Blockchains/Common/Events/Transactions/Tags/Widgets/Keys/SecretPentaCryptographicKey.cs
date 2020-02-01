@@ -1,7 +1,10 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
 
@@ -58,6 +61,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.SecretPenta;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is ISecretPentaWalletKey secretPentaWalletKey) {
+				
+				this.ThirdKey.SetFromWalletKey(secretPentaWalletKey.ThirdKey);
+				this.ThirdKey.Id = secretPentaWalletKey.KeyAddress.OrdinalId;
+				
+				this.FourthKey.SetFromWalletKey(secretPentaWalletKey.FourthKey);
+				this.FourthKey.Id = secretPentaWalletKey.KeyAddress.OrdinalId;
+				
+				this.FifthKey.SetFromWalletKey(secretPentaWalletKey.FifthKey);
+				this.FifthKey.Id = secretPentaWalletKey.KeyAddress.OrdinalId;
+			}
 		}
 	}
 }

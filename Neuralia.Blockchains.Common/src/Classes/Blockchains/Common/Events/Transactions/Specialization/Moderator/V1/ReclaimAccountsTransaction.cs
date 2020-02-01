@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -93,5 +94,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			public AccountId Account { get; set; }
 			public byte Reason { get; set; }
 		}
+
+		public override ImmutableList<AccountId> TargetAccounts => this.Accounts.Select(r => r.Account).ToImmutableList();
 	}
 }

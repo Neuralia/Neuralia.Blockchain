@@ -7,9 +7,9 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests {
 	public class BlockchainDigestDescriptor : ITreeHashable, IBinaryRehydratable {
-		public Dictionary<DigestChannelType, BlockchainDigestChannelDescriptor> Channels { get; } = new Dictionary<DigestChannelType, BlockchainDigestChannelDescriptor>();
+		public Dictionary<ushort, BlockchainDigestChannelDescriptor> Channels { get; set; } = new Dictionary<ushort, BlockchainDigestChannelDescriptor>();
 
-		public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle Hash { get; set; } = SafeArrayHandle.Create();
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 				BlockchainDigestChannelDescriptor channel = new BlockchainDigestChannelDescriptor();
 				channel.Rehydrate(rehydrator);
 
-				this.Channels.Add(type, channel);
+				this.Channels.Add(type.Value, channel);
 			}
 		}
 
@@ -31,7 +31,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 			nodeList.Add(this.Hash);
 
 			foreach(var channel in this.Channels.OrderBy(c => c.Key)) {
-				nodeList.Add(channel.Key.Value);
+				nodeList.Add(channel.Key);
 				nodeList.Add(channel.Value);
 			}
 
@@ -41,9 +41,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 	public class BlockchainDigestChannelDescriptor : BlockchainDigestSimpleChannelDescriptor, ITreeHashable {
 
-		public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
+		public SafeArrayHandle Hash { get; set; } = SafeArrayHandle.Create();
 
-		public Dictionary<int, DigestChannelIndexDescriptor> DigestChannelIndexDescriptors { get; } = new Dictionary<int, DigestChannelIndexDescriptor>();
+		public Dictionary<int, DigestChannelIndexDescriptor> DigestChannelIndexDescriptors { get; set; } = new Dictionary<int, DigestChannelIndexDescriptor>();
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
@@ -79,9 +79,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 		public class DigestChannelIndexDescriptor : ITreeHashable, IBinaryRehydratable {
 
-			public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
+			public SafeArrayHandle Hash { get; set; } = SafeArrayHandle.Create();
 
-			public Dictionary<int, DigestChannelIndexFileDescriptor> Files { get; } = new Dictionary<int, DigestChannelIndexFileDescriptor>();
+			public Dictionary<int, DigestChannelIndexFileDescriptor> Files { get; set; } = new Dictionary<int, DigestChannelIndexFileDescriptor>();
 
 			public void Rehydrate(IDataRehydrator rehydrator) {
 
@@ -118,7 +118,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 					Internal = 2
 				}
 
-				public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
+				public SafeArrayHandle Hash { get; set; } = SafeArrayHandle.Create();
 
 				/// <summary>
 				///     If true, the channel files may be missing and it will be acceptable. He hash will be used only.
@@ -131,7 +131,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 				/// </summary>
 				public DigestChannelHashingTypes HashingType { get; set; } = DigestChannelHashingTypes.File;
 
-				public Dictionary<uint, DigestChannelIndexFilePartDescriptor> DigestChannelIndexFilePartDescriptors { get; } = new Dictionary<uint, DigestChannelIndexFilePartDescriptor>();
+				public Dictionary<uint, DigestChannelIndexFilePartDescriptor> DigestChannelIndexFilePartDescriptors { get; set; } = new Dictionary<uint, DigestChannelIndexFilePartDescriptor>();
 
 				public void Rehydrate(IDataRehydrator rehydrator) {
 
@@ -169,7 +169,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 					public long FileSize { get; set; }
 
-					public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
+					public SafeArrayHandle Hash { get; set; } = SafeArrayHandle.Create();
 
 					public void Rehydrate(IDataRehydrator rehydrator) {
 

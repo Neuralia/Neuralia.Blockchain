@@ -32,19 +32,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Specialized {
 
 		public Amount(Amount other) : base((AdaptiveDecimal) other) {
 		}
-
-		[BsonIgnore]
-		[JsonIgnore]
-		public override long MaxValue => long.MaxValue;
-
-		[BsonIgnore]
-		[JsonIgnore]
-		public override long MinValue => long.MinValue;
-
-		[BsonIgnore]
-		[JsonIgnore]
-		public override ulong MaxDecimalValue => long.MaxValue;
-
+		
 	#region opeartor overloads
 
 		public static implicit operator Amount(int value) {

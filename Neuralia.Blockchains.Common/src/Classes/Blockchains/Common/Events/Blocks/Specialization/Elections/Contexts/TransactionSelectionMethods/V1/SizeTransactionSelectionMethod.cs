@@ -3,15 +3,18 @@ using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Configuration.TransactionSelectionStrategies;
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Core.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.TransactionSelectionMethods.V1 {
 	public class SizeTransactionSelectionMethod : TransactionSelectionMethod {
 
 		private readonly SizeTransactionSelectionStrategySettings sizeTransactionSelectionStrategySettings;
 
-		public SizeTransactionSelectionMethod(long blockId, IWalletProvider walletProvider, ushort maximumTransactionCount, SizeTransactionSelectionStrategySettings sizeTransactionSelectionStrategySettings) : base(blockId, walletProvider, maximumTransactionCount) {
+		public SizeTransactionSelectionMethod(long blockId, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, SizeTransactionSelectionStrategySettings sizeTransactionSelectionStrategySettings, NodeShareType nodeShareType) : base(blockId, chainStateProvider, walletProvider, electionContext, nodeShareType) {
 			this.sizeTransactionSelectionStrategySettings = sizeTransactionSelectionStrategySettings;
 		}
 
@@ -31,7 +34,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		protected override List<TransactionId> SelectSelection(List<TransactionId> transactionIds) {
-			return transactionIds.OrderByDescending(t => t.Timestamp).Take(this.maximumTransactionCount).ToList();
+			return transactionIds.OrderByDescending(t => t.Timestamp).Take(this.MaximumTransactionCount).ToList();
 		}
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {

@@ -1,31 +1,62 @@
+using Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 	public interface IMcElieceWalletKey : IWalletKey {
 
-		byte McElieceCipherMode { get; set; }
+		McElieceEncryptor.McElieceCipherModes McElieceCipherMode { get; set; }
 		int M { get; set; }
 		int T { get; set; }
-		byte McElieceHashMode { get; set; }
+		McElieceEncryptor.McElieceHashModes McElieceHashMode { get; set; }
 	}
 
 	public class McElieceWalletKey : WalletKey, IMcElieceWalletKey {
 
-		public byte McElieceCipherMode { get; set; }
+		public McElieceEncryptor.McElieceCipherModes McElieceCipherMode { get; set; }
 		public int M { get; set; }
 		public int T { get; set; }
-		public byte McElieceHashMode { get; set; }
+		public McElieceEncryptor.McElieceHashModes McElieceHashMode { get; set; }
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
 
-			nodeList.Add(this.McElieceCipherMode);
+			nodeList.Add((byte)this.McElieceCipherMode);
 			nodeList.Add(this.M);
 			nodeList.Add(this.T);
-			nodeList.Add(this.McElieceHashMode);
+			nodeList.Add((byte)this.McElieceHashMode);
 
 			return nodeList;
+		}
+		
+		public override void Dehydrate(IDataDehydrator dehydrator) {
+			base.Dehydrate(dehydrator);
+			
+			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
+			entry.Value = this.M;
+			entry.Dehydrate(dehydrator);
+			
+			entry.Value = this.T;
+			entry.Dehydrate(dehydrator);
+			
+			dehydrator.Write((byte)this.McElieceCipherMode);
+			dehydrator.Write((byte)this.McElieceHashMode);
+		}
+
+		public override void Rehydrate(IDataRehydrator rehydrator) {
+			base.Rehydrate(rehydrator);
+			
+			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
+			entry.Rehydrate(rehydrator);
+			this.M = (int)entry.Value;
+			
+			entry.Rehydrate(rehydrator);
+			this.T = (int)entry.Value;
+
+			this.McElieceCipherMode = (McElieceEncryptor.McElieceCipherModes)rehydrator.ReadByte();
+			this.McElieceHashMode = (McElieceEncryptor.McElieceHashModes)rehydrator.ReadByte();
 		}
 	}
 }

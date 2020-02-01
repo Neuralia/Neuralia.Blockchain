@@ -11,19 +11,19 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1 {
 	public interface IElectedResults : ISerializableCombo {
 		List<TransactionId> Transactions { get; set; }
-		Enums.ElectedPeerShareTypes PeerShareType { get; set; }
+		Enums.MiningTiers ElectedTier { get; set; }
 
 		AccountId DelegateAccountId { get; set; }
 	}
 
 	public class ElectedResults : IElectedResults {
 		public List<TransactionId> Transactions { get; set; } = new List<TransactionId>();
-		public Enums.ElectedPeerShareTypes PeerShareType { get; set; }
-		public AccountId DelegateAccountId { get; set; }
+		public Enums.MiningTiers ElectedTier { get; set; } = Enums.MiningTiers.ThirdTier;
+		public AccountId DelegateAccountId { get; set; } = null;
 
 		public virtual void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 
-			jsonDeserializer.SetProperty("PeerShareType", this.PeerShareType);
+			jsonDeserializer.SetProperty("ElectedTier", this.ElectedTier);
 			jsonDeserializer.SetProperty("DelegateAccountId", this.DelegateAccountId);
 			jsonDeserializer.SetArray("Transactions", this.Transactions.Select(t => t.ToString()));
 		}
@@ -31,7 +31,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
 
-			nodeList.Add((byte) this.PeerShareType);
+			nodeList.Add((byte) this.ElectedTier);
 			nodeList.Add(this.DelegateAccountId);
 			nodeList.Add(this.Transactions.OrderBy(t => t));
 

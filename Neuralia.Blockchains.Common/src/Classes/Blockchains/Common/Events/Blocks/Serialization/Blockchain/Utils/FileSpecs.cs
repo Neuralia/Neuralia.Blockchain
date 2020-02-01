@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.filesExists = null;
 		}
 
-		public string FilePath { get; }
+		public string FilePath { get; set; }
 
 		public uint FileSize {
 			get {

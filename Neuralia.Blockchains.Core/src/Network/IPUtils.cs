@@ -4,6 +4,9 @@ using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
 
@@ -83,6 +86,61 @@ namespace Neuralia.Blockchains.Core.Network {
 
 	public static class IPUtils {
 
+		public static Guid IPtoGuid(string ipaddress) {
+			NodeAddressInfo node = new NodeAddressInfo(ipaddress, 80, NodeInfo.Unknown);
+			return IPUtils.IPtoGuid(node.Address);
+		}
+		
+		public static Guid IPtoGuid(byte[] bytes) {
+			
+			NodeAddressInfo node = new NodeAddressInfo(new IPAddress(bytes), 80, NodeInfo.Unknown);
+			Span<byte> bytes2 = stackalloc byte[16];
+			node.Address.GetAddressBytes().CopyTo(bytes2);
+
+			return new Guid(bytes);
+		}
+		
+		public static Guid IPtoGuid(IPAddress ipaddress) {
+			
+			NodeAddressInfo node = new NodeAddressInfo(ipaddress, 80, NodeInfo.Unknown);
+			Span<byte> bytes = stackalloc byte[16];
+			
+			var addressSpan = node.Address.GetAddressBytes().AsSpan();
+
+			if(addressSpan.Length == 16) {
+				addressSpan.Slice(0, 16).CopyTo(bytes);
+			}
+			else if(addressSpan.Length == 4) {
+				addressSpan.CopyTo(bytes.Slice(12, 4));
+			} else {
+				throw new ApplicationException($"Invalid IP address bytes.");
+			}
+			
+			return new Guid(bytes);
+		}
+		
+		public static byte[] GuidToBytes(Guid guid) {
+
+			byte[] bytes = new byte[16];
+			guid.TryWriteBytes(bytes);
+			
+			return bytes;
+		}
+		
+		public static IPAddress GuidToIP(Guid guid) {
+
+			Span<byte> bytes = stackalloc byte[16];
+			guid.TryWriteBytes(bytes);
+			
+			return new IPAddress(bytes);
+		}
+		
+		public static string GuidToIPstring(Guid guid) {
+
+			NodeAddressInfo node = new NodeAddressInfo(GuidToIP(guid), 80, NodeInfo.Unknown);
+			return node.Ip; // always as IpV6
+		}
+		
 		/// <summary>
 		///     tells us if a certain address is in the provided range
 		/// </summary>
@@ -102,19 +160,23 @@ namespace Neuralia.Blockchains.Core.Network {
 					return true;
 				}
 			} else if(IsIPV4(entry)) {
-				if(Equals(address.Address.MapToIPv4(), new NodeAddressInfo(entry, Enums.PeerTypes.FullNode).Address.MapToIPv4())) {
+				if(Equals(address.Address.MapToIPv4(), new NodeAddressInfo(entry, NodeInfo.Unknown).Address.MapToIPv4())) {
 					return true;
 				}
 			} else if(IsIPV6(entry)) {
-				if(Equals(address.Address.MapToIPv6(), new NodeAddressInfo(entry, Enums.PeerTypes.FullNode).Address.MapToIPv6())) {
+				if(Equals(address.Address.MapToIPv6(), new NodeAddressInfo(entry, NodeInfo.Unknown).Address.MapToIPv6())) {
 					return true;
 				}
 			} else {
-				foreach(IPAddress hostAddress in Dns.GetHostAddresses(entry)) {
+				try {
+					foreach(IPAddress hostAddress in Dns.GetHostAddresses(entry)) {
 
-					if(Equals(address.Address, new NodeAddressInfo(hostAddress, Enums.PeerTypes.FullNode).Address)) {
-						return true;
+						if(Equals(address.Address, new NodeAddressInfo(hostAddress, NodeInfo.Unknown).Address)) {
+							return true;
+						}
 					}
+				} catch {
+					
 				}
 			}
 
@@ -271,8 +333,56 @@ namespace Neuralia.Blockchains.Core.Network {
 				return false;
 			}
 
-			return new NodeAddressInfo(result, Enums.PeerTypes.Unknown).IsIpV4;
+			return new NodeAddressInfo(result, NodeInfo.Unknown).IsIpV4;
 		}
+
+		public static string TranslateDnsToIP(string host) {
+			bool isIp = IPUtils.IsIPV4(host) || IPUtils.IsIPV6(host);
+
+			if(!isIp) {
+				try {
+					return Repeater.Repeat(() => {
+						string source = host;
+
+						string resultIp = host;
+						
+						if(source.ToLower() == "localhost") {
+							resultIp = "127.0.0.1";
+						} else {
+							IPHostEntry dnsResult = Dns.GetHostEntry(source);
+
+							source = dnsResult.AddressList.First().MapToIPv4().ToString();
+
+							resultIp = source;
+						}
+
+						return resultIp;
+					});
+				} catch(Exception ex) {
+					Log.Error(ex, $"Failed to translate host ip for name '{host}'.");
+				}
+			}
+
+			return host;
+		}
+
+		public static Uri TranslateHostDnsToIPUri(string url) {
+			Uri uri = new Uri(url);
+			
+			string result = IPUtils.TranslateDnsToIP(uri.Host);
+
+			if(result != uri.Host) {
+				Log.Information($"DNS '{uri.Host}' was converted to IP '{result}'." );
+				
+				UriBuilder builder = new UriBuilder(uri);
+				builder.Host = result;
+
+				return builder.Uri;
+			}
+
+			return uri;
+		}
+		
 
 	#endregion
 
@@ -332,7 +442,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				return false;
 			}
 
-			return new NodeAddressInfo(result, Enums.PeerTypes.Unknown).IsIpV6;
+			return new NodeAddressInfo(result, NodeInfo.Unknown).IsIpV6;
 		}
 
 	#endregion

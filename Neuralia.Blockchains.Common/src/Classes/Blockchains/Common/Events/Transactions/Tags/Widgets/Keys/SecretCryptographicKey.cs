@@ -1,4 +1,6 @@
-﻿using Neuralia.Blockchains.Core;
+﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
@@ -57,6 +59,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.Secret;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is ISecretWalletKey secretWalletKey) {
+				var hashes = BlockchainHashingUtils.HashSecretKey(secretWalletKey);
+
+				this.NextKeyHashSha2.Entry = hashes.sha2.Entry;
+				this.NextKeyHashSha3.Entry = hashes.sha3.Entry;
+			}
 		}
 	}
 }

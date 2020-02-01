@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General.Versions;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.DataAccess {
 	public interface IEntityFrameworkDal<out DBCONTEXT>
@@ -15,15 +19,23 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		private readonly Func<AppSettingsBase.SerializationTypes, DBCONTEXT> contextInstantiator;
 		protected readonly object locker = new object();
 		protected readonly AppSettingsBase.SerializationTypes serializationType;
-
-		public EntityFrameworkDal(Func<AppSettingsBase.SerializationTypes, DBCONTEXT> contextInstantiator, AppSettingsBase.SerializationTypes serializationType) {
+		protected readonly SoftwareVersion softwareVersion;
+		
+		public EntityFrameworkDal(SoftwareVersion softwareVersion, Func<AppSettingsBase.SerializationTypes, DBCONTEXT> contextInstantiator, AppSettingsBase.SerializationTypes serializationType) {
 			this.contextInstantiator = contextInstantiator;
 			this.serializationType = serializationType;
+			this.softwareVersion = softwareVersion;
 		}
 
+		protected DBCONTEXT CreateRawContext(Action<DBCONTEXT> initializer = null) {
+			lock(this.locker) {
+				return this.contextInstantiator(this.serializationType);
+			}
+		}
+		
 		protected DBCONTEXT CreateContext(Action<DBCONTEXT> initializer = null) {
 			lock(this.locker) {
-				DBCONTEXT db = this.contextInstantiator(this.serializationType);
+				DBCONTEXT db = this.CreateRawContext();
 
 				this.PrepareContext(db, initializer);
 
@@ -31,9 +43,48 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 		}
 
+		protected void EnsureVersionCreated() {
+			this.PerformOperation(this.EnsureVersionCreated);
+		}
+		
+		protected void EnsureVersionCreated(DBCONTEXT db) {
+
+			((IEntityFrameworkContextInternal)db).EnsureVersionCreated(this.softwareVersion);
+		}
+		
 		protected virtual void PerformInnerContextOperation(Action<DBCONTEXT> action, params object[] contents) {
-			using(DBCONTEXT db = this.CreateContext()) {
-				action(db);
+			try {
+				using(DBCONTEXT db = this.CreateContext()) {
+					action(db);
+				}
+			} catch(Exception ex) {
+				Log.Error(ex, "exception occured during an Entity Framework action");
+
+				throw;
+			}
+		}
+		
+		protected virtual async Task PerformInnerContextOperationAsync(Func<DBCONTEXT, Task> action, params object[] contents) {
+			try {
+				using(DBCONTEXT db = this.CreateContext()) {
+					await action(db);
+				}
+			} catch(Exception ex) {
+				Log.Error(ex, "exception occured during an Entity Framework action");
+
+				throw;
+			}
+		}
+		
+		protected virtual async Task<T> PerformInnerContextOperationAsync<T>(Func<DBCONTEXT, Task<T>> action, params object[] contents) {
+			try {
+				using(DBCONTEXT db = this.CreateContext()) {
+					return await action(db);
+				}
+			} catch(Exception ex) {
+				Log.Error(ex, "exception occured during an Entity Framework action");
+
+				throw;
 			}
 		}
 
@@ -42,6 +93,12 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 				this.PerformInnerContextOperation(process, contents);
 			}
 		}
+		
+		protected virtual Task PerformOperationAsync(Func<DBCONTEXT, Task> process, params object[] contents) {
+
+				return this.PerformInnerContextOperationAsync(process, contents);
+			
+		}
 
 		protected virtual void PerformOperations(IEnumerable<Action<DBCONTEXT>> processes, params object[] contents) {
 			lock(this.locker) {
@@ -49,6 +106,12 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 		}
 
+		protected virtual Task PerformOperationsAsync(IEnumerable<Func<DBCONTEXT, Task>> processes, params object[] contents) {
+
+				return this.PerformInnerContextOperationAsync(db => this.PerformContextOperationsAsync(db, processes), contents);
+			
+		}
+		
 		protected virtual T PerformOperation<T>(Func<DBCONTEXT, T> process, params object[] contents) {
 			lock(this.locker) {
 				T result = default;
@@ -56,6 +119,12 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 
 				return result;
 			}
+		}
+		
+		protected virtual Task<T> PerformOperationAsync<T>(Func<DBCONTEXT, Task<T>> process, params object[] contents) {
+
+			return this.PerformInnerContextOperationAsync<T>(db => this.PerformContextOperationAsync(db, process), contents);
+			
 		}
 
 		protected virtual List<T> PerformOperation<T>(Func<DBCONTEXT, List<T>> process, params object[] contents) {
@@ -67,6 +136,12 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 		}
 
+		protected virtual Task<List<T>> PerformOperationAsync<T>(Func<DBCONTEXT, Task<List<T>>> process, params object[] contents) {
+
+			return this.PerformInnerContextOperationAsync(db => this.PerformContextOperationAsync(db, process), contents);
+			
+		}
+		
 		protected void PerformTransaction(Action<DBCONTEXT> process, params object[] contents) {
 
 			lock(this.locker) {
@@ -91,6 +166,31 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 				}, contents);
 			}
 		}
+		
+		protected Task PerformTransactionAsync(Func<DBCONTEXT, Task> process, params object[] contents) {
+
+			lock(this.locker) {
+				return this.PerformInnerContextOperationAsync(async db => {
+					IExecutionStrategy strategy = db.Database.CreateExecutionStrategy();
+
+					await strategy.ExecuteAsync(async () => {
+
+						using(IDbContextTransaction transaction = await db.Database.BeginTransactionAsync()) {
+							try {
+								await process(db);
+
+								await transaction.CommitAsync();
+
+							} catch(Exception e) {
+								await transaction.RollbackAsync();
+
+								throw;
+							}
+						}
+					});
+				}, contents);
+			}
+		}
 
 		protected virtual void PerformContextOperations(DBCONTEXT db, IEnumerable<Action<DBCONTEXT>> processes) {
 			lock(this.locker) {
@@ -101,7 +201,22 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 		}
 
+		protected virtual async Task PerformContextOperationsAsync(DBCONTEXT db, IEnumerable<Func<DBCONTEXT, Task>> processes) {
+
+			foreach(var process in processes) {
+				await process(db);
+			}
+		}
+
+		
 		protected virtual T PerformContextOperation<T>(DBCONTEXT db, Func<DBCONTEXT, T> process) {
+			lock(this.locker) {
+
+				return process(db);
+			}
+		}
+		
+		protected virtual Task<T> PerformContextOperationAsync<T>(DBCONTEXT db, Func<DBCONTEXT, Task<T>> process) {
 			lock(this.locker) {
 
 				return process(db);
@@ -126,6 +241,11 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		}
 
 		protected virtual void InitContext(DBCONTEXT db) {
+
+			this.PerformCustomMappings(db);
+		}
+		
+		protected virtual void PerformCustomMappings(DBCONTEXT db) {
 
 		}
 	}

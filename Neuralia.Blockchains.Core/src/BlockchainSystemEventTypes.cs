@@ -43,6 +43,10 @@ namespace Neuralia.Blockchains.Core {
 
 		public readonly BlockchainSystemEventType AccountPublicationStarted;
 		public readonly BlockchainSystemEventType AccountPublicationStep;
+		
+		public readonly BlockchainSystemEventType ImportantWalletUpdate;
+
+		
 
 		public readonly BlockchainSystemEventType Alert;
 		public readonly BlockchainSystemEventType BlockchainSyncEnded;
@@ -65,6 +69,12 @@ namespace Neuralia.Blockchains.Core {
 		public readonly BlockchainSystemEventType KeyGenerationStarted;
 		public readonly BlockchainSystemEventType ConnectableStatusChanged;
 		
+		/// <summary>
+		/// this event is triggered when we find an element that we dont recognize. this signifies our node is surely out of date and should be upgraded. 
+		/// </summary>
+		public readonly BlockchainSystemEventType RequireNodeUpdate;
+
+		
 
 		/// <summary>
 		///     used for log window messages
@@ -74,7 +84,8 @@ namespace Neuralia.Blockchains.Core {
 		public readonly BlockchainSystemEventType MiningElected;
 		public readonly BlockchainSystemEventType MiningEnded;
 		public readonly BlockchainSystemEventType MiningPrimeElected;
-
+		public readonly BlockchainSystemEventType MiningPrimeElectedMissed;
+		
 		public readonly BlockchainSystemEventType MiningStarted;
 		public readonly BlockchainSystemEventType MiningStatusChanged;
 
@@ -171,6 +182,7 @@ namespace Neuralia.Blockchains.Core {
 			this.MiningEnded = this.CreateBaseConstant();
 			this.MiningElected = this.CreateBaseConstant();
 			this.MiningPrimeElected = this.CreateBaseConstant();
+			this.MiningPrimeElectedMissed = this.CreateBaseConstant();
 			this.MiningStatusChanged = this.CreateBaseConstant();
 
 			this.BlockInserted = this.CreateBaseConstant();
@@ -185,6 +197,10 @@ namespace Neuralia.Blockchains.Core {
 
 			this.Alert = this.CreateBaseConstant();
 			this.ConnectableStatusChanged = this.CreateBaseConstant();
+			
+			this.RequireNodeUpdate = this.CreateBaseConstant();
+
+			this.ImportantWalletUpdate = this.CreateBaseConstant();
 		}
 
 		public static BlockchainSystemEventTypes Instance { get; } = new BlockchainSystemEventTypes();

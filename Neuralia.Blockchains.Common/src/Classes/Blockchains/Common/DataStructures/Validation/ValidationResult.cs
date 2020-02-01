@@ -110,6 +110,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 	}
 
 	public class EventValidationErrorCodes : UShortConstantSet<EventValidationErrorCode> {
+		
+		public readonly EventValidationErrorCode ENVELOPE_EXPIRED;
 		public readonly EventValidationErrorCode ENVELOPE_EMBEDED_PUBLIC_KEY_INVALID;
 		public readonly EventValidationErrorCode FAILED_PUBLISHED_HASH_VALIDATION;
 		public readonly EventValidationErrorCode HASH_INVALID;
@@ -118,18 +120,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public readonly EventValidationErrorCode INVALID_KEY_TYPE;
 		public readonly EventValidationErrorCode KEY_NOT_YET_SYNCED;
 
+		public readonly EventValidationErrorCode INVALID_BYTES;
+		
+		public readonly EventValidationErrorCode INVALID_ID;
+		public readonly EventValidationErrorCode INVALID_TIMESTAMP;
+		public readonly EventValidationErrorCode INVALID_TRANSACTION_TYPE_ENVELOPE_REPRESENTATION;
+		public readonly EventValidationErrorCode GOSSIP_PRESENTATION_TRANSACTIONS_NOT_ALLOWED;
+		
 		public readonly EventValidationErrorCode MOBILE_CANNOT_VALIDATE;
 
 		public readonly EventValidationErrorCode NOT_WITHIN_ACCEPTABLE_TIME_RANGE;
 		public readonly EventValidationErrorCode SECRET_KEY_NO_SECRET_ACCOUNT_SIGNATURE;
 		public readonly EventValidationErrorCode SIGNATURE_VERIFICATION_FAILED;
 		public readonly EventValidationErrorCode TRANSACTION_TYPE_ALLOWS_SINGLE_SCOPE;
-
+		
+		public readonly EventValidationErrorCode JOINT_TRANSACTION_SINGLE_SIGNATURE;
+		public readonly EventValidationErrorCode INVALID_JOINT_SIGNATURE_COUNT;
+		public readonly EventValidationErrorCode INVALID_JOINT_SIGNATURE_ACCOUNTS;
+		public readonly EventValidationErrorCode INVALID_REFERENCED_TRANSACTION;
+		public readonly EventValidationErrorCode MISSING_REQUIRED_JOINT_ACCOUNT;
+		
 		static EventValidationErrorCodes() {
 		}
 
 		protected EventValidationErrorCodes() : base(10_000) {
 
+			this.ENVELOPE_EXPIRED = this.CreateBaseConstant();
 			this.NOT_WITHIN_ACCEPTABLE_TIME_RANGE = this.CreateBaseConstant();
 			this.HASH_INVALID = this.CreateBaseConstant();
 			this.IMPOSSIBLE_BLOCK_DECLARATION_ID = this.CreateBaseConstant();
@@ -137,11 +153,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 			this.SIGNATURE_VERIFICATION_FAILED = this.CreateBaseConstant();
 			this.TRANSACTION_TYPE_ALLOWS_SINGLE_SCOPE = this.CreateBaseConstant();
 			this.FAILED_PUBLISHED_HASH_VALIDATION = this.CreateBaseConstant();
+			this.INVALID_TRANSACTION_TYPE_ENVELOPE_REPRESENTATION = this.CreateBaseConstant();
+			this.GOSSIP_PRESENTATION_TRANSACTIONS_NOT_ALLOWED = this.CreateBaseConstant();
+			
+			this.INVALID_ID = this.CreateBaseConstant();
+			this.INVALID_TIMESTAMP = this.CreateBaseConstant();
 
 			this.INVALID_KEY_TYPE = this.CreateBaseConstant();
 			this.SECRET_KEY_NO_SECRET_ACCOUNT_SIGNATURE = this.CreateBaseConstant();
 			this.MOBILE_CANNOT_VALIDATE = this.CreateBaseConstant();
 			this.KEY_NOT_YET_SYNCED = this.CreateBaseConstant();
+			this.INVALID_BYTES = this.CreateBaseConstant();
+
+			this.JOINT_TRANSACTION_SINGLE_SIGNATURE = this.CreateBaseConstant();
+			this.INVALID_JOINT_SIGNATURE_COUNT = this.CreateBaseConstant();
+			this.INVALID_JOINT_SIGNATURE_ACCOUNTS = this.CreateBaseConstant();
+			this.INVALID_REFERENCED_TRANSACTION = this.CreateBaseConstant();
+			this.MISSING_REQUIRED_JOINT_ACCOUNT = this.CreateBaseConstant();
 		}
 
 		public static EventValidationErrorCodes Instance { get; } = new EventValidationErrorCodes();

@@ -662,9 +662,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 		private long HashFile(IFileInfo file) {
 			if(file.Exists && (file.Length != 0)) {
-				using(var sliceHashNodes = new FileStreamSliceHashNodeList(file.FullName, this.physicalFileSystem)) {
-					return HashingUtils.HashxxTree(sliceHashNodes);
-				}
+				return HashingUtils.XxHashFile(file.FullName,  this.physicalFileSystem);
 			}
 
 			return 0;
@@ -759,7 +757,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			// skip any exclusions
 			//TODO: make this stronger with regexes
-			if(this.exclusions?.Any(e => e.name.ToLower() == directory.Name.ToLower()) ?? false) {
+			if(this.exclusions?.Any(e => string.Equals(e.name, directory.Name, StringComparison.CurrentCultureIgnoreCase)) ?? false) {
 				return;
 			}
 
@@ -814,6 +812,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			string path = this.CompletePath(file);
 
 			return this.activeFileSystem.File.Exists(path);
+		}
+
+		/// <summary>
+		/// We check If something has changed on the physical file system that may not reflect in the memory one
+		/// </summary>
+		/// <param name="file"></param>
+		public void RefreshFile(string file) {
+			string path = this.CompletePath(file);
+
+			//TODO: right now it only adds missing files. should we handle deletes and udpates too?
+			
+			bool physicalExists = this.physicalFileSystem.File.Exists(path);
+			bool activeExists = this.activeFileSystem.File.Exists(path);
+			
+			if(physicalExists && !activeExists) {
+				// it was added on the physical
+				this.fileStatuses.Add(file, FileStatuses.Untouched);
+				this.initialFileStructure.Add(file);
+				this.Create(file);
+			}
+			if(!physicalExists && activeExists) {
+				// it was deleted on the physical
+			}
 		}
 
 		private string CompletePath(string file) {
@@ -928,6 +949,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			// complete the path if it is relative
 			string path = this.CompletePath(file);
 
+			FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(file), this.activeFileSystem);
+			
 			return this.activeFileSystem.File.Create(path);
 		}
 

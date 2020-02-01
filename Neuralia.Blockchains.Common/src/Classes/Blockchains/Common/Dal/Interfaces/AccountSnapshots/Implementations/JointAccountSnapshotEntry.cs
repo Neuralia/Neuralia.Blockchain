@@ -2,8 +2,8 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Acco
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Implementations {
 
-	public class JointAccountSnapshotEntry<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE> : JointAccountSnapshot<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE>, IJointAccountSnapshotEntry<ACCOUNT_FEATURE, JOINT_MEMBER_FEATURE>
-		where ACCOUNT_FEATURE : IAccountFeatureEntry
+	public class JointAccountSnapshotEntry<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE> : JointAccountSnapshot<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE>, IJointAccountSnapshotEntry<ACCOUNT_ATTRIBUTE, JOINT_MEMBER_FEATURE>
+		where ACCOUNT_ATTRIBUTE : IAccountAttributeEntry
 		where JOINT_MEMBER_FEATURE : IJointMemberAccountEntry {
 	}
 }

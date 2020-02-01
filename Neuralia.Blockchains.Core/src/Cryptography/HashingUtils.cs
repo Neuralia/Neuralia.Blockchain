@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
+using System.IO.Abstractions;
 using System.Linq;
 using System.Security.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Hash;
@@ -23,31 +25,72 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		
 		public static SafeArrayHandle Hash3(IHashNodeList sliceHashNodeList) {
 			using(Sha3SakuraTree Hasher3 = new Sha3SakuraTree(512)) {
-				return Hasher3.Hash(sliceHashNodeList);
+				return Hash3(sliceHashNodeList, Hasher3);
 			}
 		}
 		
+		public static SafeArrayHandle Hash3(IHashNodeList sliceHashNodeList, Sha3SakuraTree hasher) {
+			return hasher.Hash(sliceHashNodeList);
+		}
+
 		public static long HashxxTree(IHashNodeList sliceHashNodeList) {
-			xxHashSakuraTree XxhasherTree = new xxHashSakuraTree();
-			return XxhasherTree.HashLong(sliceHashNodeList);
+			using(xxHashSakuraTree XxhasherTree = new xxHashSakuraTree()) {
+				return XxhasherTree.HashLong(sliceHashNodeList);
+			}
 		}
 		
 		public static int HashxxTree32(IHashNodeList sliceHashNodeList) {
-			xxHashSakuraTree32 XxhasherTree32 = new xxHashSakuraTree32();
-			return XxhasherTree32.HashInt(sliceHashNodeList);
+			using(xxHashSakuraTree32 XxhasherTree32 = new xxHashSakuraTree32()) {
+				return XxhasherTree32.HashInt(sliceHashNodeList);
+			}
 		}
 
-		
 		public static long XxHash64(SafeArrayHandle data) {
-			xxHasher64 XxHasher64 = new xxHasher64();
-			return XxHasher64.Hash(data);
+			using(xxHasher64 XxHasher64 = new xxHasher64()) {
+				return XxHasher64.Hash(data);
+			}
 		}
 
 		public static int XxHash32(SafeArrayHandle data) {
-			xxHasher32 XxHasher32 = new xxHasher32();
-			return XxHasher32.Hash(data);
+			using(xxHasher32 XxHasher32 = new xxHasher32()) {
+				return XxHasher32.Hash(data);
+			}
 		}
 			
+		/// <summary>
+		/// a special hashing method to hash a file in a buffered manner
+		/// </summary>
+		/// <param name="sliceHashNodeList"></param>
+		/// <returns></returns>
+		public static long XxHashFile(string filename, IFileSystem fileSystem) {
+			using(xxHasher64 XxHasher64 = new xxHasher64()) {
+
+				long hash = 0;
+				ByteArray buffer = ByteArray.Create(4096);
+
+				using(Stream fs = fileSystem.File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
+					using(BufferedStream bs = new BufferedStream(fs)) {
+						long bytesLeft = bs.Length;
+
+						while(bytesLeft > 0) {
+							// Read may return anything from 0 to numBytesToRead.
+							int bytesRead = bs.Read(buffer.Bytes, buffer.Offset, buffer.Length);
+
+							// The end of the file is reached.
+							if(bytesRead == 0)
+								break;
+
+							bytesLeft -= bytesRead;
+
+							long current = XxHasher64.Hash(buffer.Span.Slice(0, bytesRead));
+							hash = XxHasher64.HashTwo(hash, current);
+						}
+					}
+				}
+
+				return hash;
+			}
+		}
 
 		public static bool ValidateGossipMessageSetHash(IGossipMessageSet gossipMessageSet) {
 			
@@ -178,28 +221,32 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			}
 		}
 
+		public static (SafeArrayHandle sha2, SafeArrayHandle sha3) GetCombinedHash(SafeArrayHandle hash, SafeArrayHandle sha2, SafeArrayHandle sha3) {
+			return (HashSha512(hasher => hasher.Hash(hash)), HashSha3_512(hasher => hasher.Hash(hash)));
+		}
+
 		public static bool VerifyCombinedHash(SafeArrayHandle hash, SafeArrayHandle sha2, SafeArrayHandle sha3) {
 
-			Sha512Hasher sha512Hasher = new Sha512Hasher();
-			SafeArrayHandle newsha2 = sha512Hasher.Hash(hash);
+			(SafeArrayHandle newsha2, SafeArrayHandle newsha3) = GetCombinedHash(hash, sha2, sha3);
 
-			bool result = newsha2.Equals(sha2);
+			bool result = VerifyCombinedHash(hash, sha2, sha3, newsha2, newsha3);
+			
 			newsha2.Return();
-			
-			if(!result) {
-				return false;
-			}
-
-			Sha3_512Hasher sha3Hasher = new Sha3_512Hasher();
-			SafeArrayHandle newsha3 = sha3Hasher.Hash(hash);
-
-			result = newsha3.Equals(sha3);
-			
 			newsha3.Return();
 
 			return result;
 		}
 
+		public static bool VerifyCombinedHash(SafeArrayHandle hash, SafeArrayHandle sha2, SafeArrayHandle sha3, SafeArrayHandle newSha2, SafeArrayHandle newSha3) {
+			bool result = newSha2.Equals(sha2);
+
+			if(!result) {
+				return false;
+			}
+
+			return newSha3.Equals(sha3);
+		}
+		
 		public static SafeArrayHandle GenerateHash(ITreeHashable hashable) {
 
 			using(HashNodeList structure = hashable.GetStructuresArray()) {
@@ -283,5 +330,32 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				return HashxxTree32(nodes);
 			}
 		}
+
+		public static SafeArrayHandle HashSha512(Func<Sha512Hasher, SafeArrayHandle> hash) {
+			using(Sha512Hasher sha512Hasher = new Sha512Hasher()) {
+				return hash(sha512Hasher);
+			}
+		}
+		
+		public static SafeArrayHandle HashSha256(Func<Sha256Hasher, SafeArrayHandle> hash) {
+			using(Sha256Hasher sha256Hasher = new Sha256Hasher()) {
+				return hash(sha256Hasher);
+			}
+		}
+
+		
+		public static SafeArrayHandle HashSha3_512(Func<Sha3_512Hasher, SafeArrayHandle> hash) {
+			using(Sha3_512Hasher sha3512Hasher = new Sha3_512Hasher()) {
+				return hash(sha3512Hasher);
+			}
+		}
+		
+		public static SafeArrayHandle HashBlake2_512(Func<Blake2_512Hasher, SafeArrayHandle> hash) {
+			using(Blake2_512Hasher blake2512Hasher = new Blake2_512Hasher()) {
+				return hash(blake2512Hasher);
+			}
+		}
+		
+		
 	}
 }

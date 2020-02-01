@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using System.IO.Abstractions;
 using System.Linq;
 using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
+using Neuralia.Blockchains.Core.Configuration;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders {
 
 	public class SqliteChannelBandFileInterpretationProvider<CARD_TYPE, NAMING_PROVIDER, KEY, QUERY_KEY, KEY_SELECTOR> : DigestChannelBandFileInterpretationProvider<CARD_TYPE, NAMING_PROVIDER>
-		where CARD_TYPE : class, IChannelBandSqliteProviderEntry<KEY>, new()
+		where CARD_TYPE : class, IChannelBandSqliteProviderEntry<KEY>
 		where KEY : struct, IEquatable<KEY>
 		where KEY_SELECTOR : Delegate
 		where NAMING_PROVIDER : DigestChannelBandFileNamingProvider {
@@ -27,8 +29,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.indexer = indexer;
 
 		}
+		
+		public void InitModel(Action<ModelBuilder> builder) {
+			this.ChannelBandSqliteProviderDal.ModelBuilder = builder;
+		}
 
-		protected ChannelBandSqliteProviderDal<CARD_TYPE, KEY> ChannelBandSqliteProviderDal => new ChannelBandSqliteProviderDal<CARD_TYPE, KEY>(this.ActiveFilename, this.ActiveFolder, this.keyDeclaration);
+
+		protected ChannelBandSqliteProviderDal<CARD_TYPE, KEY> channelBandSqliteProviderDal = null;
+
+
+		protected ChannelBandSqliteProviderDal<CARD_TYPE, KEY> ChannelBandSqliteProviderDal {
+			get {
+				if(this.channelBandSqliteProviderDal == null) {
+					this.channelBandSqliteProviderDal = new ChannelBandSqliteProviderDal<CARD_TYPE, KEY>(this.ActiveFilename, this.ActiveFolder, GlobalSettings.SoftwareVersion, this.keyDeclaration);
+				}
+
+				return this.channelBandSqliteProviderDal;
+			}
+		}
 
 		protected string ExtractedFileName => "";
 
@@ -44,6 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public List<CARD_TYPE> QueryCards() {
 
+			
 			return this.ChannelBandSqliteProviderDal.PerformOperation(db => db.ChannelBandCards.ToList());
 		}
 

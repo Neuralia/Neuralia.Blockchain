@@ -25,8 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => ulong.Parse(bson.RawValue.ToString()));
 
-			BsonMapper.Global.RegisterType<SafeArrayHandle>(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle)ByteArray.Create((byte[]) bson.RawValue));
-			BsonMapper.Global.RegisterType<ByteArray>(uri => uri.ToExactByteArray(), bson => ByteArray.Create((byte[]) bson.RawValue));
+			RegisterArrayTypes();
 			
 			RegisterAmount();
 
@@ -36,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			RegisterTransactionId();
 
-			RegisterTransactionIdExtended();
+			RegisterTransactionId();
 
 			RegisterTransactionTimestamp();
 
@@ -58,6 +57,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		//			BsonMapper.Global.RegisterType(dict => SerializeComplexObject<T>(dict), bson => DeserializeComplexObject<TImp>(bson.AsDocument));
 		//		}
 
+		public static void RegisterArrayTypes() {
+
+			BsonMapper.Global.RegisterType<SafeArrayHandle>(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle)ByteArray.Create((byte[]) bson.RawValue));
+			BsonMapper.Global.RegisterType<ByteArray>(uri => uri.ToExactByteArray(), bson => ByteArray.Create((byte[]) bson.RawValue));
+		}
+		
 		public static void RegisterWalletSnaphostTypes() {
 
 			BsonMapper.Global.Entity<IWalletAccountSnapshot>().Id(x => x.AccountId);
@@ -80,6 +85,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			//				(uri) => uri.,
 			//				(bson) => new BlockId((long)bson.RawValue));
 		}
+		
+		public static void RegisterPublishedAddress() {
+
+			//			BsonMapper.Global.RegisterType<PublishedAddress>
+			//			(
+			//				(uri) => uri.,
+			//				(bson) => new BlockId((long)bson.RawValue));
+		}
+		
 
 		public static void RegisterKeyUseIndexSet() {
 
@@ -94,10 +108,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterTransactionId() {
 			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => new TransactionId(bson.AsString));
-		}
-
-		public static void RegisterTransactionIdExtended() {
-			BsonMapper.Global.RegisterType(uri => uri.ToExtendedString(), bson => new TransactionIdExtended(bson.AsString));
 		}
 
 		public static void RegisterTransactionTimestamp() {

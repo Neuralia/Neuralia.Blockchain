@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Gated;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Moderator.V1;
@@ -16,485 +20,469 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1 {
 
-	public abstract partial class TransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
+	public abstract partial class TransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
+		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttribute, new()
+		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttribute, new()
 		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
 		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
 
+		protected DateTime TrxDt(ITransaction t) {
+			return this.centralCoordinator.BlockchainServiceSet.TimeService.GetTimestampDateTime(t.TransactionId.Timestamp.Value, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
+		}
+
+		protected abstract CardsUtils CardsUtils { get; }
+
 		/// <summary>
 		///     Register all the base transaction types and their behaviors
 		/// </summary>
 		protected virtual void RegisterTransactionImpactSets() {
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IStandardPresentationTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IStandardPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+				affectedSnapshots.standardAccounts.Add(t.AssignedAccountId);
 
-					affectedSnapshots.standardAccounts.Add(t.TransactionId.Account);
-
-				},
-				InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
-
-					STANDARD_ACCOUNT_SNAPSHOT snapshot = snapshotCache.CreateNewStandardAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account);
-
-					STANDARD_ACCOUNT_SNAPSHOT newSnapshot = snapshot;
-
-					newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
-
-					newSnapshot.InceptionBlockId = blockId;
-					newSnapshot.CorrelationId = t.CorrelationId;
-
-					foreach(ITransactionAccountFeature entry in t.Features) {
-
-						STANDARD_ACCOUNT_FEATURE_SNAPSHOT newEntry = new STANDARD_ACCOUNT_FEATURE_SNAPSHOT();
-
-						newEntry.FeatureType = entry.FeatureType;
-						newEntry.CertificateId = entry.CertificateId;
-						newEntry.Data = entry.Data;
-
-						newSnapshot.AppliedFeatures.Add(newEntry);
-					}
-				},
-				InterpretTransactionStandardAccountKeysFunc = (t, blockId, snapshotCache, mode) => {
-					
-					if(mode == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.AssignedAccountId)) {
-						// we dont need to set the keys in sumlated mode.
-						STANDARD_ACCOUNT_KEY_SNAPSHOT key = snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
-
-						string transactionId = t.TransactionId.ToExtendedString();
-						key.PublicKey = this.Dehydratekey(t.TransactionCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
-
-						key = snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.MessageCryptographicKey.Id));
-						key.PublicKey = this.Dehydratekey(t.MessageCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
-
-						key = snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
-						key.PublicKey = this.Dehydratekey(t.ChangeCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
-						
-						key = snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.SuperCryptographicKey.Id));
-						key.PublicKey = this.Dehydratekey(t.SuperCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
-					}
-				},
-				CollectStandardAccountFastKeysFunc = (t, blockId, types) => {
-					List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
-
-					if(types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
-						keys.Add(new FastKeyMetadata() {AccountId = t.AssignedAccountId, Ordinal = t.TransactionCryptographicKey.Id, PublicKey = this.Dehydratekey(t.TransactionCryptographicKey)});
-					}
-
-					if(types.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
-						keys.Add(new FastKeyMetadata() {AccountId = t.AssignedAccountId, Ordinal = t.MessageCryptographicKey.Id, PublicKey = this.Dehydratekey(t.MessageCryptographicKey)});
-					}
-
-					return keys;
+				foreach(var ordinal in t.Keyset.Keys.Keys) {
+					affectedSnapshots.accountKeys.Add((t.AssignedAccountId.ToLongRepresentation(), ordinal));
 				}
-			});
-			
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IJointPresentationTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
 
-					affectedSnapshots.jointAccounts.Add(t.TransactionId.Account);
+				STANDARD_ACCOUNT_SNAPSHOT snapshot = parameters.snapshotCache.CreateNewStandardAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account);
 
-				},
-				InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
+				STANDARD_ACCOUNT_SNAPSHOT newSnapshot = snapshot;
 
-					JOINT_ACCOUNT_SNAPSHOT newSnapshot = snapshotCache.CreateNewJointAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account);
+				newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
 
-					newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
-					newSnapshot.InceptionBlockId = blockId;
-					newSnapshot.CorrelationId = t.CorrelationId;
+				newSnapshot.InceptionBlockId = parameters.blockId;
+				newSnapshot.CorrelationId = t.CorrelationId;
 
-					foreach(ITransactionAccountFeature entry in t.Features) {
+				foreach(ITransactionAccountAttribute entry in t.Attributes) {
 
-						JOINT_ACCOUNT_FEATURE_SNAPSHOT newEntry = new JOINT_ACCOUNT_FEATURE_SNAPSHOT();
+					STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT newEntry = new STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT();
 
-						newEntry.FeatureType = entry.FeatureType;
-						newEntry.CertificateId = entry.CertificateId;
-						newEntry.Data = entry.Data;
+					this.CardsUtils.Copy(entry, newEntry);
 
-						newSnapshot.AppliedFeatures.Add(newEntry);
-					}
-
-					foreach(ITransactionJointAccountMember entry in t.MemberAccounts) {
-
-						JOINT_ACCOUNT_MEMBERS_SNAPSHOT newEntry = new JOINT_ACCOUNT_MEMBERS_SNAPSHOT();
-
-						newEntry.AccountId = entry.AccountId;
-
-						newSnapshot.MemberAccounts.Add(newEntry);
-					}
-
+					newSnapshot.AppliedAttributes.Add(newEntry);
 				}
+			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.AssignedAccountId)) {
+					// we dont need to set the keys in sumlated mode.
+					STANDARD_ACCOUNT_KEY_SNAPSHOT key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
+
+					string transactionId = t.TransactionId.ToString();
+					key.PublicKey = this.Dehydratekey(t.TransactionCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
+
+					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.MessageCryptographicKey.Id));
+					key.PublicKey = this.Dehydratekey(t.MessageCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
+
+					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
+					key.PublicKey = this.Dehydratekey(t.ChangeCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
+
+					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.SuperCryptographicKey.Id));
+					key.PublicKey = this.Dehydratekey(t.SuperCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
+				}
+			}, collectStandardAccountFastKeysFunc: (t, parameters) => {
+				List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
+
+				if(parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
+					keys.Add(new FastKeyMetadata() {AccountId = t.AssignedAccountId, Ordinal = t.TransactionCryptographicKey.Id, PublicKey = this.Dehydratekey(t.TransactionCryptographicKey)});
+				}
+
+				if(parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
+					keys.Add(new FastKeyMetadata() {AccountId = t.AssignedAccountId, Ordinal = t.MessageCryptographicKey.Id, PublicKey = this.Dehydratekey(t.MessageCryptographicKey)});
+				}
+
+				parameters.results = keys;
 			});
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IStandardAccountKeyChangeTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IJointPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-					affectedSnapshots.accountKeys.Add((t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id));
+				affectedSnapshots.jointAccounts.Add(t.AssignedAccountId);
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
 
-				},
-				InterpretTransactionStandardAccountKeysFunc = (t, blockId, snapshotCache, mode) => {
+				JOINT_ACCOUNT_SNAPSHOT newSnapshot = parameters.snapshotCache.CreateNewJointAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account);
 
-					if(mode == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.TransactionId.Account)) {
-						(long SequenceId, byte Id) key = (t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id);
+				newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
+				newSnapshot.InceptionBlockId = parameters.blockId;
+				newSnapshot.CorrelationId = t.CorrelationId;
 
-						string transactionId = t.TransactionId.ToExtendedString();
-						
-						STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = snapshotCache.GetAccountKeySnapshotModify(key);
-	
-						accountKeySnapshot.PublicKey = this.Dehydratekey(t.NewCryptographicKey);
-						accountKeySnapshot.DeclarationTransactionId = transactionId;
+				foreach(ITransactionAccountAttribute entry in t.Attributes) {
 
-						if(t.IsChangingChangeKey) {
-							(long SequenceId, byte SUPER_KEY_ORDINAL_ID) superKey = (t.TransactionId.Account.ToLongRepresentation(), t.NextSuperCryptographicKey.Id);
+					JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT newEntry = new JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT();
 
-							STANDARD_ACCOUNT_KEY_SNAPSHOT accountSuperKeySnapshot = snapshotCache.GetAccountKeySnapshotModify(superKey);
-							accountSuperKeySnapshot.PublicKey = this.Dehydratekey(t.NextSuperCryptographicKey);
-							accountSuperKeySnapshot.DeclarationTransactionId = transactionId;
-						}
-					}
-				},
-				CollectStandardAccountFastKeysFunc = (t, blockId, types) => {
-					List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
+					this.CardsUtils.Copy(entry, newEntry);
 
-					if((t.NewCryptographicKey.Id == GlobalsService.TRANSACTION_KEY_ORDINAL_ID && types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) || (t.NewCryptographicKey.Id == GlobalsService.MESSAGE_KEY_ORDINAL_ID && types.HasFlag(ChainConfigurations.FastKeyTypes.Messages))) {
-						keys.Add(new FastKeyMetadata(){AccountId = t.TransactionId.Account, Ordinal = t.NewCryptographicKey.Id, PublicKey = this.Dehydratekey(t.NewCryptographicKey)});
-					} 
-
-					return keys;
+					newSnapshot.AppliedAttributes.Add(newEntry);
 				}
+
+				foreach(ITransactionJointAccountMember entry in t.MemberAccounts) {
+
+					JOINT_ACCOUNT_MEMBERS_SNAPSHOT newEntry = new JOINT_ACCOUNT_MEMBERS_SNAPSHOT();
+
+					this.CardsUtils.Copy(entry, newEntry);
+
+					newSnapshot.MemberAccounts.Add(newEntry);
+				}
+
 			});
-			
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<ISetAccountCorrelationIdTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
 
-					affectedSnapshots.AddAccountId(t.TransactionId.Account);
-				},
-				InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IStandardAccountKeyChangeTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-					ACCOUNT_SNAPSHOT accountSnapshot = snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
+				AccountId accountId = t.TransactionId.Account;
+				affectedSnapshots.accountKeys.Add((accountId.ToLongRepresentation(), t.NewCryptographicKey.Id));
+				affectedSnapshots.standardAccounts.Add(accountId);
 
+			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.TransactionId.Account)) {
+					(long SequenceId, byte Id) key = (t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id);
+
+					string transactionId = t.TransactionId.ToString();
+
+					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.GetAccountKeySnapshotModify(key);
+
+					accountKeySnapshot.PublicKey = this.Dehydratekey(t.NewCryptographicKey);
+					accountKeySnapshot.DeclarationTransactionId = transactionId;
+
+					if(t.IsChangingChangeKey) {
+						(long SequenceId, byte SUPER_KEY_ORDINAL_ID) superKey = (t.TransactionId.Account.ToLongRepresentation(), t.NextSuperCryptographicKey.Id);
+
+						STANDARD_ACCOUNT_KEY_SNAPSHOT accountSuperKeySnapshot = parameters.snapshotCache.GetAccountKeySnapshotModify(superKey);
+						accountSuperKeySnapshot.PublicKey = this.Dehydratekey(t.NextSuperCryptographicKey);
+						accountSuperKeySnapshot.DeclarationTransactionId = transactionId;
+					}
+				}
+			}, collectStandardAccountFastKeysFunc: (t, parameters) => {
+				List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
+
+				if((t.NewCryptographicKey.Id == GlobalsService.TRANSACTION_KEY_ORDINAL_ID && parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) || (t.NewCryptographicKey.Id == GlobalsService.MESSAGE_KEY_ORDINAL_ID && parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Messages))) {
+					keys.Add(new FastKeyMetadata() {AccountId = t.TransactionId.Account, Ordinal = t.NewCryptographicKey.Id, PublicKey = this.Dehydratekey(t.NewCryptographicKey)});
+				}
+
+				parameters.results = keys;
+			});
+
+			this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountCorrelationIdTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+
+				affectedSnapshots.AddAccountId(t.TransactionId.Account);
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
+
+				ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
+
+				if(accountSnapshot != null && !accountSnapshot.CorrelationId.HasValue) {
 					accountSnapshot.CorrelationId = t.CorrelationId;
 				}
 			});
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<ISetAccountRecoveryTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountRecoveryTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-					affectedSnapshots.AddAccountId(t.TransactionId.Account);
-				},
-				InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
+				affectedSnapshots.AddAccountId(t.TransactionId.Account);
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
 
-					ACCOUNT_SNAPSHOT accountSnapshot = snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
+				ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
 
-					if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Create) {
-						IAccountFeature feature = accountSnapshot.GetCollectionEntry(entry => entry.FeatureType == AccountFeatureTypes.Instance.RESETABLE_ACCOUNT);
+				if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Create) {
+					IAccountAttribute attribute = accountSnapshot.GetCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
 
-						if(feature == null) {
-							accountSnapshot.CreateNewCollectionEntry(out feature);
+					if(attribute == null) {
+						accountSnapshot.CreateNewCollectionEntry(out attribute);
 
-							feature.FeatureType = AccountFeatureTypes.Instance.RESETABLE_ACCOUNT.Value;
+						attribute.AttributeType = AccountAttributesTypes.Instance.RESETABLE_ACCOUNT.Value;
 
-							accountSnapshot.AddCollectionEntry(feature);
+						accountSnapshot.AddCollectionEntry(attribute);
 
-						}
-
-						feature.Data = t.AccountRecoveryHash.ToExactByteArrayCopy();
-					} else if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Revoke) {
-						accountSnapshot.RemoveCollectionEntry(entry => entry.FeatureType == AccountFeatureTypes.Instance.RESETABLE_ACCOUNT);
 					}
+
+					attribute.Context = t.AccountRecoveryHash.ToExactByteArrayCopy();
+				} else if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Revoke) {
+					accountSnapshot.RemoveCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
 				}
+			});
+			
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IGatedJudgementTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+
+				affectedSnapshots.AddAccounts(t.TargetAccounts);
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
+
+
+				//TODO: anything here?
+			});
+			
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IThreeWayGatedTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+
+				affectedSnapshots.AddAccounts(t.TargetAccounts);
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
+
+				//TODO: anything here?
 			});
 
 			//----------------------- moderator transactions ----------------------------
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IAccountResetWarningTransaction>());
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetWarningTransaction>();
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IAccountResetTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-					affectedSnapshots.standardAccounts.Add(t.Account);
+				affectedSnapshots.standardAccounts.Add(t.Account);
 
-					affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.MessageCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.SuperCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.MessageCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.SuperCryptographicKey.Id));
 
-				},
-				InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
 
-					ACCOUNT_SNAPSHOT accountSnapshot = snapshotCache.GetAccountSnapshotModify(t.Account);
+				ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.Account);
 
-					IAccountFeature feature = accountSnapshot.GetCollectionEntry(entry => entry.FeatureType == AccountFeatureTypes.Instance.RESETABLE_ACCOUNT);
+				IAccountAttribute attribute = accountSnapshot.GetCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
 
-					if(feature != null) {
-						feature.Data = t.NextRecoveryHash.ToExactByteArrayCopy();
-					}
-				},
-				InterpretTransactionStandardAccountKeysFunc = (t, blockId, snapshotCache, mode) => {
+				if(attribute != null) {
+					attribute.Context = t.NextRecoveryHash.ToExactByteArrayCopy();
+				}
+			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
 
-					if(mode == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.Account)) {
-						// we dont need to set the keys in sumlated mode.
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.Account)) {
+					// we dont need to set the keys in sumlated mode.
 
-						string transactionId = t.TransactionId.ToExtendedString();
-						
-						STANDARD_ACCOUNT_KEY_SNAPSHOT key = snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
-						key.PublicKey = this.Dehydratekey(t.TransactionCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
+					string transactionId = t.TransactionId.ToString();
 
-						key = snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.MessageCryptographicKey.Id));
-						key.PublicKey = this.Dehydratekey(t.MessageCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
+					STANDARD_ACCOUNT_KEY_SNAPSHOT key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
+					key.PublicKey = this.Dehydratekey(t.TransactionCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
 
-						key = snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
-						key.PublicKey = this.Dehydratekey(t.ChangeCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
-						
-						key = snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.SuperCryptographicKey.Id));
-						key.PublicKey = this.Dehydratekey(t.SuperCryptographicKey);
-						key.DeclarationTransactionId = transactionId;
-					}
-				},
-				CollectStandardAccountFastKeysFunc = (t, blockId, types) => {
-					List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
+					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.MessageCryptographicKey.Id));
+					key.PublicKey = this.Dehydratekey(t.MessageCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
 
-					if(types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
-						keys.Add(new FastKeyMetadata() {AccountId = t.Account, Ordinal = t.TransactionCryptographicKey.Id, PublicKey = this.Dehydratekey(t.TransactionCryptographicKey)});
-					}
+					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
+					key.PublicKey = this.Dehydratekey(t.ChangeCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
 
-					if(types.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
-						keys.Add(new FastKeyMetadata() {AccountId = t.Account, Ordinal = t.MessageCryptographicKey.Id, PublicKey = this.Dehydratekey(t.MessageCryptographicKey)});
-					}
+					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.SuperCryptographicKey.Id));
+					key.PublicKey = this.Dehydratekey(t.SuperCryptographicKey);
+					key.DeclarationTransactionId = transactionId;
+				}
+			}, collectStandardAccountFastKeysFunc: (t, parameters) => {
+				List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
 
-					return keys;
+				if(parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
+					keys.Add(new FastKeyMetadata() {AccountId = t.Account, Ordinal = t.TransactionCryptographicKey.Id, PublicKey = this.Dehydratekey(t.TransactionCryptographicKey)});
+				}
+
+				if(parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
+					keys.Add(new FastKeyMetadata() {AccountId = t.Account, Ordinal = t.MessageCryptographicKey.Id, PublicKey = this.Dehydratekey(t.MessageCryptographicKey)});
+				}
+
+				parameters.results = keys;
+			});
+
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IChainAccreditationCertificateTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+
+				if(t.CertificateOperation != ChainAccreditationCertificateTransaction.CertificateOperationTypes.Create) {
+					affectedSnapshots.accreditationCertificates.Add((int) t.CertificateId.Value);
+				}
+			}, interpretTransactionAccreditationCertificatesFunc: (t, parameters) => {
+
+				ACCREDITATION_CERTIFICATE_SNAPSHOT certificate = null;
+
+				if(t.CertificateOperation == ChainAccreditationCertificateTransaction.CertificateOperationTypes.Create) {
+					certificate = parameters.snapshotCache.CreateNewAccreditationCertificateSnapshot((int) t.CertificateId.Value);
+				} else {
+					certificate = parameters.snapshotCache.GetAccreditationCertificateSnapshotModify((int) t.CertificateId.Value);
+				}
+
+				certificate.CertificateId = (int) t.CertificateId.Value;
+
+				if(t.CertificateOperation == ChainAccreditationCertificateTransaction.CertificateOperationTypes.Revoke) {
+					certificate.CertificateState = Enums.CertificateStates.Revoked;
+				} else {
+					certificate.CertificateState = Enums.CertificateStates.Active;
+				}
+
+				certificate.CertificateType = t.CertificateType.Value;
+				certificate.CertificateVersion = t.CertificateVersion;
+
+				certificate.EmissionDate = t.EmissionDate;
+				certificate.ValidUntil = t.ValidUntil;
+
+				certificate.AssignedAccount = t.AssignedAccount.ToLongRepresentation();
+				certificate.Application = t.Application;
+				certificate.Organisation = t.Organisation;
+				certificate.Url = t.Url;
+
+				certificate.CertificateAccountPermissionType = t.AccountPermissionType;
+				certificate.PermittedAccountCount = t.PermittedAccounts.Count;
+
+				foreach(AccountId entry in t.PermittedAccounts) {
+					ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT newEntry = new ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT();
+
+					newEntry.AccountId = entry.ToLongRepresentation();
+
+					certificate.PermittedAccounts.Add(newEntry);
 				}
 			});
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IChainAccreditationCertificateTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IChainOperatingRulesTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-					if(t.CertificateOperation != ChainAccreditationCertificateTransaction.CertificateOperationTypes.Create) {
-						affectedSnapshots.accreditationCertificates.Add((int) t.CertificateId.Value);
-					}
-				},
-				InterpretTransactionAccreditationCertificatesFunc = (t, blockId, snapshotCache, mode) => {
+				affectedSnapshots.chainOptions.Add(1);
 
-					ACCREDITATION_CERTIFICATE_SNAPSHOT certificate = null;
+			}, interpretTransactionChainOptionsFunc: (t, parameters) => {
 
-					if(t.CertificateOperation == ChainAccreditationCertificateTransaction.CertificateOperationTypes.Create) {
-						certificate = snapshotCache.CreateNewAccreditationCertificateSnapshot((int) t.CertificateId.Value);
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real) {
+
+					CHAIN_OPTIONS_SNAPSHOT options = null;
+
+					if(parameters.snapshotCache.CheckChainOptionsSnapshotExists(1)) {
+						options = parameters.snapshotCache.GetChainOptionsSnapshotModify(1);
 					} else {
-						certificate = snapshotCache.GetAccreditationCertificateSnapshotModify((int) t.CertificateId.Value);
+						options = parameters.snapshotCache.CreateNewChainOptionsSnapshot(1);
 					}
 
-					certificate.CertificateId = (int) t.CertificateId.Value;
-
-					if(t.CertificateOperation == ChainAccreditationCertificateTransaction.CertificateOperationTypes.Revoke) {
-						certificate.CertificateState = Enums.CertificateStates.Revoked;
-					} else {
-						certificate.CertificateState = Enums.CertificateStates.Active;
-					}
-
-					certificate.CertificateType = t.CertificateType.Value;
-					certificate.CertificateVersion = t.CertificateVersion;
-
-					certificate.EmissionDate = t.EmissionDate;
-					certificate.ValidUntil = t.ValidUntil;
-
-					certificate.AssignedAccount = t.AssignedAccount.ToLongRepresentation();
-					certificate.Application = t.Application;
-					certificate.Organisation = t.Organisation;
-					certificate.Url = t.Url;
-
-					certificate.CertificateAccountPermissionType = t.AccountPermissionType;
-					certificate.PermittedAccountCount = t.PermittedAccounts.Count;
-
-					foreach(AccountId entry in t.PermittedAccounts) {
-						ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT newEntry = new ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT();
-
-						newEntry.AccountId = entry.ToLongRepresentation();
-
-						certificate.PermittedAccounts.Add(newEntry);
-					}
+					options.MaximumVersionAllowed = t.MaximumVersionAllowed.ToString();
+					options.MinimumWarningVersionAllowed = t.MinimumWarningVersionAllowed.ToString();
+					options.MinimumVersionAllowed = t.MinimumVersionAllowed.ToString();
+					options.MaxBlockInterval = t.MaxBlockInterval;
+					options.AllowGossipPresentations = t.AllowGossipPresentations;
 				}
 			});
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IChainOperatingRulesTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisModeratorAccountPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-					affectedSnapshots.chainOptions.Add(1);
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.CommunicationsCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksXmssMTCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksChangeCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.DigestBlocksCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.DigestBlocksChangeCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BinaryCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.SuperChangeCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.PtahCryptographicKey.Id));
 
-				},
-				InterpretTransactionChainOptionsFunc = (t, blockId, snapshotCache, mode) => {
+			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
 
-					if(mode == TransactionImpactSet.OperationModes.Real) {
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real) {
+					NtruCryptographicKey key = t.CommunicationsCryptographicKey;
+					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key.Id));
+					IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+					key.Dehydrate(dehydrator);
+					SafeArrayHandle bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
-						CHAIN_OPTIONS_SNAPSHOT accountKeySnapshot = null;
+					XmssmtCryptographicKey key3 = t.BlocksXmssMTCryptographicKey;
+					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
+					dehydrator = DataSerializationFactory.CreateDehydrator();
+					key3.Dehydrate(dehydrator);
+					bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
-						if(snapshotCache.CheckChainOptionsSnapshotExists(1)) {
-							accountKeySnapshot = snapshotCache.GetChainOptionsSnapshotModify(1);
-						} else {
-							accountKeySnapshot = snapshotCache.CreateNewChainOptionsSnapshot(1);
-						}
+					SecretPentaCryptographicKey key2 = t.BlocksChangeCryptographicKey;
+					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
+					dehydrator = DataSerializationFactory.CreateDehydrator();
+					key2.Dehydrate(dehydrator);
+					bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
-						accountKeySnapshot.MaximumVersionAllowed = t.MaximumVersionAllowed.ToString();
-						accountKeySnapshot.MinimumWarningVersionAllowed = t.MinimumWarningVersionAllowed.ToString();
-						accountKeySnapshot.MinimumVersionAllowed = t.MinimumVersionAllowed.ToString();
-						accountKeySnapshot.MaxBlockInterval = t.MaxBlockInterval;
-					}
+					key3 = t.DigestBlocksCryptographicKey;
+					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
+					dehydrator = DataSerializationFactory.CreateDehydrator();
+					key3.Dehydrate(dehydrator);
+					bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
+
+					key2 = t.DigestBlocksChangeCryptographicKey;
+					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
+					dehydrator = DataSerializationFactory.CreateDehydrator();
+					key2.Dehydrate(dehydrator);
+					bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
+
+					key3 = t.BinaryCryptographicKey;
+					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
+					dehydrator = DataSerializationFactory.CreateDehydrator();
+					key3.Dehydrate(dehydrator);
+					bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
+
+					key2 = t.SuperChangeCryptographicKey;
+					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
+					dehydrator = DataSerializationFactory.CreateDehydrator();
+					key2.Dehydrate(dehydrator);
+					bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
+
+					key2 = t.PtahCryptographicKey;
+					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
+					dehydrator = DataSerializationFactory.CreateDehydrator();
+					key2.Dehydrate(dehydrator);
+					bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 				}
 			});
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IGenesisModeratorAccountPresentationTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisAccountPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.CommunicationsCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksXmssMTCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksChangeCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.DigestBlocksCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.DigestBlocksChangeCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BinaryCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.SuperChangeCryptographicKey.Id));
-					affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.PtahCryptographicKey.Id));
+			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
 
-				},
-				InterpretTransactionStandardAccountKeysFunc = (t, blockId, snapshotCache, mode) => {
+			});
 
-					if(mode == TransactionImpactSet.OperationModes.Real) {
-						NtruCryptographicKey key = t.CommunicationsCryptographicKey;
-						STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key.Id));
-						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
-						key.Dehydrate(dehydrator);
-						SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IModeratorKeyChangeTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-						XmssmtCryptographicKey key3 = t.BlocksXmssMTCryptographicKey;
-						accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-						dehydrator = DataSerializationFactory.CreateDehydrator();
-						key3.Dehydrate(dehydrator);
-						bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
+				affectedSnapshots.accountKeys.Add((t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id));
 
-						SecretPentaCryptographicKey key2 = t.BlocksChangeCryptographicKey;
-						accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-						dehydrator = DataSerializationFactory.CreateDehydrator();
-						key2.Dehydrate(dehydrator);
-						bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
+			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
 
-						key3 = t.DigestBlocksCryptographicKey;
-						accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-						dehydrator = DataSerializationFactory.CreateDehydrator();
-						key3.Dehydrate(dehydrator);
-						bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real) {
+					(long SequenceId, byte Id) key = (t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id);
 
-						key2 = t.DigestBlocksChangeCryptographicKey;
-						accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-						dehydrator = DataSerializationFactory.CreateDehydrator();
-						key2.Dehydrate(dehydrator);
-						bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
+					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.GetAccountKeySnapshotModify(key);
 
-						key3 = t.BinaryCryptographicKey;
-						accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-						dehydrator = DataSerializationFactory.CreateDehydrator();
-						key3.Dehydrate(dehydrator);
-						bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
+					IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+					t.NewCryptographicKey.Dehydrate(dehydrator);
+					SafeArrayHandle bytes = dehydrator.ToArray();
+					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					bytes.Return();
+					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
-						key2 = t.SuperChangeCryptographicKey;
-						accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-						dehydrator = DataSerializationFactory.CreateDehydrator();
-						key2.Dehydrate(dehydrator);
-						bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
-
-						key2 = t.PtahCryptographicKey;
-						accountKeySnapshot = snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-						dehydrator = DataSerializationFactory.CreateDehydrator();
-						key2.Dehydrate(dehydrator);
-						bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
-					}
+					//TODO: what else?
 				}
 			});
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IGenesisAccountPresentationTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IReclaimAccountsTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
-				},
-				InterpretTransactionStandardAccountKeysFunc = (t, blockId, snapshotCache, mode) => {
-
+				foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
+					affectedSnapshots.AddAccountId(accountset.Account);
 				}
-			});
+			}, interpretTransactionAccountsFunc: (t, parameters) => {
 
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IModeratorKeyChangeTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
+				foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
+					ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(accountset.Account);
 
-					affectedSnapshots.accountKeys.Add((t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id));
-
-				},
-				InterpretTransactionStandardAccountKeysFunc = (t, blockId, snapshotCache, mode) => {
-
-					if(mode == TransactionImpactSet.OperationModes.Real) {
-						(long SequenceId, byte Id) key = (t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id);
-
-						STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = snapshotCache.GetAccountKeySnapshotModify(key);
-
-						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
-						t.NewCryptographicKey.Dehydrate(dehydrator);
-						SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-						bytes.Return();
-						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToExtendedString();
-
-						//TODO: what else?
-					}
-				}
-			});
-
-			this.RegisterTransactionImpactSet(new TransactionImpactSet<IReclaimAccountsTransaction> {
-				GetImpactedSnapshotsFunc = (t, affectedSnapshots) => {
-
-					foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
-						affectedSnapshots.AddAccountId(accountset.Account);
-					}
-				},
-				InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
-
-					foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
-						ACCOUNT_SNAPSHOT accountSnapshot = snapshotCache.GetAccountSnapshotModify(accountset.Account);
-
-						//TODO: what to do here?
-					}
+					//TODO: what to do here?
 				}
 			});
 

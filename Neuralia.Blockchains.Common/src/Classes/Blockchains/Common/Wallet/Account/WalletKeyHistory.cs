@@ -13,6 +13,8 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
 	public interface IWalletKeyHistory {
 		[BsonId]
+		public ObjectId DbId { get; set; }
+		
 		Guid Id { get; set; }
 
 		long DecommissionedTime { get; set; }
@@ -30,6 +32,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 	public abstract class WalletKeyHistory : IWalletKeyHistory {
 
 		[BsonId]
+		public ObjectId DbId { get; set; } = ObjectId.NewObjectId();
+		
 		public Guid Id { get; set; } = Guid.NewGuid();
 
 		public long DecommissionedTime { get; set; } = DateTime.UtcNow.Ticks;

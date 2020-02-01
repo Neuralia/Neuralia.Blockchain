@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public class SynthesizedBlockAccountSet {
 
-			public Dictionary<TransactionIdExtended, ITransaction> ConfirmedLocalTransactions { get; set; } = new Dictionary<TransactionIdExtended, ITransaction>();
+			public Dictionary<TransactionId, ITransaction> ConfirmedLocalTransactions { get; set; } = new Dictionary<TransactionId, ITransaction>();
 			public Dictionary<TransactionId, ITransaction> ConfirmedExternalsTransactions { get; set; } = new Dictionary<TransactionId, ITransaction>();
 
 			public Dictionary<TransactionId, ITransaction> ConfirmedTransactions { get; set; } = new Dictionary<TransactionId, ITransaction>();
@@ -48,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 			public DateTime Timestamp { get; set; }
 
 			public List<AccountId> DelegateAccounts { get; set; } = new List<AccountId>();
-			public Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.ElectedPeerShareTypes peerShareType, string selectedTransactions)> ElectedAccounts { get; set; } = new Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.ElectedPeerShareTypes peerType, string selectedTransactions)>();
+			public Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.MiningTiers electedTier, string selectedTransactions)> ElectedAccounts { get; set; } = new Dictionary<AccountId, (AccountId accountId, AccountId delegateAccountId, Enums.MiningTiers electedTier, string selectedTransactions)>();
 		}
 	}
 }

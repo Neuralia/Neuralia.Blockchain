@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -28,12 +29,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		protected readonly Stack<SerializationTransactionOperation> UndoOperations = new Stack<SerializationTransactionOperation>();
 
 		private bool commited;
-
+		private bool restored = false;
+		
 		public SerializationTransactionProcessor(string cachePath, IFileSystem fileSystem) {
 			this.cachePath = cachePath;
 			this.fileSystem = fileSystem;
 		}
 
+		public void Check(IChainDataWriteProvider chainDataWriteProvider) {
+			string filename = this.GetUndoFilePath();
+
+			if(this.fileSystem.File.Exists(filename)) {
+				this.LoadUndoOperations(chainDataWriteProvider);
+
+				this.Rollback();
+			}
+		}
 		private string GetUndoFilePath() {
 			return Path.Combine(this.cachePath, UNDO_FILE_NAME);
 		}
@@ -115,24 +126,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		}
 
 		public void RestoreSnapshot() {
+
+			if(this.restored) {
+				return;
+			}
 			this.Operations.Clear();
 
+			List<Action> actions = new List<Action>();
 			foreach(SerializationTransactionOperation entry in this.UndoOperations) {
-				entry.Undo();
+				actions.Add(() => entry.Undo());
 			}
+			
+			IndependentActionRunner.Run(actions);
 
 			this.UndoOperations.Clear();
+			this.restored = true;
 		}
 
 		public void Commit() {
 			this.commited = true;
-
-			try {
-				this.DeleteUndoFile();
-			} catch {
-				// do nothing, its not so important
-			}
 		}
+		
+		public void Uncommit() {
+
+			this.commited = false;
+		}
+
 
 		public void Rollback() {
 			if(!this.commited) {
@@ -152,7 +171,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 
 		private void Dispose(bool disposing) {
 			if(!this.IsDisposed && disposing) {
-				this.Rollback();
+				if(this.commited) {
+					this.DeleteUndoFile();
+				} else {
+					this.Rollback();
+				}
 			}
 			this.IsDisposed = true;
 		}

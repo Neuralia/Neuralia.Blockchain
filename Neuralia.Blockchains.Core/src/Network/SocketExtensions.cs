@@ -45,16 +45,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
 				socket.IOControl(IOControlCode.KeepAliveValues, inOptionValues, null);
 			}
-
-			//TODO: at the moment of this writing, linux and macos do not support keep alive interval. code is almost comitted, check this again later
-			//https://github.com/dotnet/corefx/issues/25040
-			//https://github.com/dotnet/corefx/pull/29963
+			
 			socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-
-			if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
-				// implement this when Portable support for TCP keepalive is functional
-				//socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, true);
-			}
 		}
 
 		public static void InitializeSocketParameters(this Socket socket) {
@@ -66,7 +58,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			// The socket will linger for 3 seconds after 
 			// Socket.Close is called.
-			socket.LingerState = new LingerOption(true, 3);
+			socket.LingerState = new LingerOption(true, 10);
 
 			// Don't allow another socket to bind to this port.
 			socket.ExclusiveAddressUse = true;
@@ -189,6 +181,21 @@ namespace Neuralia.Blockchains.Core.Network {
 				return false;
 			}
 
+			// sometimes the empty send technique does not work (with network streams notably), so we do a poll to confirm.
+			try {
+				success = !(socket.Poll(1, SelectMode.SelectRead) && socket.Available == 0);
+			} catch(SocketException) {
+				return false;
+			}
+			
+			if(!success) {
+				return false;
+			}
+			
+			if(!socket.Connected) {
+				return false;
+			}
+			
 			// note: the bellow technique does not work for us. the connection might have no data and be perfectly valid
 			// // finally, poll the sock to see if we are still connected
 			// try {

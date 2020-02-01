@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Messages.Components;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
@@ -35,7 +37,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public readonly ITcpConnection connection;
 		public readonly Directions direction;
 
-		public readonly Dictionary<Enums.PeerTypes, NodeAddressInfoList> PeerNodes = new Dictionary<Enums.PeerTypes, NodeAddressInfoList>();
+		public NodeAddressInfoList PeerNodes = new NodeAddressInfoList();
 
 		/// <summary>
 		///     here we store the peer's reported version for each blockchain, and if we consider them to be valid as per our
@@ -74,18 +76,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     the IP and listening port of the client, since it is different than the one we see here. used to propagate the peer
 		///     ip.
 		/// </summary>
-		public NodeAddressInfo NodeAddressInfoInfo => this.NodeActivityInfo?.Node;
+		public NodeAddressInfo NodeAddressInfo => this.NodeActivityInfo?.Node;
 
-		public Enums.PeerTypes PeerType {
-			get => this.NodeAddressInfoInfo?.PeerType ?? Enums.PeerTypes.Unknown;
-			set => this.NodeAddressInfoInfo.PeerType = value;
+		public NodeInfo NodeInfo {
+			get => this.NodeAddressInfo?.PeerInfo ?? new NodeInfo(Enums.GossipSupportTypes.None, Enums.PeerTypes.Unknown);
+			set => this.NodeAddressInfo.PeerInfo = value;
 		}
 
-		public string ScoppedIp => this.NodeAddressInfoInfo?.ScoppedIp;
-		public string ScoppedAdjustedIp => this.NodeAddressInfoInfo?.ScoppedAdjustedIp;
+		public string ScoppedIp => this.NodeAddressInfo?.ScoppedIp;
+		public string ScoppedAdjustedIp => this.NodeAddressInfo?.ScoppedAdjustedIp;
 
-		public string Ip => this.NodeAddressInfoInfo?.Ip;
-		public string AdjustedIp => this.NodeAddressInfoInfo?.AdjustedIp;
+		public string Ip => this.NodeAddressInfo?.Ip;
+		public string AdjustedIp => this.NodeAddressInfo?.AdjustedIp;
 
 		/// <summary>
 		///     tells is if this connection is there but supports no chain at all
@@ -158,12 +160,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.Disposed?.Invoke(this);
 		}
 
-		public void SetPeerNodes(Dictionary<Enums.PeerTypes, NodeAddressInfoList> peerNodes) {
-			this.PeerNodes.Clear();
-
-			foreach(var entry in peerNodes) {
-				this.PeerNodes[entry.Key] = new NodeAddressInfoList(entry.Key, entry.Value);
-			}
+		public void SetPeerNodes(NodeAddressInfoList peerNodes) {
+			this.PeerNodes = new NodeAddressInfoList(peerNodes.Nodes);
 		}
 
 		public void SetGeneralSettings(GeneralSettings generalSettings) {
@@ -193,13 +191,16 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
+				
+				// set this now, to prevent loopbacks
+				this.IsDisposed = true;
 				try {
 					this.connection.Dispose();
 				} finally {
 					this.TriggerDisposed();
 				}
 			}
-			this.IsDisposed = true;
+			
 		}
 
 		~PeerConnection() {

@@ -16,6 +16,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public string MinimumWarningVersionAllowed { get; set; }
 		public string MinimumVersionAllowed { get; set; }
 		public int MaxBlockInterval { get; set; }
+		public bool AllowGossipPresentations { get; set; }
 
 		public virtual void ConvertToSnapshotEntry(IChainOptionsSnapshot other, ICardUtils cardUtils) {
 

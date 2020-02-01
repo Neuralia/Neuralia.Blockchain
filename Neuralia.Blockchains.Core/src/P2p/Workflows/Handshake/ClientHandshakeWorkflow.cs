@@ -10,6 +10,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.Base;
 using Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages;
 using Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Serilog;
@@ -80,9 +81,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			ClientHandshakeWorkflow.ConnectingNonces.AddSafe(handshakeTrigger.Message.nonce, true);
 
 			// now the supported chains and settings
-			handshakeTrigger.Message.chainSettings = this.networkingService.ChainSettings;
-
-			handshakeTrigger.Message.peerType = GlobalSettings.Instance.PeerType;
+			handshakeTrigger.Message.nodeInfo = GlobalSettings.Instance.NodeInfo;
 
 			handshakeTrigger.Message.generalSettings = this.networkingService.GeneralSettings;
 			
@@ -113,7 +112,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					Log.Verbose("Failed to connect to peer");
 
 					// this can happen if for some reason the other side cuts the connection early.
-					this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfoInfo);
+					this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
 
 					return false;
 				}
@@ -136,14 +135,14 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 						Log.Verbose("We are already connected to this peer. removing");
 
 						// let's make the connection as one of ours.
-						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfoInfo);
+						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
 
 						return false;
 					} else if(serverHandshake.Message.Status == ServerHandshake<R>.HandshakeStatuses.AlreadyConnecting) {
 						Log.Verbose("We are already connecting to this peer. removing");
 
 						// let's make the connection as one of ours.
-						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfoInfo);
+						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
 
 						return false;
 					} else {
@@ -155,7 +154,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				}
 
 				// lets take note of this peer's type
-				this.serverConnection.PeerType = serverHandshake.Message.peerType;
+				this.serverConnection.NodeInfo = serverHandshake.Message.nodeInfo;
 
 				var clientConfirm = this.ProcessServerHandshake(handshakeTrigger, serverHandshake.Message, this.serverConnection);
 
@@ -179,8 +178,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
 
 					return true;
-
-				}
+				} 
 			} finally {
 				if(ClientHandshakeWorkflow.ConnectingNonces.ContainsKey(handshakeTrigger.Message.nonce)) {
 					ClientHandshakeWorkflow.ConnectingNonces.RemoveSafe(handshakeTrigger.Message.nonce);
@@ -225,9 +223,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			var clientConfirm = this.MessageFactory.CreateClientConfirmSet(handshakeTrigger.Header);
 			Log.Verbose("Sending again correlation id {0}", this.CorrelationId);
 
-			if(serverHandshake.peerType != Enums.PeerTypes.Hub) {
+			if(serverHandshake.nodeInfo != NodeInfo.Hub) {
 				// first, lets confirm their time definition is within acceptable range
-				if(!this.timeService.WithinAcceptableRange(serverHandshake.localTime)) {
+				if(!this.timeService.WithinAcceptableRange(serverHandshake.localTime, TimeSpan.FromSeconds(3))) {
 					clientConfirm.Message.Status = ServerHandshake<R>.HandshakeStatuses.TimeOutOfSync;
 
 					Log.Verbose("Sending handshake negative response");
@@ -254,7 +252,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				peerConnectionn.SetGeneralSettings(serverHandshake.generalSettings);
 				
 				// now we check the blockchains and the version they allow
-				foreach(var chainSetting in serverHandshake.chainSettings) {
+				foreach(var chainSetting in serverHandshake.nodeInfo.GetChainSettings()) {
 
 					// validate the blockchain valid minimum version
 					peerConnectionn.AddSupportedChain(chainSetting.Key, this.networkingService.IsChainVersionValid(chainSetting.Key, serverHandshake.clientSoftwareVersion));
@@ -288,21 +286,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					this.networkingService.ConnectionStore.AddPeerReportedConnectable(serverHandshake.Connectable.Value, source);
 				}
 
-				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(serverHandshake.PerceivedIP, source);
+				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(IPUtils.GuidToIP(serverHandshake.PerceivedIP), source);
 
 				// then send our OK
-
-				// now we decide what kind of list to share with our peer. power ones should get power peers
-				ConnectionStore.PeerSelectionHeuristic heuristic = ConnectionStore.PeerSelectionHeuristic.Any;
-
-				if(Enums.SimplePeerTypes.Contains(serverHandshake.peerType)) {
-					heuristic = ConnectionStore.PeerSelectionHeuristic.Simple;
-				} else {
-					heuristic = ConnectionStore.PeerSelectionHeuristic.Powers;
-				}
-
+				
 				// lets send the server our list of nodeAddressInfo IPs
-				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(heuristic, new[] {peerConnectionn.NodeAddressInfoInfo}.ToList(), 20));
+
+				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(serverHandshake.nodeInfo, serverHandshake.nodeInfo.GetSupportedBlockchains(), NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), 20));
 			} else {
 
 				if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.SkipHubCheck && !this.networkingService.ConnectionStore.IsNeuraliumHub(peerConnectionn)) {
@@ -311,10 +301,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					return null;
 				}
 
-				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(serverHandshake.PerceivedIP, ConnectionStore.PublicIpSource.Hub);
+				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(IPUtils.GuidToIP(serverHandshake.PerceivedIP), ConnectionStore.PublicIpSource.Hub);
 
 				// lets send the server our list of nodeAddressInfo IPs
-				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(ConnectionStore.PeerSelectionHeuristic.Powers, new[] {peerConnectionn.NodeAddressInfoInfo}.ToList(), 20));
+				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(NodeInfo.Hub, this.networkingService.SupportsChains, NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), 20));
 			}
 
 			// generate a random nonce and send it to the server
@@ -327,7 +317,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			if(serverHandshakeConfirm.Status == ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.CanGoNoFurther) {
 
-				if(serverHandshake.peerType != Enums.PeerTypes.Hub) {
+				if(serverHandshake.nodeInfo != NodeInfo.Hub) {
 					Log.Verbose("The peer stops the connection like a hub, but does not report as one. This is illegal");
 
 					return false;
@@ -345,9 +335,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				this.networkingService.ConnectionStore.AddAvailablePeerNodes(serverHandshakeConfirm.nodes, false);
 
 				Log.Verbose("Server tells us it can go no further. we will now disconnect");
-
-				peerConnectionn.connection.Close();
-
+				
 				// this connection is not added, goes no further
 				return false;
 			}
@@ -366,11 +354,11 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			if(serverHandshakeConfirm.Status != ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Ok) {
 				Log.Verbose("Something wrong happened, we can go no further.");
-
+				
 				return false;
 			}
 
-			if(serverHandshake.peerType == Enums.PeerTypes.Hub) {
+			if(serverHandshake.nodeInfo == NodeInfo.Hub) {
 				Log.Verbose("The peer reported as a hub, but did not Stop the connection when it should. This is illegal");
 
 				return false;

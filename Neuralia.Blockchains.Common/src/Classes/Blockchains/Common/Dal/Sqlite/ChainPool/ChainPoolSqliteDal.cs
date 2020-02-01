@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
+using Neuralia.Blockchains.Core.General.Versions;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.ChainPool {
@@ -21,7 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		where CHAIN_STATE_CONTEXT : DbContext, IChainPoolSqliteContext<CHAIN_POOL_PUBLIC_TRANSACTIONS>
 		where CHAIN_POOL_PUBLIC_TRANSACTIONS : ChainPoolSqlitePublicTransactions<CHAIN_POOL_PUBLIC_TRANSACTIONS>, new() {
 
-		public ChainPoolSqliteDal(string folderPath, BlockchainServiceSet serviceSet, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, chainDalCreationFactory.CreateChainPoolContext<CHAIN_STATE_CONTEXT>, serializationType) {
+		public ChainPoolSqliteDal(string folderPath, BlockchainServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateChainPoolContext<CHAIN_STATE_CONTEXT>, serializationType) {
 
 		}
 
@@ -120,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		}
 
 		protected virtual void PrepareTransactionEntry(CHAIN_POOL_PUBLIC_TRANSACTIONS entry, ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
-			entry.TransactionId = transactionEnvelope.Contents.Uuid.SimpleTransactionId.ToCompactString();
+			entry.TransactionId = transactionEnvelope.Contents.Uuid.ToCompactString();
 			entry.Timestamp = DateTime.UtcNow;
 			entry.Expiration = transactionEnvelope.GetExpirationTime(this.timeService, chainInception);
 		}

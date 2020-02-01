@@ -15,11 +15,13 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.Cha
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Digest;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Base;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Data;
 using Serilog;
@@ -59,9 +61,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		///     Here we store the clients with which we have a sync workflow already. It helps ensure a peer will only have one
 		///     sync at a time
 		/// </summary>
+		protected static readonly object clientIdWorkflowExistsLocker = new object();
 		protected static readonly ConcurrentDictionary<Guid, IWorkflow<IBlockchainEventsRehydrationFactory>> activeClientIds = new ConcurrentDictionary<Guid, IWorkflow<IBlockchainEventsRehydrationFactory>>();
 
-		protected readonly AppSettingsBase.BlockSavingModes blockchainSavingMode;
+		protected readonly NodeShareType shareType;
 
 		protected override TaskCreationOptions TaskCreationOptions => TaskCreationOptions.LongRunning;
 		
@@ -73,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			// this is a special workflow, and we make sure we are generous in waiting times, to accomodate everything that can happen
 			//TODO: set this to 3 minute
 			this.hibernateTimeoutSpan = TimeSpan.FromMinutes(3);
-			this.blockchainSavingMode = this.ChainConfiguration.BlockSavingMode;
+			this.shareType = this.ChainConfiguration.NodeShareType();
 
 			// allow only one per peer at a time
 			this.ExecutionMode = Workflow.ExecutingMode.SingleRepleacable;
@@ -88,7 +91,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		
 		protected override void PerformWork() {
 			try {
-				this.CheckShouldCancel();
+				this.CheckShouldStopThrow();
 
 				// check if this client already has an active sync workflow in progress
 				if(this.ClientIdWorkflowExistsAdd()) {
@@ -128,6 +131,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return this.NetworkPaused || this.shutdownRequest || this.CheckCancelRequested();
 		}
 		
+		protected void CheckShouldStopThrow() {
+			if(this.CheckShouldStop()) {
+				this.CancelTokenSource.Cancel();
+				this.CancelNeuralium.ThrowIfCancellationRequested();
+			}
+		}
+		
 		/// <summary>
 		///     Ensure that we dont stop during a sync step if a shutdown has been requested
 		/// </summary>
@@ -137,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.shutdownRequest = true;
 			// ok, if this happens while we are syncing, we ask for a grace period until we are ready to clean exit
 			if(this.IsBusy) {
-				beacons.Add(new TaskFactory().StartNew(() => {
+				beacons.Add(Task.Run(() => {
 
 					while(true) {
 						if(!this.IsBusy) {
@@ -186,18 +196,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				serverHandshake.Message.ChainInception = this.ChainStateProvider.ChainInception;
 				serverHandshake.Message.DiskBlockHeight = this.ChainStateProvider.DiskBlockHeight;
 				serverHandshake.Message.DigestHeight = this.ChainStateProvider.DigestHeight;
-				serverHandshake.Message.BlockSavingMode = this.blockchainSavingMode;
+				serverHandshake.Message.ShareType = this.shareType;
 
 				serverHandshake.Message.EarliestBlockHeight = 0;
 
-				if((this.blockchainSavingMode == AppSettingsBase.BlockSavingModes.BlockOnly) || (this.blockchainSavingMode == AppSettingsBase.BlockSavingModes.DigestAndBlocks) || (this.ChainStateProvider.DigestHeight == 0)) {
+				if(this.shareType.OnlyBlocks || this.shareType.HasDigestsAndBlocks || (this.ChainStateProvider.DigestHeight == 0)) {
 					if(this.ChainStateProvider.DiskBlockHeight == 1) {
 						serverHandshake.Message.EarliestBlockHeight = 1;
 					} else if(this.ChainStateProvider.DiskBlockHeight > 1) {
 						// in this case, the earliest block we have is the second one, since we skip the genesis which everyone has
 						serverHandshake.Message.EarliestBlockHeight = 2;
 					}
-				} else if(this.blockchainSavingMode == AppSettingsBase.BlockSavingModes.DigestsThenBlocks) {
+				} else if(this.shareType.HasDigestsThenBlocks) {
 					// if we have a digest and nothing above, thats what we have
 					serverHandshake.Message.EarliestBlockHeight = this.ChainStateProvider.DigestBlockHeight;
 
@@ -228,7 +238,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						bool hasMessages = false;
 
-						while(DateTime.Now < timeout) {
+						while(DateTime.Now <= timeout) {
 						
 							if(this.CheckShouldStop()) {
 								
@@ -269,7 +279,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								break;
 							}
 
-							this.CheckShouldCancel();
+							this.CheckShouldStopThrow();
 
 							if(requestSet?.BaseMessage is REQUEST_BLOCK_INFO blockInfoRequestMessage) {
 								Log.Verbose($"Sending block id {blockInfoRequestMessage.Id} info to peer {this.PeerConnection.ScoppedAdjustedIp}.");
@@ -351,8 +361,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								var blockSlices = this.FetchBlockSlice(blockRequestMessage.Id, offsets, nextBlockId);
 
 								foreach(var slice in blockSlices.blockSlice.Entries) {
-
-									sendBlockMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice(blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key].Length, blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key].Offset, slice.Value));
+									
+									long offset = 0;
+									long length = 0;
+									
+									if(blockRequestMessage.SlicesInfo.SlicesInfo.ContainsKey(slice.Key)) {
+										DataSliceInfo sliceInfo = blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key];
+										offset = sliceInfo.Offset;
+										length = sliceInfo.Length;
+										
+										sendBlockMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice(length, offset, slice.Value));
+									}
 								}
 
 								sendBlockMessage.Message.HasNextInfo = blockRequestMessage.IncludeNextInfo;
@@ -593,7 +612,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected virtual void RemoveClientIdWorkflow() {
 
-			activeClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
+			lock(clientIdWorkflowExistsLocker) {
+				activeClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
+			}
 		}
 
 		/// <summary>
@@ -602,20 +623,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <returns></returns>
 		protected virtual bool ClientIdWorkflowExistsAdd() {
 
-			if(activeClientIds.ContainsKey(this.PeerConnection.ClientUuid) && !this.TestingMode) {
+			lock(clientIdWorkflowExistsLocker) {
+				if(activeClientIds.ContainsKey(this.PeerConnection.ClientUuid) && !this.TestingMode) {
 
-				var workflow = activeClientIds[this.PeerConnection.ClientUuid];
+					var workflow = activeClientIds[this.PeerConnection.ClientUuid];
 
-				if(!workflow.IsCompleted) {
-					return true; // its there, we can't continue
+					if(!workflow.IsCompleted) {
+						return true; // its there, we can't continue
+					}
+
+					// its fine, it is done, we can remove it and act like it was never there
+					activeClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
 				}
 
-				// its fine, it is done, we can remove it and act like it was never there
-				activeClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
+				// lets add it now
+				activeClientIds.AddSafe(this.PeerConnection.ClientUuid, this);
 			}
-
-			// lets add it now
-			activeClientIds.AddSafe(this.PeerConnection.ClientUuid, this);
 
 			return false;
 

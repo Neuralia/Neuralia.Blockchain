@@ -1,23 +1,28 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainPool;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
-	public interface IEventPoolProvider {
+	public interface IEventPoolProvider: IChainProvider {
 		AppSettingsBase.TransactionPoolHandling TransactionPoolHandlingMode { get; }
 
 		bool EventPoolEnabled { get; }
 		bool SaveTransactionEnvelopes { get; }
 
 		void InsertTransaction(ITransactionEnvelope transactionEnvelope);
-		List<(ITransactionEnvelope envelope, TransactionId transactionId)> GetTransactions();
+		Task<List<(ITransactionEnvelope envelope, TransactionId transactionId)>> GetTransactions();
 		List<TransactionId> GetTransactionIds();
 		void DeleteTransactions(List<TransactionId> transactionIds);
 		void DeleteExpiredTransactions();
@@ -91,7 +96,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 
 					// save it for future use
-					FileExtensions.OpenWrite(Path.Combine(publicPath, transactionEnvelope.Contents.Uuid.SimpleTransactionId.ToString()), envelope);
+					FileExtensions.OpenWrite(Path.Combine(publicPath, transactionEnvelope.Contents.Uuid.ToString()), envelope);
 				}
 			}
 		}
@@ -104,18 +109,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ChainPoolDal.GetTransactions();
 		}
 
-		public virtual List<(ITransactionEnvelope envelope, TransactionId transactionId)> GetTransactions() {
+		public virtual Task<List<(ITransactionEnvelope envelope, TransactionId transactionId)>> GetTransactions() {
 
 			if(!this.EventPoolEnabled) {
-				return new List<(ITransactionEnvelope envelope, TransactionId transactionId)>(); // if disabled, we return nothing
+				return Task.FromResult(new List<(ITransactionEnvelope envelope, TransactionId transactionId)>()); // if disabled, we return nothing
 			}
 
 			var poolTransactions = this.GetTransactionIds();
 
-			var results = new List<(ITransactionEnvelope envelope, TransactionId transactionId)>();
+			var results = new ConcurrentBag<(ITransactionEnvelope envelope, TransactionId transactionId)>();
 			string publicPath = this.GetPublicPath();
 
-			foreach(TransactionId trx in poolTransactions) {
+			Parallel.ForEach(poolTransactions, trx => {
 				string trxfile = Path.Combine(publicPath, trx.ToString());
 
 				ITransactionEnvelope envelope = null;
@@ -123,13 +128,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(this.SaveTransactionEnvelopes && File.Exists(trxfile)) {
 					SafeArrayHandle trxBytes = ByteArray.WrapAndOwn(File.ReadAllBytes(trxfile));
 
-					envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(trxBytes);
+					try {
+						envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(trxBytes);
+					}
+					catch(UnrecognizedElementException urex) {
+						
+
+						throw;
+					}
 				}
 
 				results.Add((envelope, trx));
-			}
+			});
 
-			return results;
+			return Task.FromResult(results.ToList());
 		}
 
 		public virtual void DeleteExpiredTransactions() {

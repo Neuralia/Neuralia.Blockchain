@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Abstractions;
 using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
@@ -16,6 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where KEY : struct, IEquatable<KEY> {
 
 		protected readonly Func<INPUT_QUERY_KEY, QUERY_KEY> convertKeys;
+		public Action<ModelBuilder> ModelBuilder { get; set; }
 
 		public SingleSqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem, Func<INPUT_QUERY_KEY, QUERY_KEY> convertKeys, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base(bandName, baseFolder, scopeFolder, enabledBands, fileSystem, keyDeclaration) {
 			this.convertKeys = convertKeys;
@@ -24,11 +26,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		protected override SingleDigestChannelBandFileNamingProvider CreateNamingProvider() {
 			return new SingleDigestChannelBandFileNamingProvider();
 		}
+		
+		protected void PrepareDb() {
+			string expandedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedExpandedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] { }));
 
+			this.InterpretationProvider.SetActiveFilename(Path.GetFileName(expandedFilename), Path.GetDirectoryName(expandedFilename));
+
+			if(this.ModelBuilder != null) {
+				this.InterpretationProvider.InitModel(this.ModelBuilder);
+			}
+		}
+		
 		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {
 			var results = new Dictionary<int, SafeArrayHandle>();
 
-			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.scopeFolder, new object[] { }));
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] { }));
 
 			results.Add(this.BandType.ToInt32(null), this.HashFile(archivedFilename));
 
@@ -45,13 +57,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public override SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length) {
 
-			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.scopeFolder, new object[] { }));
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] { }));
 
 			return FileExtensions.ReadBytes(archivedFilename, offset, length, this.fileSystem);
 		}
 
+		public override void WriteFileBytes(int fileId, uint partIndex, SafeArrayHandle data) {
+
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] { }));
+
+			FileExtensions.EnsureFileExists(archivedFilename, this.fileSystem);
+			FileExtensions.WriteAllBytes(archivedFilename, data, this.fileSystem);
+		}
+		
 		public override DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> QueryCard(INPUT_QUERY_KEY key) {
 
+			this.PrepareDb();
+			
 			string extractedFilename = this.EnsureFilesetExtracted();
 
 			this.InterpretationProvider.SetActiveFilename(Path.GetFileName(extractedFilename), Path.GetDirectoryName(extractedFilename));
@@ -64,7 +86,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public List<CARD_TYPE> QueryCards() {
-
+			
+			this.PrepareDb();
+			
 			string extractedFilename = this.EnsureFilesetExtracted();
 
 			this.InterpretationProvider.SetActiveFilename(Path.GetFileName(extractedFilename), Path.GetDirectoryName(extractedFilename));

@@ -1,3 +1,4 @@
+using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Tools;
@@ -12,6 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		void RemoveTransaction(TransactionId transactionId);
 		void UpdateTransaction(TransactionId transactionId, WalletTransactionCache.TransactionStatuses status, long gossipMessageHash);
 		IWalletTransactionCache GetTransactionBase(TransactionId transactionId);
+		int ClearTimedOutTransactions(DateTime lastBlockTimestamp);
 	}
 
 	public class WalletTransactionCacheFileInfo<T> : SingleEntryWalletFileInfo<T>, IWalletTransactionCacheFileInfo
@@ -136,6 +138,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					}
 
 					return null;
+				});
+			}
+		}
+
+		/// <summary>
+		/// remove all timed outs
+		/// </summary>
+		/// <returns></returns>
+		public int ClearTimedOutTransactions(DateTime lastBlockTimestamp) {
+			lock(this.locker) {
+				return this.RunQueryDbOperation(litedbDal => {
+					if(litedbDal.CollectionExists<T>()) {
+
+						return litedbDal.Remove<T>(k => k.Expiration < lastBlockTimestamp);
+					}
+
+					return 0;
 				});
 			}
 		}

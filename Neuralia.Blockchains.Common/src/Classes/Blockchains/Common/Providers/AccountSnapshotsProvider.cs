@@ -27,7 +27,7 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
-	public interface IAccountSnapshotsProvider {
+	public interface IAccountSnapshotsProvider : IChainProvider {
 
 		//		void InsertModeratorKey(TransactionId transactionId, byte keyId, ArrayWrapper key);
 		//		void UpdateModeratorKey(TransactionId transactionId, byte keyId, ArrayWrapper key);
@@ -85,15 +85,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		List<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificate(List<int> certificateIds, AccountId accountId, AccreditationCertificateType certificateType, Enums.CertificateApplicationTypes applicationType);
 		List<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificate(List<int> certificateIds, AccountId accountId, AccreditationCertificateType[] certificateTypes, Enums.CertificateApplicationTypes applicationType);
+		ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccreditationCertificate(int certificateId);
+
 	}
 
-	public interface IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
+	public interface IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new()
+		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>, new()
+		where STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
+		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, new()
+		where JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
 		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccountEntry, new()
 		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshotEntry, new()
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
@@ -101,13 +103,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshotEntry, new() {
 	}
 
-	public interface IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_DAL, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_DAL, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_DAL, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_DAL, TRACKED_ACCOUNTS_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
+	public interface IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_DAL, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_DAL, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_DAL, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_DAL, TRACKED_ACCOUNTS_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where STANDARD_ACCOUNT_SNAPSHOT_DAL : class, IStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT>
-		where STANDARD_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IStandardAccountSnapshotContext<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT>
-		where JOINT_ACCOUNT_SNAPSHOT_DAL : class, IJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
-		where JOINT_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IJointAccountSnapshotContext<JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
+		where STANDARD_ACCOUNT_SNAPSHOT_DAL : class, IStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>
+		where STANDARD_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IStandardAccountSnapshotContext<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>
+		where JOINT_ACCOUNT_SNAPSHOT_DAL : class, IJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
+		where JOINT_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IJointAccountSnapshotContext<JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL : class, IAccreditationCertificatesSnapshotDal<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IAccreditationCertificatesSnapshotContext<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL : class, IAccountKeysSnapshotDal<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEY_SNAPSHOT>
@@ -116,10 +118,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where CHAIN_OPTIONS_SNAPSHOT_CONTEXT : DbContext, IChainOptionsSnapshotContext<CHAIN_OPTIONS_SNAPSHOT>
 		where TRACKED_ACCOUNTS_DAL : class, ITrackedAccountsDal
 		where TRACKED_ACCOUNTS_CONTEXT : DbContext, ITrackedAccountsContext
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new()
+		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>, new()
+		where STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
+		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, new()
+		where JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
 		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccountEntry, new()
 		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshotEntry, new()
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
@@ -133,13 +135,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	/// <typeparam name="ACCOUNT_SNAPSHOT_DAL"></typeparam>
 	/// <typeparam name="ACCOUNT_SNAPSHOT_CONTEXT"></typeparam>
 	/// <typeparam name="STANDARD_ACCOUNT_SNAPSHOT"></typeparam>
-	public abstract class AccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_DAL, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_DAL, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_DAL, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_DAL, TRACKED_ACCOUNTS_CONTEXT, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_DAL, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_DAL, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_DAL, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_DAL, TRACKED_ACCOUNTS_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
+	public abstract class AccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_DAL, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_DAL, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_DAL, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_DAL, TRACKED_ACCOUNTS_CONTEXT, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_DAL, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_DAL, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_DAL, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_DAL, TRACKED_ACCOUNTS_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where STANDARD_ACCOUNT_SNAPSHOT_DAL : class, IStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT>
-		where STANDARD_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IStandardAccountSnapshotContext<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT>
-		where JOINT_ACCOUNT_SNAPSHOT_DAL : class, IJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
-		where JOINT_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IJointAccountSnapshotContext<JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
+		where STANDARD_ACCOUNT_SNAPSHOT_DAL : class, IStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>
+		where STANDARD_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IStandardAccountSnapshotContext<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>
+		where JOINT_ACCOUNT_SNAPSHOT_DAL : class, IJointAccountSnapshotDal<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
+		where JOINT_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IJointAccountSnapshotContext<JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_DAL : class, IAccreditationCertificatesSnapshotDal<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT : DbContext, IAccreditationCertificatesSnapshotContext<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where STANDARD_ACCOUNT_KEYS_SNAPSHOT_DAL : class, IAccountKeysSnapshotDal<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEY_SNAPSHOT>
@@ -149,10 +151,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where TRACKED_ACCOUNTS_DAL : class, ITrackedAccountsDal<TRACKED_ACCOUNTS_CONTEXT>
 		where TRACKED_ACCOUNTS_CONTEXT : DbContext, ITrackedAccountsContext
 		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new()
+		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
+		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshotEntry<JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
 		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccountEntry, new()
 		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshotEntry, new()
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
@@ -206,6 +208,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}, certificateId);
 		}
 
+		public ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccreditationCertificate(int certificateId) {
+			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificate(db => {
+
+				return db.AccreditationCertificates.SingleOrDefault(c => c.CertificateId == certificateId);
+			}, certificateId);
+		}
+		
 		public List<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificate(List<int> certificateIds, AccountId accountId, AccreditationCertificateType certificateType, Enums.CertificateApplicationTypes applicationType) {
 			return this.GetAccreditationCertificate(certificateIds, accountId, new[] {certificateType}, applicationType);
 		}
@@ -240,7 +249,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				var containsCertificates = db.AccreditationCertificateAccounts.Where(c => c.AccountId == accountId.ToLongRepresentation()).Select(c => c.CertificateId).ToList();
 
 				// ok, the account is in the certificate, lets select it itself
-				return db.AccreditationCertificates.Where(c => containsCertificates.Contains(c.CertificateId) && certificateTypeValues.Contains(c.CertificateType) && c.ApplicationType.HasFlag(applicationType)).ToList();
+				return db.AccreditationCertificates.Where(c => c.AssignedAccount == accountId.ToLongRepresentation() || containsCertificates.Contains(c.CertificateId) && certificateTypeValues.Contains(c.CertificateType) && c.ApplicationType.HasFlag(applicationType)).ToList();
 			});
 		}
 
@@ -261,7 +270,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public void StartTrackingConfigAccounts() {
 			ChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-			this.StartTrackingAccounts(chainConfiguration.TrackedSnapshotAccountsList.Select(a => new AccountId(a.accountId, a.accountType)).ToList());
+			if(chainConfiguration.AccountSnapshotTrackingMethod == AppSettingsBase.SnapshotIndexTypes.List) {
+				// ensure we update the tracking list
+				this.StartTrackingAccounts(chainConfiguration.TrackedSnapshotAccountsList.Select(AccountId.FromString).ToList());
+			}
 		}
 
 		public void StartTrackingAccounts(List<AccountId> accountIds) {
@@ -287,6 +299,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public bool AnyAccountTracked(List<AccountId> accountIds) {
+			if(!accountIds.Any()) {
+				return false;
+			}
 			ChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			if(chainConfiguration.AccountSnapshotTrackingMethod == AppSettingsBase.SnapshotIndexTypes.None) {
@@ -305,6 +320,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public List<AccountId> AccountsTracked(List<AccountId> accountIds) {
+			if(!accountIds.Any()) {
+				return new List<AccountId>();
+			}
+			
 			ChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			if(chainConfiguration.AccountSnapshotTrackingMethod == AppSettingsBase.SnapshotIndexTypes.None) {
@@ -508,11 +527,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			standardAccountKeysDigestChannelCard.ConvertToSnapshotEntry(entry, this.GetCardUtils());
 
+			if(string.IsNullOrWhiteSpace(entry.CompositeKey)) {
+				entry.CompositeKey = this.GetCardUtils().GenerateCompositeKey(entry);
+			}
+
 			this.AccountKeysSnapshotDal.UpdateSnapshotDigestFromDigest(db => {
 
 				STANDARD_ACCOUNT_KEY_SNAPSHOT result = db.StandardAccountkeysSnapshots.SingleOrDefault(e => (e.AccountId == entry.AccountId) && (e.OrdinalId == entry.OrdinalId));
-
+				
 				if(result != null) {
+					
 					db.StandardAccountkeysSnapshots.Remove(result);
 					db.SaveChanges();
 				}
@@ -527,8 +551,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			accreditationCertificateDigestChannelCard.ConvertToSnapshotEntry(entry, this.GetCardUtils());
 
+			
 			this.AccreditationCertificateAccountSnapshotsDal.UpdateSnapshotDigestFromDigest(db => {
-
+				
 				ACCREDITATION_CERTIFICATE_SNAPSHOT result = db.AccreditationCertificates.SingleOrDefault(c => c.CertificateId == entry.CertificateId);
 
 				if(result != null) {
@@ -592,8 +617,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return results;
 		}
 
-		protected ISnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> GetSpecializedSnapshotsModificationHistoryStack(ISnapshotHistoryStackSet snapshotsModificationHistoryStack) {
-			return (ISnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>) snapshotsModificationHistoryStack;
+		protected ISnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> GetSpecializedSnapshotsModificationHistoryStack(ISnapshotHistoryStackSet snapshotsModificationHistoryStack) {
+			return (ISnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>) snapshotsModificationHistoryStack;
 
 		}
 
@@ -883,40 +908,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			db.StandardAccountSnapshots.Add(snapshot);
 
-			foreach(STANDARD_ACCOUNT_FEATURE_SNAPSHOT attribute in snapshot.AppliedFeatures) {
+			foreach(STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT attribute in snapshot.AppliedAttributes) {
 				db.StandardAccountSnapshotAttributes.Add(attribute);
 			}
 
 			return snapshot;
 		}
 
-		protected void UpdateFeatures<ACCOUNT_SNAPSHOT, ACCOUNT_FEATURE_SNAPSHOT>(ACCOUNT_SNAPSHOT snapshot, AccountId accountId, DbSet<ACCOUNT_FEATURE_SNAPSHOT> features)
-			where ACCOUNT_SNAPSHOT : class, IAccountSnapshotEntry<ACCOUNT_FEATURE_SNAPSHOT>
-			where ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry {
+		protected void UpdateFeatures<ACCOUNT_SNAPSHOT, ACCOUNT_ATTRIBUTE_SNAPSHOT>(ACCOUNT_SNAPSHOT snapshot, AccountId accountId, DbSet<ACCOUNT_ATTRIBUTE_SNAPSHOT> features)
+			where ACCOUNT_SNAPSHOT : class, IAccountSnapshotEntry<ACCOUNT_ATTRIBUTE_SNAPSHOT>
+			where ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry {
 
 			var existingAttributes = this.QueryDbSetEntityEntries(features, a => a.AccountId == accountId.ToLongRepresentation());
 
-			var snapshotAttributes = snapshot.AppliedFeatures.ToList();
+			var snapshotAttributes = snapshot.AppliedAttributes.ToList();
 
-			var certificateIds = existingAttributes.Select(a => a.CertificateId).ToList();
-			var snapshotCertificates = snapshotAttributes.Select(a => a.CertificateId).ToList();
+			var certificateIds = existingAttributes.Select(a => (a.CorrelationId, FeatureType: a.AttributeType, a.AccountId) ).ToList();
+			var snapshotCertificates = snapshotAttributes.Select(a =>  (a.CorrelationId, FeatureType: a.AttributeType, a.AccountId)).ToList();
 
 			// build the delta
-			var newAttributes = snapshotAttributes.Where(a => !certificateIds.Contains(a.CertificateId)).ToList();
-			var modifyAttributes = snapshotAttributes.Where(a => certificateIds.Contains(a.CertificateId)).ToList();
-			var removeAttributes = existingAttributes.Where(a => !snapshotCertificates.Contains(a.CertificateId)).ToList();
+			var newAttributes = snapshotAttributes.Where(a => !certificateIds.Contains( (a.CorrelationId, a.AttributeType, a.AccountId))).ToList();
+			var modifyAttributes = snapshotAttributes.Where(a => certificateIds.Contains( (a.CorrelationId, a.AttributeType, a.AccountId))).ToList();
+			var removeAttributes = existingAttributes.Where(a => !snapshotCertificates.Contains( (a.CorrelationId, a.AttributeType, a.AccountId))).ToList();
 
-			foreach(ACCOUNT_FEATURE_SNAPSHOT attribute in newAttributes) {
+			foreach(ACCOUNT_ATTRIBUTE_SNAPSHOT attribute in newAttributes) {
 				features.Add(attribute);
 			}
 
-			foreach(ACCOUNT_FEATURE_SNAPSHOT attribute in modifyAttributes) {
+			foreach(ACCOUNT_ATTRIBUTE_SNAPSHOT attribute in modifyAttributes) {
 
-				ACCOUNT_FEATURE_SNAPSHOT dbEntry = existingAttributes.Single(a => a.CertificateId == attribute.CertificateId);
+				ACCOUNT_ATTRIBUTE_SNAPSHOT dbEntry = existingAttributes.Single(a => a.CorrelationId == attribute.CorrelationId && a.AttributeType == attribute.AttributeType && a.AccountId == attribute.AccountId);
 				this.CardUtils.Copy(attribute, dbEntry);
 			}
 
-			foreach(ACCOUNT_FEATURE_SNAPSHOT attribute in removeAttributes) {
+			foreach(ACCOUNT_ATTRIBUTE_SNAPSHOT attribute in removeAttributes) {
 				features.Remove(attribute);
 			}
 		}

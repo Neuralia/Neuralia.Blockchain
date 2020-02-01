@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Core;
+﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
@@ -12,7 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	public class XmssmtCryptographicKey : XmssCryptographicKey, IXmssmtCryptographicKey {
 
 		public XmssmtCryptographicKey() {
-			this.BitSize = (byte) XMSSMTProvider.DEFAULT_HASH_BITS;
+			this.BitSize = XMSSMTProvider.DEFAULT_HASH_BITS;
 			this.TreeHeight = XMSSMTProvider.DEFAULT_XMSSMT_TREE_HEIGHT;
 			this.TreeLayer = XMSSMTProvider.DEFAULT_XMSSMT_TREE_LAYERS;
 		}
@@ -49,6 +50,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.XMSSMT;
+		}
+		
+		public override  void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+
+			if(walletKey is IXmssMTWalletKey xmssMtWalletKey) {
+				this.TreeLayer = (byte)xmssMtWalletKey.TreeLayers;
+			}
 		}
 	}
 }

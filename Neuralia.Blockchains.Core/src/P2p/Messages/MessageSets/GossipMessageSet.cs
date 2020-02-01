@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 
 		IGossipMessageMetadata MessageMetadata { get; }
 
-		Enums.PeerTypeSupport MinimumNodeTypeSupport { get; }
+		Enums.GossipSupportTypes MinimumNodeGossipSupport { get; }
 	}
 
 	public interface IGossipMessageSet<R> : IGossipMessageSet, INetworkMessageSet<R>
@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 			return hashNodeList;
 		}
 
-		public virtual Enums.PeerTypeSupport MinimumNodeTypeSupport => Enums.PeerTypeSupport.GossipBasic;
+		public virtual Enums.GossipSupportTypes MinimumNodeGossipSupport => Enums.GossipSupportTypes.Basic;
 
 		protected override void DehydrateContents(IDataDehydrator dehydrator) {
 

@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
-#if (NETSTANDARD2_0)
-using System.Text.Json;
-#else
+
 using System.Text.Json.Serialization;
-#endif
+
 
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
@@ -32,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public abstract class SynthesizedElectionResultAPI {
 			public byte Offset { get; set; }
 			public string Timestamp { get; set; }
-			public byte PeerType { get; set; }
+			public byte ElectedTier { get; set; }
 			public string DelegateAccountId { get; set; }
 			public string SelectedTransactions { get; set; }
 		}

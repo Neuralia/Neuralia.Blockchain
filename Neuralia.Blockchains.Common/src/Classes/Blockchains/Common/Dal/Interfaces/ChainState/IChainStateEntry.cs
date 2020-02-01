@@ -107,7 +107,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		/// </summary>
 		int MaxBlockInterval { get; set; }
 
+		/// <summary>
+		/// are presentations allowed to pass on gossip
+		/// </summary>
+		bool AllowGossipPresentations { get; set; }
+		
 		long MiningPassword { get; set; }
+		
+		byte[] MiningAutograph { get; set; }
+		
 		DateTime? LastMiningRegistrationUpdate { get; set; }
 	}
 

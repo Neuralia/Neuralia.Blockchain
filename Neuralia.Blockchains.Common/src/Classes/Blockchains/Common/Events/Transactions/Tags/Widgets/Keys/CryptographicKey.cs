@@ -1,10 +1,12 @@
 ﻿using System;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
@@ -16,6 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		Enums.KeyTypes Type { get; }
 		void Rehydrate(byte id, IDataRehydrator rehydrator);
+		void SetFromWalletKey(IWalletKey walletKey);
 	}
 
 	public abstract class CryptographicKey : ICryptographicKey {
@@ -91,6 +94,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		protected abstract void SetType();
+		
+		
+		public virtual void SetFromWalletKey(IWalletKey walletKey) {
+
+			this.Id = walletKey.KeyAddress.OrdinalId;
+			this.Key.Entry = ByteArray.CreateClone(walletKey.PublicKey);
+
+		}
 	}
 
 }

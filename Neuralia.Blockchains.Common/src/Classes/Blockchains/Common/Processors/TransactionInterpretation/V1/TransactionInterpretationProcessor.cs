@@ -8,23 +8,26 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Speci
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1 {
 
-	public abstract partial class TransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
+	public abstract partial class TransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
+		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttribute, new()
+		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttribute, new()
 		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
 		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
@@ -36,10 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		private readonly Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys;
 		private readonly TransactionImpactSet.OperationModes operationMode;
-
-		protected readonly Dictionary<Type, ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>> overriddenTransactionImpactSets = new Dictionary<Type, ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>>();
-
-		protected readonly Dictionary<Type, ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>> transactionImpactSets = new Dictionary<Type, ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>>();
+		
 		private ImmutableList<AccountId> dispatchedAccounts;
 
 		private bool isInitialized;
@@ -48,7 +48,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		private ImmutableList<AccountId> publishedAccounts;
 
-		protected SnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCacheSet;
+		protected SnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCacheSet;
+		protected  IAccreditationCertificateProvider AccreditationCertificateProvider => ( IAccreditationCertificateProvider)this.centralCoordinator.ChainComponentProvider.AccreditationCertificateProviderBase;
 
 		public TransactionInterpretationProcessor(CENTRAL_COORDINATOR centralCoordinator) : this(centralCoordinator, TransactionImpactSet.OperationModes.Real) {
 
@@ -92,15 +93,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				this.RegisterTransactionImpactSets();
 
 				// lets connect all our events
-				foreach(var transactionImpactSet in this.transactionImpactSets.Values) {
-					// since the this functions can change over time, we need to wrap them into calling functions. we can not '=' them directly unless we did a rebind.
-					transactionImpactSet.IsAnyAccountTracked = ids => this.IsAnyAccountTracked?.Invoke(ids) ?? false;
-					transactionImpactSet.GetTrackedAccounts = ids => this.GetTrackedAccounts?.Invoke(ids) ?? new List<AccountId>();
 
-					transactionImpactSet.IsAnyAccountKeysTracked = (ids, accounts) => this.IsAnyAccountKeysTracked?.Invoke(ids, accounts) ?? false;
-					transactionImpactSet.IsAnyAccreditationCertificateTracked = ids => this.IsAnyAccreditationCertificateTracked?.Invoke(ids) ?? false;
-					transactionImpactSet.IsAnyChainOptionTracked = ids => this.IsAnyChainOptionTracked?.Invoke(ids) ?? false;
-				}
+				// since the this functions can change over time, we need to wrap them into calling functions. we can not '=' them directly unless we did a rebind.
+				this.TransactionImpactSets.IsAnyAccountTracked = ids => this.IsAnyAccountTracked?.Invoke(ids) ?? false;
+				this.TransactionImpactSets.GetTrackedAccounts = ids => this.GetTrackedAccounts?.Invoke(ids) ?? new List<AccountId>();
+
+				this.TransactionImpactSets.IsAnyAccountKeysTracked = (ids, accounts) => this.IsAnyAccountKeysTracked?.Invoke(ids, accounts) ?? false;
+				this.TransactionImpactSets.IsAnyAccreditationCertificateTracked = ids => this.IsAnyAccreditationCertificateTracked?.Invoke(ids) ?? false;
+				this.TransactionImpactSets.IsAnyChainOptionTracked = ids => this.IsAnyChainOptionTracked?.Invoke(ids) ?? false;
+				
 
 				this.snapshotCacheSet.RequestStandardAccountSnapshots += this.RequestStandardAccountSnapshots;
 				this.snapshotCacheSet.RequestJointAccountSnapshots += this.RequestJointAccountSnapshots;
@@ -120,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			}
 		}
 
-		public SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> GetEntriesModificationStack() {
+		public SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> GetEntriesModificationStack() {
 			return this.snapshotCacheSet.GetEntriesModificationStack();
 		}
 
@@ -160,12 +161,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 				var trackedElectedAccounts = this.GetTrackedAccounts(finalElectionResult.ElectedCandidates.Keys.ToList());
 
-				foreach(var entry in finalElectionResult.ElectedCandidates.Where(a => trackedElectedAccounts.Contains(a.Key))) {
+				foreach((AccountId key, IElectedResults value) in finalElectionResult.ElectedCandidates.Where(a => trackedElectedAccounts.Contains(a.Key))) {
 
-					ACCOUNT_SNAPSHOT snapshot = this.snapshotCacheSet.GetAccountSnapshotModify(entry.Key);
+					ACCOUNT_SNAPSHOT snapshot = this.snapshotCacheSet.GetAccountSnapshotModify(key);
 
 					if(snapshot != null) {
-						this.ApplyElectedResultsToSnapshot(snapshot, entry.Value, transactions);
+						this.ApplyElectedResultsToSnapshot(snapshot, value, transactions);
 					}
 				}
 			}
@@ -238,48 +239,65 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.dispatchedAccounts = null;
 		}
 
-		public virtual void InterpretTransactions(List<ITransaction> transactions, long blockId, Action<int> step = null) {
-
-			this.Initialize();
-
-			this.PrepareImpactedSnapshotsList(transactions);
-
-			int index = 1;
-
-			foreach(ITransaction transaction in transactions) {
-
-				SnapshotKeySet impactedSnapshots = this.GetTransactionImpactedSnapshots(transaction);
+		private void InterpretTransaction(ITransaction transaction, long blockId) {
+			SnapshotKeySet impactedSnapshots = this.GetTransactionImpactedSnapshots(transaction);
 				bool isLocal = false;
 				bool isDispatched = false;
+				AccountId accounthash = null;
 
 				if(this.localMode) {
+
+					// if we are in local mode, then we ensure we treat presentation transactions specially, they are special. we add the accountId hash.
+					if(transaction is IPresentationTransaction presentationTransaction) {
+						accounthash = presentationTransaction.TransactionId.Account;
+						isDispatched = this.dispatchedAccounts?.Contains(accounthash) ?? false;
+					}
+
 					// determine if it is a local account matching and if yes, if it is a dispatched one
-					isDispatched = impactedSnapshots.standardAccounts.Any(a => this.dispatchedAccounts?.Contains(a) ?? false) || impactedSnapshots.jointAccounts.Any(a => this.dispatchedAccounts?.Contains(a) ?? false);
 					isLocal = isDispatched || impactedSnapshots.standardAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false) || impactedSnapshots.jointAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false);
 
-					if(isLocal || isDispatched) {
+					if(isLocal) {
 
-						var impactedLocalDispatchedAccounts = impactedSnapshots.standardAccounts.Where(a => this.dispatchedAccounts?.Contains(a) ?? false).ToList();
-						impactedLocalDispatchedAccounts.AddRange(impactedSnapshots.jointAccounts.Where(a => this.dispatchedAccounts?.Contains(a) ?? false));
+						var impactedLocalDispatchedAccounts = new List<AccountId>();
 
-						var impactedLocalPublishedAccounts = impactedSnapshots.standardAccounts.Where(a => isDispatched || (this.publishedAccounts?.Contains(a) ?? false)).ToList();
-						impactedLocalPublishedAccounts.AddRange(impactedSnapshots.jointAccounts.Where(a => isDispatched || (this.publishedAccounts?.Contains(a) ?? false)));
+						if(accounthash != null) {
+							impactedLocalDispatchedAccounts.Add(accounthash);
+						}
+
+						var impactedLocalPublishedAccounts = impactedSnapshots.standardAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false).ToList();
+						impactedLocalPublishedAccounts.AddRange(impactedSnapshots.jointAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false));
 
 						// determine if it is our own transaction, or if it is foreign
-						bool isOwn = impactedLocalPublishedAccounts.Contains(transaction.TransactionId.Account);
+						bool isOwn = impactedLocalPublishedAccounts.Contains(transaction.TransactionId.Account) || impactedLocalDispatchedAccounts.Contains(transaction.TransactionId.Account);
 
 						// this transaction concerns us, lets alert.
 						this.AccountInfluencingTransactionFound?.Invoke(isOwn, impactedLocalPublishedAccounts, impactedLocalDispatchedAccounts, transaction);
 					}
 				}
 
-				foreach(var entry in this.transactionImpactSets) {
-					entry.Value.InterpretTransaction(transaction, blockId, impactedSnapshots, this.fastKeys, this.enabledFastKeyTypes, this.operationMode, this.snapshotCacheSet, isLocal, isDispatched, this.TransactionRejected);
-				}
+				this.TransactionImpactSets.InterpretTransaction(transaction, blockId, impactedSnapshots, this.fastKeys, this.enabledFastKeyTypes, this.operationMode, this.snapshotCacheSet, isLocal, isDispatched, this.TransactionRejected);
 
+		}
+		public virtual void InterpretTransactionStream(List<ITransaction> transactions, long blockId, Action<int> step = null) {
+			
+			this.PrepareImpactedSnapshotsList(transactions);
+
+			int index = 1;
+
+			foreach(ITransaction transaction in transactions) {
+
+				this.InterpretTransaction(transaction,blockId);
 				step?.Invoke(index);
 				index++;
 			}
+
+		}
+		
+		public virtual void InterpretTransactions(List<ITransaction> transactions, long blockId, Action<int> step = null) {
+
+			this.Initialize();
+
+			this.InterpretTransactionStream(transactions, blockId, step);
 		}
 
 		/// <summary>
@@ -316,16 +334,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				// if we track the transaction source account, then we add it
 				if(this.IsAnyAccountTracked(search)) {
 					// this is one of ours
-					if(!impactingLocals.ContainsKey(transaction.TransactionId.SimpleTransactionId)) {
-						impactingLocals.Add(transaction.TransactionId.SimpleTransactionId, transaction);
+					if(!impactingLocals.ContainsKey(transaction.TransactionId)) {
+						impactingLocals.Add(transaction.TransactionId, transaction);
 					}
 
-					AddTranaction(transaction.TransactionId.Account, transaction.TransactionId.SimpleTransactionId);
+					AddTranaction(transaction.TransactionId.Account, transaction.TransactionId);
 				}
 
 				// we still need to check the target, since we may send transactions between accounts that we own
 
-				SnapshotKeySet snapshots = this.RunTransactionImpactSet(transaction, impactSet => impactSet.GetImpactedSnapshots(transaction));
+				SnapshotKeySet snapshots = this.RunTransactionImpactSet(transaction);
 
 				var trackedAccounts = this.GetTrackedAccounts(snapshots.AllAccounts);
 
@@ -333,46 +351,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					// ok, this transaction impacts us. lets see if its send by us, or not
 
 					if(account == transaction.TransactionId.Account) {
-						if(!impactingLocals.ContainsKey(transaction.TransactionId.SimpleTransactionId)) {
-							impactingLocals.Add(transaction.TransactionId.SimpleTransactionId, transaction);
+						if(!impactingLocals.ContainsKey(transaction.TransactionId)) {
+							impactingLocals.Add(transaction.TransactionId, transaction);
 						}
 					} else {
-						if(!impactingExternals.ContainsKey(transaction.TransactionId.SimpleTransactionId)) {
-							impactingExternals.Add(transaction.TransactionId.SimpleTransactionId, (transaction, account));
+						if(!impactingExternals.ContainsKey(transaction.TransactionId)) {
+							impactingExternals.Add(transaction.TransactionId, (transaction, account));
 						}
 					}
 
 					// now all the accounts targetted by this transaction
 					foreach(AccountId subaccount in trackedAccounts) {
-						AddTranaction(subaccount, transaction.TransactionId.SimpleTransactionId);
+						AddTranaction(subaccount, transaction.TransactionId);
 					}
 				}
 			}
 
 			return (impactingLocals.Values.ToList(), impactingExternals.Values.ToList(), accountsTransactions);
 		}
-
-		public void ModifyTransactionImpact<T>(Action<ITransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>> action)
-			where T : ITransaction {
-
-			Type type = typeof(T);
-
-			ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> transactionImpactSet = null;
-
-			if(this.transactionImpactSets.ContainsKey(type)) {
-				transactionImpactSet = this.transactionImpactSets[type];
-			}
-
-			// search for the base class
-			if((transactionImpactSet == null) && this.overriddenTransactionImpactSets.ContainsKey(type)) {
-				transactionImpactSet = this.overriddenTransactionImpactSets[type];
-			}
-
-			if(transactionImpactSet != null) {
-				action((ITransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>) transactionImpactSet);
-			}
-		}
-
+		
 		protected virtual void ApplyDelegateResultsToSnapshot(ACCOUNT_SNAPSHOT snapshot, IDelegateResults delegateResults, Dictionary<TransactionId, ITransaction> transactions) {
 
 		}
@@ -396,7 +393,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		/// <returns></returns>
 		public SnapshotKeySet GetTransactionImpactedSnapshots(ITransaction transaction) {
 			SnapshotKeySet impactedSnapshots = new SnapshotKeySet();
-			impactedSnapshots.Add(this.RunTransactionImpactSet(transaction, impactSet => impactSet.GetImpactedSnapshots(transaction)));
+			impactedSnapshots.Add(this.RunTransactionImpactSet(transaction));
 
 			impactedSnapshots.Distinct();
 
@@ -410,7 +407,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			SnapshotKeySet impactedSnapshots = new SnapshotKeySet();
 
 			foreach(ITransaction transaction in transactions) {
-				impactedSnapshots.Add(this.RunTransactionImpactSet(transaction, impactSet => impactSet.GetImpactedSnapshots(transaction)));
+				impactedSnapshots.Add(this.RunTransactionImpactSet(transaction));
 			}
 
 			impactedSnapshots.Distinct();
@@ -428,43 +425,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.snapshotCacheSet.EnsureSnapshots(impactedSnapshots);
 		}
 
-		protected SnapshotKeySet RunTransactionImpactSet(ITransaction transaction, Func<ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, SnapshotKeySet> action) {
+		protected SnapshotKeySet RunTransactionImpactSet(ITransaction transaction) {
 
-			SnapshotKeySet results = new SnapshotKeySet();
-
-			foreach(var entry in this.transactionImpactSets) {
-				results.Add(action(entry.Value));
-			}
-
-			return results;
+			return this.TransactionImpactSets.GetImpactedSnapshots(transaction);
 		}
 
-		protected void RegisterTransactionImpactSet(ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> transactionImpactSet) {
-
-			this.transactionImpactSets.Add(transactionImpactSet.ActingType, transactionImpactSet);
-		}
-
-		/// <summary>
-		///     override the base class behavior and wrap it ina subclass
-		/// </summary>
-		/// <param name="transactionImpactSet"></param>
-		/// <typeparam name="T_PARENT"></typeparam>
-		protected void RegisterTransactionImpactSetOverride(ISupersetTransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> transactionImpactSet) {
-
-			Type parentType = transactionImpactSet.ParentActingType;
-
-			// wrap the parent
-			if(this.transactionImpactSets.ContainsKey(parentType)) {
-				transactionImpactSet.Parent = this.transactionImpactSets[parentType];
-				this.transactionImpactSets.Remove(parentType);
-				this.overriddenTransactionImpactSets.Add(parentType, transactionImpactSet.Parent);
-
-			}
-
-			transactionImpactSet.RegisterOverrides();
-			this.transactionImpactSets.Add(transactionImpactSet.ActingType, transactionImpactSet);
-		}
-
+		public TransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> TransactionImpactSets { get; } = new TransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>();
+		
+		
 		protected byte[] Dehydratekey(ICryptographicKey key) {
 			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 			key.Dehydrate(dehydrator);
@@ -473,16 +441,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			bytes.Return();
 
 			return result;
-		}
-
-		protected class TransactionImpactSet<T> : TransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
-			where T : ITransaction {
-		}
-
-		//TODO: improve error handling in this class
-		protected class SupersetTransactionImpactSet<T, T_PARENT> : SupersetTransactionImpactSet<T, T_PARENT, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
-			where T : ITransaction, T_PARENT
-			where T_PARENT : ITransaction {
 		}
 	}
 }

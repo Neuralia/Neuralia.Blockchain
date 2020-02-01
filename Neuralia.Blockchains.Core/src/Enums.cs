@@ -5,6 +5,9 @@ using System.Linq;
 namespace Neuralia.Blockchains.Core {
 	public static class Enums {
 
+		public enum BlockHashingModes:byte { Mode1 = 1}
+		
+
 		public enum AccountTypes : byte {
 			Standard = 1,
 			Joint = 2
@@ -45,12 +48,20 @@ namespace Neuralia.Blockchains.Core {
 			Desynchronized
 		}
 
+		public const byte SHA2 = 0x0;
+		public const byte SHA3 = 0x10;
+		public const byte BLAKE2 = 0x20;
+		
+		public const byte HASH512 = 0x80;
+		
+		[Flags]
 		public enum KeyHashBits : byte {
-			SHA3_256 = 1,
-			SHA3_384 = 2,
-			SHA3_512 = 3,
-			SHA2_256 = 4,
-			SHA2_512 = 5
+			SHA3_256 = SHA3,
+			SHA3_512 = SHA3 | HASH512 ,
+			SHA2_256 = SHA2,
+			SHA2_512 = SHA2 | HASH512,
+			BLAKE2_256 = BLAKE2,
+			BLAKE2_512 = BLAKE2 | HASH512
 		}
 
 		public enum KeyStatus : byte {
@@ -66,46 +77,61 @@ namespace Neuralia.Blockchains.Core {
 			NTRU = 3,
 			SPHINCS = 4,
 			QTESLA = 5,
-			Secret = 6,
-			SecretCombo = 7,
-			SecretDouble = 8,
-			SecretPenta = 9,
-			MCELIECE = 10,
-			ECDSA = 11,
-			RSA = 12
+			ECDSA = 6,
+			RSA = 7,
+			// more?
+			
+			Secret = 15,
+			SecretCombo = 16,
+			SecretDouble = 17,
+			SecretPenta = 18,
+			MCELIECE = 19,
 
 		}
 
 		public enum PeerTypes : byte {
 			Unknown = 0,
 			FullNode = 1,
-			SimpleMobile = 2,
-			PowerMobile = 3,
-			SimpleSdk = 4,
-			PowerSdk = 5,
-			Hub = 6
+			Mobile = 2,
+			Sdk = 3,
+			Hub = 4
 		}
 		
-		public enum ElectedPeerShareTypes : byte {
+		public enum GossipSupportTypes : byte {
 			None = 0,
-			DigestThenBlocks = 1,
-			DigestAndBlocks = 2
+			Basic = 1,
+			//Basic = 2,
+			Full = 3
+		}
+
+		public enum ChainSharingTypes : byte {
+			None = 0,
+			BlockOnly = 1,
+			DigestThenBlocks = 2,
+			DigestAndBlocks = 3,
+			Full = DigestAndBlocks
 		}
 
 		[Flags]
-		public enum PeerTypeSupport : short {
-			None = 1 << 0,
-			Sync = 1 << 1,
-			GossipBasic = 1 << 2,
-			FullGossip = GossipBasic | (1 << 3),
-			Full = Sync | FullGossip
+		public enum MiningTiers : byte {
+			ThirdTier = 0,
+			SecondTier = 1,
+			FirstTier = 2 | SecondTier
 		}
-
+		
+		
 		public enum PublicationStatus : byte {
 			New = 1,
 			Dispatched = 2,
 			Published = 3,
 			Rejected = 4
+		}
+		
+		public enum MiningStatus:byte {
+			Unknown = 0,
+			Mining = 1,
+			IpUsed = 2,
+			Error = byte.MaxValue
 		}
 
 		public enum ServiceExecutionTypes {
@@ -122,35 +148,9 @@ namespace Neuralia.Blockchains.Core {
 			Full
 		}
 
-		public const PeerTypeSupport FullnodeSupport = PeerTypeSupport.Full;
-		public const PeerTypeSupport SimpleMobileSupport = PeerTypeSupport.None;
-		public const PeerTypeSupport GossipMobileSupport = PeerTypeSupport.GossipBasic;
-		public const PeerTypeSupport SimpleSdkSupport = PeerTypeSupport.None;
-		public const PeerTypeSupport PowerSdkSupport = PeerTypeSupport.GossipBasic;
-		public const PeerTypeSupport HubSupport = PeerTypeSupport.None;
-
 		public const string INTERFACE = "interface";
 		public const string BLOCKCHAIN_SERVICE = "blockchain";
 		public const string GOSSIP_SERVICE = "gossip";
-		
-		public static ImmutableList<(PeerTypeSupport supportType, PeerTypes peerType)> PeerTypeMappings => new[] {(SimpleMobileSupport, PeerTypes.Unknown), (FullnodeSupport, PeerTypes.FullNode), (SimpleMobileSupport, PeerTypes.SimpleMobile), (HubSupport, PeerTypes.Hub), (GossipMobileSupport, PeerTypes.PowerMobile), (SimpleSdkSupport, PeerTypes.SimpleSdk), (PowerSdkSupport, PeerTypes.PowerSdk)}.ToImmutableList();
-		public static ImmutableList<PeerTypeSupport> PeerTypeSupports => PeerTypeMappings.Select(t => t.supportType).ToImmutableList();
-
-		public static ImmutableList<PeerTypeSupport> SimplePeerSupportTypes => PeerTypeSupports.Where(t => t.HasFlag(PeerTypeSupport.None)).ToImmutableList();
-		public static ImmutableList<PeerTypeSupport> SyncingPeerSupportTypes => PeerTypeSupports.Where(t => t.HasFlag(PeerTypeSupport.Sync)).ToImmutableList();
-		public static ImmutableList<PeerTypeSupport> BasicGossipPeerSupportTypes => PeerTypeSupports.Where(t => t.HasFlag(PeerTypeSupport.GossipBasic)).ToImmutableList();
-		public static ImmutableList<PeerTypeSupport> FullGossipPeerSupportTypes => PeerTypeSupports.Where(t => t.HasFlag(PeerTypeSupport.FullGossip)).ToImmutableList();
-		public static ImmutableList<PeerTypeSupport> CompletePeerSupportTypes => PeerTypeSupports.Where(t => t.HasFlag(PeerTypeSupport.Full)).ToImmutableList();
-
-		public static ImmutableList<PeerTypes> SimplePeerTypes => PeerTypeMappings.Where(t => SimplePeerSupportTypes.Contains(t.supportType)).Select(t => t.peerType).ToImmutableList();
-		public static ImmutableList<PeerTypes> SyncingPeerTypes => PeerTypeMappings.Where(t => SyncingPeerSupportTypes.Contains(t.supportType)).Select(t => t.peerType).ToImmutableList();
-		public static ImmutableList<PeerTypes> BasicGossipPeerTypes => PeerTypeMappings.Where(t => BasicGossipPeerSupportTypes.Contains(t.supportType)).Select(t => t.peerType).ToImmutableList();
-		public static ImmutableList<PeerTypes> FullGossipPeerTypes => PeerTypeMappings.Where(t => FullGossipPeerSupportTypes.Contains(t.supportType)).Select(t => t.peerType).ToImmutableList();
-		public static ImmutableList<PeerTypes> CompletePeerTypes => PeerTypeMappings.Where(t => CompletePeerSupportTypes.Contains(t.supportType)).Select(t => t.peerType).ToImmutableList();
-
-		public static bool DoesPeerTypeSupport(PeerTypes peerType, PeerTypeSupport peerTypeSupport) {
-			return PeerTypeMappings.Any(t => (t.peerType == peerType) && t.supportType.HasFlag(peerTypeSupport));
-		}
 
 		/// <summary>
 		///     ensure an arbitrary value can be converted to the enum in question. ensures it is a valid value.

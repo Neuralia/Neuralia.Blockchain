@@ -4,8 +4,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 	public interface IStandardAccountSnapshotEntry : IStandardAccountSnapshot, IAccountSnapshotEntry {
 	}
 
-	public interface IStandardAccountSnapshotEntry<ACCOUNT_FEATURE> : IStandardAccountSnapshot<ACCOUNT_FEATURE>, IAccountSnapshotEntry<ACCOUNT_FEATURE>, IStandardAccountSnapshotEntry
-		where ACCOUNT_FEATURE : IAccountFeatureEntry {
+	public interface IStandardAccountSnapshotEntry<ACCOUNT_ATTRIBUTE> : IStandardAccountSnapshot<ACCOUNT_ATTRIBUTE>, IAccountSnapshotEntry<ACCOUNT_ATTRIBUTE>, IStandardAccountSnapshotEntry
+		where ACCOUNT_ATTRIBUTE : IAccountAttributeEntry {
 	}
 
 }

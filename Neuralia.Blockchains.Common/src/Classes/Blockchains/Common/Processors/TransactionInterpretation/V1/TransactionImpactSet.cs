@@ -5,214 +5,125 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Acco
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1 {
-
-	public interface ITransactionImpactSet {
-		Type ActingType { get; }
-
-		Func<List<AccountId>, bool> IsAnyAccountTracked { get; set; }
-		Func<List<AccountId>, List<AccountId>> GetTrackedAccounts { get; set; }
-
-		Func<List<(long AccountId, byte OrdinalId)>, List<AccountId>, bool> IsAnyAccountKeysTracked { get; set; }
-		Func<List<int>, bool> IsAnyAccreditationCertificateTracked { get; set; }
-		Func<List<int>, bool> IsAnyChainOptionTracked { get; set; }
-
-		SnapshotKeySet GetImpactedSnapshots(ITransaction transaction);
-	}
-
-	public interface ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ITransactionImpactSet
-		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
-		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
-		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
-		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
-		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
-
-		void InterpretTransaction(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys, ChainConfigurations.FastKeyTypes enabledFastKeyTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocal, bool isDispatched, Action<TransactionId, RejectionCode> TransactionRejected);
-	}
-
-	public interface ITransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
-		where T : ITransaction
-		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
-		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
-		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
-		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
-		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
-
-		Action<T, SnapshotKeySet> GetImpactedSnapshotsFunc { get; set; }
-
-		Action<T, long, ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionAccountsFunc { get; set; }
-		Action<T, long, IAccountkeysSnapshotCacheSet<STANDARD_ACCOUNT_KEY_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionStandardAccountKeysFunc { get; set; }
-		Action<T, long, IAccreditationCertificateSnapshotCacheSet<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionAccreditationCertificatesFunc { get; set; }
-		Action<T, long, IChainOptionsSnapshotCacheSet<CHAIN_OPTIONS_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionChainOptionsFunc { get; set; }
-
-		Func<T, long, ChainConfigurations.FastKeyTypes, List<FastKeyMetadata>> CollectStandardAccountFastKeysFunc { get; set; }
-
-		Func<T, bool, ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, (bool result, RejectionCode code)> InterpretTransactionVerificationFunc { get; set; }
-
-		void AddInterpretTransactionVerificationHandler(Func<T, bool, ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, (bool result, RejectionCode code)> action);
-	}
-
+	
 	public static class TransactionImpactSet {
 		public enum OperationModes {
 			Real,
 			Simulated
 		}
 	}
-
-	public class TransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ITransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
-		where T : ITransaction
+	
+	public class TransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
 		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
+		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttribute, new()
+		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
+		where JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttribute, new()
 		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
 		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
 
-		public Func<List<AccountId>, bool> IsAnyAccountTracked { get; set; } = ids => false;
-		public Func<List<AccountId>, List<AccountId>> GetTrackedAccounts { get; set; } = ids => new List<AccountId>();
+		public void InterpretTransaction(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys, ChainConfigurations.FastKeyTypes enabledFastKeyTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected) {
+			// if we must run a simulation, we do so
+			bool accept = true;
+			RejectionCode code = RejectionCodes.Instance.NONE;
 
-		public Func<List<(long AccountId, byte OrdinalId)>, List<AccountId>, bool> IsAnyAccountKeysTracked { get; set; }
-		public Func<List<int>, bool> IsAnyAccreditationCertificateTracked { get; set; }
-		public Func<List<int>, bool> IsAnyChainOptionTracked { get; set; }
+			if(this.InterpretTransactionVerificationFuncOverrideSetAction.Any(transaction)) {
 
-		public Action<T, SnapshotKeySet> GetImpactedSnapshotsFunc { get; set; }
+				// ok, for the simulation, we build a cache set proxy
 
-		public Action<T, long, ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionAccountsFunc { get; set; }
-		public Action<T, long, IAccountkeysSnapshotCacheSet<STANDARD_ACCOUNT_KEY_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionStandardAccountKeysFunc { get; set; }
-		public Action<T, long, IAccreditationCertificateSnapshotCacheSet<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionAccreditationCertificatesFunc { get; set; }
-		public Action<T, long, IChainOptionsSnapshotCacheSet<CHAIN_OPTIONS_SNAPSHOT>, TransactionImpactSet.OperationModes> InterpretTransactionChainOptionsFunc { get; set; }
+				// run the simulation
+				bool exception = false;
 
-		public Func<T, long, ChainConfigurations.FastKeyTypes, List<FastKeyMetadata>> CollectStandardAccountFastKeysFunc { get; set; }
+				try {
+					snapshotCache.BeginTransaction();
 
-		public Func<T, bool, ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, (bool result, RejectionCode code)> InterpretTransactionVerificationFunc { get; set; }
+					this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, null, enabledFastKeyTypes, TransactionImpactSet.OperationModes.Simulated, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected);
 
-		public virtual void InterpretTransaction(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys, ChainConfigurations.FastKeyTypes enabledFastKeyTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected) {
+					var parameter = new InterpretTransactionVerificationFuncParameter();
+					parameter.isException = exception;
+					parameter.entryCache = snapshotCache;
+					(accept, code) = InterpretTransactionVerificationFuncOverrideSetAction.Run(transaction, parameter, (InterpretTransactionVerificationFuncParameter a, (bool valid, RejectionCode rejectionCode) last, ref (bool valid, RejectionCode rejectionCode) final) => {
 
-			this.Run(transaction, t => {
-				// if we must run a simulation, we do so
-				bool accept = true;
-				RejectionCode code = RejectionCodes.Instance.NONE;
+						final = last;
+						
+						//  continue only if it went well
+						return final.Item1 == true;
+					});
 
-				if(this.InterpretTransactionVerificationFunc != null) {
-
-					// ok, for the simulation, we build a cache set proxy
-
-					// run the simulation
-					bool exception = false;
-
-					try {
-						snapshotCache.BeginTransaction();
-
-						this.RunInterpretationFunctions(t, blockId, impactedSnapshots, null, enabledFastKeyTypes, TransactionImpactSet.OperationModes.Simulated, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected);
-
-						(accept, code) = this.InterpretTransactionVerificationFunc(t, exception, snapshotCache);
-					} catch {
-						//TODO: do anything here?
-						exception = true;
-						code = RejectionCodes.Instance.OTHER;
-						accept = false;
-					} finally {
-						snapshotCache.RollbackTransaction();
-					}
-
+				} catch {
+					//TODO: do anything here?
+					exception = true;
+					code = RejectionCodes.Instance.OTHER;
+					accept = false;
+				} finally {
+					snapshotCache.RollbackTransaction();
 				}
 
-				if(accept) {
-					try {
-						snapshotCache.BeginTransaction();
+			}
 
-						// ok, lets run the real thing
-						this.RunInterpretationFunctions(t, blockId, impactedSnapshots, fastKeys, enabledFastKeyTypes, operationMode, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected);
+			if(accept) {
+				try {
+					snapshotCache.BeginTransaction();
 
-						// if we operate in local mode, then lets do it here
-						snapshotCache.CommitTransaction();
-					} catch {
-						//TODO: do anything here?
-						snapshotCache.RollbackTransaction();
-					}
-				} else {
-					TransactionRejected?.Invoke(transaction.TransactionId.SimpleTransactionId, code);
+					// ok, lets run the real thing
+					this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, fastKeys, enabledFastKeyTypes, operationMode, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected);
+
+					// if we operate in local mode, then lets do it here
+					snapshotCache.CommitTransaction();
+				} catch {
+					//TODO: do anything here?
+					snapshotCache.RollbackTransaction();
 				}
-			});
-		}
-
-		public virtual SnapshotKeySet GetImpactedSnapshots(ITransaction transaction) {
-
-			SnapshotKeySet results = new SnapshotKeySet();
-
-			this.Run(transaction, t => {
-				SnapshotKeySet currentResults = new SnapshotKeySet();
-				this.GetImpactedSnapshotsFunc?.Invoke(t, currentResults);
-				results.Add(currentResults);
-			});
-
-			return results;
-		}
-
-		public void AddInterpretTransactionVerificationHandler(Func<T, bool, ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, (bool result, RejectionCode code)> action) {
-
-			// override the existing method
-			var source = this.InterpretTransactionVerificationFunc;
-
-			this.InterpretTransactionVerificationFunc = (t, isException, results) => {
-
-				// call the parent
-				var result = source?.Invoke(t, isException, results);
-
-				if(result.HasValue && !result.Value.result) {
-					return result.Value;
-				}
-
-				result = action?.Invoke(t, isException, results);
-
-				if(result.HasValue) {
-					return result.Value;
-				}
-
-				return (true, RejectionCodes.Instance.NONE);
-			};
-		}
-
-		public Type ActingType => typeof(T);
-
-		private void Run(ITransaction transaction, Action<T> action) {
-			if(transaction is T castedTransaction) {
-				action(castedTransaction);
+			} else {
+				TransactionRejected?.Invoke(transaction.TransactionId, code);
 			}
 		}
-
-		private void RunInterpretationFunctions(T transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys, ChainConfigurations.FastKeyTypes enabledFastKeyTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected) {
+		
+		private void RunInterpretationFunctions(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys, ChainConfigurations.FastKeyTypes enabledFastKeyTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected) {
 
 			var accounts = impactedSnapshots.standardAccounts.ToList();
 			accounts.AddRange(impactedSnapshots.jointAccounts);
 
+			if(isLocalAccount && isDispatchedAccount && transaction is IPresentationTransaction presentationTransaction) {
+				// presentation transactions are special, we add the hash directly instead of the public id
+				accounts.Add(presentationTransaction.TransactionId.Account);
+			}
+			
 			if(this.IsAnyAccountTracked(accounts)) {
-				this.InterpretTransactionAccountsFunc?.Invoke(transaction, blockId, snapshotCache, operationMode);
+				InterpretTransactionAccountsFuncParameter parameter = new InterpretTransactionAccountsFuncParameter();
+				parameter.blockId = blockId;
+				parameter.snapshotCache = snapshotCache;
+				parameter.operationModes = operationMode;
+				
+				this.InterpretTransactionAccountsFuncOverrideSetAction.Run(transaction, parameter);
 			}
 
 			if(this.IsAnyAccountKeysTracked(impactedSnapshots.accountKeys, impactedSnapshots.standardAccounts)) {
-				this.InterpretTransactionStandardAccountKeysFunc?.Invoke(transaction, blockId, snapshotCache, operationMode);
+				
+				InterpretTransactionStandardAccountKeysFuncParameter parameter = new InterpretTransactionStandardAccountKeysFuncParameter();
+				parameter.blockId = blockId;
+				parameter.snapshotCache = snapshotCache;
+				parameter.operationModes = operationMode;
+				this.InterpretTransactionStandardAccountKeysFuncOverrideSetAction.Run(transaction, parameter);
 			}
 
 			if((fastKeys != null) && (operationMode == TransactionImpactSet.OperationModes.Real)) {
-				var fastKeysdatas = this.CollectStandardAccountFastKeysFunc?.Invoke(transaction, blockId, enabledFastKeyTypes);
+				
+				CollectStandardAccountFastKeysFuncParameter parameter = new CollectStandardAccountFastKeysFuncParameter();
+				parameter.blockId = blockId;
+				parameter.types = enabledFastKeyTypes;
+
+				this.CollectStandardAccountFastKeysFuncOverrideSetAction.Run(transaction, parameter);
+				var fastKeysdatas = parameter.results;
 
 				// update the public keys, if any
 				if(fastKeysdatas != null) {
@@ -229,177 +140,127 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			}
 
 			if(this.IsAnyAccreditationCertificateTracked(impactedSnapshots.accreditationCertificates)) {
-				this.InterpretTransactionAccreditationCertificatesFunc?.Invoke(transaction, blockId, snapshotCache, operationMode);
+				InterpretTransactionAccreditationCertificatesFuncParameter parameter = new InterpretTransactionAccreditationCertificatesFuncParameter();
+				parameter.blockId = blockId;
+				parameter.snapshotCache = snapshotCache;
+				parameter.operationModes = operationMode;
+				this.InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.Run(transaction, parameter);
 			}
 
 			if(this.IsAnyChainOptionTracked(impactedSnapshots.chainOptions)) {
-				this.InterpretTransactionChainOptionsFunc?.Invoke(transaction, blockId, snapshotCache, operationMode);
+				
+				InterpretTransactionChainOptionsFuncParameter parameter = new InterpretTransactionChainOptionsFuncParameter();
+				parameter.blockId = blockId;
+				parameter.snapshotCache = snapshotCache;
+				parameter.operationModes = operationMode;
+
+				this.InterpretTransactionChainOptionsFuncOverrideSetAction.Run(transaction, parameter);
 			}
 		}
-	}
+		
+		public Func<List<AccountId>, bool> IsAnyAccountTracked { get; set; } = ids => false;
+		public Func<List<AccountId>, List<AccountId>> GetTrackedAccounts { get; set; } = ids => new List<AccountId>();
 
-	public interface ISupersetTransactionImpactSet : ITransactionImpactSet {
+		public Func<List<(long AccountId, byte OrdinalId)>, List<AccountId>, bool> IsAnyAccountKeysTracked { get; set; }
+		public Func<List<int>, bool> IsAnyAccreditationCertificateTracked { get; set; }
+		public Func<List<int>, bool> IsAnyChainOptionTracked { get; set; }
+		public SnapshotKeySet GetImpactedSnapshots(ITransaction transaction) {
 
-		Type ParentActingType { get; }
-		void RegisterOverrides();
-	}
+			SnapshotKeySet result = new SnapshotKeySet();
+			this.GetImpactedSnapshotsFuncOverrideSetAction.Run(transaction, result);
 
-	public interface ISupersetTransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ISupersetTransactionImpactSet, ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
-		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
-		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
-		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
-		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
-		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
-
-		ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> Parent { get; set; }
-	}
-
-	public interface ISupersetTransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ISupersetTransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, ITransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
-		where T : ITransaction
-		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
-		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
-		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
-		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
-		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
-	}
-
-	public class SupersetTransactionImpactSet<T, T_PARENT, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : TransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>, ISupersetTransactionImpactSet<T, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
-		where T : ITransaction, T_PARENT
-		where T_PARENT : ITransaction
-		where ACCOUNT_SNAPSHOT : IAccountSnapshot
-		where STANDARD_ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshot<STANDARD_ACCOUNT_FEATURE_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where STANDARD_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_SNAPSHOT : class, IJointAccountSnapshot<JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, ACCOUNT_SNAPSHOT, new()
-		where JOINT_ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeature, new()
-		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new()
-		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot, new()
-		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, new()
-		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
-		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
-
-		public ITransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> Parent { get; set; }
-
-		public Type ParentActingType => typeof(T_PARENT);
-
-		public void RegisterOverrides() {
-			var castedParent = (ITransactionImpactSet<T_PARENT, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_FEATURE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>) this.Parent;
-
-			var source = this.GetImpactedSnapshotsFunc;
-
-			this.GetImpactedSnapshotsFunc = (t, snapshotKeys) => {
-
-				// class the parent
-				castedParent.GetImpactedSnapshotsFunc?.Invoke(t, snapshotKeys);
-
-				source?.Invoke(t, snapshotKeys);
-			};
-
-			var source2 = this.InterpretTransactionAccountsFunc;
-
-			this.InterpretTransactionAccountsFunc = (t, blockId, snapshotCache, mode) => {
-
-				// class the parent
-				castedParent.InterpretTransactionAccountsFunc?.Invoke(t, blockId, snapshotCache, mode);
-
-				source2?.Invoke(t, blockId, snapshotCache, mode);
-			};
-
-			var source3 = this.InterpretTransactionStandardAccountKeysFunc;
-
-			this.InterpretTransactionStandardAccountKeysFunc = (t, blockId, snapshotCache, mode) => {
-
-				// class the parent
-				castedParent.InterpretTransactionStandardAccountKeysFunc?.Invoke(t, blockId, snapshotCache, mode);
-
-				source3?.Invoke(t, blockId, snapshotCache, mode);
-			};
-
-			var source4 = this.InterpretTransactionAccreditationCertificatesFunc;
-
-			this.InterpretTransactionAccreditationCertificatesFunc = (t, blockId, snapshotCache, mode) => {
-
-				// class the parent
-				castedParent.InterpretTransactionAccreditationCertificatesFunc?.Invoke(t, blockId, snapshotCache, mode);
-
-				source4?.Invoke(t, blockId, snapshotCache, mode);
-			};
-
-			var source5 = this.InterpretTransactionChainOptionsFunc;
-
-			this.InterpretTransactionChainOptionsFunc = (t, blockId, snapshotCache, mode) => {
-
-				// class the parent
-				castedParent.InterpretTransactionChainOptionsFunc?.Invoke(t, blockId, snapshotCache, mode);
-
-				source5?.Invoke(t, blockId, snapshotCache, mode);
-			};
-
-			var source6 = this.InterpretTransactionVerificationFunc;
-
-			this.InterpretTransactionVerificationFunc = (t, isException, results) => {
-
-				// class the parent
-				var result = castedParent.InterpretTransactionVerificationFunc?.Invoke(t, isException, results);
-
-				if(result.HasValue && !result.Value.result) {
-					return result.Value;
-				}
-
-				result = source6?.Invoke(t, isException, results);
-
-				if(result.HasValue) {
-					return result.Value;
-				}
-
-				return (true, RejectionCodes.Instance.NONE);
-			};
-
-			var source7 = this.CollectStandardAccountFastKeysFunc;
-
-			this.CollectStandardAccountFastKeysFunc = (t, blockId, types) => {
-
-				// class the parent
-				var results = castedParent.CollectStandardAccountFastKeysFunc?.Invoke(t, blockId, types);
-
-				Dictionary<(AccountId AccountId, byte Ordinal), byte[]> dictionaryResults = null;
-
-				if(results != null) {
-					dictionaryResults = results.ToDictionary(e => (e.AccountId, e.Ordinal), e => e.PublicKey);
-				}
-
-				var subresults = source7?.Invoke(t, blockId, types);
-
-				if(subresults != null) {
-					if(dictionaryResults == null) {
-						dictionaryResults = new Dictionary<(AccountId AccountId, byte Ordinal), byte[]>();
-					}
-
-					foreach(FastKeyMetadata entry in subresults) {
-						(AccountId AccountId, byte Ordinal) key = (entry.AccountId, entry.Ordinal);
-
-						if(dictionaryResults.ContainsKey(key)) {
-							dictionaryResults[key] = entry.PublicKey;
-						} else {
-							dictionaryResults.Add(key, entry.PublicKey);
-						}
-					}
-				}
-
-				return dictionaryResults?.Select(e => new FastKeyMetadata {AccountId = e.Key.AccountId, Ordinal = e.Key.Ordinal, PublicKey = e.Value}).ToList();
-			};
+			return result;
 		}
-	}
 
+		//public OverrideSetAction<SnapshotKeySet> GeneralOverrideSetAction { get; } = new OverrideSetAction<SnapshotKeySet>();
+		public OverrideSetAction<SnapshotKeySet> GetImpactedSnapshotsFuncOverrideSetAction { get; } = new OverrideSetAction<SnapshotKeySet>();
+		
+		public OverrideSetAction<InterpretTransactionAccountsFuncParameter> InterpretTransactionAccountsFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionAccountsFuncParameter>();
+		public OverrideSetAction<InterpretTransactionStandardAccountKeysFuncParameter> InterpretTransactionStandardAccountKeysFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionStandardAccountKeysFuncParameter>();
+		public OverrideSetAction<CollectStandardAccountFastKeysFuncParameter> CollectStandardAccountFastKeysFuncOverrideSetAction { get; } = new OverrideSetAction<CollectStandardAccountFastKeysFuncParameter>();
+		public OverrideSetAction<InterpretTransactionAccreditationCertificatesFuncParameter> InterpretTransactionAccreditationCertificatesFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionAccreditationCertificatesFuncParameter>();
+		public OverrideSetAction<InterpretTransactionChainOptionsFuncParameter> InterpretTransactionChainOptionsFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionChainOptionsFuncParameter>();
+
+		public OverrideSetFunc<InterpretTransactionVerificationFuncParameter, (bool valid, RejectionCode rejectionCode)> InterpretTransactionVerificationFuncOverrideSetAction { get; } = new OverrideSetFunc<InterpretTransactionVerificationFuncParameter, (bool valid, RejectionCode rejectionCode)>();
+
+		public void RegisterInterpretTransactionVerificationHandler<T>(Func<T, InterpretTransactionVerificationFuncParameter, (bool valid, RejectionCode rejectionCode)> interpretTransactionVerificationFuncOverrideSetAction = null) {
+
+			this.InterpretTransactionVerificationFuncOverrideSetAction.AddSet<T>(interpretTransactionVerificationFuncOverrideSetAction);
+		}
+		
+		public void RegisterInterpretTransactionVerificationHandlerOverride<C, P>(Func<C, InterpretTransactionVerificationFuncParameter, Func<P, InterpretTransactionVerificationFuncParameter, (bool valid, RejectionCode rejectionCode)>, (bool valid, RejectionCode rejectionCode)> interpretTransactionVerificationFuncOverrideSetAction= null) 
+			where C : P{
+
+			this.InterpretTransactionVerificationFuncOverrideSetAction.AddOverrideSet<C,P>(interpretTransactionVerificationFuncOverrideSetAction);
+		}
+		
+		public void RegisterTransactionImpactSet<T>(Action<T, SnapshotKeySet> getImpactedSnapshotsFunc = null, Action<T, InterpretTransactionAccountsFuncParameter> interpretTransactionAccountsFunc = null, Action<T, InterpretTransactionStandardAccountKeysFuncParameter> interpretTransactionStandardAccountKeysFunc = null, Action<T, CollectStandardAccountFastKeysFuncParameter> collectStandardAccountFastKeysFunc = null, Action<T, InterpretTransactionChainOptionsFuncParameter> interpretTransactionChainOptionsFunc = null, Action<T, InterpretTransactionAccreditationCertificatesFuncParameter> interpretTransactionAccreditationCertificatesFunc = null) {
+			
+			//TODO: all these override sets can be grouped into one, to save space and not duplicate the type hierarchy sets.
+			// so, optimize and group into one...
+			this.GetImpactedSnapshotsFuncOverrideSetAction.AddSet<T>(getImpactedSnapshotsFunc);
+			this.InterpretTransactionAccountsFuncOverrideSetAction.AddSet<T>(interpretTransactionAccountsFunc);
+			this.InterpretTransactionStandardAccountKeysFuncOverrideSetAction.AddSet<T>(interpretTransactionStandardAccountKeysFunc);
+			this.CollectStandardAccountFastKeysFuncOverrideSetAction.AddSet<T>(collectStandardAccountFastKeysFunc);
+			
+			InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet<T>(interpretTransactionAccreditationCertificatesFunc);
+			InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet<T>(interpretTransactionChainOptionsFunc);
+		}
+		
+		public void RegisterTransactionImpactSetOverride<C, P>(Action<C, SnapshotKeySet, Action<P, SnapshotKeySet>> getImpactedSnapshotsFunc= null, Action<C, InterpretTransactionAccountsFuncParameter, Action<P, InterpretTransactionAccountsFuncParameter>> interpretTransactionAccountsFunc= null, Action<C, InterpretTransactionStandardAccountKeysFuncParameter,  Action<P, InterpretTransactionStandardAccountKeysFuncParameter>> interpretTransactionStandardAccountKeysFunc= null, Action<C, CollectStandardAccountFastKeysFuncParameter, Action<P, CollectStandardAccountFastKeysFuncParameter>> collectStandardAccountFastKeysFunc= null, Action<C, InterpretTransactionChainOptionsFuncParameter, Action<P, InterpretTransactionChainOptionsFuncParameter>> interpretTransactionChainOptionsFunc = null, Action<C, InterpretTransactionAccreditationCertificatesFuncParameter, Action<P, InterpretTransactionAccreditationCertificatesFuncParameter>> interpretTransactionAccreditationCertificatesFunc= null) 
+			where C : P{
+			
+			this.GetImpactedSnapshotsFuncOverrideSetAction.AddSet<C, P>(getImpactedSnapshotsFunc);
+			this.InterpretTransactionAccountsFuncOverrideSetAction.AddSet<C, P>(interpretTransactionAccountsFunc);
+			this.InterpretTransactionStandardAccountKeysFuncOverrideSetAction.AddSet<C, P>(interpretTransactionStandardAccountKeysFunc);
+			this.CollectStandardAccountFastKeysFuncOverrideSetAction.AddSet<C, P>(collectStandardAccountFastKeysFunc);
+			
+			InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet<C, P>(interpretTransactionAccreditationCertificatesFunc);
+			InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet<C, P>(interpretTransactionChainOptionsFunc);
+		}
+		
+		public class InterpretTransactionAccountsFuncParameter {
+			public long blockId { get; set; }
+			public ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache { get; set; }
+			public TransactionImpactSet.OperationModes operationModes { get; set; }
+		}
+
+		public class InterpretTransactionStandardAccountKeysFuncParameter {
+			public long blockId { get; set; }
+			public IAccountkeysSnapshotCacheSet<STANDARD_ACCOUNT_KEY_SNAPSHOT> snapshotCache { get; set; }
+			public TransactionImpactSet.OperationModes operationModes { get; set; }
+		}
+
+		public class CollectStandardAccountFastKeysFuncParameter {
+			public long blockId { get; set; }
+			public ChainConfigurations.FastKeyTypes types { get; set; }
+			public List<FastKeyMetadata> results { get; set; }
+		}
+		
+		public class InterpretTransactionChainOptionsFuncParameter {
+			
+			public long blockId { get; set; }
+			public IChainOptionsSnapshotCacheSet<CHAIN_OPTIONS_SNAPSHOT> snapshotCache { get; set; }
+			public TransactionImpactSet.OperationModes operationModes { get; set; }
+		}
+		
+		public class InterpretTransactionVerificationFuncParameter {
+
+			public bool isException { get; set; }
+			public ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> entryCache{ get; set; }
+			public (bool result, RejectionCode code) results{ get; set; }
+		}
+		
+		public class InterpretTransactionAccreditationCertificatesFuncParameter {
+			
+			public long blockId { get; set; }
+			public ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache { get; set; }
+			public TransactionImpactSet.OperationModes operationModes { get; set; }
+		}
+		
+		
+	}
+	
 	public class FastKeyMetadata {
 		public AccountId AccountId { get; set; }
 		public byte Ordinal { get; set; }

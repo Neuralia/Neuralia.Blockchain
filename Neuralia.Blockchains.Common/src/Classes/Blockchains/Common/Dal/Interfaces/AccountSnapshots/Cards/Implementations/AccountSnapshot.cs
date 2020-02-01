@@ -1,42 +1,44 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations {
-	public class AccountSnapshot<ACCOUNT_FEATURE> : IAccountSnapshot<ACCOUNT_FEATURE>
-		where ACCOUNT_FEATURE : IAccountFeature {
+	public class AccountSnapshot<ACCOUNT_ATTRIBUTE> : IAccountSnapshot<ACCOUNT_ATTRIBUTE>
+		where ACCOUNT_ATTRIBUTE : IAccountAttribute {
 
 		public long AccountId { get; set; }
 		public long InceptionBlockId { get; set; }
 		public byte TrustLevel { get; set; }
 		public long? CorrelationId { get; set; }
-		public List<ACCOUNT_FEATURE> AppliedFeatures { get; } = new List<ACCOUNT_FEATURE>();
+		public ImmutableList<IAccountAttribute> AppliedAttributesBase => this.AppliedAttributes.Cast<IAccountAttribute>().ToImmutableList();
+		public List<ACCOUNT_ATTRIBUTE> AppliedAttributes { get; } = new List<ACCOUNT_ATTRIBUTE>();
 
 		public void ClearCollection() {
-			this.AppliedFeatures.Clear();
+			this.AppliedAttributes.Clear();
 		}
 
-		public void CreateNewCollectionEntry(out IAccountFeature result) {
-			TypedCollectionExposureUtil<IAccountFeature>.CreateNewCollectionEntry(this.AppliedFeatures, out result);
+		public void CreateNewCollectionEntry(out IAccountAttribute result) {
+			TypedCollectionExposureUtil<IAccountAttribute>.CreateNewCollectionEntry(this.AppliedAttributes, out result);
 		}
 
-		public void AddCollectionEntry(IAccountFeature entry) {
-			TypedCollectionExposureUtil<IAccountFeature>.AddCollectionEntry(entry, this.AppliedFeatures);
+		public void AddCollectionEntry(IAccountAttribute entry) {
+			TypedCollectionExposureUtil<IAccountAttribute>.AddCollectionEntry(entry, this.AppliedAttributes);
 		}
 
-		public void RemoveCollectionEntry(Func<IAccountFeature, bool> predicate) {
-			TypedCollectionExposureUtil<IAccountFeature>.RemoveCollectionEntry(predicate, this.AppliedFeatures);
+		public void RemoveCollectionEntry(Func<IAccountAttribute, bool> predicate) {
+			TypedCollectionExposureUtil<IAccountAttribute>.RemoveCollectionEntry(predicate, this.AppliedAttributes);
 		}
 
-		public IAccountFeature GetCollectionEntry(Func<IAccountFeature, bool> predicate) {
-			return TypedCollectionExposureUtil<IAccountFeature>.GetCollectionEntry(predicate, this.AppliedFeatures);
+		public IAccountAttribute GetCollectionEntry(Func<IAccountAttribute, bool> predicate) {
+			return TypedCollectionExposureUtil<IAccountAttribute>.GetCollectionEntry(predicate, this.AppliedAttributes);
 		}
 
-		public List<IAccountFeature> GetCollectionEntries(Func<IAccountFeature, bool> predicate) {
-			return TypedCollectionExposureUtil<IAccountFeature>.GetCollectionEntries(predicate, this.AppliedFeatures);
+		public List<IAccountAttribute> GetCollectionEntries(Func<IAccountAttribute, bool> predicate) {
+			return TypedCollectionExposureUtil<IAccountAttribute>.GetCollectionEntries(predicate, this.AppliedAttributes);
 		}
 
-		public ImmutableList<IAccountFeature> CollectionCopy => TypedCollectionExposureUtil<IAccountFeature>.GetCollection(this.AppliedFeatures);
+		public ImmutableList<IAccountAttribute> CollectionCopy => TypedCollectionExposureUtil<IAccountAttribute>.GetCollection(this.AppliedAttributes);
 	}
 }

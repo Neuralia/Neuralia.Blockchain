@@ -90,13 +90,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public long Hash(Guid value) {
 			Span<byte> bytes = stackalloc byte[16];
-
-#if (NETSTANDARD2_0)
-			Span<byte> guidBytes = value.ToByteArray();
-			guidBytes.CopyTo(bytes);
-#else
+			
 			value.TryWriteBytes(bytes);
-#endif
 
 			return this.HashEntry(bytes);
 		}
@@ -117,11 +112,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 		}
 
 		private string ConvertToBase64(in Span<byte> bytes) {
-#if (NETSTANDARD2_0)
-			return Convert.ToBase64String(bytes.ToArray());
-#else
+
 			return Convert.ToBase64String(bytes);
-#endif
 		}
 
 		public string SerializeBase64(byte value) {
@@ -196,13 +188,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		public SafeArrayHandle Serialize(Guid value) {
 			Span<byte> bytes = stackalloc byte[16];
-
-#if (NETSTANDARD2_0)
-			Span<byte> guidBytes = value.ToByteArray();
-			guidBytes.CopyTo(bytes);
-#else
+			
 			value.TryWriteBytes(bytes);
-#endif
 
 			return this.Encrypt(bytes);
 		}
@@ -330,11 +317,7 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 			using(SafeArrayHandle result = this.Decrypt(bytes)) {
 
-#if (NETSTANDARD2_0)
-			value = new Guid(result.Entry.ToExactByteArray());
-#else
 				value = new Guid(result.Span);
-#endif
 
 			}
 		}
@@ -357,12 +340,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 		public void Deserialize(in Span<byte> bytes, out string value) {
 
 			using(SafeArrayHandle result = this.Decrypt(bytes)) {
-
-#if (NETSTANDARD2_0)
-			value = Encoding.UTF8.GetString(result.Entry.ToExactByteArray());
-#else
+				
 				value = Encoding.UTF8.GetString(result.Span);
-#endif
 
 			}
 		}

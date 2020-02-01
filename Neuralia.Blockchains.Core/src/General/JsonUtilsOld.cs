@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Neuralia.Blockchains.Core.General.Types.Simple;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -66,10 +68,21 @@ namespace Neuralia.Blockchains.Core.General {
 			
 			settings.Converters.Add(new ByteArrayBaseConverterOld());
 			settings.Converters.Add(new DecimalConverterOld());
+			settings.Converters.Add(new ComponentVersionConverterOld());
 			
 			return settings;
 		}
 
+		
+		public static JsonSerializerSettings CreateDigestChannelSerializerSettings() {
+			JsonSerializerSettings settings = CreatePrettySerializerSettings();
+			
+			settings.TypeNameHandling = TypeNameHandling.None;
+			settings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple;
+
+			return settings;
+		}
+		
 		public static JsonSerializerSettings CreateCompactSerializerSettings() {
 			JsonSerializerSettings settings = CreateSerializerSettings();
 
@@ -110,6 +123,77 @@ namespace Neuralia.Blockchains.Core.General {
 			return JsonDeserializer.Serialize(jsonSerializable);
 		}
 	}
+	
+	public class ComponentVersionConverterOld : JsonConverter {
+
+		public ComponentVersionConverterOld() {
+
+		}
+
+		public override bool CanRead => true;
+
+		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
+			if(value is ComponentVersion cversion) {
+
+				new JValue(cversion.ToString()).WriteTo(writer);
+			}
+		}
+
+		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
+			
+			if(reader.Value == null) {
+				return null;
+			}
+			
+			string basevalue = reader.Value.ToString();
+
+			if(typeof(ComponentVersion).IsAssignableFrom(objectType)) {
+				return new ComponentVersion(basevalue);
+			}
+
+			return null;
+		}
+
+		public override bool CanConvert(Type objectType) {
+			return typeof(ComponentVersion).IsAssignableFrom(objectType);
+		}
+	}
+	
+	public class ComponentVersionTypedConverterOld<T> : JsonConverter 
+		where T : SimpleUShort<T>, new() {
+
+		public ComponentVersionTypedConverterOld() {
+
+		}
+
+		public override bool CanRead => true;
+
+		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
+			if(value is ComponentVersion<T> cversion) {
+
+				new JValue(cversion.ToString()).WriteTo(writer);
+			}
+		}
+
+		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
+			
+			if(reader.Value == null) {
+				return null;
+			}
+			
+			string basevalue = reader.Value.ToString();
+
+			if(typeof(ComponentVersion<T>).IsAssignableFrom(objectType)) {
+				return new ComponentVersion(basevalue);
+			}
+
+			return null;
+		}
+
+		public override bool CanConvert(Type objectType) {
+			return typeof(ComponentVersion<T>).IsAssignableFrom(objectType);
+		}
+	}
 
 	public class ByteArrayBaseConverterOld : JsonConverter {
 		public enum BaseModes {
@@ -124,7 +208,7 @@ namespace Neuralia.Blockchains.Core.General {
 
 		}
 
-		public override bool CanRead => false;
+		public override bool CanRead => true;
 
 		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
 			if(value is SafeArrayHandle arrayWrapper) {
@@ -150,31 +234,40 @@ namespace Neuralia.Blockchains.Core.General {
 		}
 
 		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
+			
+			if(reader.Value == null) {
+				return null;
+			}
+			
+			string basevalue = reader.Value.ToString();
 
-			throw new NotImplementedException();
+			SafeArrayHandle array = null;
+			if(this.mode == BaseModes.Base58) {
+				array = ByteArray.FromBase58(basevalue);
+			}
+			
+			if(this.mode == BaseModes.Base64) {
+				array = ByteArray.FromBase64(basevalue);
+			}
 
-			// if(reader.Value == null) {
-			// 	return null;
-			// }
-			//
-			// string basevalue = reader.Value.ToString();
-			//
-			// if(this.mode == BaseModes.Base58) {
-			// 	return ByteArray.FromBase58(basevalue);
-			// }
-			//
-			// if(this.mode == BaseModes.Base64) {
-			// 	return ByteArray.FromBase64(basevalue);
-			// }
-			//
-			// return null;
+			if(typeof(SafeArrayHandle).IsAssignableFrom(objectType) ) {
+				return array;
+			}
+			
+			if(typeof(ByteArray).IsAssignableFrom(objectType) ) {
+				return array.Entry;
+			}
+
+			return null;
 		}
 
 		public override bool CanConvert(Type objectType) {
-			return typeof(SafeArrayHandle).IsAssignableFrom(objectType);
+			return typeof(SafeArrayHandle).IsAssignableFrom(objectType) || typeof(ByteArray).IsAssignableFrom(objectType);
 		}
 	}
 
+	
+	
 	internal class DecimalConverterOld : JsonConverter {
 		public override bool CanConvert(Type objectType) {
 			return (objectType == typeof(decimal)) || (objectType == typeof(decimal?));

@@ -30,12 +30,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public sealed class ElectionQuestionTypes : UShortConstantSet<ElectionQuestionType> {
 
 		public readonly ElectionQuestionType BlockTransactionIndex;
-
+		public readonly ElectionQuestionType BlockByteset;
+		public readonly ElectionQuestionType DigestByteset;
+		
 		static ElectionQuestionTypes() {
 		}
 
 		private ElectionQuestionTypes() : base(100) {
 			this.BlockTransactionIndex = this.CreateBaseConstant();
+			this.BlockByteset = this.CreateBaseConstant();
+			this.DigestByteset = this.CreateBaseConstant();
 		}
 
 		public static ElectionQuestionTypes Instance { get; } = new ElectionQuestionTypes();

@@ -31,15 +31,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		private readonly int height;
 
 		private readonly object locker = new object();
-
-		private readonly int logWinternitz;
-
 		private readonly ThreadContext[] threadContexts;
 		private readonly int threadCount;
-		private readonly Enums.ThreadMode threadMode;
 
-		private readonly int winternitz;
-		private readonly WotsPlusEngine wotsPlusProvider;
+		private readonly WotsPlus wotsPlusProvider;
 		private readonly ConcurrentDictionary<XMSSMTLeafId, ByteArray[]> wotsPublicKeysCache = new ConcurrentDictionary<XMSSMTLeafId, ByteArray[]>();
 
 		private readonly ConcurrentDictionary<XMSSMTLeafId, ByteArray> wotsSecretSeedsCache = new ConcurrentDictionary<XMSSMTLeafId, ByteArray>();
@@ -51,21 +46,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		/// <param name="levels">Number of levels of the tree</param>
 		/// <param name="length">Length in bytes of the message digest as well as of each node</param>
 		/// <param name="wParam">Winternitz parameter {4,16}</param>
-		public XMSSEngine(XMSSOperationModes mode, Enums.ThreadMode threadMode, WotsPlusEngine wotsProvider, XMSSExecutionContext xmssExecutionContext, int height, WinternitzParameter wParam = WinternitzParameter.Param16) {
+		public XMSSEngine(XMSSOperationModes mode, Enums.ThreadMode threadMode, WotsPlus wotsProvider, XMSSExecutionContext xmssExecutionContext, int height) {
 
 			this.height = height;
 			this.xmssExecutionContext = xmssExecutionContext;
 
 			this.LeafCount = 1 << this.height;
 
+			this.wotsPlusProvider = wotsProvider ?? new WotsPlus(threadMode, this.xmssExecutionContext);
+			
 			this.digestLength = this.xmssExecutionContext.DigestSize;
-			this.winternitz = (int) wParam;
-			this.logWinternitz = CommonUtils.Log2(this.winternitz);
 
-			this.threadMode = threadMode;
-			this.wotsPlusProvider = wotsProvider ?? new WotsPlusEngine(mode, threadMode, this.xmssExecutionContext, wParam);
-
-			this.threadCount = CommonUtils.GetThreadCount(this.threadMode);
+			this.threadCount = XMSSCommonUtils.GetThreadCount(threadMode);
 
 			if(mode.HasFlag(XMSSOperationModes.Signature)) {
 				this.threadContexts = new ThreadContext[this.threadCount];
@@ -91,7 +83,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			int previousValue = otsHashAddress.KeyAndMask;
 			otsHashAddress.KeyAndMask = nonce1;
 
-			ByteArray result = CommonUtils.PRF(secretSeed, otsHashAddress, this.xmssExecutionContext);
+			ByteArray result = XMSSCommonUtils.PRF(secretSeed, otsHashAddress, this.xmssExecutionContext);
 
 			// restore the previous
 			otsHashAddress.KeyAndMask = previousValue;
@@ -120,7 +112,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		}
 
 		public (XMSSPrivateKey privateKey, XMSSPublicKey publicKey) GenerateKeys(Action<int> progressCallback = null) {
-			(ByteArray publicSeed, ByteArray secretSeed, ByteArray secretSeedPrf) = CommonUtils.GenerateSeeds(this.xmssExecutionContext);
+			(ByteArray publicSeed, ByteArray secretSeed, ByteArray secretSeedPrf) = XMSSCommonUtils.GenerateSeeds(this.xmssExecutionContext);
 
 			// cache all our entries for immadiate reuse
 			this.wotsPublicKeysCache.Clear();
@@ -179,7 +171,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			}
 
 			try {
-				return CommonUtils.HashEntry(CommonUtils.HashCodes.H, key, buffer, this.xmssExecutionContext);
+				return XMSSCommonUtils.HashEntry(XMSSCommonUtils.HashCodes.H, key, buffer, this.xmssExecutionContext);
 			} catch(Exception ex) {
 				throw new Exception("Exception raised while hashing buffer and key", ex);
 			}
@@ -201,7 +193,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			}
 
 			try {
-				return CommonUtils.HashEntry(CommonUtils.HashCodes.HMsg, key, buffer, this.xmssExecutionContext);
+				return XMSSCommonUtils.HashEntry(XMSSCommonUtils.HashCodes.HMsg, key, buffer, this.xmssExecutionContext);
 			} catch(Exception ex) {
 				throw new Exception("Exception raised while hashing buffer and key", ex);
 			}
@@ -228,16 +220,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			int previousKeyMask = threadContext.randHashAddress.KeyAndMask;
 
 			threadContext.randHashAddress.KeyAndMask = 0;
-			ByteArray key = CommonUtils.PRF(publicSeed, threadContext.randHashAddress, this.xmssExecutionContext);
+			ByteArray key = XMSSCommonUtils.PRF(publicSeed, threadContext.randHashAddress, this.xmssExecutionContext);
 			threadContext.randHashAddress.KeyAndMask = 1;
-			ByteArray bm = CommonUtils.PRF(publicSeed, threadContext.randHashAddress, this.xmssExecutionContext);
-			CommonUtils.Xor(bm, bm, left);
+			ByteArray bm = XMSSCommonUtils.PRF(publicSeed, threadContext.randHashAddress, this.xmssExecutionContext);
+			XMSSCommonUtils.Xor(bm, bm, left);
 			bm.CopyTo(threadContext.RandHashFinalBuffer);
 			bm.Return();
 
 			threadContext.randHashAddress.KeyAndMask = 2;
-			bm = CommonUtils.PRF(publicSeed, threadContext.randHashAddress, this.xmssExecutionContext);
-			CommonUtils.Xor(bm, bm, right);
+			bm = XMSSCommonUtils.PRF(publicSeed, threadContext.randHashAddress, this.xmssExecutionContext);
+			XMSSCommonUtils.Xor(bm, bm, right);
 			bm.CopyTo(threadContext.RandHashFinalBuffer, bm.Length);
 			bm.Return();
 
@@ -288,16 +280,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 			ByteArray randHashFinalBuffer = ByteArray.Create(this.digestLength << 1);
 			tmpAdrs.KeyAndMask = 0;
-			ByteArray key = CommonUtils.PRF(publicSeed, tmpAdrs, this.xmssExecutionContext);
+			ByteArray key = XMSSCommonUtils.PRF(publicSeed, tmpAdrs, this.xmssExecutionContext);
 			tmpAdrs.KeyAndMask = 1;
-			ByteArray bm = CommonUtils.PRF(publicSeed, tmpAdrs, this.xmssExecutionContext);
-			CommonUtils.Xor(bm, bm, left);
+			ByteArray bm = XMSSCommonUtils.PRF(publicSeed, tmpAdrs, this.xmssExecutionContext);
+			XMSSCommonUtils.Xor(bm, bm, left);
 			bm.CopyTo(randHashFinalBuffer);
 			bm.Return();
 
 			tmpAdrs.KeyAndMask = 2;
-			bm = CommonUtils.PRF(publicSeed, tmpAdrs, this.xmssExecutionContext);
-			CommonUtils.Xor(bm, bm, right);
+			bm = XMSSCommonUtils.PRF(publicSeed, tmpAdrs, this.xmssExecutionContext);
+			XMSSCommonUtils.Xor(bm, bm, right);
 			bm.CopyTo(randHashFinalBuffer, bm.Length);
 			bm.Return();
 
@@ -363,13 +355,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			this.incompleteNodes.Clear();
 
 			for(int i = 0; i < this.readyNodes.Count; i++) {
-				this.readyNodes.TryDequeue(out NodeInfo entry);
+				this.readyNodes.TryDequeue(out XmssNodeInfo entry);
 			}
 
 			
 			// first, parse the tree, find nodes that need computing
 
-			ByteArray root = this.PrepareHashTreeWorkNodes((startIndex >> targetNodeHeigth, targetNodeHeigth), default, NodeInfo.Directions.None, privateKey.NodeCache);
+			ByteArray root = this.PrepareHashTreeWorkNodes((startIndex >> targetNodeHeigth, targetNodeHeigth), default, XmssNodeInfo.Directions.None, privateKey.NodeCache);
 
 			int totalNodes = this.readyNodes.Count + this.incompleteNodes.Count;
 			int completedNodes = 0;
@@ -386,56 +378,56 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				Thread.CurrentThread.Priority = ThreadPriority.BelowNormal;
 				
 				ThreadContext threadContext = this.threadContexts[index];
-				NodeInfo workingNode = null;
+				XmssNodeInfo workingXmssNode = null;
 				int counter = 0;
 
-				while((!completed && (workingNode != null)) || this.readyNodes.TryDequeue(out workingNode) || !this.incompleteNodes.IsEmpty) {
+				while((!completed && (workingXmssNode != null)) || this.readyNodes.TryDequeue(out workingXmssNode) || !this.incompleteNodes.IsEmpty) {
 					// ok, lets process the node
-					if(workingNode != null) {
-						if(workingNode.IsCompleted) {
+					if(workingXmssNode != null) {
+						if(workingXmssNode.IsCompleted) {
 							// it was already done, lets keep going
-							workingNode = null;
+							workingXmssNode = null;
 
 							continue;
 						}
 
-						if(workingNode is MergedNodeInfo merged) {
+						if(workingXmssNode is MergedXmssNodeInfo merged) {
 
 							// hash left and right together
 							threadContext.HashTreeAddress.Initialize(adrs);
-							threadContext.HashTreeAddress.TreeHeight = workingNode.Id.Height - 1; // the height of the children
-							threadContext.HashTreeAddress.TreeIndex = workingNode.Id.Index;
+							threadContext.HashTreeAddress.TreeHeight = workingXmssNode.Id.Height - 1; // the height of the children
+							threadContext.HashTreeAddress.TreeIndex = workingXmssNode.Id.Index;
 
 							threadContext.randHashAddress = threadContext.HashTreeAddress;
-							workingNode.Hash = this.RandHashParallel(merged.Left, merged.Right, publicSeed, threadContext);
+							workingXmssNode.Hash = this.RandHashParallel(merged.Left, merged.Right, publicSeed, threadContext);
 							threadContext.randHashAddress = null;
 						} else {
 							// hash single node
 							threadContext.OtsHashAddress.Initialize(adrs);
-							threadContext.OtsHashAddress.OtsAddress = workingNode.Id.Index;
+							threadContext.OtsHashAddress.OtsAddress = workingXmssNode.Id.Index;
 
 							ByteArray[] wotsPublicKey = this.GenerateWotsPublicKeyParallel(privateKey, threadContext);
 
 							threadContext.LTreeAddress.Initialize(adrs);
-							threadContext.LTreeAddress.LtreeAddress = workingNode.Id.Index;
+							threadContext.LTreeAddress.LtreeAddress = workingXmssNode.Id.Index;
 
 							threadContext.randHashAddress = threadContext.LTreeAddress;
-							workingNode.Hash = this.LTree(wotsPublicKey, publicSeed, threadContext.LTreeAddress);
+							workingXmssNode.Hash = this.LTree(wotsPublicKey, publicSeed, threadContext.LTreeAddress);
 							threadContext.randHashAddress = null;
 						}
 
 						// here we would add the node to cache
 						Interlocked.Increment(ref completedNodes);
-						privateKey.NodeCache.Cache(workingNode.Id, workingNode.Hash);
+						privateKey.NodeCache.Cache(workingXmssNode.Id, workingXmssNode.Hash);
 
-						if(workingNode.Id.Height == targetNodeHeigth) {
-							if(!workingNode.IsCompleted) {
+						if(workingXmssNode.Id.Height == targetNodeHeigth) {
+							if(!workingXmssNode.IsCompleted) {
 								//  this is bad, we are done but we have no result
 								throw new ApplicationException("Failed to find the root node.");
 							}
 
 							// its the root, we are done!
-							root = workingNode.Hash;
+							root = workingXmssNode.Hash;
 
 							// stop the other threads too, we are done
 							completed = true;
@@ -443,14 +435,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 							break;
 						}
 
-						if(this.incompleteNodes.TryGetValue(workingNode.Parent, out MergedNodeInfo parent)) {
-							if(workingNode.Direction == NodeInfo.Directions.Left) {
-								parent.Left = workingNode.Hash;
+						if(this.incompleteNodes.TryGetValue(workingXmssNode.Parent, out MergedXmssNodeInfo parent)) {
+							if(workingXmssNode.Direction == XmssNodeInfo.Directions.Left) {
+								parent.Left = workingXmssNode.Hash;
 							} else {
-								parent.Right = workingNode.Hash;
+								parent.Right = workingXmssNode.Hash;
 							}
 
-							workingNode = null;
+							workingXmssNode = null;
 
 							if(!parent.AreChildrenReady) {
 								continue;
@@ -460,11 +452,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 								// move it to the ready queue
 								if(this.incompleteNodes.TryRemove(parent.Id, out parent)) {
 									// its ready, let's process it right away
-									workingNode = parent;
+									workingXmssNode = parent;
 								}
 							}
 						} else {
-							workingNode = null;
+							workingXmssNode = null;
 						}
 
 						if(counter >= LOOP_REST_COUNT) {
@@ -483,11 +475,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 							if(entry.Value != null) {
 
 								this.incompleteNodes.RemoveSafe(entry.Key);
-								workingNode = entry.Value;
+								workingXmssNode = entry.Value;
 							}
 						}
 
-						if(workingNode == null) {
+						if(workingXmssNode == null) {
 							// we found nothing, lets sleep a bit until something becomes available
 							Thread.Sleep(10);
 							counter = 0;
@@ -543,7 +535,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		/// <param name="direction"></param>
 		/// <param name="nodeCache"></param>
 		/// <returns></returns>
-		private ByteArray PrepareHashTreeWorkNodes(XMSSNodeId id, XMSSNodeId parentId, NodeInfo.Directions direction, XMSSNodeCache nodeCache) {
+		private ByteArray PrepareHashTreeWorkNodes(XMSSNodeId id, XMSSNodeId parentId, XmssNodeInfo.Directions direction, XMSSNodeCache nodeCache) {
 
 			ByteArray cached = nodeCache[id];
 
@@ -555,30 +547,30 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			if(id.Height == 0) {
 
 				// this one is ready to compute
-				NodeInfo leafNode = new NodeInfo();
-				leafNode.Id = id;
-				leafNode.Direction = direction;
-				leafNode.Parent = parentId;
-				this.readyNodes.Enqueue(leafNode);
+				XmssNodeInfo leafXmssNode = new XmssNodeInfo();
+				leafXmssNode.Id = id;
+				leafXmssNode.Direction = direction;
+				leafXmssNode.Parent = parentId;
+				this.readyNodes.Enqueue(leafXmssNode);
 
 				return null;
 			}
 
-			MergedNodeInfo node = new MergedNodeInfo();
+			MergedXmssNodeInfo xmssNode = new MergedXmssNodeInfo();
 
-			node.Id = id;
+			xmssNode.Id = id;
 
-			node.Left = this.PrepareHashTreeWorkNodes((2 * id.Index, id.Height - 1), id, NodeInfo.Directions.Left, nodeCache);
-			node.Right = this.PrepareHashTreeWorkNodes(((2 * id.Index) + 1, id.Height - 1), id, NodeInfo.Directions.Right, nodeCache);
-			node.Direction = direction;
-			node.Parent = parentId;
+			xmssNode.Left = this.PrepareHashTreeWorkNodes((2 * id.Index, id.Height - 1), id, XmssNodeInfo.Directions.Left, nodeCache);
+			xmssNode.Right = this.PrepareHashTreeWorkNodes(((2 * id.Index) + 1, id.Height - 1), id, XmssNodeInfo.Directions.Right, nodeCache);
+			xmssNode.Direction = direction;
+			xmssNode.Parent = parentId;
 
-			if(node.AreChildrenReady) {
+			if(xmssNode.AreChildrenReady) {
 				// its ready to be processed
-				this.readyNodes.Enqueue(node);
+				this.readyNodes.Enqueue(xmssNode);
 			} else {
 				// we will come back to it later
-				this.incompleteNodes.AddSafe(id, node);
+				this.incompleteNodes.AddSafe(id, xmssNode);
 			}
 
 			// always null, the ndoe is not computed yet
@@ -739,7 +731,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		}
 
 		private void CheckValidIndex(XMSSPrivateKey xmssSecretKey) {
-			if(xmssSecretKey.Index >= this.LeafCount) {
+			if(xmssSecretKey.Index >= this.MaximumIndex) {
 				throw new ArgumentException("The key index is higher than the key size");
 			}
 		}
@@ -751,11 +743,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			OtsHashAddress adrs = this.xmssExecutionContext.OtsHashAddressPool.GetObject();
 			adrs.Reset();
 
-			ByteArray temp2 = CommonUtils.ToBytes(signatureIndex, this.digestLength);
-			ByteArray random = CommonUtils.PRF(xmssSecretKey.SecretPrf, temp2, this.xmssExecutionContext);
+			ByteArray temp2 = XMSSCommonUtils.ToBytes(signatureIndex, this.digestLength);
+			ByteArray random = XMSSCommonUtils.PRF(xmssSecretKey.SecretPrf, temp2, this.xmssExecutionContext);
 			ByteArray temp = xmssSecretKey.Root;
 
-			ByteArray concatenated = CommonUtils.Concatenate(random, temp, temp2);
+			ByteArray concatenated = XMSSCommonUtils.Concatenate(random, temp, temp2);
 
 			temp2.Return();
 
@@ -832,9 +824,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			XMSSPublicKey loadedPublicKey = new XMSSPublicKey(this.xmssExecutionContext);
 			loadedPublicKey.LoadKey(publicKey);
 
-			ByteArray temp2 = CommonUtils.ToBytes(loadedSignature.Index, this.digestLength);
+			ByteArray temp2 = XMSSCommonUtils.ToBytes(loadedSignature.Index, this.digestLength);
 
-			ByteArray concatenated = CommonUtils.Concatenate(loadedSignature.Random, loadedPublicKey.Root, temp2);
+			ByteArray concatenated = XMSSCommonUtils.Concatenate(loadedSignature.Random, loadedPublicKey.Root, temp2);
 
 			temp2.Return();
 
@@ -852,7 +844,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 			this.xmssExecutionContext.OtsHashAddressPool.PutObject(adrs);
 
-			bool result = CommonUtils.EqualsConstantTime(loadedPublicKey.Root, node);
+			bool result = XMSSCommonUtils.EqualsConstantTime(loadedPublicKey.Root, node);
 
 			node.Return();
 
@@ -864,7 +856,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 	#region TREE HASH
 
-		private class NodeInfo {
+		private class XmssNodeInfo {
 			public enum Directions {
 				None,
 				Left,
@@ -879,7 +871,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			public bool IsCompleted => (this.Hash != null) && this.Hash.HasData;
 		}
 
-		private class MergedNodeInfo : NodeInfo {
+		private class MergedXmssNodeInfo : XmssNodeInfo {
 
 			public ByteArray Left { get; set; }
 			public ByteArray Right { get; set; }
@@ -887,8 +879,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			public bool AreChildrenReady => (this.Left != null) && (this.Right != null);
 		}
 
-		private readonly ConcurrentDictionary<XMSSNodeId, MergedNodeInfo> incompleteNodes = new ConcurrentDictionary<XMSSNodeId, MergedNodeInfo>();
-		private readonly ConcurrentQueue<NodeInfo> readyNodes = new ConcurrentQueue<NodeInfo>();
+		private readonly ConcurrentDictionary<XMSSNodeId, MergedXmssNodeInfo> incompleteNodes = new ConcurrentDictionary<XMSSNodeId, MergedXmssNodeInfo>();
+		private readonly ConcurrentQueue<XmssNodeInfo> readyNodes = new ConcurrentQueue<XmssNodeInfo>();
 
 		public class ThreadContext : IDisposableExtended {
 

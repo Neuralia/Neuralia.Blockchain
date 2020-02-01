@@ -1,4 +1,5 @@
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Types;
 
 namespace Neuralia.Blockchains.Core.Configuration {
 	public sealed class GlobalSettings {
@@ -11,7 +12,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public AppSettingsBase AppSettings { get; private set; }
 		public SoftwareVersion CurrentSoftwareVersion { get; private set; }
 
-		public Enums.PeerTypes PeerType { get; private set; }
+		public NodeInfo NodeInfo { get; private set; }
 		public int NetworkId { get; private set; }
 
 		public void SetValues<OS>(in GlobalSettingsParameters globalSettingsParameters)
@@ -22,7 +23,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 				this.CurrentSoftwareVersion = globalSettingsParameters.softwareVersion;
 				this.AppSettings = globalSettingsParameters.appSettings;
-				this.PeerType = globalSettingsParameters.peerType;
+				this.NodeInfo = globalSettingsParameters.nodeInfo;
 				this.NetworkId = globalSettingsParameters.networkId;
 
 				// set the options override
@@ -36,7 +37,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			public AppSettingsBase appSettings;
 			public SoftwareVersion softwareVersion;
 			public ICommandLineOptions cmdOptions;
-			public Enums.PeerTypes peerType;
+			public NodeInfo nodeInfo;
 			public int networkId;
 		}
 

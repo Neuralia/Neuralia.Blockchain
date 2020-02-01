@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Neuralia.Blockchains.Core.Network.ReadingContexts;
 
 namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 	/// <summary>
@@ -17,6 +18,9 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 	/// </summary>
 	public class AdaptiveDecimal : ITreeHashable, IBinarySerializable, IEquatable<AdaptiveDecimal>, IComparable<decimal>, IComparable<AdaptiveDecimal> {
 
+		private const long BYTES_7 = 0xFFFFFFFFFFFFFF;
+		private const int MAX_DECIMALS = 16;
+		
 		private const byte INTEGRAL_MASK = 0x7;
 		private const byte FRACTION_MASK = 0x38;
 		private const byte ZEROS_MASK = 0x40;
@@ -38,15 +42,15 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 		[BsonIgnore]
 		[JsonIgnore]
-		public virtual long MaxValue { get; } = long.MaxValue;
+		public static long MaxValue { get; } = BYTES_7;
 
 		[BsonIgnore]
 		[JsonIgnore]
-		public virtual long MinValue { get; } = long.MinValue;
+		public static long MinValue { get; } = -BYTES_7;
 
 		[BsonIgnore]
 		[JsonIgnore]
-		public virtual ulong MaxDecimalValue { get; } = ulong.MaxValue;
+		public static ulong MaxDecimalValue { get; } = BYTES_7;
 
 		/// <summary>
 		///     Number of seconds since chain inception
@@ -55,7 +59,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			get => this.value;
 			set {
 				decimal adjustedValue = value.Normalize();
-				this.TestMaxSize(adjustedValue);
+				this.TestMaxSize(ref adjustedValue);
 				this.value = adjustedValue;
 			}
 		}
@@ -109,21 +113,11 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			return this.Value == other;
 		}
 
-		protected virtual void TestMaxSize(decimal value) {
+		protected virtual void TestMaxSize(ref decimal entry) {
 
-			if(value > this.MaxValue) {
-				throw new ApplicationException("Invalid value. bit size is too big!");
-			}
+			(long integral, ulong fraction) components = this.GetComponents(entry);
 
-			if(value < this.MinValue) {
-				throw new ApplicationException("Invalid value. bit size is too small!");
-			}
-
-			(long integral, ulong fraction) components = this.GetComponents(value);
-
-			if(components.fraction > this.MaxDecimalValue) {
-				throw new ApplicationException("Invalid value. fractions size is too big!");
-			}
+			entry = this.RebuildFromPonents(components.integral, components.fraction);
 		}
 
 		/// <summary>
@@ -196,10 +190,18 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 		/// </summary>
 		/// <returns></returns>
 		protected (long integral, ulong fraction) GetComponents(decimal value) {
-			long integral = (long) value;
+
+			long integral = value > MaxValue?MaxValue:(long) value;
+
 			decimal fractions = value % 1.0M;
+
+			fractions = Math.Round(fractions, MAX_DECIMALS);
+			
 			ulong fraction = this.InvertDecimalPlaces(fractions);
 
+			if(fraction > MaxDecimalValue) {
+				fraction = MaxDecimalValue;
+			}
 			return (integral, fraction);
 		}
 
@@ -245,24 +247,20 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			if(adjustedIntegral != 0) {
 				int integralBitSize = BitUtilities.GetValueBitSize((ulong) adjustedIntegral);
 
-				for(int i = 1; i <= 8; i++) {
-					if(integralBitSize <= (8 * i)) {
-						integralSerializationByteSize = i;
+				integralSerializationByteSize = (int)Math.Ceiling((double)integralBitSize / 8);
 
-						break;
-					}
+				if(integralSerializationByteSize >= 8) {
+					throw new ArgumentException("integral byte size can not be larger than 7 bytes");
 				}
 			}
 
 			if(adjustedfraction != 0) {
 				int fractionBitSize = BitUtilities.GetValueBitSize(adjustedfraction);
 
-				for(int i = 1; i <= 8; i++) {
-					if(fractionBitSize <= (8 * i)) {
-						fractionSerializationByteSize = i;
-
-						break;
-					}
+				fractionSerializationByteSize = (int)Math.Ceiling((double)fractionBitSize / 8);
+				
+				if(fractionSerializationByteSize >= 8) {
+					throw new ArgumentException("fraction byte size can not be larger than 7 bytes");
 				}
 			}
 
@@ -351,11 +349,14 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			// restore the sign
 			integral *= sign;
 
-			this.Value = this.RestoreDecimalPlaces(fraction) + integral;
+			this.Value = this.RebuildFromPonents(integral, fraction);
 
 			return integralSerializationByteSize + fractionSerializationByteSize + 1;
 		}
 
+		private decimal RebuildFromPonents(long integral, ulong fraction) {
+			return this.RestoreDecimalPlaces(fraction) + integral;
+		}
 		protected virtual ulong prepareBuffer(ulong buffer, byte firstByte) {
 			return buffer;
 		}

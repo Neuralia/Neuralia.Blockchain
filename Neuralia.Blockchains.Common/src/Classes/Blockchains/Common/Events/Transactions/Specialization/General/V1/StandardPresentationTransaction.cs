@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
@@ -41,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.Keyset.Add<SecretCryptographicKey>(GlobalsService.SUPER_KEY_ORDINAL_ID);
 		}
 
-		public List<ITransactionAccountFeature> Features { get; } = new List<ITransactionAccountFeature>();
+		public List<ITransactionAccountAttribute> Attributes { get; } = new List<ITransactionAccountAttribute>();
 
 		public int PowNonce { get; set; }
 		public List<int> PowSolutions { get; set; } = new List<int>();
@@ -82,7 +83,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("AssignedAccountId", this.AssignedAccountId?.ToString());
 			jsonDeserializer.SetProperty("CorrelationId", this.CorrelationId ?? 0);
 
-			jsonDeserializer.SetArray("Features", this.Features);
+			jsonDeserializer.SetArray("Attributes", this.Attributes);
 
 			//
 			jsonDeserializer.SetProperty("PowNonce", this.PowNonce);
@@ -100,15 +101,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.AssignedAccountId.Rehydrate(rehydrator);
 			this.CorrelationId = rehydrator.ReadNullableLong();
 
-			this.Features.Clear();
+			this.Attributes.Clear();
 			byte accountFeatureCount = rehydrator.ReadByte();
 
 			for(short i = 0; i < accountFeatureCount; i++) {
-				ITransactionAccountFeature feature = this.CreateTransactionAccountFeature();
+				ITransactionAccountAttribute attribute = this.CreateTransactionAccountFeature();
 
-				feature.Rehydrate(rehydrator);
+				attribute.Rehydrate(rehydrator);
 
-				this.Features.Add(feature);
+				this.Attributes.Add(attribute);
 			}
 
 			this.PowNonce = rehydrator.ReadInt();
@@ -126,9 +127,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.AssignedAccountId.Dehydrate(dehydrator);
 			dehydrator.Write(this.CorrelationId);
 
-			dehydrator.Write((byte) this.Features.Count);
+			dehydrator.Write((byte) this.Attributes.Count);
 
-			foreach(ITransactionAccountFeature feature in this.Features) {
+			foreach(ITransactionAccountAttribute feature in this.Attributes) {
 				feature.Dehydrate(dehydrator);
 			}
 
@@ -141,6 +142,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			}
 		}
 
-		protected abstract ITransactionAccountFeature CreateTransactionAccountFeature();
+		protected abstract ITransactionAccountAttribute CreateTransactionAccountFeature();
+		
+		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
 	}
 }

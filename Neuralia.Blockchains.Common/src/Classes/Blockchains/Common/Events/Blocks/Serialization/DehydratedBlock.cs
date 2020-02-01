@@ -146,7 +146,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				this.RehydratedBlock = rehydrationFactory.CreateBlock(this);
 
 				if(buildOffsets) {
-					this.RehydratedBlock.BuildKeyedOffsets();
+					this.RehydratedBlock.BuildMasterTransactionOffsets();
 				}
 
 				this.RehydratedBlock.Rehydrate(this, rehydrationFactory);

@@ -8,7 +8,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization {
 
-	public interface IKeyedTransaction : ITransaction, IRateLimitedTransaction {
+	public interface IKeyedTransaction : IMasterTransaction {
 		KeySet Keyset { get; }
 	}
 

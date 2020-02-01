@@ -84,7 +84,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			SafeArrayHandle rootHash = this.Sha3(root);
 
-			BigInteger hash = new BigInteger(rootHash.ToExactByteArrayCopy().Concat(new byte[] {0}).ToArray());
+			BigInteger hash = HashDifficultyUtils.GetBigInteger(rootHash);
 
 			BigInteger hashTarget = HashDifficultyUtils.GetHash256TargetByIncrementalDifficulty(hashTargetDifficulty);
 			Log.Verbose("Difficulty: {0}", hashTargetDifficulty);
@@ -176,7 +176,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			SafeArrayHandle rootHash = this.Sha3(root);
 
-			BigInteger hash = new BigInteger(rootHash.ToExactByteArray().Concat(new byte[] {0}).ToArray());
+			BigInteger hash = HashDifficultyUtils.GetBigInteger(rootHash);
 
 			rootHash.Return();
 
@@ -258,7 +258,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 				SafeArrayHandle hashres = this.Sha3_256(result);
 
-				results.Add(new BigInteger(hashres.ToExactByteArray().Concat(new byte[] {0}).ToArray())); // add a 0 to make sure the results are positive
+				results.Add(HashDifficultyUtils.GetBigInteger(hashres)); // add a 0 to make sure the results are positive
 
 				hashres.Return();
 			}
@@ -487,17 +487,10 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		}
 
 		private SafeArrayHandle GetHash(BigInteger hash, int nonce) {
-
-#if (NETSTANDARD2_0)
-			Span<byte> bytes = hash.ToByteArray();
-			SafeArrayHandle hashbytes = ByteArray.Create(bytes.Length);
-			bytes.CopyTo(hashbytes.Span);
-#else
+			
 			int        byteCount = hash.GetByteCount();
 			SafeArrayHandle hashbytes = ByteArray.Create(byteCount);
 			hash.TryWriteBytes(hashbytes.Span, out int bytesWritten);
-			
-#endif
 
 			Span<byte> noncebytes = stackalloc byte[sizeof(int)];
 			TypeSerializer.Serialize(nonce, noncebytes);

@@ -11,6 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		Dictionary<int, Dictionary<int, SafeArrayHandle>> HashChannel(int groupIndex);
 
 		SafeArrayHandle GetFileBytes(int indexId, int bandId, uint partIndex, long offset, int length);
+		void WriteFileBytes(int indexId, int fileId, uint partIndex, SafeArrayHandle data);
 	}
 
 	public interface IDigestChannel : IVersionable<DigestChannelType>, IDigestChannelValidator {
@@ -28,6 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where CARD : class
 		where KEY : struct, IEquatable<KEY> {
 
+		private bool initialized = false;
 		public const string CHANNELS_FOLDER = "channels";
 		protected readonly string baseFolder;
 
@@ -60,7 +62,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public abstract DigestChannelType ChannelType { get; }
 
 		public virtual void Initialize() {
-			this.BuildBandsIndices();
+			if(!this.initialized) {
+				this.BuildBandsIndices();
+				this.initialized = true;
+			}
 		}
 
 		public Dictionary<int, Dictionary<int, SafeArrayHandle>> HashChannel(int groupIndex) {
@@ -73,6 +78,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public SafeArrayHandle GetFileBytes(int indexId, int fileId, uint partIndex, long offset, int length) {
 			return this.channelBandIndexSet.BandIndices[indexId].GetFileBytes(fileId, partIndex, offset, length);
+		}
+
+		public void WriteFileBytes(int indexId, int fileId, uint partIndex,  SafeArrayHandle data) {
+			this.channelBandIndexSet.BandIndices[indexId].WriteFileBytes(fileId, partIndex, data);
 		}
 
 		protected abstract void BuildBandsIndices();

@@ -9,17 +9,23 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	/// <summary>
 	///     xxhash is great for 64 bit non cryptographic hashes
 	/// </summary>
-	public class xxHashSakuraTree : SakuraTree {
-		private static readonly IxxHash hasher;
+	public class xxHashSakuraTree : SakuraTree<IxxHash> {
+		
+		
+		private static readonly xxHashConfig XxHashConfig = new xxHashConfig {HashSizeInBits = 64, Seed = 4745286767196280399UL};
 
+		protected xxHashConfig GetxxConfig() {
+			return new xxHashConfig {HashSizeInBits = 64, Seed = 4745286767196280399UL};
+		}
 		static xxHashSakuraTree() {
-			xxHashConfig XxHashConfig = new xxHashConfig {HashSizeInBits = 64, Seed = 4745261967123280399UL};
-
-			hasher = xxHashFactory.Instance.Create(XxHashConfig);
+		}
+		
+		protected override IxxHash DigestFactory() {
+			return xxHashFactory.Instance.Create(XxHashConfig);
 		}
 
-		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry) {
-			return ByteArray.WrapAndOwn(hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length).Hash);
+		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry, IxxHash hasher) {
+			return ByteArray.WrapAndOwn( hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length).Hash);
 		}
 
 		public ulong HashULong(IHashNodeList nodeList) {
@@ -38,6 +44,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				
 				return result;
 			}
+		}
+
+		public xxHashSakuraTree(Enums.ThreadMode threadMode = Enums.ThreadMode.ThreeQuarter) : base(threadMode) {
 		}
 	}
 }

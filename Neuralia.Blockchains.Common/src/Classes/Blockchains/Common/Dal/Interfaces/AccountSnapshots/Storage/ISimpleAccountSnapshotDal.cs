@@ -8,10 +8,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 	public interface IStandardAccountSnapshotDal : IAccountSnapshotDal {
 	}
 
-	public interface IStandardAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT, ACCOUNT_SNAPSHOT, ACCOUNT_FEATURE_SNAPSHOT> : IAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT>, IStandardAccountSnapshotDal
-		where ACCOUNT_SNAPSHOT_CONTEXT : IStandardAccountSnapshotContext<ACCOUNT_SNAPSHOT, ACCOUNT_FEATURE_SNAPSHOT>
-		where ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<ACCOUNT_FEATURE_SNAPSHOT>, new()
-		where ACCOUNT_FEATURE_SNAPSHOT : class, IAccountFeatureEntry, new() {
+	public interface IStandardAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT, ACCOUNT_SNAPSHOT, ACCOUNT_ATTRIBUTE_SNAPSHOT> : IAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT>, IStandardAccountSnapshotDal
+		where ACCOUNT_SNAPSHOT_CONTEXT : IStandardAccountSnapshotContext<ACCOUNT_SNAPSHOT, ACCOUNT_ATTRIBUTE_SNAPSHOT>
+		where ACCOUNT_SNAPSHOT : class, IStandardAccountSnapshotEntry<ACCOUNT_ATTRIBUTE_SNAPSHOT>, new()
+		where ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new() {
 
 		void Clear();
 		List<ACCOUNT_SNAPSHOT> LoadAccounts(List<AccountId> accountIds);

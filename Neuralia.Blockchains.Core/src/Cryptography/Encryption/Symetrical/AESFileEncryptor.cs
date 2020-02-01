@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
@@ -15,14 +16,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 	/// </summary>
 	public class AESFileEncryptor {
 		public static AesEncryptorParameters GenerateEncryptionParameters() {
-			SecureRandom rnd = new SecureRandom();
+			SecureRandom rnd = new BetterSecureRandom();
 
 			ByteArray salt = ByteArray.Create(500);
 
 			// get a random salt
 			salt.FillSafeRandom();
 
-			return new AesEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_256, Salt = salt, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			var entry = new AesEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_256, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			entry.Salt.Entry = salt;
+			return entry;
 		}
 
 		public static SymmetricAlgorithm InitSymmetric(SymmetricAlgorithm algorithm, SecureString password, AesEncryptorParameters parameters) {
@@ -55,12 +58,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 		private static ByteArray Transform(SafeArrayHandle bytes, Func<ICryptoTransform> selectCryptoTransform) {
 			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
-#if (NETSTANDARD2_0)
-				using(CryptoStream cryptoStream = new CryptoStream(memoryStream, selectCryptoTransform(), CryptoStreamMode.Write)) {
-#else
+
 				using(CryptoStream cryptoStream = new CryptoStream(memoryStream, selectCryptoTransform(), CryptoStreamMode.Write, true)) {
-					
-#endif
+
 					cryptoStream.Write(bytes.Bytes, bytes.Offset, bytes.Length);
 
 					cryptoStream.FlushFinalBlock();
@@ -85,11 +85,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		private static ByteArray Transform(ReadOnlySpan<byte> bytes, Func<ICryptoTransform> selectCryptoTransform) {
 			using(RecyclableMemoryStream memoryStream = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("encryptor")) {
 				using(CryptoStream cryptoStream = new CryptoStream(memoryStream, selectCryptoTransform(), CryptoStreamMode.Write)) {
-#if (NETSTANDARD2_0)
-					cryptoStream.Write(bytes.ToArray(), 0, bytes.Length);
-#else
+
 					cryptoStream.Write(bytes);
-#endif
 
 					cryptoStream.FlushFinalBlock();
 

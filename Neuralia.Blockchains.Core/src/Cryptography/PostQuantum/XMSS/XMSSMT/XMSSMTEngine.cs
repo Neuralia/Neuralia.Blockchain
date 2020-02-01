@@ -23,11 +23,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 		private readonly int height;
 		private readonly int layers;
 
-		private readonly int winternitz;
-		private readonly WotsPlusEngine wotsPlusProvider;
+		private readonly WotsPlus wotsPlusProvider;
 
 		private readonly Dictionary<XMSSMTreeId, ByteArray[]> wotsPrivateSeedsCache = new Dictionary<XMSSMTreeId, ByteArray[]>();
-		private readonly Dictionary<XMSSMTLeafId, ByteArray[]> wotsPublicKeysCache = new Dictionary<XMSSMTLeafId, ByteArray[]>();
 
 		private readonly XMSSEngine xmssEngine;
 
@@ -38,7 +36,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 		/// <param name="levels">Number of levels of the tree</param>
 		/// <param name="length">Length in bytes of the message digest as well as of each node</param>
 		/// <param name="wParam">Winternitz parameter {4,16}</param>
-		public XMSSMTEngine(XMSSOperationModes mode, Enums.ThreadMode threadMode, XMSSExecutionContext xmssExecutionContext, int height, int layers, WinternitzParameter wParam = WinternitzParameter.Param16) {
+		public XMSSMTEngine(XMSSOperationModes mode, Enums.ThreadMode threadMode, XMSSExecutionContext xmssExecutionContext, int height, int layers) {
 
 			if(height < 2) {
 				throw new ArgumentException("totalHeight must be rgeater than 1");
@@ -55,18 +53,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			this.layers = layers;
 			this.height = height;
 
+			this.xmssExecutionContext = xmssExecutionContext;
+			this.wotsPlusProvider = new WotsPlus(threadMode, this.xmssExecutionContext);
+			
 			this.ReducedHeight = this.height / this.layers;
 			this.LeafCount = 1 << this.height;
 			this.ReducedLeafCount = 1 << this.ReducedHeight;
 
-			this.xmssExecutionContext = xmssExecutionContext;
-
 			this.digestLength = this.xmssExecutionContext.DigestSize;
-			this.winternitz = (int) wParam;
 
-			this.wotsPlusProvider = new WotsPlusEngine(mode, threadMode, this.xmssExecutionContext, wParam);
-
-			this.xmssEngine = new XMSSEngine(mode, threadMode, this.wotsPlusProvider, this.xmssExecutionContext, this.ReducedHeight, (WinternitzParameter) this.winternitz);
+			this.xmssEngine = new XMSSEngine(mode, threadMode, this.wotsPlusProvider, this.xmssExecutionContext, this.ReducedHeight);
 		}
 
 		public int LeafCount { get; }
@@ -97,9 +93,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 		public (XMSSMTPrivateKey privateKey, XMSSMTPublicKey publicKey) GenerateKeys() {
 
-			(ByteArray publicSeed, ByteArray secretSeed, ByteArray secretSeedPrf) = CommonUtils.GenerateSeeds(this.xmssExecutionContext);
+			(ByteArray publicSeed, ByteArray secretSeed, ByteArray secretSeedPrf) = XMSSCommonUtils.GenerateSeeds(this.xmssExecutionContext);
 
-			this.wotsPublicKeysCache.Clear();
 			this.wotsPrivateSeedsCache.Clear();
 
 			var nonces = new Dictionary<XMSSMTLeafId, (int nonce1, int nonce2)>();
@@ -108,7 +103,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				for(int tree = 0; tree < (1 << ((this.layers - 1 - layer) * this.ReducedHeight)); tree++) {
 					for(int i = 0; i < this.LeafCount; i++) {
 #if DETERMINISTIC_DEBUG
-				nonces.Add((i,tree, layer), (i,i));
+						nonces.Add((i,tree, layer), (i,i));
 #else
 						nonces.Add((i, tree, layer), (this.xmssExecutionContext.Random.NextInt(), this.xmssExecutionContext.Random.NextInt()));
 #endif
@@ -147,18 +142,27 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			return key;
 		}
 
+		private void CheckValidIndex(XMSSMTPrivateKey xmssmtSecretKey) {
+			if(xmssmtSecretKey.Index >= this.MaximumIndex) {
+				throw new ArgumentException("The key index is higher than the key size");
+			}
+		}
+		
 		public ByteArray Sign(ByteArray message, XMSSMTPrivateKey xmssmtSecretKey) {
 
+			
+			this.CheckValidIndex(xmssmtSecretKey);
+			
 			long signatureIndex = xmssmtSecretKey.Index;
-
+			
 			OtsHashAddress adrs = this.xmssExecutionContext.OtsHashAddressPool.GetObject();
 			adrs.Reset();
 
-			ByteArray temp2 = CommonUtils.ToBytes(signatureIndex, this.digestLength);
-			ByteArray random = CommonUtils.PRF(xmssmtSecretKey.SecretPrf, temp2, this.xmssExecutionContext);
+			ByteArray temp2 = XMSSCommonUtils.ToBytes(signatureIndex, this.digestLength);
+			ByteArray random = XMSSCommonUtils.PRF(xmssmtSecretKey.SecretPrf, temp2, this.xmssExecutionContext);
 			ByteArray temp = xmssmtSecretKey.Root;
 
-			ByteArray concatenated = CommonUtils.Concatenate(random, temp, temp2);
+			ByteArray concatenated = XMSSCommonUtils.Concatenate(random, temp, temp2);
 
 			temp2.Return();
 
@@ -221,9 +225,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			XMSSMTPublicKey loadedPublicKey = new XMSSMTPublicKey(this.xmssExecutionContext);
 			loadedPublicKey.LoadKey(publicKey);
 
-			ByteArray temp2 = CommonUtils.ToBytes(loadedSignature.Index, this.digestLength);
+			ByteArray temp2 = XMSSCommonUtils.ToBytes(loadedSignature.Index, this.digestLength);
 
-			ByteArray concatenated = CommonUtils.Concatenate(loadedSignature.Random, loadedPublicKey.Root, temp2);
+			ByteArray concatenated = XMSSCommonUtils.Concatenate(loadedSignature.Random, loadedPublicKey.Root, temp2);
 
 			temp2.Return();
 
@@ -267,7 +271,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			this.xmssExecutionContext.OtsHashAddressPool.PutObject(adrs);
 
-			bool result = CommonUtils.EqualsConstantTime(loadedPublicKey.Root, node);
+			bool result = XMSSCommonUtils.EqualsConstantTime(loadedPublicKey.Root, node);
 
 			node.Return();
 
@@ -323,16 +327,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 				this.xmssEngine?.Dispose();
 
-				foreach(ByteArray[] entry in this.wotsPublicKeysCache.Values) {
-					DoubleArrayHelper.Dispose(entry);
-				}
-
 				foreach(ByteArray[] entry in this.wotsPrivateSeedsCache.Values) {
 					DoubleArrayHelper.Dispose(entry);
 				}
 
 				this.wotsPlusProvider?.Dispose();
-				this.wotsPublicKeysCache.Clear();
 
 				this.xmssExecutionContext?.Dispose();
 			}
