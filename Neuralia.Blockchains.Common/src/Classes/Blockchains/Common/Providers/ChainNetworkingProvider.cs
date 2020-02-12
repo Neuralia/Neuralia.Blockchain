@@ -293,7 +293,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
 			bool sent = false;
 
-			if((transactionEnvelope.IsPresentation || transactionEnvelope.Contents.RehydratedTransaction is IPresentation) && !this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations && !useWeb) {
+			if(!useWeb && !chainConfiguration.AllowGossipPresentations && (transactionEnvelope.IsPresentation || transactionEnvelope.Contents.RehydratedTransaction is IPresentation) && !this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations) {
 				
 				// seems we have no choice but to use the webreg for presentation transactions.
 				useWeb = true;

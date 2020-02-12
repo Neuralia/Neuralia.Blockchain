@@ -17,6 +17,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Ident
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Genesis;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization;
@@ -36,7 +37,9 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snap
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
@@ -1538,6 +1541,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateProvider.MinimumVersionAllowed = chainOperatingRulesTransaction.MaximumVersionAllowed.ToString();
 			chainStateProvider.MaxBlockInterval = chainOperatingRulesTransaction.MaxBlockInterval;
 			chainStateProvider.AllowGossipPresentations = chainOperatingRulesTransaction.AllowGossipPresentations;
+
+			if(new SoftwareVersion(chainStateProvider.MinimumVersionAllowed) > GlobalSettings.SoftwareVersion) {
+				throw new UnrecognizedElementException(this.CentralCoordinator.ChainId, this.CentralCoordinator.ChainName);
+			}
 		}
 
 	#endregion

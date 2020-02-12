@@ -3795,7 +3795,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					signature2 = provider.Sign(message, ByteArray.Wrap(qsecretDoubleWalletKey.SecondKey.PrivateKey));
 				}
 
-				IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+				using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 				dehydrator.Write(signature1);
 				dehydrator.Write(signature2);

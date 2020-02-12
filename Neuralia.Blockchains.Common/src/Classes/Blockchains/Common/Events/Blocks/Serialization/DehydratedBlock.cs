@@ -75,7 +75,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public IBlock RehydratedBlock { get; private set; }
 
 		public SafeArrayHandle Dehydrate() {
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 

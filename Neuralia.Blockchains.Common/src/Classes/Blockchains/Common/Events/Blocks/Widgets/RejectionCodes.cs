@@ -41,7 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.W
 
 		public readonly RejectionCode NONE;
 
-		public readonly RejectionCode OTHER = ushort.MaxValue;
+		public readonly RejectionCode OTHER = 0;
 
 		static RejectionCodes() {
 		}

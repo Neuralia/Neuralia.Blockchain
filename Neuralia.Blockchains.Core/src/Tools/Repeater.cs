@@ -81,7 +81,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			throw new ApplicationException($"Falied to retry {tries} times.");
 		}
 		
-		public static Task RepeatAsync(Func<int, Task> action, int tries = 3, Action afterFailed = null) {
+		public static async Task RepeatAsync(Func<int, Task> action, int tries = 3, Action afterFailed = null) {
 			int count = 1;
 
 			int time = 10;
@@ -89,8 +89,10 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 				try {
 
-					return action(count);
-					
+					await action(count);
+
+					return;
+
 				} catch(Exception ex) {
 
 					if(count == tries) {
@@ -108,7 +110,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			throw new ApplicationException($"Falied to retry {tries} times.");
 		}
 		
-		public static Task<R> RepeatAsync<R>(Func<int, Task<R>> action, int tries = 3, Action afterFailed = null) {
+		public static async Task<R> RepeatAsync<R>(Func<int, Task<R>> action, int tries = 3, Action afterFailed = null) {
 			int count = 1;
 
 			int time = 10;
@@ -116,7 +118,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 				try {
 
-					return action(count);
+					return await action(count);
 					
 				} catch(Exception ex) {
 

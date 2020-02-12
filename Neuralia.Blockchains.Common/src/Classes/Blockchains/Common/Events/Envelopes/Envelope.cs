@@ -55,7 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public SafeArrayHandle DehydrateEnvelope() {
 
 			if(this.dehydratedEnvelopeBytes.IsEmpty) {
-				IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
+				using IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
 
 				this.Version.Dehydrate(dh);
 
@@ -120,7 +120,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 					throw new ApplicationException("Blockchain event must be loaded to dehydrate an envelope");
 				}
 
-				IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
+				using IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
 				this.Contents.Dehydrate(dh);
 
 				this.EventBytes.Entry = dh.ToArray().Entry;

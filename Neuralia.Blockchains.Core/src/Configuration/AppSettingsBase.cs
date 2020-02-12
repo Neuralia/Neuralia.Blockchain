@@ -588,6 +588,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes ChangeXmssKeyHashType { get; set; } = HashTypes.Sha3;
+
+		/// <summary>
+		/// if true, we will allow gossip presentations even if not allowed otherwise
+		/// </summary>
+		public bool AllowGossipPresentations { get; set; } = false;
 	}
 
 	public class KeySecurityConfigurations {

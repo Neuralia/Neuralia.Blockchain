@@ -244,7 +244,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			BlockchainDigestSimpleChannelSetDescriptor descriptor = DigestChannelSetFactory.ConvertToDigestSimpleChannelSetDescriptor(blockchainDigestDescriptor);
 
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			descriptor.Dehydrate(dehydrator);
 
@@ -634,9 +634,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				}
 			} else {
 				// write a regular block
-				this.ChainScheduler.ScheduleWrite(indexer => {
-					result = indexer.SaveBlockBytes(blockId, blockIndex, blockData, this.PrepareMasterTransactionData(keyedOffsets));
-				});
+				using(var bytes = this.PrepareMasterTransactionData(keyedOffsets)) {
+					this.ChainScheduler.ScheduleWrite(indexer => {
+						result = indexer.SaveBlockBytes(blockId, blockIndex, blockData, bytes);
+					});
+				}
 			}
 
 			return result;
@@ -751,7 +753,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		protected SafeArrayHandle PrepareMasterTransactionData(List<(int offset, int length)> keyedOffsets) {
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 			AdaptiveInteger2_5 numberWriter = new AdaptiveInteger2_5();
 
 			numberWriter.Value = (uint) keyedOffsets.Count;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Serilog;
 
@@ -24,7 +25,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		///     answer
 		/// </summary>
 		/// <returns></returns>
-		private readonly ConcurrentQueue<T> entryTaskQueue = new ConcurrentQueue<T>();
+		/// <remarks>ConcurrentQueue has a weird behavior, it stores references to entries in its slot field. This means big objects stay referenced even if dequeued. We use a wrapper to eliminate this.</remarks>
+		private readonly WrapperConcurrentQueue<T> entryTaskQueue = new WrapperConcurrentQueue<T>();
 
 		/// <summary>
 		///     Tasks that we want excluded from the pickup

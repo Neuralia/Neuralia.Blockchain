@@ -1,6 +1,8 @@
-﻿using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
+﻿using System;
+using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -10,15 +12,101 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 	public class XMSSMTPrivateKey : XMSSMTKey {
 
 		// versioning information
-		public readonly byte Major = 1;
-		public readonly byte Minor = 0;
-		public readonly byte Revision = 0;
-
+		
+		
+		public byte Height {
+			get => this.HeaderPart.Height;
+			set => this.HeaderPart.Height = value;
+		}
+		public byte Layers {
+			get => this.HeaderPart.Layers;
+			set => this.HeaderPart.Layers = value;
+		}
+		public int LeafCount {
+			get => this.HeaderPart.LeafCount;
+			set => this.HeaderPart.LeafCount = value;
+		}
+		/// <summary>
+		///     private key index to use (0 based)
+		/// </summary>
+		public long Index {
+			get => this.HeaderPart.Index;
+			set => this.HeaderPart.Index = value;
+		}
+		public ByteArray PublicSeed {
+			get => this.HeaderPart.PublicSeed;
+			set => this.HeaderPart.PublicSeed = value;
+		}
+		
+		/// <summary>
+		///     private key index to use (1 based)
+		/// </summary>
+		public long IndexOne => this.Index + 1;
+		
+		
+		
+		public ByteArray SecretSeed {
+			get => this.SecretPart.SecretSeed;
+			set => this.SecretPart.SecretSeed = value;
+		}
+		public ByteArray Root {
+			get => this.SecretPart.Root;
+			set => this.SecretPart.Root = value;
+		}
+		public ByteArray SecretPrf {
+			get => this.SecretPart.SecretPrf;
+			set => this.SecretPart.SecretPrf = value;
+		}
+		
+		
+		public XMSSMTNonceSet Nonces {
+			get => this.NoncePart.Nonces;
+			set => this.NoncePart.Nonces = value;
+		}
+		public XMSSMTNodeCache NodeCache {
+			get => this.NoncePart.NodeCache;
+			set => this.NoncePart.NodeCache = value;
+		}
+		
+		public KeyHeaderPart HeaderPart { get; set; }
+		public KeySecretPart SecretPart { get; set; }
+		public KeyNoncePart NoncePart { get; set; }
+		
 		protected readonly XMSSExecutionContext XmssExecutionContext;
 
 		public XMSSMTPrivateKey(XMSSExecutionContext xmssExecutionContext) {
 			this.XmssExecutionContext = xmssExecutionContext;
-			this.NodeCache = new XMSSMTNodeCache();
+			
+			this.HeaderPart = new KeyHeaderPart(this.XmssExecutionContext.DigestSize);
+			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
+			
+			this.NoncePart = new KeyNoncePart(0) {NodeCache = new XMSSMTNodeCache()};
+			this.NoncePart.Nonces = new XMSSMTNonceSet();
+			this.NoncePart.NodeCache = new XMSSMTNodeCache();
+		}
+
+		public XMSSMTPrivateKey(XMSSMTPrivateKey other, XMSSExecutionContext xmssExecutionContext) {
+			
+			this.XmssExecutionContext = xmssExecutionContext;
+			
+			this.HeaderPart = new KeyHeaderPart(this.XmssExecutionContext.DigestSize);
+			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
+			
+			this.HeaderPart.Index = other.HeaderPart.Index;
+			this.HeaderPart.Height = other.HeaderPart.Height;
+			this.HeaderPart.Layers = other.HeaderPart.Layers;
+			this.HeaderPart.LeafCount = other.HeaderPart.LeafCount;
+			
+			this.HeaderPart.PublicSeed = other.HeaderPart.PublicSeed?.Clone();
+			
+			
+			this.SecretPart.SecretPrf = other.SecretPart.SecretPrf?.Clone();
+			this.SecretPart.Root = other.SecretPart.Root?.Clone();
+			this.SecretPart.SecretSeed = other.SecretPart.SecretSeed?.Clone();
+
+			this.NoncePart = new KeyNoncePart(this.HeaderPart.LeafCount);
+			this.NoncePart.Nonces = new XMSSMTNonceSet(other.NoncePart.Nonces.Nonces);
+			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize);
 		}
 
 		/// <summary>
@@ -27,116 +115,227 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		/// <param name="heigth">Height (number of levels - 1) of the tree</param>
 		public XMSSMTPrivateKey(int heigth, int layer, ByteArray publicSeed, ByteArray secretSeed, ByteArray secretPrf, XMSSMTNonceSet nonces, XMSSExecutionContext xmssExecutionContext, long index = 0, ByteArray root = null) {
 
-			this.Index = index;
-			this.Height = (byte) heigth;
-			this.Layers = (byte) layer;
-			this.LeafCount = 1 << heigth;
 			this.XmssExecutionContext = xmssExecutionContext;
+			
+			this.HeaderPart = new KeyHeaderPart(this.XmssExecutionContext.DigestSize);
+			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
+			
+			this.HeaderPart.LeafCount = 1 << heigth;
+			this.HeaderPart.Index = index;
+			this.HeaderPart.Height = (byte) heigth;
+			this.HeaderPart.Layers = (byte) layer;
 
-			this.PublicSeed = publicSeed?.Clone();
-			this.SecretPrf = secretPrf?.Clone();
-			this.Root = root?.Clone();
-			this.SecretSeed = secretSeed?.Clone();
+			this.HeaderPart.PublicSeed = publicSeed?.Clone();
+			
+			this.SecretPart.SecretPrf = secretPrf?.Clone();
+			this.SecretPart.Root = root?.Clone();
+			this.SecretPart.SecretSeed = secretSeed?.Clone();
 
-			this.Nonces = nonces;
-
-			this.NodeCache = new XMSSMTNodeCache(this.Height, this.Layers, xmssExecutionContext.DigestSize);
+			this.NoncePart = new KeyNoncePart(this.HeaderPart.LeafCount);
+			this.NoncePart.Nonces = new XMSSMTNonceSet(nonces.Nonces);
+			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize);
 		}
-
-		public byte Height { get; set; }
-
-		public byte Layers { get; set; }
-
-		protected int LeafCount { get; set; }
-
-		/// <summary>
-		///     private key index to use (0 based)
-		/// </summary>
-		public long Index { get; protected set; }
-
-		/// <summary>
-		///     private key index to use (1 based)
-		/// </summary>
-		public long IndexOne => this.Index + 1;
-
-		public XMSSMTNonceSet Nonces { get; } = new XMSSMTNonceSet();
-		public XMSSMTNodeCache NodeCache { get; }
-
-		public ByteArray PublicSeed { get; private set; }
-		public ByteArray SecretSeed { get; private set; }
-		public ByteArray Root { get; set; }
-		public ByteArray SecretPrf { get; private set; }
 
 		protected override void DisposeAll() {
 			base.DisposeAll();
-
-			this.PublicSeed?.Dispose();
-			this.Root?.Dispose();
-			this.SecretPrf?.Dispose();
-			this.SecretSeed?.Dispose();
+			
+			this.SecretPart.Dispose();
 		}
 
 		protected override void Rehydrate(IDataRehydrator rehydrator) {
 
-			int major = rehydrator.ReadByte();
-			int minor = rehydrator.ReadByte();
-			int revision = rehydrator.ReadByte();
-
-			base.Rehydrate(rehydrator);
-
-			int n = this.XmssExecutionContext.DigestSize;
-
-			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
-			adaptiveLong.Rehydrate(rehydrator);
-			this.Index = (int) adaptiveLong.Value;
-			this.Height = rehydrator.ReadByte();
-			this.Layers = rehydrator.ReadByte();
-			adaptiveLong.Rehydrate(rehydrator);
-			this.LeafCount = (int) adaptiveLong.Value;
-
-			this.PublicSeed = rehydrator.ReadArray(n);
-			this.SecretSeed = rehydrator.ReadArray(n);
-			this.SecretPrf = rehydrator.ReadArray(n);
-			this.Root = rehydrator.ReadArray(n);
-
-			this.NodeCache.Rehydrate(rehydrator);
-
-			this.Nonces.Rehydrate(rehydrator, this.LeafCount);
+			this.RehydrateParts(rehydrator, rehydrator, rehydrator);
 		}
-
+		
 		protected override void Dehydrate(IDataDehydrator dehydrator) {
-			dehydrator.Write(this.Major);
-			dehydrator.Write(this.Minor);
-			dehydrator.Write(this.Revision);
 
-			base.Dehydrate(dehydrator);
-
-			int n = this.XmssExecutionContext.DigestSize;
-
-			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
-			adaptiveLong.Value = this.Index;
-			adaptiveLong.Dehydrate(dehydrator);
-
-			dehydrator.Write(this.Height);
-			dehydrator.Write(this.Layers);
-
-			adaptiveLong.Value = this.LeafCount;
-			adaptiveLong.Dehydrate(dehydrator);
-
-			dehydrator.WriteRawArray(this.PublicSeed);
-			dehydrator.WriteRawArray(this.SecretSeed);
-			dehydrator.WriteRawArray(this.SecretPrf);
-			dehydrator.WriteRawArray(this.Root);
-
-			this.NodeCache.Dehydrate(dehydrator);
-
-			this.Nonces.Dehydrate(dehydrator);
+			this.DehydrateParts(dehydrator, dehydrator, dehydrator);
 		}
+		
+		public void RehydrateParts(IDataRehydrator rehydratorHeader, IDataRehydrator rehydratorSecrets, IDataRehydrator rehydratorNonces) {
+			if(rehydratorHeader != null) {
+				this.HeaderPart.Rehydrate(rehydratorHeader);
+
+				base.Rehydrate(rehydratorHeader);
+			}
+
+			if(rehydratorSecrets != null) {
+				this.SecretPart.Rehydrate(rehydratorSecrets);
+			}
+
+			if(rehydratorNonces != null) {
+				this.NoncePart.LeafCount = this.HeaderPart.LeafCount;
+				this.NoncePart.Rehydrate(rehydratorNonces);
+			}
+		}
+
+		public void DehydrateParts(IDataDehydrator dehydratorHeader, IDataDehydrator dehydratorSecrets, IDataDehydrator dehydratorNonces) {
+			if(dehydratorHeader != null) {
+				this.HeaderPart.Dehydrate(dehydratorHeader);
+
+				base.Dehydrate(dehydratorHeader);
+			}
+
+			if(dehydratorSecrets != null) {
+				this.SecretPart.Dehydrate(dehydratorSecrets);
+			}
+
+			if(dehydratorNonces != null) {
+				this.NoncePart.Dehydrate(dehydratorNonces);
+			}
+		}
+
 
 		public void IncrementIndex(XMSSMTEngine engine) {
 			engine.CleanAuthTree(this);
 
-			this.Index += 1;
+			this.HeaderPart.Index += 1;
+		}
+
+		public class KeyHeaderPart : IBinarySerializable {
+
+			public KeyHeaderPart(int digestSize) {
+				this.DigestSize = digestSize;
+			}
+			
+			public readonly byte Major = 1;
+			public readonly byte Minor = 0;
+			public readonly byte Revision = 0;
+
+			private int DigestSize { get; }
+
+			public byte Height { get; set; }
+
+			public byte Layers { get; set; }
+
+			public int LeafCount { get; set; }
+
+			/// <summary>
+			///     private key index to use (0 based)
+			/// </summary>
+			public long Index { get; set; }
+
+			/// <summary>
+			///     private key index to use (1 based)
+			/// </summary>
+			public long IndexOne => this.Index + 1;
+
+			public ByteArray PublicSeed { get; set; }
+
+			public void Rehydrate(IDataRehydrator rehydrator) {
+
+				int major = rehydrator.ReadByte();
+				int minor = rehydrator.ReadByte();
+				int revision = rehydrator.ReadByte();
+
+				
+				AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
+				adaptiveLong.Rehydrate(rehydrator);
+				this.Index = (int) adaptiveLong.Value;
+				this.Height = rehydrator.ReadByte();
+				this.Layers = rehydrator.ReadByte();
+				adaptiveLong.Rehydrate(rehydrator);
+				this.LeafCount = (int) adaptiveLong.Value;
+
+				this.PublicSeed = rehydrator.ReadArray(this.DigestSize);
+			}
+
+			public void Dehydrate(IDataDehydrator dehydrator) {
+
+				dehydrator.Write(this.Major);
+				dehydrator.Write(this.Minor);
+				dehydrator.Write(this.Revision);
+				
+				AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
+				adaptiveLong.Value = this.Index;
+				adaptiveLong.Dehydrate(dehydrator);
+
+				dehydrator.Write(this.Height);
+				dehydrator.Write(this.Layers);
+
+				adaptiveLong.Value = this.LeafCount;
+				adaptiveLong.Dehydrate(dehydrator);
+
+				dehydrator.WriteRawArray(this.PublicSeed);
+			}
+		}
+
+		public class KeySecretPart : IBinarySerializable, IDisposableExtended {
+			
+			public KeySecretPart(int digestSize) {
+				this.DigestSize = digestSize;
+			}
+
+			private int DigestSize { get; }
+			
+			public ByteArray SecretSeed { get; set; }
+			public ByteArray Root { get; set; }
+			public ByteArray SecretPrf { get; set; }
+			public void Rehydrate(IDataRehydrator rehydrator) {
+				this.SecretSeed = rehydrator.ReadArray(this.DigestSize);
+				this.SecretPrf = rehydrator.ReadArray(this.DigestSize);
+				this.Root = rehydrator.ReadArray(this.DigestSize);
+			}
+
+			public void Dehydrate(IDataDehydrator dehydrator) {
+				
+				dehydrator.WriteRawArray(this.SecretSeed);
+				dehydrator.WriteRawArray(this.SecretPrf);
+				dehydrator.WriteRawArray(this.Root);
+			}
+			
+		#region disposable
+
+			public bool IsDisposed { get; private set; }
+
+			public void Dispose() {
+				this.Dispose(true);
+				GC.SuppressFinalize(this);
+			}
+
+			private void Dispose(bool disposing) {
+
+	
+				if(disposing && !this.IsDisposed) {
+					this.DisposeAll();
+				}
+
+				this.IsDisposed = true;
+			}
+
+			protected virtual void DisposeAll() {
+				this.Root?.Dispose();
+				this.SecretPrf?.Dispose();
+				this.SecretSeed?.Dispose();
+			}
+
+			~KeySecretPart() {
+				this.Dispose(false);
+			}
+
+		#endregion
+		}
+		
+		public class KeyNoncePart : IBinarySerializable {
+			public KeyNoncePart(int leafCount) {
+				this.LeafCount = leafCount;
+			}
+
+			public int LeafCount { get;set; }
+			
+			public XMSSMTNonceSet Nonces { get;set; }
+			public XMSSMTNodeCache NodeCache { get;set; }
+			public void Rehydrate(IDataRehydrator rehydrator) {
+				this.NodeCache.Rehydrate(rehydrator);
+
+				this.Nonces.Rehydrate(rehydrator, this.LeafCount);
+			}
+
+			public void Dehydrate(IDataDehydrator dehydrator) {
+				this.NodeCache.Dehydrate(dehydrator);
+
+				this.Nonces.Dehydrate(dehydrator);
+			}
 		}
 	}
 }

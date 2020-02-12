@@ -291,7 +291,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 				// ok, since the l3 section, we simply store the size of the block
 
-				IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+				using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 				AdaptiveInteger2_5 value = new AdaptiveInteger2_5();
 

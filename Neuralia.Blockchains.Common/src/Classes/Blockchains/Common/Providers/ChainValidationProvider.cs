@@ -437,10 +437,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		public void ValidateTransaction(ITransactionEnvelope transactionEnvelope, bool gossipOrigin, Action<ValidationResult> completedResultCallback) {
 
+			var chainStateProvider = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase;
+			var chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			
 #if(!COLORADO_EXCLUSION)
 
 			// lets make sure the expiration of the envelope is still within the timeframe
-			if(transactionEnvelope.GetExpirationTime(this.timeService, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception) < DateTime.UtcNow) {
+			if(transactionEnvelope.GetExpirationTime(this.timeService, chainStateProvider.ChainInception) < DateTime.UtcNow) {
 				completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.ENVELOPE_EXPIRED));
 
 				return;
@@ -468,14 +471,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			}
 			
 			// if its gossip and a presentation and its not allowed, we reject. here we check early based on envelope. we will check again later
-			if(transactionEnvelope.IsPresentation && gossipOrigin && !this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations) {
+			if(transactionEnvelope.IsPresentation && gossipOrigin && (!chainStateProvider.AllowGossipPresentations && !chainConfiguration.AllowGossipPresentations)) {
 				completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.GOSSIP_PRESENTATION_TRANSACTIONS_NOT_ALLOWED));
 
 				return;
 			}
 
 			// make sure the timestamp is not in the future
-			DateTime transactionTime = this.timeService.GetTransactionDateTime(transactionEnvelope.Contents.Uuid, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
+			DateTime transactionTime = this.timeService.GetTransactionDateTime(transactionEnvelope.Contents.Uuid, chainStateProvider.ChainInception);
 
 			if(transactionTime >= DateTime.UtcNow) {
 				// its impossible for a transaction timestamp to be higher than our current time.
@@ -509,7 +512,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			}
 			
 			// if its gossip and a presentation and its not allowed, we reject. we check again now that we know the true type mof the transaction
-			if(isPresentation && gossipOrigin && !this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations) {
+			if(isPresentation && gossipOrigin && (!chainStateProvider.AllowGossipPresentations && !chainConfiguration.AllowGossipPresentations)) {
 				completedResultCallback(this.CreateTrasactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.GOSSIP_PRESENTATION_TRANSACTIONS_NOT_ALLOWED));
 
 				return;

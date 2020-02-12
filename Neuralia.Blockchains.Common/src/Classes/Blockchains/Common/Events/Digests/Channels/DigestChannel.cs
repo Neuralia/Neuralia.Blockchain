@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public byte Minor { get; protected set; }
 
 		public SafeArrayHandle DehydrateVersionInfo() {
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Version.Dehydrate(dehydrator);
 

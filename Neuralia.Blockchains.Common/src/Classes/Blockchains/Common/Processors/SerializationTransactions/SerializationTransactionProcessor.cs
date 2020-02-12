@@ -77,7 +77,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		}
 
 		public void SerializeUndoOperations() {
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			dehydrator.Write(this.UndoOperations.Count);
 
@@ -85,7 +85,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 				entry.Dehydrate(dehydrator);
 			}
 
-			SafeArrayHandle bytes = dehydrator.ToArray();
+			using SafeArrayHandle bytes = dehydrator.ToArray();
 
 			this.DeleteUndoFile();
 
@@ -94,8 +94,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			FileExtensions.EnsureDirectoryStructure(this.cachePath, this.fileSystem);
 
 			FileExtensions.WriteAllBytes(filename, bytes, this.fileSystem);
-
-			bytes.Return();
 		}
 
 		public void LoadUndoOperations(IChainDataWriteProvider chainDataWriteProvider) {

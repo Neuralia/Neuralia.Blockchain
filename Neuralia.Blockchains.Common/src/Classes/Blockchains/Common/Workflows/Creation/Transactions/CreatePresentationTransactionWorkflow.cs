@@ -47,6 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		}
 
 		protected override ValidationResult ValidateContents(ITransactionEnvelope envelope) {
+			
 			ValidationResult result = base.ValidateContents(envelope);
 
 			if(result.Invalid) {
@@ -66,7 +67,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 			try {
 				base.PerformWork(workflow, taskRoutingContext);
-			} finally {
+			}catch(Exception ex) {
+
+				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationError, this.correlationContext);
+
+				throw;
+			}
+			
+			finally {
 				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, this.correlationContext);
 			}
 		}

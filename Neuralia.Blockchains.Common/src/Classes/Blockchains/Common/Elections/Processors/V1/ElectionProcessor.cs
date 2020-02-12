@@ -105,7 +105,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
 					
-					var dehydrator = DataSerializationFactory.CreateDehydrator();
+					using var dehydrator = DataSerializationFactory.CreateDehydrator();
 
 					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 
@@ -122,7 +122,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 				if(ballotingApplications.Any()) {
 					
-					var dehydrator = DataSerializationFactory.CreateDehydrator();
+					using var dehydrator = DataSerializationFactory.CreateDehydrator();
 					
 					dehydrator.Write(ballotingApplications);
 
@@ -166,7 +166,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				// note:  we send a message even if we have no transactions. we may not get transaction fees, but the bounty is still applicable for being present and elected.
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
 					
-					var dehydrator = DataSerializationFactory.CreateDehydrator();
+					using var dehydrator = DataSerializationFactory.CreateDehydrator();
 
 					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 

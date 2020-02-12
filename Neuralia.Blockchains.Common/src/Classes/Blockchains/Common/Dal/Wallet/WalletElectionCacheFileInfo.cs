@@ -108,7 +108,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					return false;
 				}
 
-				return litedbDal.Exists<WalletElectionCache>(k => k.TransactionId.Equals(transactionId));
+				return litedbDal.Exists<WalletElectionCache>(k => k.TransactionId == transactionId);
 			});
 		}
 
@@ -133,7 +133,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			lock(this.locker) {
 				this.RunDbOperation(litedbDal => {
 					if(litedbDal.CollectionExists<WalletElectionCache>()) {
-						litedbDal.Remove<WalletElectionCache>(k => k.TransactionId.Equals(transactionId));
+						litedbDal.Remove<WalletElectionCache>(k => k.TransactionId == transactionId);
 					}
 				});
 
@@ -149,7 +149,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						if(litedbDal.CollectionExists<WalletElectionCache>()) {
 							foreach(TransactionId transaction in transactions) {
 
-								litedbDal.Remove<WalletElectionCache>(k => k.TransactionId.Equals(transaction));
+								litedbDal.Remove<WalletElectionCache>(k => k.TransactionId == transaction);
 							}
 						}
 					});
@@ -196,11 +196,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		public List<TransactionId> GetAllTransactions() {
 			return this.RunQueryDbOperation(litedbDal => {
-				if(litedbDal.CollectionExists<WalletElectionCache>()) {
-					return litedbDal.All<WalletElectionCache>().Select(t => t.TransactionId).ToList();
-				}
+				
+				return litedbDal.Open(db => {
+					return litedbDal.CollectionExists<WalletElectionCache>() ? litedbDal.All<WalletElectionCache>().Select(t => t.TransactionId).ToList() : new List<TransactionId>();
+				});
 
-				return new List<TransactionId>();
 			});
 		}
 	}

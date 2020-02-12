@@ -92,7 +92,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				}
 			}
 
-			IDataDehydrator headerDehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator headerDehydrator = DataSerializationFactory.CreateDehydrator();
 
 			header.Dehydrate(headerDehydrator);
 

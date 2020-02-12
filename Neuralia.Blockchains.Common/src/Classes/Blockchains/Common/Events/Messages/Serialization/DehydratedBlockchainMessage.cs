@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		public IBlockchainMessage RehydratedMessage { get; set; }
 
 		public SafeArrayHandle Dehydrate() {
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 

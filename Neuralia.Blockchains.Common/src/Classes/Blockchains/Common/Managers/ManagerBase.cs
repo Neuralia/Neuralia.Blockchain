@@ -1,5 +1,7 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
+﻿using System;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
@@ -19,9 +21,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		protected ManagerBase(CENTRAL_COORDINATOR centralCoordinator, int maxParallelTasks) : base(centralCoordinator, maxParallelTasks) {
 
+			this.Error2 += (sender, ex) => {
+				ExceptionOccured(ex);
+			};
 		}
 
 		protected ManagerBase(CENTRAL_COORDINATOR centralCoordinator, int maxParallelTasks, int sleepTime) : base(centralCoordinator, maxParallelTasks, sleepTime) {
+			this.Error2 += (sender, ex) => {
+				ExceptionOccured(ex);
+			};
+		}
+
+		protected virtual void ExceptionOccured(Exception ex) {
+			Log.Error(ex, "Exception occured,");
 		}
 	}
 }

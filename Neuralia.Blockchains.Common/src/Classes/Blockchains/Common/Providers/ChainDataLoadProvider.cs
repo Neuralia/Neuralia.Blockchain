@@ -695,7 +695,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				if(this.blocksCache.Count > BLOCK_CACHE_SIZE) {
-					foreach(BlockId entry in this.blocksCache.Keys.OrderByDescending(k => k.Value).Skip(BLOCK_CACHE_SIZE)) {
+					foreach(BlockId entry in this.blocksCache.Keys.ToArray().OrderByDescending(k => k.Value).Skip(BLOCK_CACHE_SIZE)) {
 						this.blocksCache.RemoveSafe(entry);
 					}
 				}

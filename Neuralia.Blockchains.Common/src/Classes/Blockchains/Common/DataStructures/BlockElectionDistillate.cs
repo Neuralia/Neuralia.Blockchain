@@ -57,7 +57,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 			}
 
 			// if(dehydrateElectionContext) {
-			// 	var dehydrator = DataSerializationFactory.CreateDehydrator();
+			// 	using var dehydrator = DataSerializationFactory.CreateDehydrator();
 			// 	currentElection.ElectionContext.Dehydrate(dehydrator);
 			// 	ArrayWrapper data = dehydrator.ToArray();
 			// 	blockElectionContext.DehydratedElectionContext = Compressors.BlockCompressor.Compress(data).ToBase64();

@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split.Messages
 
 		public override SafeArrayHandle Dehydrate() {
 
-			IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
 
 			this.Header.Dehydrate(dh);
 

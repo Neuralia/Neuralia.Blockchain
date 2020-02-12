@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
@@ -41,7 +42,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		/// </summary>
 		public readonly ConcurrentDictionary<WorkflowId, WORKFLOW> promotedWorkflows = new ConcurrentDictionary<WorkflowId, WORKFLOW>();
 
-		private readonly ConcurrentQueue<WORKFLOW> queuedWorkflows = new ConcurrentQueue<WORKFLOW>();
+		private readonly WrapperConcurrentQueue<WORKFLOW> queuedWorkflows = new WrapperConcurrentQueue<WORKFLOW>();
 
 		private readonly TimeSpan WORKFLOW_PROMOTION_TIME = TimeSpan.FromSeconds(5);
 

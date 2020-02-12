@@ -26,6 +26,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.General.Types;
@@ -148,7 +149,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		/// Queue of events stored for later
 		/// </summary>
-		protected readonly ConcurrentQueue<Action> callbackQueue = new ConcurrentQueue<Action>();
+		protected readonly WrapperConcurrentQueue<Action> callbackQueue = new WrapperConcurrentQueue<Action>();
 
 		protected readonly IElectionProcessorFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> factory;
 

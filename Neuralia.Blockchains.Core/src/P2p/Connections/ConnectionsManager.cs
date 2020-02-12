@@ -558,7 +558,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					}
 				}
 
-				throw new ApplicationException("Failed to register transaction through web");
+				throw new ApplicationException("Failed to query web hubs");
 			});
 		}
 

@@ -44,7 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 		public DateTime Timestamp { get; set; }
 
 		public virtual SafeArrayHandle Dehydrate() {
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.AccountId.Dehydrate(dehydrator);
 

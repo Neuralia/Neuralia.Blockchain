@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Core.Tools;
 using Serilog;
@@ -54,6 +55,21 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			catch(SynchronizationLockException syncEx) {
 				LogError(syncEx, logError);
 			}
+		}
+		
+		public static Task RunDbUpdateConcurrentAsync(Func<Task> action, string logError = null) {
+			
+			try {
+				return Repeater.RepeatAsync(action, 2);
+			} 
+			catch(DbUpdateConcurrencyException bdcex) {
+				LogError(bdcex, logError);
+			}
+			catch(SynchronizationLockException syncEx) {
+				LogError(syncEx, logError);
+			}
+
+			return Task.CompletedTask;
 		}
 	}
 }

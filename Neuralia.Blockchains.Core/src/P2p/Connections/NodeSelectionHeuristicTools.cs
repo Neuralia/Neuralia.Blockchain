@@ -107,11 +107,20 @@ namespace Neuralia.Blockchains.Core.Types {
 
 				if(blockchainTypes != null) {
 
+					bool foundBlockchains = false;
 					// lets filter by blockchain
 					foreach(BlockchainType bc in blockchainTypes) {
 
 						int remaining = 10;
-						var targetChainShareType = targetNode.GetChainSettings()[bc].ShareType;
+
+						var chainSettings = targetNode.GetChainSettings();
+
+						if(!chainSettings.ContainsKey(bc)) {
+							continue;
+						}
+
+						foundBlockchains = true;
+						var targetChainShareType = chainSettings[bc].ShareType;
 
 						var usableList = nodes.Where(n => n.PeerInfo.GetSupportedBlockchains().Any(c => c == bc)).ToList();
 
@@ -156,6 +165,10 @@ namespace Neuralia.Blockchains.Core.Types {
 							nodesFiltered.AddRange(usableList.Where(e => !nodesFiltered.Select(s => s.AdjustedIp).Contains(e.AdjustedIp)).Take(remaining));
 						}
 
+					}
+
+					if(!foundBlockchains) {
+						nodesFiltered.AddRange(nodes.Take(10));
 					}
 				}
 			}

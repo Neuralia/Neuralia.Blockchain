@@ -34,7 +34,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			lock(this.locker) {
 				this.RunDbOperation(litedbDal => {
 					if(litedbDal.CollectionExists<T>()) {
-						litedbDal.Remove<T>(k => k.TransactionId.Equals(transactionId.ToString()));
+						litedbDal.Remove<T>(k => k.TransactionId  ==  transactionId.ToString());
 					}
 				});
 
@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				this.RunDbOperation(litedbDal => {
 					if(litedbDal.CollectionExists<T>()) {
 
-						T entry = litedbDal.GetOne<T>(k => k.TransactionId.Equals(transactionId.ToString()));
+						T entry = litedbDal.GetOne<T>(k => k.TransactionId  == transactionId.ToString());
 
 						if(entry != null) {
 							entry.Status = (byte) status;
@@ -125,7 +125,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					return false;
 				}
 
-				return litedbDal.Exists<T>(k => k.TransactionId.Equals(transactionId.ToString()));
+				return litedbDal.Exists<T>(k => k.TransactionId == transactionId.ToString());
 			});
 		}
 
@@ -134,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				return this.RunQueryDbOperation(litedbDal => {
 					if(litedbDal.CollectionExists<T>()) {
 
-						return litedbDal.GetOne<T>(k => k.TransactionId.Equals(transactionId.ToString()));
+						return litedbDal.GetOne<T>(k => k.TransactionId == transactionId.ToString());
 					}
 
 					return null;

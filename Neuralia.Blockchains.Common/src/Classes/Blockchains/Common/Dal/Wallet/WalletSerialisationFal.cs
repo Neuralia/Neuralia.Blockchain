@@ -15,6 +15,7 @@ using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -239,8 +240,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				LiteDBDAL litedbDal = LiteDBDAL.GetLiteDBDAL(walletStream);
 
-				operation?.Invoke(litedbDal);
-
+				Repeater.Repeat(() => operation?.Invoke(litedbDal));
+				
 				SafeArrayHandle result = ByteArray.Create(walletStream);
 
 				walletStream.ClearStream();
@@ -272,7 +273,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				LiteDBDAL litedbDal = LiteDBDAL.GetLiteDBDAL(walletStream);
 
-				T result = operation(litedbDal);
+				T result = Repeater.Repeat(() => operation(litedbDal));
 
 				walletStream.ClearStream();
 
@@ -435,7 +436,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			// first, let's generate a passphrase
 			string walletPath = this.GetWalletFolderPath();
 
-			string backupsPath = this.GetWalletFolderPath();
+			string backupsPath = Path.Combine(Core.Configuration.GlobalSettings.ApplicationSettings.SystemFilesPath, "backup"); ;
 
 			FileExtensions.EnsureDirectoryStructure(backupsPath, this.centralCoordinator.FileSystem);
 
@@ -449,6 +450,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			if(this.centralCoordinator.FileSystem.File.Exists(resultsFile)) {
 				this.centralCoordinator.FileSystem.File.Delete(resultsFile);
 			}
+
 
 			ZipFile.CreateFromDirectory(walletPath, zipFile);
 

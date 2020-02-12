@@ -104,8 +104,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				singleEntryContext.syncManifest.Key = singleEntryContext.details.Id;
 
 				// lets generate the file map
-				foreach(var channel in singleEntryContext.details.nextBlockSize.SlicesInfo) {
-					singleEntryContext.syncManifest.Files.Add(channel.Key, new DataSlice { Length = channel.Value.Length});
+				foreach((BlockChannelUtils.BlockChannelTypes key, DataSliceSize value) in singleEntryContext.details.nextBlockSize.SlicesInfo) {
+					singleEntryContext.syncManifest.Files.Add(key, new DataSlice { Length = value.Length});
 				}
 
 				this.GenerateSyncManifestStructure<BlockFilesetSyncManifest, BlockChannelUtils.BlockChannelTypes, BlockFilesetSyncManifest.BlockSyncingDataSlice>(singleEntryContext.syncManifest);
@@ -833,13 +833,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								dehydratedBlock.Rehydrate(dataChannels);
 
 								dehydratedBlock.RehydrateBlock(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase, true);
-							}
-							catch(UnrecognizedElementException urex) {
-								
+							} catch(UnrecognizedElementException urex) {
+
 								throw;
-							}
-							catch(Exception ex) {
+							} catch(Exception ex) {
 								throw new InvalidBlockDataException($"Failed to rehydrate block {nextBlockId} while syncing.", ex);
+							} finally {
+								foreach(var entry in dataChannels.Entries) {
+									entry.Value?.Dispose();
+								}
 							}
 						}
 

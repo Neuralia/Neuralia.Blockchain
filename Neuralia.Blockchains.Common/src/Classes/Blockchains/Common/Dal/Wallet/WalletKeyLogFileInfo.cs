@@ -71,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						WalletAccountKeyLog last = null;
 
 						if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
-							last = litedbDal.Get<WalletAccountKeyLog>(k => k.KeyOrdinalId.Equals(walletAccountKeyLog.KeyOrdinalId)).OrderByDescending(k => k.Timestamp).FirstOrDefault();
+							last = litedbDal.Get<WalletAccountKeyLog>(k => k.KeyOrdinalId == walletAccountKeyLog.KeyOrdinalId).OrderByDescending(k => k.Timestamp).FirstOrDefault();
 						}
 
 						if(last?.KeyUseIndex != null) {

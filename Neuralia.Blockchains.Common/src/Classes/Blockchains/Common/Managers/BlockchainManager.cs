@@ -135,7 +135,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		protected override void Initialize(IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext) {
 			base.Initialize(workflow, taskRoutingContext);
 
-			this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PeerConnectionsCountUpdated += ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated;
+			this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PeerConnectionsCountUpdated += this.ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated;
 
 			// make sure we check our status when starting
 			this.CheckBlockchainSynchronizationStatus();

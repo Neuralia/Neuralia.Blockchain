@@ -31,7 +31,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 				throw new ApplicationException("Impossible to dehydrate a message which is not completed yet. The binary message has not been set.");
 			}
 
-			IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
 
 			this.DehydrateHeader(dh);
 

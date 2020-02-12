@@ -651,7 +651,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 						// now dehydrate each transaction into a byte array
 						IDehydratedTransaction dehydratedTransaction = t.Value.Dehydrate(BlockChannelUtils.BlockChannelTypes.All);
 
-						IDataDehydrator rehydrator = DataSerializationFactory.CreateDehydrator();
+						using IDataDehydrator rehydrator = DataSerializationFactory.CreateDehydrator();
 						dehydratedTransaction.Dehydrate(rehydrator);
 
 						SafeArrayHandle bytes = rehydrator.ToArray();
@@ -931,7 +931,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		private readonly Dictionary<int, Action<string>> keyQueries = new Dictionary<int, Action<string>>();
 
-		protected async void TriggerRequestWalletPassphrase(RequestWalletPassphraseSystemMessageTask requestWalletPassphraseSystemMessageTask) {
+		protected void TriggerRequestWalletPassphrase(RequestWalletPassphraseSystemMessageTask requestWalletPassphraseSystemMessageTask) {
 
 			// store it for a callback
 			this.keyQueries.Add(requestWalletPassphraseSystemMessageTask.correlationCode, passphrase => {
@@ -946,7 +946,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		protected async void TriggerRequestWalletKeyPassphrase(RequestWalletKeyPassphraseSystemMessageTask requestWalletKeyPassphraseSystemMessageTask) {
+		protected void TriggerRequestWalletKeyPassphrase(RequestWalletKeyPassphraseSystemMessageTask requestWalletKeyPassphraseSystemMessageTask) {
 
 			// store it for a callback
 			this.keyQueries.Add(requestWalletKeyPassphraseSystemMessageTask.correlationCode, passphrase => {
@@ -961,7 +961,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		protected async void TriggerRequestCopyWalletKeyFile(RequestCopyWalletKeyFileSystemMessageTask requestCopyWalletKeyFileSystemMessageTask) {
+		protected void TriggerRequestCopyWalletKeyFile(RequestCopyWalletKeyFileSystemMessageTask requestCopyWalletKeyFileSystemMessageTask) {
 
 			// store it for a callback
 			this.keyQueries.Add(requestCopyWalletKeyFileSystemMessageTask.correlationCode, passphrase => {

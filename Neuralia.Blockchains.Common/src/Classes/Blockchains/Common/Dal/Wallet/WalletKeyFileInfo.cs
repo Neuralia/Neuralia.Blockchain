@@ -46,7 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
-		protected const string NEXT_KEY_SUFFIX = "-NEXT";
+		protected const string NEXT_KEY_SUFFIX = "NEXT";
 		protected string KeyTypeName => this.keyType.Name;
 		protected string KeyTypeNextName => $"{this.KeyTypeName}{NEXT_KEY_SUFFIX}";
 		

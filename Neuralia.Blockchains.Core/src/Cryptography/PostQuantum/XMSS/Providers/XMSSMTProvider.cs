@@ -53,11 +53,21 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		public (ByteArray signature, ByteArray nextPrivateKey) Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
 			return this.Sign(content.Entry, privateKey.Entry);
 		}
+
+		public XMSSMTPrivateKey CreatePrivateKey() {
+			return new XMSSMTPrivateKey(this.excutionContext);
+		}
 		
 
-		public (ByteArray signature, ByteArray nextPrivateKey) Sign(ByteArray content, ByteArray privateKey) {
-			XMSSMTPrivateKey loadedPrivateKey = new XMSSMTPrivateKey(this.excutionContext);
+		public XMSSMTPrivateKey LoadPrivateKey(ByteArray privateKey) {
+			XMSSMTPrivateKey loadedPrivateKey = this.CreatePrivateKey();
 			loadedPrivateKey.LoadKey(privateKey);
+
+			return loadedPrivateKey;
+		}
+		
+		public (ByteArray signature, ByteArray nextPrivateKey) Sign(ByteArray content, ByteArray privateKey) {
+			XMSSMTPrivateKey loadedPrivateKey = this.LoadPrivateKey(privateKey);
 
 			ByteArray result = this.Sign(content, loadedPrivateKey);
 

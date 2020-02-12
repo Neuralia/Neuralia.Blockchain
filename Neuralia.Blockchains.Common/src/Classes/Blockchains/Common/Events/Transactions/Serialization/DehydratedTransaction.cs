@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public ITransaction RehydratedTransaction { get; set; }
 
 		public SafeArrayHandle Dehydrate() {
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 

@@ -146,7 +146,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						int groupingCount = chainConfiguration.BlockFileGroupSize ?? BLOCKS_COUNT_PER_GROUP;
 						this.blockGroupingConfig = new BlockGroupingConfigs {GroupingCount = groupingCount};
 
-						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+						using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 						dehydrator.Write(this.blockGroupingConfig.Value.GroupingCount);
 
 						SafeArrayHandle bytes = dehydrator.ToArray();
@@ -179,7 +179,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						int groupingCount = chainConfiguration.MessageFileGroupSize ?? MESSAGE_COUNT_PER_GROUP;
 						this.messageGroupingConfig = new MessageGroupingConfigs {GroupingCount = groupingCount};
 
-						IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+						using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 						dehydrator.Write(this.messageGroupingConfig.Value.GroupingCount);
 
 						SafeArrayHandle bytes = dehydrator.ToArray();

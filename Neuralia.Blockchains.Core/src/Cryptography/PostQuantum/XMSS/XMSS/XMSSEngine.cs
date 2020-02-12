@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS;
@@ -880,7 +881,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		}
 
 		private readonly ConcurrentDictionary<XMSSNodeId, MergedXmssNodeInfo> incompleteNodes = new ConcurrentDictionary<XMSSNodeId, MergedXmssNodeInfo>();
-		private readonly ConcurrentQueue<XmssNodeInfo> readyNodes = new ConcurrentQueue<XmssNodeInfo>();
+		private readonly WrapperConcurrentQueue<XmssNodeInfo> readyNodes = new WrapperConcurrentQueue<XmssNodeInfo>();
 
 		public class ThreadContext : IDisposableExtended {
 

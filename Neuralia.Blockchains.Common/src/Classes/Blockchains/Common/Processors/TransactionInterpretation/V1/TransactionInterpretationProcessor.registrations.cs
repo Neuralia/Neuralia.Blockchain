@@ -173,43 +173,43 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				parameters.results = keys;
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountCorrelationIdTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			// this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountCorrelationIdTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			//
+			// 	affectedSnapshots.AddAccountId(t.TransactionId.Account);
+			// }, interpretTransactionAccountsFunc: (t, parameters) => {
+			//
+			// 	ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
+			//
+			// 	if(accountSnapshot != null && !accountSnapshot.CorrelationId.HasValue) {
+			// 		accountSnapshot.CorrelationId = t.CorrelationId;
+			// 	}
+			// });
 
-				affectedSnapshots.AddAccountId(t.TransactionId.Account);
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
-
-				ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
-
-				if(accountSnapshot != null && !accountSnapshot.CorrelationId.HasValue) {
-					accountSnapshot.CorrelationId = t.CorrelationId;
-				}
-			});
-
-			this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountRecoveryTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
-
-				affectedSnapshots.AddAccountId(t.TransactionId.Account);
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
-
-				ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
-
-				if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Create) {
-					IAccountAttribute attribute = accountSnapshot.GetCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
-
-					if(attribute == null) {
-						accountSnapshot.CreateNewCollectionEntry(out attribute);
-
-						attribute.AttributeType = AccountAttributesTypes.Instance.RESETABLE_ACCOUNT.Value;
-
-						accountSnapshot.AddCollectionEntry(attribute);
-
-					}
-
-					attribute.Context = t.AccountRecoveryHash.ToExactByteArrayCopy();
-				} else if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Revoke) {
-					accountSnapshot.RemoveCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
-				}
-			});
-			
+			// this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountRecoveryTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			//
+			// 	affectedSnapshots.AddAccountId(t.TransactionId.Account);
+			// }, interpretTransactionAccountsFunc: (t, parameters) => {
+			//
+			// 	ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
+			//
+			// 	if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Create) {
+			// 		IAccountAttribute attribute = accountSnapshot.GetCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
+			//
+			// 		if(attribute == null) {
+			// 			accountSnapshot.CreateNewCollectionEntry(out attribute);
+			//
+			// 			attribute.AttributeType = AccountAttributesTypes.Instance.RESETABLE_ACCOUNT.Value;
+			//
+			// 			accountSnapshot.AddCollectionEntry(attribute);
+			//
+			// 		}
+			//
+			// 		attribute.Context = t.AccountRecoveryHash.ToExactByteArrayCopy();
+			// 	} else if(t.Operation == SetAccountRecoveryTransaction.OperationTypes.Revoke) {
+			// 		accountSnapshot.RemoveCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
+			// 	}
+			// });
+			//
 			this.TransactionImpactSets.RegisterTransactionImpactSet<IGatedJudgementTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
 				affectedSnapshots.AddAccounts(t.TargetAccounts);
@@ -358,6 +358,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisModeratorAccountPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
+				affectedSnapshots.AddAccounts(t.TargetAccounts);
+				
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.CommunicationsCryptographicKey.Id));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksXmssMTCryptographicKey.Id));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksChangeCryptographicKey.Id));
@@ -372,84 +374,115 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real) {
 					NtruCryptographicKey key = t.CommunicationsCryptographicKey;
 					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key.Id));
-					IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
-					key.Dehydrate(dehydrator);
-					SafeArrayHandle bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+					
+					
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					XmssmtCryptographicKey key3 = t.BlocksXmssMTCryptographicKey;
 					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-					dehydrator = DataSerializationFactory.CreateDehydrator();
-					key3.Dehydrate(dehydrator);
-					bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key3.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+
+					
+					
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					SecretPentaCryptographicKey key2 = t.BlocksChangeCryptographicKey;
 					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-					dehydrator = DataSerializationFactory.CreateDehydrator();
-					key2.Dehydrate(dehydrator);
-					bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key2.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+
+					
+
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					key3 = t.DigestBlocksCryptographicKey;
 					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-					dehydrator = DataSerializationFactory.CreateDehydrator();
-					key3.Dehydrate(dehydrator);
-					bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key3.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+
+					
+
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					key2 = t.DigestBlocksChangeCryptographicKey;
 					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-					dehydrator = DataSerializationFactory.CreateDehydrator();
-					key2.Dehydrate(dehydrator);
-					bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key2.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+
+					
+
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					key3 = t.BinaryCryptographicKey;
 					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-					dehydrator = DataSerializationFactory.CreateDehydrator();
-					key3.Dehydrate(dehydrator);
-					bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key3.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+
+					
+
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					key2 = t.SuperChangeCryptographicKey;
 					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-					dehydrator = DataSerializationFactory.CreateDehydrator();
-					key2.Dehydrate(dehydrator);
-					bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key2.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+
+					
+
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					key2 = t.PtahCryptographicKey;
 					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-					dehydrator = DataSerializationFactory.CreateDehydrator();
-					key2.Dehydrate(dehydrator);
-					bytes = dehydrator.ToArray();
-					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
+
+					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+						key2.Dehydrate(dehydrator);
+						using SafeArrayHandle bytes = dehydrator.ToArray();
+						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					}
+
+					
+
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 				}
 			});
 
 			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisAccountPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
-
+				affectedSnapshots.AddAccounts(t.TargetAccounts);
 			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
 
 			});
-
+			
 			this.TransactionImpactSets.RegisterTransactionImpactSet<IModeratorKeyChangeTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 
 				affectedSnapshots.accountKeys.Add((t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id));
@@ -461,30 +494,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.GetAccountKeySnapshotModify(key);
 
-					IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+					using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 					t.NewCryptographicKey.Dehydrate(dehydrator);
-					SafeArrayHandle bytes = dehydrator.ToArray();
+					using SafeArrayHandle bytes = dehydrator.ToArray();
 					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					bytes.Return();
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
 					//TODO: what else?
 				}
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IReclaimAccountsTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
-
-				foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
-					affectedSnapshots.AddAccountId(accountset.Account);
-				}
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
-
-				foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
-					ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(accountset.Account);
-
-					//TODO: what to do here?
-				}
-			});
+			// this.TransactionImpactSets.RegisterTransactionImpactSet<IReclaimAccountsTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			//
+			// 	foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
+			// 		affectedSnapshots.AddAccountId(accountset.Account);
+			// 	}
+			// }, interpretTransactionAccountsFunc: (t, parameters) => {
+			//
+			// 	foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
+			// 		ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(accountset.Account);
+			//
+			// 		//TODO: what to do here?
+			// 	}
+			// });
+			
 
 		}
 	}

@@ -42,14 +42,15 @@ namespace Neuralia.Blockchains.Core.General {
 			this.Changed = true;
 		}
 	
-		public R Run<T>(T item, PARAM parameter, AfterFunction after = null) {
+		public R Run<T>(T item, PARAM parameter, out bool hasRun, AfterFunction after = null) {
 	
 			R finalResult = default;
-	
+			hasRun = false;
 			foreach(var entry in this.BuildHierarchy(item)) {
 	
 				if(entry.HasAction) {
 					R lastResult = entry.Run(item, parameter);
+					hasRun = true;
 					bool shouldContinue = after?.Invoke(parameter, lastResult, ref finalResult)??true;
 	
 					if(!shouldContinue) {
@@ -57,7 +58,7 @@ namespace Neuralia.Blockchains.Core.General {
 					}
 				}
 			}
-	
+			
 			return finalResult;
 		}
 	}
@@ -88,10 +89,12 @@ namespace Neuralia.Blockchains.Core.General {
 			this.Changed = true;
 		}
 
-		public void Run<T>(T item, PARAM parameter) {
+		public void Run<T>(T item, PARAM parameter, out bool hasRun) {
+			hasRun = false;
 			foreach(var entry in this.BuildHierarchy(item)) {
 				if(entry.HasAction) {
 					entry.Run(item, parameter);
+					hasRun = true;
 				}
 			}
 		}

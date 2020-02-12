@@ -1314,7 +1314,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					try {
 						var token = tokenSource.Token;
-						this.KeyedAction(async () => {
+						this.KeyedAction(() => {
 							
 							this.RecursiveResourceAccessScheduler.ScheduleWrite(wp => {
 								this.walletProvider.PerformWalletTransaction(action, token, (prov, a, t) => {

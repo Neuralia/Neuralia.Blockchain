@@ -158,7 +158,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 				return blockHeadrer.BlockId == this.BlockId;
 			}
 
-			return base.Equals(obj);
+			return false;
 		}
 
 		public override int GetHashCode() {
@@ -198,8 +198,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 				// make sure we dotn return the data here, its used by dehydratedBlock. it would cause a serious issue.
 				SafeArrayHandle bytes = data;
 
-				bool compressed = false;
-
 				// decompress if we should
 				if(rehydrationFactory.CompressedBlockchainChannels.HasFlag(band)) {
 					if(compressor == null) {
@@ -208,21 +206,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 
 					bytes = compressor.Decompress(data);
 					toReturn.Add(bytes);
-					compressed = true;
 				}
-
-				IDataRehydrator results = DataSerializationFactory.CreateRehydrator(bytes);
 				
-				return results;
+				return DataSerializationFactory.CreateRehydrator(bytes);
 			});
 
 			IDataRehydrator rehydratorHeader = channelRehydrators.HighHeaderData;
 
-			var essentialHeader = RehydrateHeaderEssentials(rehydratorHeader);
-			this.Version.EnsureEqual(essentialHeader.version);
+			(var version, SafeArrayHandle hash, BlockId blockId) = RehydrateHeaderEssentials(rehydratorHeader);
+			this.Version.EnsureEqual(version);
 
-			this.Hash.Entry = essentialHeader.hash.Entry;
-			this.BlockId = essentialHeader.blockId;
+			this.Hash.Entry = hash.Entry;
+			this.BlockId = blockId;
 
 			this.Timestamp.Rehydrate(rehydratorHeader);
 			this.Lifespan.Rehydrate(rehydratorHeader);
@@ -246,7 +241,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 				int offset = rehydratorHeader.Offset;
 
 				// master transactions have their own independent rehydrator array which contains only the header (body)
-				SafeArrayHandle keyedBytes = rehydratorHeader.ReadNonNullableArray();
+				using SafeArrayHandle keyedBytes = rehydratorHeader.ReadNonNullableArray();
 
 				using(IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes)) {
 

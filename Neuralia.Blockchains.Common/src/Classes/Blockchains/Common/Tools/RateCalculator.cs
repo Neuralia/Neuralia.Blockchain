@@ -3,11 +3,12 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using MoreLinq.Extensions;
+using Neuralia.Blockchains.Core.Collections;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 	public class RateCalculator {
 		
-		private readonly ConcurrentQueue<SyncHistory> insertionHistory = new ConcurrentQueue<SyncHistory>();
+		private readonly WrapperConcurrentQueue<SyncHistory> insertionHistory = new WrapperConcurrentQueue<SyncHistory>();
 
 		public void AddHistoryEntry(long blockId) {
 			this.insertionHistory.Enqueue(new SyncHistory {blockId = blockId, timestamp = DateTime.UtcNow});

@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 
 		public SafeArrayHandle Dehydrate() {
 
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			dehydrator.Write(this.Version);
 			dehydrator.Write((byte) this.Response);

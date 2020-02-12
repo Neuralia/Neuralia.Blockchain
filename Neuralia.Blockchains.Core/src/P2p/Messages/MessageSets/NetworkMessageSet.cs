@@ -90,7 +90,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		/// <returns></returns>
 		public SafeArrayHandle Dehydrate() {
 
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Dehydrate(dehydrator);
 
@@ -126,7 +126,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		}
 
 		protected virtual void DehydrateMessage(IDataDehydrator dehydrator) {
-			IDataDehydrator subDehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator subDehydrator = DataSerializationFactory.CreateDehydrator();
 			this.Message.Dehydrate(subDehydrator);
 
 			var bytes = subDehydrator.ToArray();

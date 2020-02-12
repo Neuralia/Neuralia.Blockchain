@@ -21,9 +21,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public static void RegisterBasics() {
 
 			// litedb does not map these unsigned types by default. so lets add them
-			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => uint.Parse(bson.RawValue.ToString()));
+			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => uint.Parse(bson.AsString.ToString()));
 
-			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => ulong.Parse(bson.RawValue.ToString()));
+			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => ulong.Parse(bson.AsString.ToString()));
 
 			RegisterArrayTypes();
 			
@@ -59,8 +59,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterArrayTypes() {
 
-			BsonMapper.Global.RegisterType<SafeArrayHandle>(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle)ByteArray.Create((byte[]) bson.RawValue));
-			BsonMapper.Global.RegisterType<ByteArray>(uri => uri.ToExactByteArray(), bson => ByteArray.Create((byte[]) bson.RawValue));
+			BsonMapper.Global.RegisterType<SafeArrayHandle>(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle)ByteArray.Create(bson.AsBinary));
+			BsonMapper.Global.RegisterType<ByteArray>(uri => uri.ToExactByteArray(), bson => ByteArray.Create((byte[]) bson.AsBinary));
 		}
 		
 		public static void RegisterWalletSnaphostTypes() {
@@ -70,12 +70,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterAmount() {
 
-			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new Amount((decimal) bson.RawValue));
+			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new Amount((decimal) bson.AsDecimal));
 		}
 
 		public static void RegisterBlockId() {
 
-			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new BlockId((long) bson.RawValue));
+			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new BlockId((long) bson.AsInt64));
 		}
 
 		public static void RegisterKeyAddress() {
@@ -103,7 +103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterAccountId() {
 
-			BsonMapper.Global.RegisterType(uri => uri.ToLongRepresentation(), bson => AccountId.FromLongRepresentation((long) bson.RawValue));
+			BsonMapper.Global.RegisterType(uri => uri.ToLongRepresentation(), bson => AccountId.FromLongRepresentation((long) bson.AsInt64));
 		}
 
 		public static void RegisterTransactionId() {
@@ -111,7 +111,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public static void RegisterTransactionTimestamp() {
-			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new TransactionTimestamp((long) bson.RawValue));
+			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new TransactionTimestamp((long) bson.AsInt64));
 		}
 
 		/// <summary>
@@ -130,7 +130,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			foreach(Guid key in dict.Keys) {
 				T value = dict[key];
 
-				o.RawValue[key.ToString()] = BsonMapper.Global.ToDocument(value);
+				o[key.ToString()] = BsonMapper.Global.ToDocument(value);
 			}
 
 			return o;

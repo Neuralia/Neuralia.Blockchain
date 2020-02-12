@@ -196,11 +196,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			where T : new() {
 
 			return this.RunQueryDbOperation(litedbDal => {
-				if(litedbDal.CollectionExists<K>()) {
-					return operation(litedbDal.All<K>());
-				}
-
-				return new T[0];
+				
+				return litedbDal.Open(db => litedbDal.CollectionExists<K>(db) ? operation(litedbDal.All<K>(db)) : new T[0]);
+				
 			}, data);
 		}
 
