@@ -3,6 +3,7 @@ using System.Linq;
 using MoreLinq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
+using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Configuration.TransactionSelectionStrategies;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
@@ -19,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private readonly CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings;
 
-		public CreationTimeTransactionSelectionMethod(long blockId, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings, NodeShareType nodeShareType) : base(blockId, chainStateProvider, walletProvider, electionContext, nodeShareType) {
+		public CreationTimeTransactionSelectionMethod(long blockId, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings) : base(blockId, configuration, chainStateProvider, walletProvider, electionContext) {
 			this.creationTimeTransactionSelectionStrategySettings = creationTimeTransactionSelectionStrategySettings;
 		}
 

@@ -57,13 +57,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 					var results = this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, null, enabledFastKeyTypes, TransactionImpactSet.OperationModes.Simulated, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected);
 					if(results.HasValue && results.Value == false){
-						throw new UnrecognizedElementException(this.blockchainType, this.chainName);
+						//throw new UnrecognizedElementException(this.blockchainType, this.chainName);
 					}
 
 					var parameter = new InterpretTransactionVerificationFuncParameter();
 					parameter.isException = exception;
 					parameter.entryCache = snapshotCache;
-					(accept, code) = InterpretTransactionVerificationFuncOverrideSetAction.Run(transaction, parameter, out bool hasRun, (InterpretTransactionVerificationFuncParameter a, (bool valid, RejectionCode rejectionCode) last, ref (bool valid, RejectionCode rejectionCode) final) => {
+					(accept, code) = this.InterpretTransactionVerificationFuncOverrideSetAction.Run(transaction, parameter, out bool hasRun, (InterpretTransactionVerificationFuncParameter a, (bool valid, RejectionCode rejectionCode) last, ref (bool valid, RejectionCode rejectionCode) final) => {
 
 						final = last;
 						
@@ -89,7 +89,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					var results = this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, fastKeys, enabledFastKeyTypes, operationMode, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected);
 					// ok, lets run the real thing
 					if(results.HasValue && results.Value == false){
-						throw new UnrecognizedElementException(this.blockchainType, this.chainName);
+						//throw new UnrecognizedElementException(this.blockchainType, this.chainName);
 					}
 
 					// if we operate in local mode, then lets do it here
@@ -235,17 +235,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.InterpretTransactionVerificationFuncOverrideSetAction.AddOverrideSet<C,P>(interpretTransactionVerificationFuncOverrideSetAction);
 		}
 		
-		public void RegisterTransactionImpactSet<T>(Action<T, SnapshotKeySet> getImpactedSnapshotsFunc = null, Action<T, InterpretTransactionAccountsFuncParameter> interpretTransactionAccountsFunc = null, Action<T, InterpretTransactionStandardAccountKeysFuncParameter> interpretTransactionStandardAccountKeysFunc = null, Action<T, CollectStandardAccountFastKeysFuncParameter> collectStandardAccountFastKeysFunc = null, Action<T, InterpretTransactionChainOptionsFuncParameter> interpretTransactionChainOptionsFunc = null, Action<T, InterpretTransactionAccreditationCertificatesFuncParameter> interpretTransactionAccreditationCertificatesFunc = null) {
-			
+		public void RegisterTransactionImpactSet<T>(Action<T, SnapshotKeySet> getImpactedSnapshotsFunc, Action<T, InterpretTransactionAccountsFuncParameter> interpretTransactionAccountsFunc = null, Action<T, InterpretTransactionStandardAccountKeysFuncParameter> interpretTransactionStandardAccountKeysFunc = null, Action<T, CollectStandardAccountFastKeysFuncParameter> collectStandardAccountFastKeysFunc = null, Action<T, InterpretTransactionChainOptionsFuncParameter> interpretTransactionChainOptionsFunc = null, Action<T, InterpretTransactionAccreditationCertificatesFuncParameter> interpretTransactionAccreditationCertificatesFunc = null) {
+
+			if(getImpactedSnapshotsFunc == null) {
+				throw new ArgumentNullException($"{nameof(getImpactedSnapshotsFunc)} cannot be null");	
+			}
 			//TODO: all these override sets can be grouped into one, to save space and not duplicate the type hierarchy sets.
 			// so, optimize and group into one...
 			this.GetImpactedSnapshotsFuncOverrideSetAction.AddSet<T>(getImpactedSnapshotsFunc);
 			this.InterpretTransactionAccountsFuncOverrideSetAction.AddSet<T>(interpretTransactionAccountsFunc);
 			this.InterpretTransactionStandardAccountKeysFuncOverrideSetAction.AddSet<T>(interpretTransactionStandardAccountKeysFunc);
 			this.CollectStandardAccountFastKeysFuncOverrideSetAction.AddSet<T>(collectStandardAccountFastKeysFunc);
-			
-			InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet<T>(interpretTransactionAccreditationCertificatesFunc);
-			InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet<T>(interpretTransactionChainOptionsFunc);
+
+			this.InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet<T>(interpretTransactionAccreditationCertificatesFunc);
+			this.InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet<T>(interpretTransactionChainOptionsFunc);
 		}
 		
 		public void RegisterTransactionImpactSetOverride<C, P>(Action<C, SnapshotKeySet, Action<P, SnapshotKeySet>> getImpactedSnapshotsFunc= null, Action<C, InterpretTransactionAccountsFuncParameter, Action<P, InterpretTransactionAccountsFuncParameter>> interpretTransactionAccountsFunc= null, Action<C, InterpretTransactionStandardAccountKeysFuncParameter,  Action<P, InterpretTransactionStandardAccountKeysFuncParameter>> interpretTransactionStandardAccountKeysFunc= null, Action<C, CollectStandardAccountFastKeysFuncParameter, Action<P, CollectStandardAccountFastKeysFuncParameter>> collectStandardAccountFastKeysFunc= null, Action<C, InterpretTransactionChainOptionsFuncParameter, Action<P, InterpretTransactionChainOptionsFuncParameter>> interpretTransactionChainOptionsFunc = null, Action<C, InterpretTransactionAccreditationCertificatesFuncParameter, Action<P, InterpretTransactionAccreditationCertificatesFuncParameter>> interpretTransactionAccreditationCertificatesFunc= null) 
@@ -255,9 +258,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.InterpretTransactionAccountsFuncOverrideSetAction.AddSet<C, P>(interpretTransactionAccountsFunc);
 			this.InterpretTransactionStandardAccountKeysFuncOverrideSetAction.AddSet<C, P>(interpretTransactionStandardAccountKeysFunc);
 			this.CollectStandardAccountFastKeysFuncOverrideSetAction.AddSet<C, P>(collectStandardAccountFastKeysFunc);
-			
-			InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet<C, P>(interpretTransactionAccreditationCertificatesFunc);
-			InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet<C, P>(interpretTransactionChainOptionsFunc);
+
+			this.InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet<C, P>(interpretTransactionAccreditationCertificatesFunc);
+			this.InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet<C, P>(interpretTransactionChainOptionsFunc);
 		}
 		
 		public class InterpretTransactionAccountsFuncParameter {

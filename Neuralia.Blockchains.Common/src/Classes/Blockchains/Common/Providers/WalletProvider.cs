@@ -3539,7 +3539,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public IXmssMTWalletKey CreateXmssmtKey(string name, int treeHeight, int treeLayers, Enums.KeyHashBits hashBits, float warningLevel, float changeLevel) {
 			IXmssMTWalletKey key = this.CreateBasicKey<IXmssMTWalletKey>(name, Enums.KeyTypes.XMSSMT);
 
-			using(XMSSMTProvider provider = new XMSSMTProvider(hashBits, treeHeight, treeLayers, Enums.ThreadMode.ThreeQuarter)) {
+			using(XMSSMTProvider provider = new XMSSMTProvider(hashBits, treeHeight, treeLayers, Enums.ThreadMode.Half)) {
 				provider.Initialize();
 
 				Log.Information($"Creating a new XMSS^MT key named '{name}' with tree height {treeHeight}, tree layers {treeLayers} and hashBits {provider.HashBits} and good for {provider.MaximumHeight} signatures.");

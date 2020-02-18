@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
+using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Configuration.TransactionSelectionStrategies;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
@@ -14,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private readonly TransactionTypeTransactionSelectionStrategySettings transactionSelectionStrategySettings;
 
-		public TransactionTypeTransactionSelectionMethod(long blockId, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, TransactionTypeTransactionSelectionStrategySettings transactionSelectionStrategySettings, NodeShareType nodeShareType) : base(blockId, chainStateProvider, walletProvider, electionContext, nodeShareType) {
+		public TransactionTypeTransactionSelectionMethod(long blockId, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, TransactionTypeTransactionSelectionStrategySettings transactionSelectionStrategySettings) : base(blockId, configuration, chainStateProvider, walletProvider, electionContext) {
 			this.transactionSelectionStrategySettings = transactionSelectionStrategySettings;
 		}
 

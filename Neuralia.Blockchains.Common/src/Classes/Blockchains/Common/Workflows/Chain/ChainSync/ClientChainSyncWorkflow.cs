@@ -75,12 +75,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			OK,
 			NoSyncingConnections,
 			Error,
-			NetworkPaused
+			NetworkPaused,
+			SyncOver
 		}
 
 		private const string DOWNLOAD_TEMP_DIR_NAME = "files";
 
-		private const int MAXIMUM_UNIFIED_BLOCK_SIZE = 100_000;
+		/// <summary>
+		/// the maximum size of slices sent to each peer
+		/// </summary>
+		private const int MAXIMUM_UNIFIED_BLOCK_SIZE = 20_000;
 		private const int MINIMUM_USEFUL_SLICE_SIZE = 1000;
 
 		/// <summary>
@@ -253,11 +257,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncStarted(this.ChainStateProvider.BlockHeight, this.ChainStateProvider.PublicBlockHeight));
 
 					// this will be our parallel fetch new peers task
-					PeerBlockSpecs nextBlockSpecs = null;
-					PeerBlockSpecs previousBlockSpecs = null;
-
 					int attempts = 0;
-
 
 					bool syncGenesis = this.ChainStateProvider.DownloadBlockHeight == 0;
 
@@ -289,21 +289,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							return;
 						}
 
-						ResultsState result = this.RunBlockSyncingAction(connectionsSet => {
+						var genesisTask = this.RunBlockSyncingAction(connectionsSet => {
 							this.SynchronizeGenesisBlock(connectionsSet);
 
 							this.rateCalculator.AddHistoryEntry(1);
 
-							this.UpdateDownloadBlockHeight(1);
+							this.UpdateDownloadBlockHeight(1).Wait();
 
 							this.UpdateSignificantActionTimestamp();
 							syncGenesis = false;
 							synched = true;
 
-							return ResultsState.OK;
+							return System.Threading.Tasks.Task.FromResult(((PeerBlockSpecs)null, ResultsState.OK));
 						}, 3, connections);
 
-						if(result != ResultsState.OK || this.ChainStateProvider.DownloadBlockHeight != 1) {
+						genesisTask.Wait();
+						(PeerBlockSpecs nextBlockSpecs, ResultsState state) = genesisTask.Result;
+
+						if(state != ResultsState.OK || this.ChainStateProvider.DownloadBlockHeight != 1) {
 
 							if(!connections.HasSyncingConnections) {
 								Log.Verbose("Failed to sync genesis block, we had no syncing connections");
@@ -336,7 +339,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						if(this.ChainStateProvider.BlockHeight == 0) {
 							return;
 						}
-						ResultsState result = this.RunBlockSyncingAction(connectionsSet => {
+						
+						var digestTask = this.RunBlockSyncingAction(connectionsSet => {
 							//if we need to get a digest, we do now
 							this.SynchronizeDigest(connectionsSet);
 
@@ -345,10 +349,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							syncDigest = false;
 							synched = true;
 
-							return ResultsState.OK;
+							return System.Threading.Tasks.Task.FromResult(((PeerBlockSpecs)null, ResultsState.OK));
 						}, 2, connections);
 
-						if(result != ResultsState.OK) {
+						digestTask.Wait();
+
+						(PeerBlockSpecs nextBlockSpecs, ResultsState state) = digestTask.Result;
+
+						if(state != ResultsState.OK) {
 							if(!connections.HasSyncingConnections) {
 								Log.Verbose("Failed to sync digest, we had no syncing connections");
 							} else {
@@ -1174,7 +1182,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			var peerSlicesContexts = new Dictionary<Guid, PeerSlicesContext<CHANNEL_INFO_SET_REQUEST, T_REQUEST, CHANNEL_INFO_SET_RESPONSE, T_RESPONSE, KEY, SLICE_KEY, DATA_REQUEST, DATA_RESPONSE>>();
 			var slicePeersContexts = slices.ToDictionary(s => s.index, s => new SlicePeersContext<CHANNEL_INFO_SET_REQUEST, T_REQUEST, CHANNEL_INFO_SET_RESPONSE, T_RESPONSE, KEY, SLICE_KEY, DATA_REQUEST, DATA_RESPONSE> {SliceIndex = s.index, SliceInfo = s});
 			
-			var syncingConnections = new List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>>();
+			List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> syncingConnections;
 			
 			void RefreshSyncConnections() {
 				syncingConnections = parameters.selectUsefulConnections(parameters.singleEntryContext.Connections);
@@ -1227,7 +1235,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				var validPeers = syncingConnections.ToDictionary(c => c.PeerConnection.ClientUuid, c => c);
 				var validPeerUUids = validPeers.Keys.ToList();
-
+				
 				// update the peers
 				// new ones
 				var newPeers = validPeerUUids.Where(k => !peerSlicesContexts.Keys.Contains(k)).ToList();
@@ -1287,7 +1295,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							slice.SliceInfo.connection = validPeers[validPeer.PeerId];
 							slice.SetCurrentPeer(validPeer);
 
-							if(firstRun) {
+							if(!nextBlockPeerSpecs.ContainsKey(validPeer.PeerId)) {
 								// lets ask them for the next block specs
 								parameters.prepareFirstRunRequestMessage?.Invoke(slice.SliceInfo.requestMessage.Message);
 							}
@@ -1888,7 +1896,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		protected string GetDownloadTempDirName(string path) {
-			return Path.Combine(Path.GetDirectoryName(path), DOWNLOAD_TEMP_DIR_NAME);
+			return Path.Combine(Path.GetDirectoryName(path) ?? throw new ArgumentNullException(nameof(path)), DOWNLOAD_TEMP_DIR_NAME);
 		}
 
 		protected enum DownloadResults {

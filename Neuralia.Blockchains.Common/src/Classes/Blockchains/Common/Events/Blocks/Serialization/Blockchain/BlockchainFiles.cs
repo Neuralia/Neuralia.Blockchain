@@ -236,7 +236,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			var result = this.QueryBlockIndex(blockId, blockIndex, channelIndexSet);
 
-			return result.Entries.Any();
+			return result?.Entries.Any()??false;
 		}
 
 		private uint? AdjustBlockId(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
@@ -365,10 +365,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			var indices = this.QueryBlockIndex(blockId, blockIndex, channelIndexSet);
 
-			entries.RunForAll((key, index) => {
+			if(indices != null) {
+				entries.RunForAll((key, index) => {
 
-				entries[key] = indices[key].blockEnd;
-			});
+					entries[key] = indices[key].blockEnd;
+				});
+			}
 
 			return entries;
 		}

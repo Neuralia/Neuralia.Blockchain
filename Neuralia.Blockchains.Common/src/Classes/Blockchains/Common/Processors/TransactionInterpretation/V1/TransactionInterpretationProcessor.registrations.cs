@@ -229,7 +229,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 			//----------------------- moderator transactions ----------------------------
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetWarningTransaction>();
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetWarningTransaction>((t, affectedSnapshots) => {
+
+				affectedSnapshots.standardAccounts.Add(t.Account);
+
+			});
 
 			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
 

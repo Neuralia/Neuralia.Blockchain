@@ -39,6 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 	/// <summary>
 	///     this is a more elaborate resource exclusion which permits recursive access.
 	/// </summary>
+	/// <remarks>DOES NOT WORK WITH ASYNC/AWAIT!</remarks>
 	public class RecursiveResourceAccessScheduler<T> : IRecursiveResourceAccessScheduler<T> {
 
 
@@ -95,7 +96,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				this.readerWriterLock.ExitReadLock();
 			}
 		}
-		
+
 		public bool ScheduleWrite(Action<T> action, int timeout = 60) {
 			return this.ScheduleWrite(action, TimeSpan.FromSeconds(timeout));
 		}
@@ -107,8 +108,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			}
 
 			//TODO: this is not atomic with the above enter write. is it a problem?  can we find a better way
-			Interlocked.Exchange(ref this.threadId, Thread.CurrentThread.ManagedThreadId);
 			try {
+				Interlocked.Exchange(ref this.threadId, Thread.CurrentThread.ManagedThreadId);
+				
 				action(this.Component);
 
 				return true;
@@ -118,7 +120,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				this.readerWriterLock.ExitWriteLock();
 			}
 		}
-
+		
 		public (K result, bool success) ScheduleWrite<K>(Func<T, K> action, int timeout = 60) {
 			return this.ScheduleWrite(action, TimeSpan.FromSeconds(timeout));
 		}
@@ -127,8 +129,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			if(!this.readerWriterLock.TryEnterWriteLock((int)timeout.TotalMilliseconds)) {
 				return (default, false);
 			}
-			Interlocked.Exchange(ref this.threadId, Thread.CurrentThread.ManagedThreadId);
+			
 			try {
+				Interlocked.Exchange(ref this.threadId, Thread.CurrentThread.ManagedThreadId);
 				return (action(this.Component), true);
 			} finally {
 				Interlocked.Exchange(ref this.threadId, 0);

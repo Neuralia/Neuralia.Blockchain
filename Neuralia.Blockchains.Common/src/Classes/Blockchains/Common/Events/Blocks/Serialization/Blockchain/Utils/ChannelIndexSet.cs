@@ -57,12 +57,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public virtual ChannelsEntries<(long start, int end)> QueryIndex(uint adjustedBlockId) {
 
-			var result = new ChannelsEntries<(long start, int end)>();
+			ChannelsEntries<(long start, int end)> result = null;
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
 				var subResults = index.QueryIndex(adjustedBlockId);
 
 				if(subResults != null) {
+					if(result == null) {
+						result = new ChannelsEntries<(long start, int end)>();
+					}
+					
 					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
 				}
 			}
@@ -71,13 +75,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId) {
-			var result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
+			ChannelsEntries<SafeArrayHandle> result = null;
 
 			try {
 				foreach(IChannelIndex index in this.ChannelIndices) {
 					var subResults = index.QueryBytes(adjustedBlockId);
 
-					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+					if(subResults != null) {
+						if(result == null) {
+							result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
+						}
+
+						var result1 = result;
+						subResults.Entries.ForEach(entry => result1[entry.Key] = entry.Value);
+					}
 				}
 			} catch(BlockLoadException blex) {
 				//TODO: do anything or just retunr null?
@@ -87,13 +98,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
-			var result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
+			ChannelsEntries<SafeArrayHandle> result = null;
 
 			try {
 				foreach(IChannelIndex index in this.ChannelIndices) {
 					var subResults = index.QueryPartialBlockBytes(adjustedBlockId, offsets.GetSubset(index.ChannelTypes));
 
-					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+					if(subResults != null) {
+						if(result == null) {
+							result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
+						}
+
+						var result1 = result;
+						subResults.Entries.ForEach(entry => result1[entry.Key] = entry.Value);
+					}
 				}
 			} catch(BlockLoadException blex) {
 				//TODO: do anything or just retunr null?
@@ -109,13 +127,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public ChannelsEntries<long> QueryProviderFileSizes() {
-			var result = new ChannelsEntries<long>(this.ChannelTypes);
+			ChannelsEntries<long> result = null;
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
 				try {
 					var subResults = index.QueryProviderFileSizes();
 
-					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
+					if(subResults != null) {
+						if(result == null) {
+							result = new ChannelsEntries<long>(this.ChannelTypes);
+						}
+
+						var result1 = result;
+						subResults.Entries.ForEach(entry => result1[entry.Key] = entry.Value);
+					}
 				} catch(BlockLoadException blex) {
 					//TODO: do anything or just retunr null?
 				}

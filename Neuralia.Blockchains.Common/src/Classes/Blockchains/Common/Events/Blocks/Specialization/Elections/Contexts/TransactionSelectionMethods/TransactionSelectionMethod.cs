@@ -4,6 +4,7 @@ using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General;
@@ -22,15 +23,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		protected readonly  IElectionContext electionContext;
 
 		protected readonly IWalletProvider walletProvider;
-		protected readonly NodeShareType nodeShareType;
 		protected readonly IChainStateProvider chainStateProvider;
+		protected readonly BlockChainConfigurations configuration;
 		
-		public TransactionSelectionMethod(long blockId, IChainStateProvider chainStateProvider, IWalletProvider walletProvider,  IElectionContext electionContext, NodeShareType nodeShareType) {
+		public TransactionSelectionMethod(long blockId, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider,  IElectionContext electionContext) {
 			this.walletProvider = walletProvider;
 			this.blockId = blockId;
 			this.electionContext = electionContext;
-			this.nodeShareType = nodeShareType;
 			this.chainStateProvider = chainStateProvider;
+			this.configuration = configuration;
 		}
 
 		public virtual List<TransactionId> PerformTransactionSelection(IEventPoolProvider chainEventPoolProvider, List<TransactionId> existingTransactions) {
@@ -55,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		protected int MaximumTransactionCount {
 			get {
-				var miningTier = BlockchainUtilities.GetMiningTier(this.nodeShareType, this.chainStateProvider.DigestHeight);
+				var miningTier = BlockchainUtilities.GetMiningTier(this.configuration, this.chainStateProvider.DigestHeight);
 				if(miningTier.HasFlag(Enums.MiningTiers.FirstTier)) {
 					return this.electionContext.FirstTierMaximumElectedTransactionCount;
 				}

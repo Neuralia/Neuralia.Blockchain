@@ -26,23 +26,45 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return nodeShareType.DoesNotShare;
 		}
 
-		public static Enums.MiningTiers GetMiningTier(ChainConfigurations configuration, int? digestId) {
-			return GetMiningTier(configuration.NodeShareType(), digestId);
-		}
+		public static Enums.MiningTiers GetMiningTier(BlockChainConfigurations configuration, int digestId) {
 
-		public static Enums.MiningTiers GetMiningTier(NodeShareType nodeShareType, int? digestId) {
-
-			// 1st tier is everything (digest included) or if only blocks, only while there is no digest.
-			if(nodeShareType.HasDigestsAndBlocks || (nodeShareType.OnlyBlocks && digestId.HasValue && digestId.Value == 0)) {
-				// first tier is for full sharers only
-				return Enums.MiningTiers.FirstTier;
-			}
-			if(!nodeShareType.Shares) {
-				// if they dont share anything, its third tier
+			
+			if(configuration.MiningTier.HasValue && configuration.MiningTier.Value == Enums.MiningTiers.ThirdTier) {
 				return Enums.MiningTiers.ThirdTier;
 			}
-			// anything in between is second tier
-			return Enums.MiningTiers.SecondTier;
+			
+			Enums.MiningTiers determinedMiningTier = Enums.MiningTiers.ThirdTier;
+
+			var nodeShareType = configuration.NodeShareType();
+			
+			// 1st tier is everything (digest included) or if only blocks, only while there is no digest.
+			if(nodeShareType.HasDigestsAndBlocks || (nodeShareType.OnlyBlocks && digestId == 0)) {
+				// first tier is for full sharers only
+				determinedMiningTier = Enums.MiningTiers.FirstTier;
+			}
+			else if(!nodeShareType.Shares) {
+				// if they dont share anything, its third tier
+				determinedMiningTier = Enums.MiningTiers.ThirdTier;
+			} else {
+				// anything in between is second tier
+				determinedMiningTier = Enums.MiningTiers.SecondTier;
+			}
+			
+			if(configuration.MiningTier.HasValue) {
+
+				if(configuration.MiningTier.Value == Enums.MiningTiers.FirstTier && determinedMiningTier != Enums.MiningTiers.FirstTier) {
+					// leave whatever we already have, we can not fullfill the request
+				} else {
+					// ok, lets override it.
+					determinedMiningTier = configuration.MiningTier.Value;
+				}
+			}
+
+			if(determinedMiningTier == Enums.MiningTiers.SecondTier && digestId == 0) {
+				determinedMiningTier = Enums.MiningTiers.FirstTier;
+			}
+			
+			return determinedMiningTier;
 		}
 	}
 }

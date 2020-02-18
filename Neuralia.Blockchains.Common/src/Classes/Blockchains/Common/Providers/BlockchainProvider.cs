@@ -179,28 +179,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// thats it really. now we have our block, lets update our chain stats.
 
 				// ready to move to the next step
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted;
-
+				var chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
+				
+				var actions = new List<Func<IChainStateProvider, string>>();
+						
+				actions.Add(prov => prov.SetBlockInterpretationStatusField(ChainStateEntryFields.BlockInterpretationStatuses.InterpretationCompleted));
 				// we got our first block!
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight = 1;
-
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockTimestamp = genesisBlock.FullTimestamp;
-
+				actions.Add(prov => prov.SetDiskBlockHeightField(1));
+				
+				actions.Add(prov => prov.SetLastBlockTimestampField(genesisBlock.FullTimestamp));
 				// infinite
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockLifespan = 0;
+				actions.Add(prov => prov.SetLastBlockLifespanField(0));
+
 
 				// lets set the timestamp, thats our inception. its very important to remove milliseconds, keep it very simple.
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = genesisBlock.Inception.TrimMilliseconds();
-
+				actions.Add(prov => prov.SetChainInceptionField(genesisBlock.Inception.TrimMilliseconds()));
+				
 				// lets store the block hash
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockHash = genesisBlock.Hash.ToExactByteArrayCopy();
-
+				actions.Add(prov => prov.SetLastBlockHashField(genesisBlock.Hash.ToExactByteArrayCopy()));
+				
 				// keep it too, its too nice :)
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GenesisBlockHash = genesisBlock.Hash.ToExactByteArrayCopy();
+				actions.Add(prov => prov.SetGenesisBlockHashField(genesisBlock.Hash.ToExactByteArrayCopy()));
+				
+				chainStateProvider.UpdateFields(actions);
 
 				// store the promised next signature if it is secret
 				if(genesisBlock.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.InsertModeratorKey(new TransactionId(), genesisBlock.SignatureSet.NextModeratorKey, genesisBlock.SignatureSet.ConvertToDehydratedKey());
+					chainStateProvider.InsertModeratorKey(new TransactionId(), genesisBlock.SignatureSet.NextModeratorKey, genesisBlock.SignatureSet.ConvertToDehydratedKey());
 				}
 
 			} catch(Exception ex) {
@@ -277,17 +282,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					// lets update our chain
 					Repeater.Repeat(() => {
-						//TODO: group all this inside a single database call for efficiency
-						chainStateProvider.DiskBlockHeight = block.BlockId.Value;
 
-						chainStateProvider.LastBlockTimestamp = block.FullTimestamp;
-
+						var actions = new List<Func<IChainStateProvider, string>>();
+						
+						actions.Add(prov => prov.SetDiskBlockHeightField(block.BlockId.Value));
+						actions.Add(prov => prov.SetLastBlockTimestampField(block.FullTimestamp));
+						
 						// a hint as to when we should expect the next one
-						chainStateProvider.LastBlockLifespan = block.Lifespan;
-
+						actions.Add(prov => prov.SetLastBlockLifespanField(block.Lifespan));
 						// lets store the block hash
-						chainStateProvider.LastBlockHash = block.Hash.ToExactByteArrayCopy();
-
+						actions.Add(prov => prov.SetLastBlockHashField(block.Hash.ToExactByteArrayCopy()));
+						
+						chainStateProvider.UpdateFields(actions);
+						
 						// store the promised next signature if it is secret
 						if(block.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
 							chainStateProvider.UpdateModeratorKey(new TransactionId(), block.SignatureSet.NextModeratorKey, block.SignatureSet.ConvertToDehydratedKey());
@@ -380,8 +387,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// thats it, lets begin interpretation only if ti was not already performed or completed
 				if(chainStateProvider.BlockHeight == block.BlockId.Value - 1) {
-					chainStateProvider.BlockHeight = block.BlockId.Value;
-					chainStateProvider.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.Blank;
+					
+					var actions = new List<Func<IChainStateProvider, string>>();
+						
+					actions.Add(prov => prov.SetBlockHeightField(block.BlockId.Value));
+					actions.Add(prov => prov.SetBlockInterpretationStatusField(ChainStateEntryFields.BlockInterpretationStatuses.Blank));
+
+					chainStateProvider.UpdateFields(actions);
+					
 				} else if(chainStateProvider.BlockHeight < block.BlockId.Value - 1) {
 					throw new ArgumentException("Block Id is too low for interpretation");
 				}

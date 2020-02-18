@@ -104,7 +104,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					WalletAccountKeyLog entry = null;
 
 					if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
-						entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == (byte) eventType)).FirstOrDefault();
+						byte eventTypeCasted = (byte) eventType;
+						entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted)).FirstOrDefault();
 					}
 
 					if(entry == null) {
@@ -145,7 +146,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					return false;
 				}
 
-				return litedbDal.Exists<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == (byte) eventType));
+				byte eventTypeCasted = (byte) eventType;
+				return litedbDal.Exists<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted));
 			});
 		}
 
@@ -165,7 +167,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				WalletAccountKeyLog entry = null;
 
 				if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
-					entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == (byte) eventType)).FirstOrDefault();
+					
+					byte eventTypeCasted = (byte) eventType;
+					entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted)).FirstOrDefault();
 				}
 
 				return entry?.ConfirmationBlockId != null;

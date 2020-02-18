@@ -72,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				}
 			}
 
-			request.Timeout = 3000; // 3 second
+			request.Timeout = 5000; // 5 seconds
 
 			return client.ExecuteTaskAsync(request);
 

@@ -1,6 +1,6 @@
 # Neuralia.Blockchain
 
-##### Version:  Release Candidate II
+##### Version:  Release Candidate III
 
 The essential blockchain components of the Neuralia Blockchain.
 

@@ -9,12 +9,12 @@ using Neuralia.Blockchains.Core.Types;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.TransactionSelectionMethods {
 
 	public interface ITransactionSelectionMethodFactory {
-		ITransactionSelectionMethod CreateTransactionSelectionMethod(TransactionSelectionMethodType type, long blockId, BlockElectionDistillate blockElectionDistillate, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, BlockChainConfigurations blockChainConfigurations, BlockchainServiceSet serviceSet);
+		ITransactionSelectionMethod CreateTransactionSelectionMethod(TransactionSelectionMethodType type, long blockId, BlockElectionDistillate blockElectionDistillate, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, BlockchainServiceSet serviceSet);
 	}
 
 	public class TransactionSelectionMethodFactory : ITransactionSelectionMethodFactory {
 
-		public virtual ITransactionSelectionMethod CreateTransactionSelectionMethod(TransactionSelectionMethodType type, long blockId, BlockElectionDistillate blockElectionDistillate, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, BlockChainConfigurations blockChainConfigurations, BlockchainServiceSet serviceSets) {
+		public virtual ITransactionSelectionMethod CreateTransactionSelectionMethod(TransactionSelectionMethodType type, long blockId, BlockElectionDistillate blockElectionDistillate, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, BlockchainServiceSet serviceSets) {
 
 			if(type == TransactionSelectionMethodTypes.Instance.Automatic) {
 				// ok, this one is meant to be automatic. we wlil try to find the best method
@@ -23,29 +23,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				type = TransactionSelectionMethodTypes.Instance.Random;
 			}
 
-			NodeShareType nodeShareType = blockChainConfigurations.BlockSavingMode;
+
 			if(type == TransactionSelectionMethodTypes.Instance.CreationTime) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new CreationTimeTransactionSelectionMethod(blockId, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, blockChainConfigurations.CreationTimeTransactionSelectionStrategySettings, nodeShareType);
+				return new CreationTimeTransactionSelectionMethod(blockId, configuration, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, configuration.CreationTimeTransactionSelectionStrategySettings);
 			}
 
 			if(type == TransactionSelectionMethodTypes.Instance.TransationTypes) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new TransactionTypeTransactionSelectionMethod(blockId, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, blockChainConfigurations.TransactionTypeTransactionSelectionStrategySettings, nodeShareType);
+				return new TransactionTypeTransactionSelectionMethod(blockId, configuration, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, configuration.TransactionTypeTransactionSelectionStrategySettings);
 			}
 
 			if(type == TransactionSelectionMethodTypes.Instance.Size) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new SizeTransactionSelectionMethod(blockId, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, blockChainConfigurations.SizeTransactionSelectionStrategySettings, nodeShareType);
+				return new SizeTransactionSelectionMethod(blockId, configuration, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, configuration.SizeTransactionSelectionStrategySettings);
 			}
 
 			if(type == TransactionSelectionMethodTypes.Instance.Random) {
 
 				// ok, nothing special here, lets just maximize profits by choosing the highest paying transactions
-				return new RandomTransactionSelectionMethod(blockId, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, blockChainConfigurations.RandomTransactionSelectionStrategySettings, nodeShareType);
+				return new RandomTransactionSelectionMethod(blockId, configuration, chainStateProvider, walletProvider, blockElectionDistillate.ElectionContext, configuration.RandomTransactionSelectionStrategySettings);
 			}
 
 			return null;

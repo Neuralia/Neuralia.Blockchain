@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
@@ -61,10 +62,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		///     Here we store the clients with which we have a sync workflow already. It helps ensure a peer will only have one
 		///     sync at a time
 		/// </summary>
-		protected static readonly object clientIdWorkflowExistsLocker = new object();
-		protected static readonly ConcurrentDictionary<Guid, IWorkflow<IBlockchainEventsRehydrationFactory>> activeClientIds = new ConcurrentDictionary<Guid, IWorkflow<IBlockchainEventsRehydrationFactory>>();
+		protected static readonly object ClientIdWorkflowExistsLocker = new object();
+		protected static readonly ConcurrentDictionary<Guid, IWorkflow<IBlockchainEventsRehydrationFactory>> ActiveClientIds = new ConcurrentDictionary<Guid, IWorkflow<IBlockchainEventsRehydrationFactory>>();
+		
+		protected static readonly TimeSpan Cache_Entry_Lifespan = TimeSpan.FromSeconds(20);
+		public const int MAX_CACHE_ENTRIES = 3 * 10;
+		public static readonly object cacheLocker = new object();
+		
+		protected static readonly ConcurrentDictionary<BlockId, BlocksCacheEntry> DeliveryBlocksCache = new ConcurrentDictionary<BlockId, BlocksCacheEntry>();
 
-		protected readonly NodeShareType shareType;
+		protected class BlocksCacheEntry {
+			public ConcurrentDictionary<Guid, bool> Hooks { get; } = new ConcurrentDictionary<Guid, bool>();
+			public DateTime Timeout { get; set; }
+
+			public ChannelsEntries<SafeArrayHandle> BlockData { get; set; }
+			public ChannelsEntries<int> BlockSize { get; set; } 
+			public SafeArrayHandle BlockHash  { get; set; }
+		}
+		
+		
+		protected readonly NodeShareType ShareType;
 
 		protected override TaskCreationOptions TaskCreationOptions => TaskCreationOptions.LongRunning;
 		
@@ -76,7 +93,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			// this is a special workflow, and we make sure we are generous in waiting times, to accomodate everything that can happen
 			//TODO: set this to 3 minute
 			this.hibernateTimeoutSpan = TimeSpan.FromMinutes(3);
-			this.shareType = this.ChainConfiguration.NodeShareType();
+			this.ShareType = this.ChainConfiguration.NodeShareType();
 
 			// allow only one per peer at a time
 			this.ExecutionMode = Workflow.ExecutingMode.SingleRepleacable;
@@ -196,18 +213,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				serverHandshake.Message.ChainInception = this.ChainStateProvider.ChainInception;
 				serverHandshake.Message.DiskBlockHeight = this.ChainStateProvider.DiskBlockHeight;
 				serverHandshake.Message.DigestHeight = this.ChainStateProvider.DigestHeight;
-				serverHandshake.Message.ShareType = this.shareType;
+				serverHandshake.Message.ShareType = this.ShareType;
 
 				serverHandshake.Message.EarliestBlockHeight = 0;
 
-				if(this.shareType.OnlyBlocks || this.shareType.HasDigestsAndBlocks || (this.ChainStateProvider.DigestHeight == 0)) {
+				if(this.ShareType.OnlyBlocks || this.ShareType.HasDigestsAndBlocks || (this.ChainStateProvider.DigestHeight == 0)) {
 					if(this.ChainStateProvider.DiskBlockHeight == 1) {
 						serverHandshake.Message.EarliestBlockHeight = 1;
 					} else if(this.ChainStateProvider.DiskBlockHeight > 1) {
 						// in this case, the earliest block we have is the second one, since we skip the genesis which everyone has
 						serverHandshake.Message.EarliestBlockHeight = 2;
 					}
-				} else if(this.shareType.HasDigestsThenBlocks) {
+				} else if(this.ShareType.HasDigestsThenBlocks) {
 					// if we have a digest and nothing above, thats what we have
 					serverHandshake.Message.EarliestBlockHeight = this.ChainStateProvider.DigestBlockHeight;
 
@@ -298,14 +315,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 										// set the block data
 										var results = this.FetchBlockSize(blockInfoRequestMessage.Id);
 
-										sendBlockInfoMessage.Message.HasBlockDetails = true;
+										if(results.HasValue) {
+											sendBlockInfoMessage.Message.HasBlockDetails = true;
 
-										sendBlockInfoMessage.Message.BlockHash.Entry = results.hash.Entry;
+											sendBlockInfoMessage.Message.BlockHash.Entry = results.Value.hash.Entry;
 
-										sendBlockInfoMessage.Message.SlicesSize.FileId = 0;
+											sendBlockInfoMessage.Message.SlicesSize.FileId = 0;
 
-										foreach(var channel in results.sizes.Entries) {
-											sendBlockInfoMessage.Message.SlicesSize.SlicesInfo.Add(channel.Key, new DataSliceSize(channel.Value));
+											foreach((BlockChannelUtils.BlockChannelTypes key, int value) in results.Value.sizes.Entries) {
+												sendBlockInfoMessage.Message.SlicesSize.SlicesInfo.Add(key, new DataSliceSize(value));
+											}
 										}
 									}
 								}
@@ -314,6 +333,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									Log.Verbose($"Connection with peer  {this.PeerConnection.ScoppedAdjustedIp} was terminated");
 
 									return;
+								}
+
+								// now we prefetch the next two blocks while we sent the response and we are in downtime
+								var entry = this.GetBlockEntry(blockInfoRequestMessage.Id+1);
+
+								if(entry != null) {
+									this.GetBlockEntry(blockInfoRequestMessage.Id + 2);
 								}
 
 								//sendBlockInfoMessage.BaseMessage.Dispose();
@@ -347,38 +373,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								sendBlockMessage.Message.Slices.FileId = blockRequestMessage.SlicesInfo.FileId;
 
-								foreach(var channel in blockRequestMessage.SlicesInfo.SlicesInfo) {
-									offsets[channel.Key] = ((int) channel.Value.Offset, (int) channel.Value.Length);
+								foreach((BlockChannelUtils.BlockChannelTypes key, DataSliceInfo value) in blockRequestMessage.SlicesInfo.SlicesInfo) {
+									offsets[key] = ((int) value.Offset, (int) value.Length);
 								}
 
 								long nextBlockId = 0;
 								long potentialNextBlockId = blockRequestMessage.Id + 1;
 
-								if(blockRequestMessage.IncludeNextInfo && (potentialNextBlockId <= diskBlockHeight)) {
+								if(blockRequestMessage.IncludeNextInfo && potentialNextBlockId <= diskBlockHeight) {
 									nextBlockId = potentialNextBlockId;
 								}
 
 								var blockSlices = this.FetchBlockSlice(blockRequestMessage.Id, offsets, nextBlockId);
 
-								foreach(var slice in blockSlices.blockSlice.Entries) {
-									
-									long offset = 0;
-									long length = 0;
-									
-									if(blockRequestMessage.SlicesInfo.SlicesInfo.ContainsKey(slice.Key)) {
-										DataSliceInfo sliceInfo = blockRequestMessage.SlicesInfo.SlicesInfo[slice.Key];
-										offset = sliceInfo.Offset;
-										length = sliceInfo.Length;
+								foreach((BlockChannelUtils.BlockChannelTypes key, SafeArrayHandle value) in blockSlices.blockSlice.Entries) {
+
+									if(blockRequestMessage.SlicesInfo.SlicesInfo.ContainsKey(key)) {
+										DataSliceInfo sliceInfo = blockRequestMessage.SlicesInfo.SlicesInfo[key];
+										long offset = sliceInfo.Offset;
+										long length = sliceInfo.Length;
 										
-										sendBlockMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice(length, offset, slice.Value));
+										sendBlockMessage.Message.Slices.SlicesInfo.Add(key, new DataSlice(length, offset, value));
 									}
 								}
 
-								sendBlockMessage.Message.HasNextInfo = blockRequestMessage.IncludeNextInfo;
-
 								if(nextBlockId != 0) {
-
 									// if we do have the block, then we send it's connection, otherwise we ignore it
+									sendBlockMessage.Message.HasNextInfo = true;
 									sendBlockMessage.Message.NextBlockHeight = nextBlockId;
 									sendBlockMessage.Message.NextBlockHash.Entry = blockSlices.nextBlockHash.Entry;
 
@@ -392,6 +413,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 									return;
 								}
+
+								// now we prefetch the next two blocks while we sent the response and we are in downtime
+								var entry = this.GetBlockEntry(blockRequestMessage.Id+1);
+
+								if(entry != null) {
+									this.GetBlockEntry(blockRequestMessage.Id + 2);
+								}
+
+								// remove our hook, we probably dont need it anymore
+								this.UnhookCacheEntries(blockRequestMessage.Id);
 
 								//sendBlockMessage.BaseMessage.Dispose();
 							}
@@ -424,10 +455,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								var blockSlices = this.FetchBlockSlicesHashes(requestBlockSliceHashes.Id, requestBlockSliceHashes.Slices.Select(s => {
 									var offsets = new ChannelsEntries<(int offset, int length)>();
 
-									foreach(var channel in s) {
-										offsets[channel.Key] = (startingOffsets[channel.Key], channel.Value);
+									foreach((BlockChannelUtils.BlockChannelTypes key, int value) in s) {
+										offsets[key] = (startingOffsets[key], value);
 
-										startingOffsets[channel.Key] += channel.Value;
+										startingOffsets[key] += value;
 									}
 
 									return offsets;
@@ -514,11 +545,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								sendDigestFileMessage.Message.Slices.FileId = requestDigestFile.SlicesInfo.FileId;
 
-								foreach(var slice in requestDigestFile.SlicesInfo.SlicesInfo) {
+								foreach((ChannelFileSetKey key, DataSliceInfo value) in requestDigestFile.SlicesInfo.SlicesInfo) {
 
-									SafeArrayHandle data = this.FetchDigestFile(slice.Key.ChannelId, slice.Key.IndexId, slice.Key.FileId, slice.Key.FilePart, (int) slice.Value.Offset, (int) slice.Value.Length);
+									SafeArrayHandle data = this.FetchDigestFile(key.ChannelId, key.IndexId, key.FileId, key.FilePart, (int) value.Offset, (int) value.Length);
 
-									sendDigestFileMessage.Message.Slices.SlicesInfo.Add(slice.Key, new DataSlice(slice.Value.Length, slice.Value.Offset, data));
+									sendDigestFileMessage.Message.Slices.SlicesInfo.Add(key, new DataSlice(value.Length, value.Offset, data));
 								}
 
 								if(!this.Send(sendDigestFileMessage)) {
@@ -539,6 +570,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				}
 			} finally {
+				this.UnhookAllCacheEntries();
+				
 				// thats it, we are done :)
 				Log.Information($"Finished handling synchronization for peer {this.PeerConnection.ScoppedAdjustedIp}.");
 
@@ -546,62 +579,175 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		/// <summary>
+		/// remove hooks on all blocks
+		/// </summary>
+		protected virtual void UnhookAllCacheEntries() {
+			try {
+
+				var lowerBlocks = DeliveryBlocksCache.Where(e => e.Value.Hooks.ContainsKey(this.PeerConnection.ClientUuid)).ToArray();
+
+				foreach(var entry in lowerBlocks) {
+					try {
+						entry.Value.Hooks.RemoveSafe(this.PeerConnection.ClientUuid);
+					} catch {
+						// do nothing
+					}
+				}
+			} catch {
+				// do nothing
+			}
+			
+			this.ClearBlockCache();
+		}
+		
+
+		/// <summary>
+		/// remove hooks on blocks we dont really need anymore
+		/// </summary>
+		/// <param name="id"></param>
+		protected virtual void UnhookCacheEntries(long id) {
+
+			try {
+
+				var lowerBlocks = DeliveryBlocksCache.Where(e => e.Key < id && e.Value.Hooks.ContainsKey(this.PeerConnection.ClientUuid)).ToArray();
+
+				foreach(var entry in lowerBlocks) {
+					try {
+						entry.Value.Hooks.RemoveSafe(this.PeerConnection.ClientUuid);
+					} catch {
+						// do nothing
+					}
+				}
+
+			} catch {
+				// do nothing
+			}
+		}
+
+		protected virtual BlocksCacheEntry GetBlockEntry(long id) {
+
+			if(id > this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) {
+				return null;
+			}
+			BlocksCacheEntry cacheEntry = null;
+			if(!DeliveryBlocksCache.ContainsKey(id)) {
+				
+				var blockData = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockData(id);
+
+				if(blockData == null) {
+					return null;
+				}
+				
+				cacheEntry = new BlocksCacheEntry();
+				cacheEntry.BlockData = blockData;
+				cacheEntry.Timeout = DateTime.Now + Cache_Entry_Lifespan;
+				var entry = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSizeAndHash(id);
+
+				if(entry.HasValue) {
+					cacheEntry.BlockSize = entry.Value.sizes;
+					cacheEntry.BlockHash = entry.Value.hash;
+				}
+				
+				DeliveryBlocksCache.AddSafe(id, cacheEntry);
+			}
+
+			cacheEntry = DeliveryBlocksCache[id];
+			cacheEntry.Timeout = DateTime.Now + Cache_Entry_Lifespan;
+
+			// add our hook
+			if(!cacheEntry.Hooks.ContainsKey(this.PeerConnection.ClientUuid)) {
+				cacheEntry.Hooks.AddSafe(this.PeerConnection.ClientUuid, false);
+			}
+
+			this.ClearBlockCache();
+
+			return cacheEntry;
+		}
+
+		protected void ClearBlockCache() {
+			try {
+				lock(cacheLocker) {
+					if(DeliveryBlocksCache.Count > MAX_CACHE_ENTRIES) {
+						//  gotta clean up a bit
+						try {
+
+							foreach(var entry in DeliveryBlocksCache.Where(e => e.Value.Timeout < DateTime.Now || !e.Value.Hooks.Any())) {
+								DeliveryBlocksCache.RemoveSafe(entry.Key);
+							}
+
+						} catch {
+							// do nothing
+						}
+					}
+				}
+			} catch {
+				// do nothing
+			}
+		}
+
+		/// <summary>
+		/// fetch block data either from the cache, or from disk
+		/// </summary>
+		/// <param name="id"></param>
+		/// <returns></returns>
+		protected virtual ChannelsEntries<SafeArrayHandle> FetchBlockData(long id) {
+
+			return this.GetBlockEntry(id).BlockData;
+		}
+		
+		/// <summary>
 		///     Get both a slice of block and the size of the next one
 		/// </summary>
-		/// <param name="Id"></param>
+		/// <param name="id"></param>
 		/// <param name="offset"></param>
 		/// <param name="length"></param>
 		/// <returns></returns>
-		protected virtual (ChannelsEntries<SafeArrayHandle> blockSlice, ChannelsEntries<int> nextBlockSize, SafeArrayHandle nextBlockHash) FetchBlockSlice(long Id, ChannelsEntries<(int offset, int length)> offsets, long nextBlockId) {
+		protected virtual (ChannelsEntries<SafeArrayHandle> blockSlice, ChannelsEntries<int> nextBlockSize, SafeArrayHandle nextBlockHash) FetchBlockSlice(long id, ChannelsEntries<(int offset, int length)> offsets, long nextBlockId) {
 
-			var slices = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockSlice(Id, offsets);
-
+			ChannelsEntries<SafeArrayHandle> blockData = this.FetchBlockData(id);
 			(ChannelsEntries<int> sizes, SafeArrayHandle hash)? nextBlock = null;
+			
+			var slices = new ChannelsEntries<SafeArrayHandle>(offsets.EnabledChannels);
+			offsets.RunForAll((flag, offset) => {
+
+				(int i, int length) = offset;
+				slices[flag] = blockData[flag].Entry.Slice(i, length);
+			});
 
 			if(nextBlockId != 0) {
-				nextBlock = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSizeAndHash(nextBlockId);
-
-				if(!nextBlock.HasValue) {
-					throw new WorkflowException("Next block was not found");
-				}
+				nextBlock = this.FetchBlockSize(nextBlockId);
 			}
 
 			return (slices, nextBlock?.sizes, nextBlock?.hash);
-
 		}
 
 		/// <summary>
 		///     Get the binary size of a block on disk
 		/// </summary>
-		/// <param name="Id"></param>
+		/// <param name="id"></param>
 		/// <returns></returns>
-		protected virtual (ChannelsEntries<int> sizes, SafeArrayHandle hash) FetchBlockSize(long Id) {
+		protected virtual (ChannelsEntries<int> sizes, SafeArrayHandle hash)? FetchBlockSize(long id) {
 
-			// lets make sure hour hashes are properly computed
-			var result = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSizeAndHash(Id);
-
-			if(result == null) {
-				throw new WorkflowException("Block was not found");
-			}
-
-			return (result.Value.sizes, result.Value.hash);
+			var blockEntry = this.GetBlockEntry(id);
+			
+			return (blockEntry.BlockSize, blockEntry.BlockHash);
 		}
 
-		protected virtual (List<int> sliceHashes, int hash)? FetchBlockSlicesHashes(long Id, List<ChannelsEntries<(int offset, int length)>> slices) {
+		protected virtual (List<int> sliceHashes, int hash)? FetchBlockSlicesHashes(long id, List<ChannelsEntries<(int offset, int length)>> slices) {
 
-			return this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.BuildBlockSliceHashes(Id, slices);
+			return this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.BuildBlockSliceHashes(id, slices);
 				
 		}
 
-		protected virtual int FetchDigestSize(int Id) {
+		protected virtual int FetchDigestSize(int id) {
 			// lets make sure hour hashes are properly computed
-			return this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetDigestHeaderSize(Id);
+			return this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetDigestHeaderSize(id);
 		}
 
-		protected virtual SafeArrayHandle FetchDigest(int Id, int offset, int length) {
+		protected virtual SafeArrayHandle FetchDigest(int id, int offset, int length) {
 
 			// lets make sure hour hashes are properly computed
-			return this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestHeaderArchiveData(Id, offset, length);
+			return this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestHeaderArchiveData(id, offset, length);
 		}
 
 		protected virtual SafeArrayHandle FetchDigestFile(DigestChannelType channelId, int indexId, int fileId, uint filePart, long offset, int length) {
@@ -612,8 +758,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected virtual void RemoveClientIdWorkflow() {
 
-			lock(clientIdWorkflowExistsLocker) {
-				activeClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
+			lock(ClientIdWorkflowExistsLocker) {
+				ActiveClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
 			}
 		}
 
@@ -623,21 +769,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <returns></returns>
 		protected virtual bool ClientIdWorkflowExistsAdd() {
 
-			lock(clientIdWorkflowExistsLocker) {
-				if(activeClientIds.ContainsKey(this.PeerConnection.ClientUuid) && !this.TestingMode) {
+			lock(ClientIdWorkflowExistsLocker) {
+				if(ActiveClientIds.ContainsKey(this.PeerConnection.ClientUuid) && !this.TestingMode) {
 
-					var workflow = activeClientIds[this.PeerConnection.ClientUuid];
+					var workflow = ActiveClientIds[this.PeerConnection.ClientUuid];
 
 					if(!workflow.IsCompleted) {
 						return true; // its there, we can't continue
 					}
 
 					// its fine, it is done, we can remove it and act like it was never there
-					activeClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
+					ActiveClientIds.RemoveSafe(this.PeerConnection.ClientUuid);
 				}
 
 				// lets add it now
-				activeClientIds.AddSafe(this.PeerConnection.ClientUuid, this);
+				ActiveClientIds.AddSafe(this.PeerConnection.ClientUuid, this);
 			}
 
 			return false;
@@ -647,7 +793,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected override bool CompareOtherPeerId(IWorkflow other) {
 			if(other is ServerChainSyncWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY, CLOSE_CONNECTION, REQUEST_BLOCK, REQUEST_DIGEST, SEND_BLOCK, SEND_DIGEST, REQUEST_BLOCK_INFO, SEND_BLOCK_INFO, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, REQUEST_DIGEST_INFO, SEND_DIGEST_INFO, REQUEST_BLOCK_SLICE_HASHES, SEND_BLOCK_SLICE_HASHES> otherWorkflow) {
 				return this.triggerMessage.Header.OriginatorId == otherWorkflow.triggerMessage.Header.OriginatorId;
-
 			}
 
 			return base.CompareOtherPeerId(other);

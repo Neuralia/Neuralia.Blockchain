@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		DbSet<DBVersion> Versions { get; set; }
 		
 		int SaveChanges();
-		
+		Task<int> SaveChangesAsync();
 	}
 
 	public interface IEntityFrameworkContextInternal: IEntityFrameworkContext {
@@ -80,6 +80,15 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 
 			return base.SaveChanges();
+		}
+
+		public Task<int> SaveChangesAsync() {
+			if(!this.CanSave) {
+				// only masters can save
+				return Task.FromResult(0);
+			}
+
+			return base.SaveChangesAsync();
 		}
 
 		/// <summary>

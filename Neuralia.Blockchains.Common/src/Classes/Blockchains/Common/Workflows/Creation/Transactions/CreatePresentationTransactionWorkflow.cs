@@ -23,18 +23,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		protected readonly SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet;
 		private IStandardPresentationTransaction PresentationTransaction => (IStandardPresentationTransaction)this.transaction;
-		private Guid? accountUuId;
+		private Guid? accountUuid;
 		
-		public CreatePresentationTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, CorrelationContext correlationContext, Guid? accountUuId) : base(centralCoordinator, expiration, null, correlationContext) {
+		public CreatePresentationTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, CorrelationContext correlationContext, Guid? accountUuid) : base(centralCoordinator, expiration, null, correlationContext) {
 			this.accountPublicationStepSet = new SystemEventGenerator.AccountPublicationStepSet();
-			this.accountUuId = accountUuId;
+			this.accountUuid = accountUuid;
 
 		}
 
 		protected override int Timeout => 60 * 10; // this can be a long process, 10 minutes might be required.
 
 		protected override void PreTransaction() {
-			this.transaction = this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GeneratePresentationTransaction(this.accountPublicationStepSet, this.correlationContext, this.accountUuId, this.expiration);
+			this.transaction = this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GeneratePresentationTransaction(this.accountPublicationStepSet, this.correlationContext, this.accountUuid, this.expiration);
 
 		}
 

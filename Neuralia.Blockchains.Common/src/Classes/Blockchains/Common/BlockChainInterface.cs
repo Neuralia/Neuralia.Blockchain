@@ -98,13 +98,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<WalletTransactionHistoryDetailsAPI> QueryWalletTransationHistoryDetails(Guid accountUuid, string transactionId);
 
 		TaskResult<List<WalletAccountAPI>> QueryWalletAccounts();
+		TaskResult<string> QueryDefaultWalletAccountId();
+		TaskResult<Guid> QueryDefaultWalletAccountUuid();
+		
 		TaskResult<WalletAccountDetailsAPI> QueryWalletAccountDetails(Guid accountUuid);
 		TaskResult<TransactionId> QueryWalletAccountPresentationTransactionId(Guid accountUuid);
 
 		TaskResult<bool> ChangeKey(byte changingKeyOrdinal, string note, CorrelationContext correlationContext);
 		TaskResult<IBlock> LoadBlock(long blockId);
 
-		TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, Guid? accountUuId, byte expiration = 0);
+		TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, Guid? accountUuid, byte expiration = 0);
 
 		TaskResult<List<ElectedCandidateResultDistillate>> PerformOnDemandElection(BlockElectionDistillate blockElectionDistillate);
 		TaskResult<bool> PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults);
@@ -494,8 +497,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 				int minimumDispatchPeerCount = chainConfiguration.MinimumDispatchPeerCount;
+				int minigTier = (int)this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.MiningTier;
 
-				return new ChainStatusAPI { WalletInfo = walletProvider.APIQueryWalletInfoAPI(), MinRequiredPeerCount = minimumDispatchPeerCount};
+				return new ChainStatusAPI { WalletInfo = walletProvider.APIQueryWalletInfoAPI(), MinRequiredPeerCount = minimumDispatchPeerCount, MiningTier = minigTier};
 			});
 		}
 		
@@ -600,6 +604,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccounts());
 		}
 
+		public TaskResult<string> QueryDefaultWalletAccountId() {
+			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount().GetAccountId().ToString());
+		}
+		
+		public TaskResult<Guid> QueryDefaultWalletAccountUuid() {
+			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountUuid());
+		}
+		
 		public TaskResult<WalletAccountDetailsAPI> QueryWalletAccountDetails(Guid accountUuid) {
 
 			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccountDetails(accountUuid));
@@ -670,13 +682,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		public TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, Guid? accountUuId, byte expiration = 0) {
+		public TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, Guid? accountUuid, byte expiration = 0) {
 
 			return this.RunTaskMethod(() => {
 
 				using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
 
-					var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreatePresentationTransactionChainWorkflow(correlationContext, accountUuId, expiration);
+					var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreatePresentationTransactionChainWorkflow(correlationContext, accountUuid, expiration);
 
 					workflow.Success += w => {
 						resetEvent.Set();

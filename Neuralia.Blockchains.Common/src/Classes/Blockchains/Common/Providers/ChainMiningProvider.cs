@@ -51,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		bool MiningEnabled { get; }
 
 		bool MiningAllowed { get; }
-
+		Enums.MiningTiers MiningTier { get; }
 		List<MiningHistoryEntry> GetMiningHistory(int page, int pageSize, byte maxLevel);
 
 		BlockElectionDistillate PrepareBlockElectionContext(IBlock currentBlock, AccountId miningAccountId);
@@ -86,10 +86,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public virtual MiningHistory ToApiHistory() {
 			MiningHistory miningHistory = this.CreateApiMiningHistory();
 
-			miningHistory.blockId = this.blockId.Value;
+			miningHistory.blockId = this.blockId?.Value??0;
 			miningHistory.selectedTransactions.AddRange(this.selectedTransactions.Select(t => t.ToString()));
 
-			miningHistory.Message = this.Message.Value;
+			miningHistory.Message = this.Message?.Value??0;
 			miningHistory.Timestamp = this.Time;
 			miningHistory.Level = (byte) this.Level;
 			miningHistory.Parameters = this.Parameters;
@@ -210,7 +210,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public IElectionProcessorFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ElectionProcessorFactory => this.factory;
 
-		private Enums.MiningTiers MiningTier => BlockchainUtilities.GetMiningTier(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestHeight);
+		public Enums.MiningTiers MiningTier => BlockchainUtilities.GetMiningTier(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestHeight);
 
 		public virtual void EnableMining(AccountId miningAccountId, AccountId delegateAccountId) {
 
@@ -722,7 +722,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
 				parameters.Add("password", registrationInfo.Password);
 
-				var result = restUtility.Put(url, "elections/stop", parameters);
+				var result = restUtility.Post(url, "elections/stop", parameters);
 
 				if(result.Wait(TimeSpan.FromSeconds(20)) && !result.IsFaulted) {
 
@@ -1673,7 +1673,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 									}
 								}
 
-								throw new ApplicationException("Failed to record election results through web");
+								throw new ApplicationException("Failed to still fixibngrecord election results through web");
 							});
 
 							updateController = true;

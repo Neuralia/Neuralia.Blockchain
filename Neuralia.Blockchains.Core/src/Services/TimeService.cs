@@ -45,11 +45,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			//TODO: add more time servers
 			ntpServers.Add("pool.ntp.org");
-			ntpServers.Add("time-a-g.nist.gov");
-			ntpServers.Add("time-b-g.nist.gov");
-			ntpServers.Add("time-a-b.nist.gov");
 			ntpServers.Add("time.nist.gov");
-			ntpServers.Add("utcnist.colorado.edu");
 			ntpServers.Add("time.google.com");
 			ntpServers.Add("time2.google.com");
 			ntpServers.Add("time.windows.com");

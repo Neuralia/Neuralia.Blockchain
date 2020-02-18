@@ -268,7 +268,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 			// select transaction based on the bounty allocation method to maximise our profit
 			//TODO: consider bouty allocation method in our selection in the future
-			ITransactionSelectionMethod transactionSelectionMethod = transactionSelectionMethodFactory.CreateTransactionSelectionMethod(this.GetTransactionSelectionMethodType(), blockId, blockElectionDistillate, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase, this.centralCoordinator.ChainComponentProvider.WalletProviderBase, this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.BlockchainServiceSet);
+			ITransactionSelectionMethod transactionSelectionMethod = transactionSelectionMethodFactory.CreateTransactionSelectionMethod(this.GetTransactionSelectionMethodType(), blockId, blockElectionDistillate, this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase, this.centralCoordinator.ChainComponentProvider.WalletProviderBase, this.centralCoordinator.BlockchainServiceSet);
 
 			// get the transactions we already selected in previous mining, so we dont send them again
 			IWalletAccount account = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();

@@ -518,7 +518,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so its preferable to use. 
 		/// </summary>
 		public AppSettingsBase.ContactMethods RegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.Gossip;
-		
+
+		/// <summary>
+		/// force a specific mining tier (if possible)
+		/// </summary>
+		public Enums.MiningTiers? MiningTier { get; set; } = null;
+
 		/// <summary>
 		///     Time in minutes to store a wallet passphrase in memory before wiping it out
 		/// </summary>

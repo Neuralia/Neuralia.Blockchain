@@ -114,16 +114,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 			return true;
 		}
 
-		public IWalletAccount GetAccount(Guid accountId) {
+		public IWalletAccount GetAccount(Guid accountUuid) {
 			if(this.Accounts.Count == 0) {
 				throw new ApplicationException("No user account loaded");
 			}
 
-			if(!this.Accounts.ContainsKey(accountId)) {
+			if(!this.Accounts.ContainsKey(accountUuid)) {
 				throw new ApplicationException("The account does not exist");
 			}
 
-			return this.Accounts[accountId];
+			return this.Accounts[accountUuid];
 		}
 
 		public IWalletAccount GetAccount(string name) {

@@ -50,6 +50,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// </summary>
 		/// <param name="message"></param>
 		protected override void WritePart(in ReadOnlySpan<byte> message) {
+			if(this.IsDisposed || this.clientPipe == null) {
+				return;
+			}
 			this.clientPipe.Output.Write(message);
 		}
 
@@ -59,6 +62,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <returns></returns>
 		protected override Task<bool> CompleteWrite() {
 
+			if(this.IsDisposed || this.clientPipe == null) {
+				return Task.FromResult(false);
+			}
 			return Flush(this.clientPipe.Output).AsTask();
 		}
 
