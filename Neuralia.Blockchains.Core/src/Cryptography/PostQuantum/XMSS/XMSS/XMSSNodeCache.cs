@@ -56,13 +56,17 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 
-			foreach(var node in this.nodes) {
+			foreach((XMSSNodeId key, ByteArray value) in this.nodes) {
 
-				adaptiveLong.Value = node.Key.Index;
+				adaptiveLong.Value = key.Index;
 				adaptiveLong.Dehydrate(dehydrator);
-				dehydrator.Write((byte) node.Key.Height);
+				dehydrator.Write((byte) key.Height);
 
-				dehydrator.WriteRawArray(node.Value);
+				dehydrator.Write(value.IsEmpty);
+
+				if(!value.IsEmpty) {
+					dehydrator.WriteRawArray(value);
+				}
 			}
 		}
 
@@ -85,7 +89,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				int index = (int) adaptiveLong.Value;
 				int height = rehydrator.ReadByte();
 
-				ByteArray buffer = rehydrator.ReadArray(this.DigestSize);
+				bool isEmpty = rehydrator.ReadBool();
+
+				ByteArray buffer = null;
+				if(!isEmpty) {
+					buffer = rehydrator.ReadArray(this.DigestSize);
+				} else {
+					buffer = ByteArray.Create(0);
+				}
 
 				this.nodes.AddSafe((index, height), buffer);
 			}

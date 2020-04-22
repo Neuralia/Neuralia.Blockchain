@@ -2,15 +2,20 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Collections;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 
 	public interface IRoutedTaskReceiver<T> : IRoutedTaskHandler
 		where T : IDelegatedTask {
-		List<Guid> CheckTasks(Action loopItemAction = null);
+		Task<List<Guid>> CheckTasks(Func<Task> loopItemAction = null);
 	}
 
 	/// <summary>
@@ -33,7 +38,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		/// </summary>
 		protected readonly List<Guid> excludedTasks = new List<Guid>();
 
-		protected readonly object locker = new object();
+		protected readonly RecursiveAsyncLock locker = new RecursiveAsyncLock();
 
 		/// <summary>
 		///     tasks that need to be reinserted for defered execution
@@ -55,7 +60,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		/// </summary>
 		/// <param name="Process">returns true if satisfied to end the loop, false if it still needs to wait</param>
 		/// <returns>The guid of the tasks that were processesd</returns>
-		public virtual List<Guid> CheckTasks(Action loopItemAction = null) {
+		public virtual async Task<List<Guid>> CheckTasks(Func<Task> loopItemAction = null) {
 			var processedTasks = new List<Guid>();
 
 			this.TransferAvailableTasks();
@@ -63,17 +68,18 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			T task = null;
 
 			//First, we remove the messages from the shared queue and transfer them into our own personal queue
-			while((task = this.GetNextQueuedTask()) != null) {
+			while((task = await this.GetNextQueuedTask().ConfigureAwait(false)) != null) {
 				// run a potential action on every loop (like checking if we should cancel, for example. trask processing can be long)
-				loopItemAction?.Invoke();
+				if(loopItemAction != null) {
+					await loopItemAction().ConfigureAwait(false);
+				}
 
 				// transfer into our own personal thread queue
 				try {
-					this.ProcessTask(task);
+					await this.ProcessTask(task).ConfigureAwait(false);
 
 					processedTasks.Add(task.Id);
-
-					lock(this.locker) {
+					using(await this.locker.LockAsync().ConfigureAwait(false)){
 						if(this.reinsertedTasks.ContainsKey(task.Id)) {
 							this.reinsertedTasks.Remove(task.Id);
 						}
@@ -83,7 +89,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 
 					ReinsertedTaskInfo existingTask = null;
 
-					lock(this.locker) {
+					using(await this.locker.LockAsync().ConfigureAwait(false)){
 						if(!this.reinsertedTasks.ContainsKey(task.Id)) {
 							this.reinsertedTasks.Add(task.Id, new ReinsertedTaskInfo(task));
 						} else {
@@ -100,10 +106,10 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			return processedTasks;
 		}
 
-		protected virtual T GetNextQueuedTask() {
+		protected virtual async Task<T> GetNextQueuedTask() {
 			T task = null;
 
-			lock(this.locker) {
+			using(await this.locker.LockAsync().ConfigureAwait(false)){
 				task = this.selectedTaskQueue.FirstOrDefault(t => !this.excludedTasks.Contains(t.Id));
 
 				if(task == null) {
@@ -123,7 +129,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		protected void TransferAvailableTasks() {
 			//First, we remove the messages from the shared queue and transfer them into our own personal queue
 			while(this.entryTaskQueue.TryDequeue(out T task)) {
-				lock(this.locker) {
+				using(this.locker.Lock()){
 					if(!this.selectedTaskIds.Contains(task.Id)) {
 						this.selectedTaskQueue.Add(task);
 						this.selectedTaskIds.Add(task.Id);
@@ -134,7 +140,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			// now the tasks to be reinserted
 			T[] tasks = null;
 
-			lock(this.locker) {
+			using(this.locker.Lock()){
 				if(this.reinsertedTasks.Any()) {
 					tasks = this.reinsertedTasks.Values.Where(t => t.CanRun).OrderBy(t => t.timestamp).Select(t => t.task).ToArray();
 				}
@@ -142,7 +148,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 
 			if(tasks != null) {
 				foreach(T reinsertTask in tasks) {
-					lock(this.locker) {
+					using(this.locker.Lock()){
 						if(!this.selectedTaskIds.Contains(reinsertTask.Id)) {
 							this.selectedTaskQueue.Add(reinsertTask);
 							this.selectedTaskIds.Add(reinsertTask.Id);
@@ -172,18 +178,20 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		/// <param name="task"></param>
 		public virtual void ReceiveTaskSynchronous(T task) {
 
-			this.ProcessTask(task);
+			this.ProcessTask(task).WaitAndUnwrapException();
 		}
 
 		private void TriggerTaskReceived() {
-			this.TaskReceived?.Invoke();
+			if(this.TaskReceived != null) {
+				this.TaskReceived();
+			}
 		}
 
 		/// <summary>
 		///     here we handle only our own returning tasks
 		/// </summary>
 		/// <param name="task"></param>
-		protected abstract bool ProcessTask(T task);
+		protected abstract Task<bool> ProcessTask(T task);
 
 		protected class ReinsertedTaskInfo {
 			public static readonly TimeSpan OneSecond = TimeSpan.FromSeconds(1);

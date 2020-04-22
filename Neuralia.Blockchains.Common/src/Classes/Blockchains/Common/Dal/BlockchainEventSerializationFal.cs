@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain;
@@ -23,10 +23,15 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Extensions.FileProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Serilog;
+using Zio;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
@@ -59,9 +64,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		SafeArrayHandle LoadGenesisHighHeaderBytes();
 
 		SafeArrayHandle LoadBlockPartialTransactionBytes(PublishedAddress keyAddress, (long index, long startingBlockId, long endingBlockId) blockIndex);
-		(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
+		Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
 		bool TestFastKeysPath();
-		void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal);
+		Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal);
 		void EnsureFastKeysIndex();
 		ChannelsEntries<int> LoadBlockSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex);
 		(ChannelsEntries<int> sizes, SafeArrayHandle hash)? LoadBlockSizeAndHash(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int hashOffset, int hashLength);
@@ -152,10 +157,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		protected readonly FastKeyProvider fastKeyProvider;
 
-		protected readonly IFileSystem fileSystem;
+		protected readonly FileSystemWrapper fileSystem;
 		protected string digestFolderPath;
 
-		public BlockchainEventSerializationFal(ChainConfigurations configurations, BlockChannelUtils.BlockChannelTypes enabledChannels, string blocksFolderPath, string digestFolderPath, IBlockchainDigestChannelFactory blockchainDigestChannelFactory, IFileSystem fileSystem) {
+		public BlockchainEventSerializationFal(ChainConfigurations configurations, BlockChannelUtils.BlockChannelTypes enabledChannels, string blocksFolderPath, string digestFolderPath, IBlockchainDigestChannelFactory blockchainDigestChannelFactory, FileSystemWrapper fileSystem) {
 			this.blocksFolderPath = blocksFolderPath;
 			this.digestFolderPath = digestFolderPath;
 			this.blockchainDigestChannelFactory = blockchainDigestChannelFactory;
@@ -163,7 +168,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			this.configurations = configurations;
 			this.enabledChannels = enabledChannels;
 
-			this.fileSystem = fileSystem ?? new FileSystem();
+			this.fileSystem = fileSystem ?? FileSystemWrapper.CreatePhysical();
 
 			// add one scheduler per chain
 			lock(schedulerLocker) {
@@ -176,10 +181,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				}
 			}
 			if(configurations.EnableFastKeyIndex) {
-				this.fastKeyProvider = new FastKeyProvider(this.GetFastKeyIndexPath(), configurations.EnabledFastKeyTypes, this.fileSystem);
+				this.fastKeyProvider = new FastKeyProvider(this.GetFastKeyIndexPath(), configurations.EnabledFastKeyTypes);
 			}
 			
-			Log.Verbose($"Fast key provider is {(configurations.EnableFastKeyIndex?"enabled":"disabled")}.");
+			Log.Information($"Fast key provider is {(configurations.EnableFastKeyIndex?"enabled":"disabled")}.");
 
 			// create the digest access channels
 			this.CreateDigestChannelSet(digestFolderPath);
@@ -201,9 +206,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			this.CreateDigestChannelSet(digestFolderPath);
 
 			// delete the other digest folders
-			foreach(string directory in this.fileSystem.Directory.GetDirectories(Path.GetDirectoryName(digestFolderPath))) {
+			foreach(string directory in this.fileSystem.EnumerateDirectories(Path.GetDirectoryName(digestFolderPath))) {
 				if(directory != digestFolderPath) {
-					this.fileSystem.Directory.Delete(directory, true);
+					this.fileSystem.DeleteDirectory(directory, true);
 				}
 			}
 
@@ -220,8 +225,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				for(long i = deleteGroupIndex; i != 0; i--) {
 					string folderPath = this.GetBlockPath(i);
 
-					if(this.fileSystem.Directory.Exists(folderPath)) {
-						this.fileSystem.Directory.Delete(folderPath, true);
+					if(this.fileSystem.DirectoryExists(folderPath)) {
+						this.fileSystem.DeleteDirectory(folderPath, true);
 					}
 				}
 			}
@@ -250,7 +255,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			string digestDescFilePath = this.GetDigestChannelDescriptionFileName(digestFolderPath);
 
-			this.fileSystem.File.WriteAllBytes(digestDescFilePath, dehydrator.ToArray().ToExactByteArray());
+			this.fileSystem.WriteAllBytes(digestDescFilePath, dehydrator.ToArray().ToExactByteArray());
 		}
 
 		public SafeArrayHandle LoadDigestStandardKey(AccountId accountId, byte ordinal) {
@@ -262,7 +267,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public int GetDigestHeaderSize(int digestId, string filename) {
-			return (int) this.fileSystem.FileInfo.FromFileName(filename).Length;
+			return (int) this.fileSystem.GetFileLength(filename);
 		}
 
 		public List<IStandardAccountKeysDigestChannelCard> LoadDigestStandardAccountKeyCards(long accountId) {
@@ -307,13 +312,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 		
 		public long? GetFileSize(string filename) {
-			IFileInfo fileinfo = this.fileSystem.FileInfo.FromFileName(filename);
 
-			if(!fileinfo.Exists) {
+			if(!this.fileSystem.FileExists(filename)) {
 				return null;
 			}
 
-			return fileinfo.Length;
+			return this.fileSystem.GetFileLength(filename);
 
 		}
 
@@ -335,13 +339,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public ChannelsEntries<SafeArrayHandle> LoadGenesisBlock() {
 
-			using(SafeArrayHandle genesisBytes = FileExtensions.ReadAllBytes(this.GetGenesisBlockFilename(), this.fileSystem)) {
+			using SafeArrayHandle genesisBytes = FileExtensions.ReadAllBytes(this.GetGenesisBlockFilename(), this.fileSystem);
 
-				IDehydratedBlock genesisBlock = new DehydratedBlock();
-				genesisBlock.Rehydrate(genesisBytes);
+			IDehydratedBlock genesisBlock = new DehydratedBlock();
+			genesisBlock.Rehydrate(genesisBytes);
 
-				return genesisBlock.GetEssentialDataChannels();
-			}
+			return genesisBlock.GetEssentialDataChannels();
+
 		}
 
 		public void WriteGenesisBlock(ChannelsEntries<SafeArrayHandle> genesisBlockdata, List<(int offset, int length)> keyedOffsets) {
@@ -350,7 +354,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			IDehydratedBlock genesisBlock = new DehydratedBlock();
 			genesisBlock.Rehydrate(genesisBlockdata);
 
-			this.fileSystem.Directory.CreateDirectory(this.GetGenesisBlockFolderPath());
+			this.fileSystem.CreateDirectory(this.GetGenesisBlockFolderPath());
 
 			var dataChannels = genesisBlock.GetRawDataChannels();
 
@@ -361,14 +365,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				FileExtensions.WriteAllBytes(this.GetGenesisBlockBandFilename(band.ToString()), data, this.fileSystem);
 			});
 
-			using(SafeArrayHandle fullBytes = genesisBlock.Dehydrate()) {
+			using SafeArrayHandle fullBytes = genesisBlock.Dehydrate();
 
-				FileExtensions.WriteAllBytes(this.GetGenesisBlockFilename(), fullBytes, this.fileSystem);
+			FileExtensions.WriteAllBytes(this.GetGenesisBlockFilename(), fullBytes, this.fileSystem);
 
-				// and now the compressed
-				BrotliCompression compressor = new BrotliCompression();
-				FileExtensions.WriteAllBytes(this.GetGenesisBlockCompressedFilename(), compressor.Compress(fullBytes), this.fileSystem);
-			}
+			// and now the compressed
+			BrotliCompression compressor = new BrotliCompression();
+			FileExtensions.WriteAllBytes(this.GetGenesisBlockCompressedFilename(), compressor.Compress(fullBytes), this.fileSystem);
+
 		}
 
 		public SafeArrayHandle LoadBlockHighHeaderData(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
@@ -397,15 +401,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public SafeArrayHandle LoadDigestBytes(int digestId, string filename) {
-			if(!this.fileSystem.File.Exists(filename)) {
+			if(!this.fileSystem.FileExists(filename)) {
 				return null;
 			}
 
-			return ByteArray.WrapAndOwn(this.fileSystem.File.ReadAllBytes(filename));
+			return ByteArray.WrapAndOwn(this.fileSystem.ReadAllBytes(filename));
 		}
 
 		public SafeArrayHandle LoadDigestBytes(int digestId, int offset, int length, string filename) {
-			if(!this.fileSystem.File.Exists(filename)) {
+			if(!this.fileSystem.FileExists(filename)) {
 				return null;
 			}
 
@@ -429,9 +433,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		/// <param name="accountId"></param>
 		/// <param name="ordinal"></param>
 		/// <returns></returns>
-		public (SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
-			if((ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || (ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
-				return this.fastKeyProvider?.LoadKeyFile(accountId, ordinal);
+		public async Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
+			
+			if(ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID || ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
+				if (this.fastKeyProvider == null){
+					return null;
+				}
+				return await this.fastKeyProvider.LoadKeyFile(accountId, ordinal, this.fileSystem).ConfigureAwait(false);
 			}
 
 			throw new InvalidOperationException($"Key ordinal ID must be either '{GlobalsService.TRANSACTION_KEY_ORDINAL_ID}' or '{GlobalsService.MESSAGE_KEY_ORDINAL_ID}'. Value '{ordinal}' provided.");
@@ -439,18 +447,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public bool TestFastKeysPath() {
 
-			return this.fastKeyProvider.Test();
+			return this.fastKeyProvider?.Test()??true;
 		}
 		
-		public void SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal) {
-			this.fastKeyProvider?.WriteKey(accountId, key, treeHeight, hashBits, ordinal);
+		public async Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal) {
+			if(this.fastKeyProvider != null) {
+				await this.fastKeyProvider.WriteKey(accountId, key, treeHeight, hashBits, ordinal, this.fileSystem).ConfigureAwait(false);
+			}
 		}
 		
 		/// <summary>
 		/// ensure the base structure exists
 		/// </summary>
 		public void EnsureFastKeysIndex() {
-			this.fastKeyProvider?.EnsureBaseFileExists();
+			this.fastKeyProvider?.EnsureBaseFileExists(this.fileSystem);
 		}
 
 		public SafeArrayHandle LoadBlockPartialHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length) {
@@ -619,8 +629,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 						foreach(string name in files) {
 							try {
-								if(this.fileSystem.File.Exists(name)) {
-									this.fileSystem.File.Delete(name);
+								if(this.fileSystem.FileExists(name)) {
+									this.fileSystem.DeleteFile(name);
 								}
 							} catch {
 								// do nothing, we tried
@@ -634,11 +644,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				}
 			} else {
 				// write a regular block
-				using(var bytes = this.PrepareMasterTransactionData(keyedOffsets)) {
-					this.ChainScheduler.ScheduleWrite(indexer => {
-						result = indexer.SaveBlockBytes(blockId, blockIndex, blockData, bytes);
-					});
-				}
+				using var bytes = this.PrepareMasterTransactionData(keyedOffsets);
+
+				this.ChainScheduler.ScheduleWrite(indexer => {
+					result = indexer.SaveBlockBytes(blockId, blockIndex, blockData, bytes);
+				});
+
 			}
 
 			return result;
@@ -646,7 +657,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public BlockchainMessagesMetadata GetMessagesMetadata(string filename) {
 
-			return JsonSerializer.Deserialize<BlockchainMessagesMetadata>(this.fileSystem.File.ReadAllText(filename));
+			return JsonSerializer.Deserialize<BlockchainMessagesMetadata>(this.fileSystem.ReadAllText(filename));
 		}
 
 		public void InsertNextMessagesIndex(string filename) {
@@ -655,8 +666,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			metadata.Counts.Add(metadata.Counts.Count + 1, 0);
 
-			this.fileSystem.File.Delete(filename);
-			this.fileSystem.File.WriteAllText(filename, JsonSerializer.Serialize(metadata));
+			this.fileSystem.DeleteFile(filename);
+			this.fileSystem.WriteAllText(filename, JsonSerializer.Serialize(metadata));
 		}
 
 		public void InsertMessagesIndexEntry(string filename, Guid uuid, long blockOffset, int length) {
@@ -693,10 +704,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public (int offset, int length) LoadGenesisMasterTransactionOffsets(int masterTransactionIndex) {
 
-			using(SafeArrayHandle data = FileExtensions.ReadAllBytes(this.GetGenesisBlockBandFilename(BlockChannelUtils.BlockChannelTypes.Keys.ToString()), this.fileSystem)) {
+			using SafeArrayHandle data = FileExtensions.ReadAllBytes(this.GetGenesisBlockBandFilename(BlockChannelUtils.BlockChannelTypes.Keys.ToString()), this.fileSystem);
 
-				return this.ExtractBlockMasterTransactionOffsets(data, masterTransactionIndex);
-			}
+			return this.ExtractBlockMasterTransactionOffsets(data, masterTransactionIndex);
+
 		}
 
 		/// <summary>
@@ -777,10 +788,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		private void CreateDigestChannelSet(string digestFolderPath) {
 			this.digestFolderPath = digestFolderPath;
 
-			if(this.fileSystem.Directory.Exists(this.digestFolderPath)) {
+			if(this.fileSystem.DirectoryExists(this.digestFolderPath)) {
 				string digestDescFilePath = this.GetDigestChannelDescriptionFileName();
 
-				if(this.fileSystem.File.Exists(digestDescFilePath)) {
+				if(this.fileSystem.FileExists(digestDescFilePath)) {
 					this.DigestChannelSet = DigestChannelSetFactory.CreateDigestChannelSet(this.digestFolderPath, this.LoadBlockchainDigestSimpleChannelDescriptor(digestDescFilePath), this.blockchainDigestChannelFactory);
 				}
 			}
@@ -804,7 +815,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		protected BlockchainDigestSimpleChannelSetDescriptor LoadBlockchainDigestSimpleChannelDescriptor(string digestDescFilePath) {
 
-			var bytes = this.fileSystem.File.ReadAllBytes(digestDescFilePath);
+			var bytes = this.fileSystem.ReadAllBytes(digestDescFilePath);
 
 			BlockchainDigestSimpleChannelSetDescriptor descriptor = new BlockchainDigestSimpleChannelSetDescriptor();
 
@@ -832,7 +843,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			var sizes = new ChannelsEntries<int>(this.enabledChannels);
 
 			sizes.RunForAll((band, bandOffsets) => {
-				sizes[band] = (int) this.fileSystem.FileInfo.FromFileName(this.GetGenesisBlockBandFilename(band.ToString())).Length;
+				sizes[band] = (int) this.fileSystem.GetFileLength(this.GetGenesisBlockBandFilename(band.ToString()));
 
 			});
 
@@ -841,12 +852,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public int LoadGenesisBlockHighHeaderSize() {
 
-			return (int) this.fileSystem.FileInfo.FromFileName(this.GetGenesisBlockBandFilename(BlockChannelUtils.BlockChannelTypes.HighHeader.ToString())).Length;
+			return (int) this.fileSystem.GetFileLength(this.GetGenesisBlockBandFilename(BlockChannelUtils.BlockChannelTypes.HighHeader.ToString()));
 		}
 
 		public int LoadGenesisBlockLowHeaderSize() {
 
-			return (int) this.fileSystem.FileInfo.FromFileName(this.GetGenesisBlockBandFilename(BlockChannelUtils.BlockChannelTypes.LowHeader.ToString())).Length;
+			return (int) this.fileSystem.GetFileLength(this.GetGenesisBlockBandFilename(BlockChannelUtils.BlockChannelTypes.LowHeader.ToString()));
 		}
 
 		public int LoadGenesisBlockWholeHeaderSize() {

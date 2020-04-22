@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Microsoft.EntityFrameworkCore;
 
+using Microsoft.EntityFrameworkCore;
+using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Tools;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
@@ -33,7 +36,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		/// </summary>
 		public override void EnsureCreated() {
 
-			new DirectoryInfo(this.FolderPath).Create();
+			FileExtensions.EnsureDirectoryStructure(this.FolderPath);
 
 			base.EnsureCreated();
 		}
@@ -55,7 +58,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			});
 
 			foreach(var builder in this.ModelBuilders) {
-				builder?.Invoke(modelBuilder);
+if(				builder != null){				builder(modelBuilder);}
 			}
 		}
 	}

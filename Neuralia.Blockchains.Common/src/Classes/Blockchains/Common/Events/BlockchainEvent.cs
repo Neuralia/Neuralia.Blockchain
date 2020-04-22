@@ -52,10 +52,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events {
 		public abstract DEHYDRATED Dehydrate(BlockChannelUtils.BlockChannelTypes activeChannels);
 
 		public void Rehydrate(SafeArrayHandle data, REHYDRATION_FACTORY rehydrationFactory) {
-			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 
-				this.Rehydrate(rehydrator, rehydrationFactory);
-			}
+			this.Rehydrate(rehydrator, rehydrationFactory);
+
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator, REHYDRATION_FACTORY rehydrationFactory) {

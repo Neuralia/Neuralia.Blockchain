@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
@@ -48,7 +49,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 			this.tasks.AddLast(task);
 		}
 
-		public void ProcessNextTask(IRoutedTaskRoutingHandler currentIRoutedTaskRoutingHandler) {
+		public async Task ProcessNextTask(IRoutedTaskRoutingHandler currentIRoutedTaskRoutingHandler) {
 			if(this.HasCompleted) {
 				throw new ApplicationException("Cannot reuse a completed children context object");
 			}
@@ -64,13 +65,15 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 				this.TaskExecutionResults = new TaskExecutionResults();
 
 				// route it to its destination
-				routingTask.Router.RouteTask(routingTask);
+				await routingTask.Router.RouteTask(routingTask).ConfigureAwait(false);
 			} else {
 				this.CurrentDispatchedTask = null;
 
 				// that's it, we are done
 				try {
-					this.completed?.Invoke(this.TaskExecutionResults);
+					if(this.completed != null) {
+						this.completed(this.TaskExecutionResults);
+					}
 				} catch(Exception ex) {
 					//TODO: what should we do here? we dont want to do much. log perhaps?
 					Log.Error(ex, "Exception occured while invoking the children task set completed action");
@@ -97,7 +100,9 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 
 			this.TaskExecutionResults.Exception = ex;
 
-			this.completed?.Invoke(this.TaskExecutionResults);
+			if(this.completed != null) {
+				this.completed(this.TaskExecutionResults);
+			}
 			this.HasCompleted = true;
 
 			this.owner.ExecutionStatus = RoutedTask.ExecutionStatuses.ChildrenCompleted;

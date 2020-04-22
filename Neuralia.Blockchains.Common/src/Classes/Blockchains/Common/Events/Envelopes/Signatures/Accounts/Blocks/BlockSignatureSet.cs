@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		public enum BlockSignatureTypes : byte {
 			SecretSequential = 1,
-			XmssMT = 2,
+			Xmss = 2,
 			Genesis = 3,
 			SuperSecret = 4
 		}
@@ -29,9 +29,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			if(signatureType == BlockSignatureTypes.Genesis) {
 				this.BlockAccountSignature = new GenesisBlockAccountSignature();
 				this.AccountSignatureType = BlockSignatureTypes.Genesis;
-			} else if(signatureType == BlockSignatureTypes.XmssMT) {
+			} else if(signatureType == BlockSignatureTypes.Xmss) {
 				this.BlockAccountSignature = new XmssBlockAccountSignature();
-				this.AccountSignatureType = BlockSignatureTypes.XmssMT;
+				this.AccountSignatureType = BlockSignatureTypes.Xmss;
 			} else if(signatureType == BlockSignatureTypes.SecretSequential) {
 				this.BlockAccountSignature = new SecretBlockAccountSignature();
 				this.AccountSignatureType = BlockSignatureTypes.SecretSequential;
@@ -40,9 +40,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 				this.AccountSignatureType = BlockSignatureTypes.SuperSecret;
 			}
 
-			if(nextSignatureType == BlockSignatureTypes.XmssMT) {
+			if(nextSignatureType == BlockSignatureTypes.Xmss) {
 				this.NextBlockAccountSignature = new XmssBlockNextAccountSignature();
-				this.NextAccountSignatureType = BlockSignatureTypes.XmssMT;
+				this.NextAccountSignatureType = BlockSignatureTypes.Xmss;
 			} else if(nextSignatureType == BlockSignatureTypes.SecretSequential) {
 				this.NextBlockAccountSignature = new SecretBlockNextAccountSignature();
 				this.NextAccountSignatureType = BlockSignatureTypes.SecretSequential;
@@ -62,12 +62,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			set => this.bitArray[1] = (byte) value;
 		}
 
-		public byte NextModeratorKey => this.NextAccountSignatureType == BlockSignatureTypes.XmssMT ? GlobalsService.MODERATOR_BLOCKS_KEY_XMSSMT_ID : GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID;
+		public byte NextModeratorKey => this.NextAccountSignatureType == BlockSignatureTypes.Xmss ? GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID : GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID;
 
 		public byte ModeratorKey {
 			get {
-				if(this.AccountSignatureType == BlockSignatureTypes.XmssMT) {
-					return GlobalsService.MODERATOR_BLOCKS_KEY_XMSSMT_ID;
+				if(this.AccountSignatureType == BlockSignatureTypes.Xmss) {
+					return GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID;
 				}
 
 				if(this.AccountSignatureType == BlockSignatureTypes.SecretSequential) {
@@ -95,7 +95,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			if(this.AccountSignatureType == BlockSignatureTypes.Genesis) {
 				this.BlockAccountSignature = new GenesisBlockAccountSignature();
-			} else if(this.AccountSignatureType == BlockSignatureTypes.XmssMT) {
+			} else if(this.AccountSignatureType == BlockSignatureTypes.Xmss) {
 				this.BlockAccountSignature = new XmssBlockAccountSignature();
 			} else if(this.AccountSignatureType == BlockSignatureTypes.SecretSequential) {
 				this.BlockAccountSignature = new SecretBlockAccountSignature();
@@ -103,7 +103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 				this.BlockAccountSignature = new SuperSecretBlockAccountSignature();
 			}
 
-			if(this.NextAccountSignatureType == BlockSignatureTypes.XmssMT) {
+			if(this.NextAccountSignatureType == BlockSignatureTypes.Xmss) {
 				this.NextBlockAccountSignature = new XmssBlockNextAccountSignature();
 			} else if(this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential) {
 				this.NextBlockAccountSignature = new SecretBlockNextAccountSignature();
@@ -138,15 +138,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		}
 
 		public ISecretDoubleCryptographicKey ConvertToSecretKey() {
-			if(((this.NextAccountSignatureType == BlockSignatureTypes.Genesis) || (this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential)) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature secretBlockNextAccountSignature) {
+			if((this.NextAccountSignatureType == BlockSignatureTypes.Genesis || this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature secretBlockNextAccountSignature) {
 				return SignatureUtils.ConvertToSecretKey(secretBlockNextAccountSignature, this.NextModeratorKey);
 			}
 
 			throw new ApplicationException("Not a secret key");
 		}
 		
-		public IXmssmtCryptographicKey ConvertToXmssKey() {
-			if(((this.NextAccountSignatureType == BlockSignatureTypes.XmssMT)) && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature xmssBlockNextAccountSignature) {
+		public IXmssCryptographicKey ConvertToXmssKey() {
+			if(this.NextAccountSignatureType == BlockSignatureTypes.Xmss && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature xmssBlockNextAccountSignature) {
 				return SignatureUtils.ConvertToXmssMTKey(xmssBlockNextAccountSignature, this.NextModeratorKey);
 			}
 
@@ -155,11 +155,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		public SafeArrayHandle ConvertToDehydratedKey() {
 
-			if(((this.NextAccountSignatureType == BlockSignatureTypes.Genesis) || (this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential)) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature) {
+			if((this.NextAccountSignatureType == BlockSignatureTypes.Genesis || this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature) {
 				var key = this.ConvertToSecretKey();
 				return SignatureUtils.ConvertToDehydratedKey(key);
 			}
-			else if(((this.NextAccountSignatureType == BlockSignatureTypes.XmssMT)) && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature) {
+			else if(this.NextAccountSignatureType == BlockSignatureTypes.Xmss && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature) {
 				var key = this.ConvertToXmssKey();
 				return SignatureUtils.ConvertToDehydratedKey(key);
 			}

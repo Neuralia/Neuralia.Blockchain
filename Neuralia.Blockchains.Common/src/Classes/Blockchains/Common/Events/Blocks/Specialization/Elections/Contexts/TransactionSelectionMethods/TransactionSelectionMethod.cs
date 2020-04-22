@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Configuration;
+using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General;
@@ -15,7 +17,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.TransactionSelectionMethods {
 	public interface ITransactionSelectionMethod : IVersionable<TransactionSelectionMethodType>, IBinarySerializable, IJsonSerializable {
-		List<TransactionId> PerformTransactionSelection(IEventPoolProvider chainEventPoolProvider, List<TransactionId> existingTransactions);
+		Task<List<TransactionId>> PerformTransactionSelection(IEventPoolProvider chainEventPoolProvider, List<TransactionId> existingTransactions);
 	}
 
 	public abstract class TransactionSelectionMethod : Versionable<TransactionSelectionMethodType>, ITransactionSelectionMethod {
@@ -34,8 +36,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.configuration = configuration;
 		}
 
-		public virtual List<TransactionId> PerformTransactionSelection(IEventPoolProvider chainEventPoolProvider, List<TransactionId> existingTransactions) {
-			var poolTransactions = chainEventPoolProvider.GetTransactionIds();
+		public virtual async Task<List<TransactionId>> PerformTransactionSelection(IEventPoolProvider chainEventPoolProvider, List<TransactionId> existingTransactions) {
+			var poolTransactions = await chainEventPoolProvider.GetTransactionIds().ConfigureAwait(false);
 
 			// exclude the transactions that should not be selected
 			var availableTransactions = poolTransactions.Where(p => !existingTransactions.Contains(p)).ToList();
@@ -57,13 +59,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		protected int MaximumTransactionCount {
 			get {
 				var miningTier = BlockchainUtilities.GetMiningTier(this.configuration, this.chainStateProvider.DigestHeight);
-				if(miningTier.HasFlag(Enums.MiningTiers.FirstTier)) {
-					return this.electionContext.FirstTierMaximumElectedTransactionCount;
+
+				if(this.electionContext.MaximumElectedTransactionCount.ContainsKey(miningTier)) {
+					return this.electionContext.MaximumElectedTransactionCount[miningTier];
 				}
-				if(miningTier.HasFlag(Enums.MiningTiers.SecondTier)) {
-					return this.electionContext.SecondTierMaximumElectedTransactionCount;
-				}
-				return this.electionContext.ThirdTierMaximumElectedTransactionCount;
+
+				return 0;
 			}
 		}
 	}

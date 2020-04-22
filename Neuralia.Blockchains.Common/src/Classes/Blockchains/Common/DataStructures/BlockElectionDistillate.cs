@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public ComponentVersion<BlockType> blockType;
 		public string blockTypeString;
 		public int blockxxHash;
-		public long currentBlockId;
+		public long electionBockId;
 
 		public string DehydratedElectionContext;
 
@@ -43,17 +43,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public bool IsElectionContextLoaded => this.ElectionContext != null;
 
 		public void RehydrateElectionContext(IBlockchainEventsRehydrationFactory rehydrationFactory) {
-			if((this.ElectionContext == null) && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
+			if(this.ElectionContext == null && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
 
-				using(SafeArrayHandle compressed = ByteArray.FromBase64(this.DehydratedElectionContext)) {
+				using SafeArrayHandle compressed = ByteArray.FromBase64(this.DehydratedElectionContext);
 
-					BrotliCompression compressor = new BrotliCompression();
-					using(SafeArrayHandle bytes = compressor.Decompress(compressed)) {
+				BrotliCompression compressor = new BrotliCompression();
+				using SafeArrayHandle bytes = compressor.Decompress(compressed);
 
-						IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
-						this.ElectionContext = electionContextRehydrationFactory.CreateElectionContext(bytes);
-					}
-				}
+				IElectionContextRehydrationFactory electionContextRehydrationFactory = rehydrationFactory.CreateBlockComponentsRehydrationFactory();
+				this.ElectionContext = electionContextRehydrationFactory.CreateElectionContext(bytes);
+
 			}
 
 			// if(dehydrateElectionContext) {

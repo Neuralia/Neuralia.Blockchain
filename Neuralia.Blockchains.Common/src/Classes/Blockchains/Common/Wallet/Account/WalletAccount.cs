@@ -35,9 +35,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		TransactionId PresentationTransactionId { get; set; }
 
 		/// <summary>
-		/// If we have any correlation Id required, here it is set
+		/// if the account has been correlated with an ID
 		/// </summary>
-		long? CorrelationId  { get; set; }
+		bool Correlated  { get; set; }
 		
 		string FriendlyName { get; set; }
 
@@ -139,7 +139,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <summary>
 		/// If we have any correlation Id required, here it is set
 		/// </summary>
-		public long? CorrelationId { get; set; }
+		public bool Correlated { get; set; }
 
 		public Enums.AccountTypes WalletAccountType { get; set; } = Enums.AccountTypes.Standard;
 
@@ -239,7 +239,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public ByteArray TransactionCacheFileSecret { get; set; }
 
 		public AccountId GetAccountId() {
-			if((this.PublicAccountId == null) || (this.PublicAccountId == new AccountId())) {
+			if(this.PublicAccountId == null || this.PublicAccountId == new AccountId()) {
 				return this.AccountUuidHash;
 			}
 

@@ -1,13 +1,15 @@
 using System;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelIndex {
 	public class IndividualFileChannelIndex : ChannelIndex<IndependentFileChannelProvider> {
 
-		public IndividualFileChannelIndex(string folderPath, BlockChannelUtils.BlockChannelTypes blockchainEnabledChannels, IFileSystem fileSystem, BlockChannelUtils.BlockChannelTypes channelType, IndependentFileChannelProvider provider) : base(folderPath, blockchainEnabledChannels, fileSystem) {
+		public IndividualFileChannelIndex(string folderPath, BlockChannelUtils.BlockChannelTypes blockchainEnabledChannels, FileSystemWrapper fileSystem, BlockChannelUtils.BlockChannelTypes channelType, IndependentFileChannelProvider provider) : base(folderPath, blockchainEnabledChannels, fileSystem) {
 			this.ChannelType = channelType;
 			this.Provider = provider;
 		}

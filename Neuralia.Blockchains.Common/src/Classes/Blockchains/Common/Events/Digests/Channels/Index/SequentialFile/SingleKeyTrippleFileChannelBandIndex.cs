@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile {
 
@@ -29,7 +31,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected ITrippleChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>, uint> L1IndexProvider;
 
-		public SingleKeyTrippleFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
+		public SingleKeyTrippleFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
 			this.groupSize = groupSize;
 		}
 
@@ -148,7 +150,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			uint index = (uint) (accountId / this.groupSize);
 
-			uint adjustedAccountId = (uint) (accountId - (index * this.groupSize));
+			uint adjustedAccountId = (uint) (accountId - index * this.groupSize);
 
 			// index is 1 based
 			return (adjustedAccountId, index + 1);
@@ -183,7 +185,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		protected virtual void ResetL1Provider(uint adjustedAccountId, uint groupIndex) {
-			this.L1IndexProvider.ResetAllFileSpecs(this.GetExpandedBandName(this.ChannelBand, groupIndex), adjustedAccountId, (groupIndex,((groupIndex-1) * this.groupSize)));
+			this.L1IndexProvider.ResetAllFileSpecs(this.GetExpandedBandName(this.ChannelBand, groupIndex), adjustedAccountId, (groupIndex,(groupIndex-1) * this.groupSize));
 		}
 
 		protected SafeArrayHandle QueryL1Index(uint adjustedAccountId, uint groupIndex) {
@@ -199,7 +201,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public class SingleKeyTrippleFileChannelBandIndex<CHANEL_BANDS> : SingleKeyTrippleFileChannelBandIndex<CHANEL_BANDS, long>
 		where CHANEL_BANDS : struct, Enum, IConvertible {
 
-		public SingleKeyTrippleFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
+		public SingleKeyTrippleFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
 		}
 
 

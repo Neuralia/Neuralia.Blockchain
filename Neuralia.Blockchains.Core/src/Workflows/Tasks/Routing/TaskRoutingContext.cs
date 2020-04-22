@@ -1,11 +1,12 @@
 using System;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 
 	public interface ITaskStasher {
 		bool StashingEnabled { get; }
-		void Stash();
+		void Stash(LockContext lockContext);
 		void CompleteStash();
 		void SetCorrelationContext(CorrelationContext correlationContext);
 	}
@@ -37,10 +38,11 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		///     be brought back into context
 		///     in top priority (before other waiting tasks)
 		/// </summary>
+		/// <param name="lockContext"></param>
 		/// <param name="stashAction"></param>
 		/// <param name="stashCompleted"></param>
 		/// <exception cref="ApplicationException"></exception>
-		public void Stash() {
+		public void Stash(LockContext lockContext) {
 
 			this.service?.StashTask(this.OwnerTask);
 		}
@@ -115,7 +117,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		///     Dispatch any accumulated children task and continue processing. Call WaitDispatchedChildren() to wait for their
 		///     return.
 		/// </summary>
-		public void DispatchChildrenAsync() {
+		public async Task DispatchChildrenAsync() {
 			if(this.OwnerTask.ChildrenContext.HasMoreChildren) {
 
 				if(this.OwnerTask.StashStatus == RoutedTask.StashStatuses.Stashed) {
@@ -123,25 +125,26 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 				}
 
 				this.OwnerTask.ExecutionStatus = RoutedTask.ExecutionStatuses.ChildrenDispatched;
-				this.OwnerTask.ChildrenContext.ProcessNextTask(this.service);
+				await this.OwnerTask.ChildrenContext.ProcessNextTask(this.service).ConfigureAwait(false);
 			}
 		}
 
 		/// <summary>
 		///     Dispatch any accumulated children task and wait before executing any further processing.
 		/// </summary>
-		public bool DispatchChildrenSync() {
-			return this.DispatchChildrenSync(TimeSpan.MaxValue);
+		/// <param name="lockContext"></param>
+		public Task<bool> DispatchChildrenSync(LockContext lockContext) {
+			return this.DispatchChildrenSync(TimeSpan.MaxValue, lockContext);
 		}
 
 		/// <summary>
 		///     Dispatch any accumulated children task and wait before executing any further processing.
 		/// </summary>
-		public bool DispatchChildrenSync(TimeSpan timeout) {
+		public async Task<bool> DispatchChildrenSync(TimeSpan timeout, LockContext lockContext) {
 			if(this.OwnerTask.HasChildren) {
-				this.DispatchChildrenAsync();
+				await this.DispatchChildrenAsync().ConfigureAwait(false);
 
-				return this.WaitDispatchedChildren(timeout);
+				return await this.WaitDispatchedChildren(timeout, lockContext).ConfigureAwait(false);
 			}
 
 			return true;
@@ -150,14 +153,15 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		/// <summary>
 		///     Here we freeze the entire thread to wait for the children tasks to complete
 		/// </summary>
-		public bool WaitDispatchedChildren() {
-			return this.WaitDispatchedChildren(TimeSpan.MaxValue);
+		/// <param name="lockContext"></param>
+		public Task<bool> WaitDispatchedChildren(LockContext lockContext) {
+			return this.WaitDispatchedChildren(TimeSpan.MaxValue, lockContext);
 		}
 
 		/// <summary>
 		///     Here we freeze the entire thread to wait for the children tasks to complete
 		/// </summary>
-		public bool WaitDispatchedChildren(TimeSpan timeout) {
+		public async Task<bool> WaitDispatchedChildren(TimeSpan timeout, LockContext lockContext) {
 			if(!this.OwnerTask.ChildrenContext.IsRunning) {
 				return true;
 			}
@@ -176,14 +180,14 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 						return false;
 					}
 
-					found = this.service.CheckSingleTask(this.OwnerTask.ChildrenContext.CurrentDispatchedTask.Id);
+					found = await this.service.CheckSingleTask(this.OwnerTask.ChildrenContext.CurrentDispatchedTask.Id).ConfigureAwait(false);
 
 					if(!found) {
 						// since we run this synchrnously, we jsut stop the thread and wait for a trigger
 						if(timeout == TimeSpan.MaxValue) {
-							this.service.Wait();
+							await this.service.Wait().ConfigureAwait(false);
 						} else {
-							this.service.Wait(absoluteTimeout - DateTime.UtcNow);
+							await this.service.Wait(absoluteTimeout - DateTime.UtcNow).ConfigureAwait(false);
 						}
 					}
 				} while(!found);

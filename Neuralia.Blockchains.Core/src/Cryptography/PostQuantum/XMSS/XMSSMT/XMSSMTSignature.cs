@@ -88,11 +88,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			dehydrator.Write(this.Signatures.Count);
 
-			foreach(var signature in this.Signatures) {
+			foreach((int key, XMSSSignature value) in this.Signatures) {
 
-				dehydrator.Write(signature.Key);
+				dehydrator.Write(key);
 
-				ByteArray bytes = signature.Value.Save();
+				ByteArray bytes = value.Save();
 				dehydrator.Write(bytes);
 				bytes.Return();
 			}

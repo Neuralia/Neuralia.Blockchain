@@ -1,7 +1,9 @@
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain {
 	public interface ILoadWalletWorkflow : IChainWorkflow {
@@ -29,10 +31,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.passphrase = passphrase;
 		}
 
-		protected override void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
-			
+		protected override Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext){
 			taskRoutingContext.SetCorrelationContext(this.correlationContext);
-			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(this.correlationContext, this.passphrase);
+			return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(this.correlationContext, lockContext, this.passphrase);
 		}
 	}
 }

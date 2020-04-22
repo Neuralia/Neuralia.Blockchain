@@ -41,10 +41,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 			if(errorCodes != null) {
 				this.ErrorCodes = errorCodes.ToImmutableList();
 			} else {
-				this.ErrorCodes = new EventValidationErrorCode[0].ToImmutableList();
+				this.ErrorCodes = Array.Empty<EventValidationErrorCode>().ToImmutableList();
 			}
 		}
 
+		public string ErrorCodesJoined => string.Join(",", this.ErrorCodes.Select(e => e.Value));
+		
 		public ImmutableList<EventValidationErrorCode> ErrorCodes { get; }
 		public ValidationResults Result { get; set; }
 
@@ -81,6 +83,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 		public static bool operator !=(ValidationResult a, ValidationResult b) {
 			return !(a == b);
+		}
+
+		public override string ToString() {
+			return this.Result.ToString();
 		}
 	}
 

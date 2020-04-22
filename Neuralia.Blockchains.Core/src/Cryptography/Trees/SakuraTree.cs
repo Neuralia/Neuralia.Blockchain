@@ -136,7 +136,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					Parallel.ForEach(SteppingList(0, totalHops, totalHopJump), new ParallelOptions {MaxDegreeOfParallelism = this.threadCounts}, RunHop);
 				}
 
-
 				int finalIndex = GetActualIndex(start);
 				for(int i = start; i < end; i++) {
 					results.Add(finalIndex+ (i -start), hops[i]);

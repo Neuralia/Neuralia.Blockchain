@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
@@ -24,14 +24,19 @@ using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
 using Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Threading;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
+using Zio;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
@@ -56,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		BlockchainType ChainId { get; }
 		string ChainName { get; }
 
-		IFileSystem FileSystem { get; }
+		FileSystemWrapper FileSystem { get; }
 
 		bool IsShuttingDown { get; }
 
@@ -65,18 +70,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		event Action<ConcurrentBag<Task>> ShutdownRequested;
 		event Action ShutdownStarting;
 
-		event Action BlockchainSynced;
-		event Action WalletSynced;
-		void TriggerWalletSyncedEvent();
-		void TriggerBlockchainSyncedEvent();
+		event Func<LockContext, Task> BlockchainSynced;
+		event Func<LockContext, Task> WalletSynced;
+		Task TriggerWalletSyncedEvent(LockContext lockContext);
+		Task TriggerBlockchainSyncedEvent(LockContext lockContext);
 
-		void RequestFullSync(bool force = false);
-		void RequestBlockchainSync(bool force = false);
-		void RequestWalletSync(bool force = false);
-		void RequestWalletSync(IBlock block, bool force = false, bool? allowGrowth = null);
+		Task RequestFullSync(LockContext lockContext, bool force = false);
+		Task RequestBlockchainSync(bool force = false);
+		Task RequestWalletSync(bool force = false);
+		Task RequestWalletSync(IBlock block, bool force = false, bool? allowGrowth = null);
+		Task RequestWalletSync(List<IBlock> blocks, bool force, bool mobileForce, bool? allowGrowth = null);
 		
-		void Pause();
-		void Resume();
+		Task Pause();
+		Task Resume();
 	}
 
 	public interface ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ILoopThread<CentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>>, ICentralCoordinator
@@ -87,7 +93,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		IChainDalCreationFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainDalCreationFactory { get; }
 
-		bool IsWalletSynced { get; }
+		Task<bool> IsWalletSynced(LockContext lockContext);
 		bool IsChainSynchronizing { get; }
 
 		bool IsChainSynchronized { get; }
@@ -100,7 +106,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		void PostImmediateWorkflow(IWorkflow<IBlockchainEventsRehydrationFactory> workflow);
 
-		void InitializeContents(IChainComponentsInjection<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainComponentsInjection);
+		Task InitializeContents(IChainComponentsInjection<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainComponentsInjection, LockContext lockContext);
 	}
 
 	public class ChainRuntimeConfiguration {
@@ -119,7 +125,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		protected readonly ChainRuntimeConfiguration chainRuntimeConfiguration;
 
 		protected readonly ColoredRoutedTaskReceiver ColoredRoutedTaskReceiver;
-		protected readonly IFileSystem fileSystem;
+		protected readonly FileSystemWrapper fileSystem;
 
 		protected readonly Dictionary<string, (IRoutedTaskRoutingThread service, Enums.ServiceExecutionTypes executionType)> services = new Dictionary<string, (IRoutedTaskRoutingThread service, Enums.ServiceExecutionTypes executionType)>();
 
@@ -128,17 +134,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		private IBlockChainInterface chainInterface;
 
-		public CentralCoordinator(BlockchainType chainId, BlockchainServiceSet serviceSet, ChainRuntimeConfiguration chainRuntimeConfiguration, IFileSystem fileSystem) {
+		public CentralCoordinator(BlockchainType chainId, BlockchainServiceSet serviceSet, ChainRuntimeConfiguration chainRuntimeConfiguration, FileSystemWrapper fileSystem) {
 			this.BlockchainServiceSet = serviceSet;
 			this.chainRuntimeConfiguration = chainRuntimeConfiguration;
 			this.fileSystem = fileSystem;
 
 			if(this.fileSystem == null) {
-				this.fileSystem = new FileSystem();
+				this.fileSystem = FileSystemWrapper.CreatePhysical();
 			}
 
 			// ensure we have at least 2 workflow spaces per peer and a little more for the rest
-			int maximumWorkflows = (GlobalSettings.ApplicationSettings.MaxPeerCount * 7) + 10;
+			int maximumWorkflows = GlobalSettings.ApplicationSettings.MaxPeerCount * 7 + 10;
 
 			var maximumThreadCounts = GlobalSettings.ApplicationSettings.GetChainConfiguration(chainId).MaxWorkflowParallelCount;
 
@@ -153,7 +159,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.ChainId = chainId;
 			
 			// lets make sure we capture and handle important exceptions!!
-			AppDomain.CurrentDomain.FirstChanceException += (object sender, FirstChanceExceptionEventArgs e) => {
+			AppDomain.CurrentDomain.FirstChanceException += async (object sender, FirstChanceExceptionEventArgs e) => {
 
 				if(e.Exception is UnrecognizedElementException ex && ex.BlockchainType == chainId) {
 					Log.Fatal(ex, ex.Message);
@@ -163,66 +169,82 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			};
 		}
 
-		public event Action BlockchainSynced;
-		public event Action WalletSynced;
+		public event Func<LockContext, Task> BlockchainSynced;
+		public event Func<LockContext, Task> WalletSynced;
 
-		public void TriggerWalletSyncedEvent() {
-			this.WalletSynced?.Invoke();
+		public async Task TriggerWalletSyncedEvent(LockContext lockContext) {
+			if(this.WalletSynced != null) {
+				await WalletSynced(lockContext).ConfigureAwait(false);
+			}
 		}
 
-		public void TriggerBlockchainSyncedEvent() {
-			this.BlockchainSynced?.Invoke();
+		public async Task TriggerBlockchainSyncedEvent(LockContext lockContext) {
+			if(this.BlockchainSynced != null) {
+				await BlockchainSynced(lockContext).ConfigureAwait(false);
+			}
+			
 		}
 
-		public void RequestFullSync(bool force = false) {
+		public async Task RequestFullSync(LockContext lockContext, bool force = false) {
 
 			if(!this.IsChainLikelySynchronized) {
-				this.RequestBlockchainSync(force);
+				await this.RequestBlockchainSync(force).ConfigureAwait(false);
 			}
-			else if(!this.IsWalletSynced) {
-				this.RequestWalletSync(force);
+			else if(!await this.IsWalletSynced(lockContext).ConfigureAwait(false)) {
+				await this.RequestWalletSync(force).ConfigureAwait(false);
 			}
 		}
 		
-		public void RequestBlockchainSync(bool force = false) {
+		public Task RequestBlockchainSync(bool force = false) {
 			var blockchainTask = this.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
-			blockchainTask.SetAction((service, taskRoutingContext2) => {
-				service.SynchronizeBlockchain(force);
+			blockchainTask.SetAction(async (service, taskRoutingContext2, lc) => {
+				await service.SynchronizeBlockchain(force, lc).ConfigureAwait(false);
 			});
 
 			blockchainTask.Caller = null;
-			this.RouteTask(blockchainTask);
+			return this.RouteTask(blockchainTask);
 		}
 
-		public void RequestWalletSync(bool force = false) {
+		public Task RequestWalletSync(bool force = false) {
 			var blockchainTask = this.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
-			blockchainTask.SetAction((service, taskRoutingContext2) => {
-				service.SynchronizeWallet(force);
+			blockchainTask.SetAction(async (service, taskRoutingContext2, lc) => {
+				await service.SynchronizeWallet(force, lc).ConfigureAwait(false);
 			});
 
 			blockchainTask.Caller = null;
-			this.RouteTask(blockchainTask);
+			return this.RouteTask(blockchainTask);
 		}
 
-		public void RequestWalletSync(IBlock block, bool force = false, bool? allowGrowth = null) {
+		public Task RequestWalletSync(IBlock block, bool force = false, bool? allowGrowth = null) {
 			var blockchainTask = this.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
-			blockchainTask.SetAction((service, taskRoutingContext2) => {
-				service.SynchronizeWallet(block, force, allowGrowth);
+			blockchainTask.SetAction(async (service, taskRoutingContext2, lc) => {
+				await service.SynchronizeWallet(block, force, lc, allowGrowth).ConfigureAwait(false);
 			});
 
 			blockchainTask.Caller = null;
-			this.RouteTask(blockchainTask);
+			return this.RouteTask(blockchainTask);
+		}
+		
+		public Task RequestWalletSync(List<IBlock> blocks, bool force, bool mobileForce, bool? allowGrowth = null){
+			var blockchainTask = this.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+
+			blockchainTask.SetAction(async (service, taskRoutingContext2, lc) => {
+				await service.SynchronizeWallet(blocks, force, mobileForce, lc, allowGrowth).ConfigureAwait(false);
+			});
+
+			blockchainTask.Caller = null;
+			return this.RouteTask(blockchainTask);
 		}
 
-		public void Pause() {
-			this.ChainComponentProvider.WalletProviderBase.Pause();
+		public Task Pause() {
+			return this.ChainComponentProvider.WalletProviderBase.Pause();
 		}
 
-		public void Resume() {
-			this.ChainComponentProvider.WalletProviderBase.Resume();
+		public Task Resume() {
+			return this.ChainComponentProvider.WalletProviderBase.Resume();
 		}
 
 		public IChainDalCreationFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainDalCreationFactory => this.ChainComponentProvider.ChainFactoryProviderBase.ChainDalCreationFactoryBase;
@@ -234,44 +256,45 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public ChainConfigurations ChainSettings => this.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-		public IFileSystem FileSystem => this.fileSystem;
+		public FileSystemWrapper FileSystem => this.fileSystem;
 
-		public override void Start() {
+		public override async Task Start() {
 
 			this.IsShuttingDown = false;
-			base.Start();
+			await base.Start().ConfigureAwait(false);
 
-			this.StartWorkers();
+			await this.StartWorkers().ConfigureAwait(false);
 
 			this.IsShuttingDown = false;
 		}
 
-		public override void Stop() {
+		public override async Task Stop() {
 			try {
 				if(this.IsStarted && !this.IsShuttingDown) {
 					this.IsShuttingDown = true;
 
 					var waitFlags = new ConcurrentBag<Task>();
-					this.ShutdownRequested?.Invoke(waitFlags);
+					
+if(	this.ShutdownRequested != null){this.ShutdownRequested(waitFlags);}
 
 					// lets wait for any wait flags to complete
 					if(waitFlags.Any()) {
 						int waitTime = 20;
 
-						Log.Information($"We are preparing to stop chain {BlockchainTypes.GetBlockchainTypeName(this.ChainId)}, but we received {waitFlags.Count()} requests to wait by pending services. we will wait up to {waitTime} seconds");
+						Log.Information($"We are preparing to stop chain {BlockchainTypes.GetBlockchainTypeName(this.ChainId)}, but we received {waitFlags.Count} requests to wait by pending services. we will wait up to {waitTime} seconds");
 						Task.WaitAll(waitFlags.ToArray(), TimeSpan.FromSeconds(waitTime));
 						Log.Information($"We are done waiting for pending services for chain  {BlockchainTypes.GetBlockchainTypeName(this.ChainId)}. Proceeding with shutdown...");
 					}
 
 					Log.Information($"We are shutting down chain '{BlockchainTypes.GetBlockchainTypeName(this.ChainId)}'...");
-					this.ShutdownStarting?.Invoke();
+if(					this.ShutdownStarting != null){	this.ShutdownStarting();}
 
 					// if we had existing tasks, either break, or stop them all
-					this.StopWorkers();
+					await this.StopWorkers().ConfigureAwait(false);
 
 				}
 			} finally {
-				base.Stop();
+				await base.Stop().ConfigureAwait(false);
 			}
 		}
 
@@ -285,7 +308,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <param name="workflow"></param>
 		public void PostWorkflow(IWorkflow<IBlockchainEventsRehydrationFactory> workflow) {
 
-			this.workflowCoordinator.AddWorkflow(workflow);
+			this.workflowCoordinator.AddWorkflow(workflow).WaitAndUnwrapException();
 		}
 
 		/// <summary>
@@ -293,10 +316,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// </summary>
 		/// <param name="workflow"></param>
 		public void PostImmediateWorkflow(IWorkflow<IBlockchainEventsRehydrationFactory> workflow) {
-			this.workflowCoordinator.AddImmediateWorkflow(workflow);
+			this.workflowCoordinator.AddImmediateWorkflow(workflow).WaitAndUnwrapException();
 		}
 
-		public virtual bool RouteTask(IRoutedTask task, string destination) {
+		public virtual async Task<bool> RouteTask(IRoutedTask task, string destination) {
 
 			if(string.IsNullOrWhiteSpace(destination)) {
 				throw new ApplicationException("A task must hav a destination set");
@@ -329,7 +352,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			return false;
 		}
 
-		public virtual bool RouteTask(IRoutedTask task) {
+		public virtual Task<bool> RouteTask(IRoutedTask task) {
 			return this.RouteTask(task, task.Destination);
 		}
 
@@ -338,9 +361,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// </summary>
 		/// <param name="task"></param>
 		/// <returns></returns>
-		public bool IsWalletProviderTransaction(IRoutedTask task) {
+		public async Task<bool> IsWalletProviderTransaction(IRoutedTask task) {
 			if(task is InternalRoutedTask innternalRoutedTask) {
-				return (innternalRoutedTask.Caller != null) && this.ChainComponentProvider.WalletProviderBase.IsActiveTransactionThread(innternalRoutedTask.CallerThreadId);
+				return innternalRoutedTask.Caller != null && this.ChainComponentProvider.WalletProviderBase.IsActiveTransactionThread(innternalRoutedTask.CallerThreadId);
 			}
 
 			return false;
@@ -355,14 +378,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			this.ChainComponentProvider.ChainNetworkingProviderBase.PostNewGossipMessage(gossipMessageSet);
 		}
-
-		public bool IsWalletSynced {
-			get {
-				var walletSynced = this.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
+		public async Task<bool> IsWalletSynced (LockContext lockContext) {
+			
+				var walletSynced = await ChainComponentProvider.WalletProviderBase.SyncedNoWait(lockContext).ConfigureAwait(false);
 
 				return walletSynced.HasValue && walletSynced.Value;
-			}
-
+			
 		}
 		
 		public bool IsChainSynchronizing { get; set; }
@@ -371,7 +392,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public bool IsChainLikelySynchronized => this.ChainComponentProvider.ChainStateProviderBase.IsChainLikelySynchronized;
 
-		public virtual void InitializeContents(IChainComponentsInjection<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainComponentsInjection) {
+		public virtual async Task InitializeContents(IChainComponentsInjection<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainComponentsInjection, LockContext lockContext) {
 			if(this.ChainId == BlockchainTypes.Instance.None) {
 				throw new ApplicationException("The chain ID must be set and can not be 0");
 			}
@@ -382,8 +403,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				throw new ApplicationException("workflow factory must be set and can not be null");
 			}
 
-			// make sure we initialize our wallet provider
-			this.ChainComponentProvider.WalletProviderBase.Initialize();
+			// make sure we initialize our providers
+			await this.ChainComponentProvider.Initialize(lockContext).ConfigureAwait(false);
 
 			// now register our gossip message info analyzer
 			if(!ServerMessageGroupManifestWorkflow.GossipMetadataAnalysers.ContainsKey(this.ChainId)) {
@@ -401,9 +422,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <summary>
 		///     Route a network message to the proper workflow, or if applicable, instantiate a new one
 		/// </summary>
-		/// <param name="messageSet"></param>
+		/// <param name="header"></param>
 		/// <param name="data"></param>
 		/// <param name="connection"></param>
+		/// <param name="messageSet"></param>
 		public void RouteNetworkMessage(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection) {
 			MessageReceivedTask messageTask = new MessageReceivedTask(header, data, connection);
 			this.ColoredRoutedTaskReceiver.ReceiveTask(messageTask);
@@ -426,9 +448,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public event Action<ConcurrentBag<Task>> ShutdownRequested;
 		public event Action ShutdownStarting;
 
-		protected virtual void HandleMessages(IColoredTask task) {
+		protected virtual async Task HandleMessages(IColoredTask task) {
 			if(task is MessageReceivedTask messageTask) {
-				this.HandleMesageReceived(messageTask);
+				await this.HandleMesageReceived(messageTask).ConfigureAwait(false);
 			} 
 		}
 
@@ -438,7 +460,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// </summary>
 		/// <param name="messageTask"></param>
 		/// <exception cref="ApplicationException"></exception>
-		protected virtual void HandleMesageReceived(MessageReceivedTask messageTask) {
+		protected virtual async Task HandleMesageReceived(MessageReceivedTask messageTask) {
 
 			try {
 				if(messageTask.header.ChainId != this.ChainId) {
@@ -464,7 +486,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 								// create a new workflow
 								var workflow = (ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory>) this.ChainComponentProvider.ChainFactoryProviderBase.ServerWorkflowFactoryBase.CreateResponseWorkflow(triggerMessageSet, messageTask.Connection);
 
-								this.workflowCoordinator.AddWorkflow(workflow);
+								await this.workflowCoordinator.AddWorkflow(workflow).ConfigureAwait(false);
 							}
 						} else {
 							// this means we did not pass the trigger filter above, it could be an evil trigger and we default
@@ -547,21 +569,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.AddService(Enums.GOSSIP_SERVICE, chainComponentsInjection.gossipManager);
 		}
 
-		protected virtual void StartWorkers(bool killExistingTasks = true) {
+		protected virtual async Task StartWorkers(bool killExistingTasks = true) {
 			try {
 
 				if(!killExistingTasks && this.services.Values.Any(s => !s.service.IsCompleted)) {
 					throw new ApplicationException("There are still some running tasks in the list. Cancel them first");
 				}
 
-				this.StopWorkers();
+				await this.StopWorkers().ConfigureAwait(false);
 
 				foreach(var service in this.services) {
 					if(service.Value.executionType == Enums.ServiceExecutionTypes.Threaded) {
-						service.Value.service.Start();
+						await service.Value.service.Start().ConfigureAwait(false);
 					} else if(service.Value.executionType == Enums.ServiceExecutionTypes.Synchronous) {
 						// we will be using a synchronous model. let's set it up
-						service.Value.service.StartSync();
+						await service.Value.service.StartSync().ConfigureAwait(false);
 					} else if(service.Value.executionType == Enums.ServiceExecutionTypes.None) {
 						// this service is deactivated. it does nothing
 
@@ -574,18 +596,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}
 		}
 
-		protected virtual void StopWorkers() {
+		protected virtual async Task StopWorkers() {
 			try {
 				// if we had existing tasks, either break, or stop them all
 				foreach(var service in this.services) {
 					if(service.Value.executionType == Enums.ServiceExecutionTypes.Threaded) {
-						service.Value.service.Stop();
+						await service.Value.service.Stop().ConfigureAwait(false);
 					} else if(service.Value.executionType == Enums.ServiceExecutionTypes.Synchronous) {
-						service.Value.service.StopSync();
+						await service.Value.service.StopSync().ConfigureAwait(false);
 					}
 				}
 
-				Task.WaitAll(this.services.Where(ts => (ts.Value.service.IsCompleted == false) && ts.Value.service.IsStarted && (ts.Value.executionType == Enums.ServiceExecutionTypes.Threaded)).Select(ts => ts.Value.service.Task).ToArray(), 1000 * 20);
+				Task.WaitAll(this.services.Where(ts => ts.Value.service.IsCompleted == false && ts.Value.service.IsStarted && ts.Value.executionType == Enums.ServiceExecutionTypes.Threaded).Select(ts => ts.Value.service.Task).ToArray(), 1000 * 20);
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to stop controllers");
 
@@ -593,31 +615,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}
 		}
 
-		public void RequestShutdown() {
-			this.Stop();
+		public Task RequestShutdown() {
+			return this.Stop();
 		}
 
-		protected override void ProcessLoop() {
-
+		protected override Task ProcessLoop(LockContext lockContext){
 			this.CheckShouldCancel();
-			
-			this.ColoredRoutedTaskReceiver.CheckTasks();
+
+			return this.ColoredRoutedTaskReceiver.CheckTasks();
 		}
 
-		protected override void DisposeAll() {
+		protected override async Task DisposeAllAsync() {
 
-			this.Stop();
+			await this.Stop().ConfigureAwait(false);
 
 			// and any providers
-			foreach(var provider in this.ChainComponentProvider.Providers) {
-				try {
-					if(provider is IDisposable disposable) {
-						disposable.Dispose();
-					}
-				} catch {
-					
-				}
-			}
+			this.ChainComponentProvider?.Dispose();
 
 			// dispose them all
 			foreach((IRoutedTaskRoutingThread service, Enums.ServiceExecutionTypes executionType) in this.services.Values) {

@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
@@ -11,6 +12,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions {
 
@@ -23,15 +25,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		private const string UNDO_FILE_NAME = "SerializationTransaction.undo";
 
 		private readonly string cachePath;
-		private readonly IFileSystem fileSystem;
-		protected readonly Queue<Action> Operations = new Queue<Action>();
+		private readonly FileSystemWrapper fileSystem;
+		protected readonly Queue<Func<Task>> Operations = new Queue<Func<Task>>();
 
 		protected readonly Stack<SerializationTransactionOperation> UndoOperations = new Stack<SerializationTransactionOperation>();
 
 		private bool commited;
 		private bool restored = false;
 		
-		public SerializationTransactionProcessor(string cachePath, IFileSystem fileSystem) {
+		public SerializationTransactionProcessor(string cachePath, FileSystemWrapper fileSystem) {
 			this.cachePath = cachePath;
 			this.fileSystem = fileSystem;
 		}
@@ -39,7 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		public void Check(IChainDataWriteProvider chainDataWriteProvider) {
 			string filename = this.GetUndoFilePath();
 
-			if(this.fileSystem.File.Exists(filename)) {
+			if(this.fileSystem.FileExists(filename)) {
 				this.LoadUndoOperations(chainDataWriteProvider);
 
 				this.Rollback();
@@ -49,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			return Path.Combine(this.cachePath, UNDO_FILE_NAME);
 		}
 
-		public void AddOperation(Action operation, SerializationTransactionOperation undoOperation) {
+		public void AddOperation(Func<Task> operation, SerializationTransactionOperation undoOperation) {
 			if(undoOperation != null) {
 				this.UndoOperations.Push(undoOperation);
 			}
@@ -57,12 +59,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			this.Operations.Enqueue(operation);
 		}
 
-		public void Apply() {
+		public async Task Apply() {
 
 			this.SerializeUndoOperations();
 
-			foreach(Action action in this.Operations.ToArray().Where(a => a != null)) {
-				action();
+			foreach(Func<Task> action in this.Operations.ToArray().Where(a => a != null)) {
+				await action().ConfigureAwait(false);
 			}
 
 			this.Operations.Clear();
@@ -71,8 +73,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		public void DeleteUndoFile() {
 			string filename = this.GetUndoFilePath();
 
-			if(this.fileSystem.File.Exists(filename)) {
-				this.fileSystem.File.Delete(filename);
+			if(this.fileSystem.FileExists(filename)) {
+				this.fileSystem.DeleteFile(filename);
 			}
 		}
 
@@ -99,7 +101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		public void LoadUndoOperations(IChainDataWriteProvider chainDataWriteProvider) {
 			string filename = this.GetUndoFilePath();
 
-			if(this.fileSystem.File.Exists(filename)) {
+			if(this.fileSystem.FileExists(filename)) {
 				SafeArrayHandle bytes = FileExtensions.ReadAllBytes(filename, this.fileSystem);
 
 				IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);

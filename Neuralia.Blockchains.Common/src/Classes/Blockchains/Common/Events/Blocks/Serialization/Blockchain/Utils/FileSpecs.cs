@@ -1,16 +1,18 @@
 using System;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils {
 	public class FileSpecs {
 
-		private readonly IFileSystem fileSystem;
+		private readonly FileSystemWrapper fileSystem;
 		private bool? filesExists;
 		private uint? fileSize;
 
-		public FileSpecs(string filePath, IFileSystem fileSystem) {
+		public FileSpecs(string filePath, FileSystemWrapper fileSystem) {
 			this.fileSystem = fileSystem;
 
 			this.FilePath = filePath;
@@ -35,7 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public bool FileExists {
 			get {
 				if(!this.filesExists.HasValue) {
-					this.filesExists = this.fileSystem.File.Exists(this.FilePath);
+					this.filesExists = this.fileSystem.FileExists(this.FilePath);
 				}
 
 				return this.filesExists.Value;
@@ -56,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			this.EnsureFilesExist();
 
-			return this.fileSystem.FileInfo.FromFileName(filename).Length;
+			return this.fileSystem.GetFileLength(filename);
 		}
 
 		public void ResetSizes() {
@@ -98,7 +100,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public void Delete() {
 			if(!this.FileExists) {
-				this.fileSystem.File.Delete(this.FilePath);
+				this.fileSystem.DeleteFile(this.FilePath);
 				this.ResetSizes();
 				this.filesExists = false;
 			}

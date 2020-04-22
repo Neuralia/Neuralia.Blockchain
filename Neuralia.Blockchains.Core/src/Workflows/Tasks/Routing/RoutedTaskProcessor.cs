@@ -1,9 +1,11 @@
 using System;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 	public static class RoutedTaskProcessor {
 
-		public static void ProcessTask(InternalRoutedTask task, IRoutedTaskRoutingHandler currentService) {
+		public static async Task ProcessTask(InternalRoutedTask task, IRoutedTaskRoutingHandler currentService) {
 
 			if((task.RoutingStatus == RoutedTask.RoutingStatuses.New) || (task.RoutingStatus == RoutedTask.RoutingStatuses.Disposed)) {
 				return;
@@ -58,10 +60,10 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 				};
 			}
 
-			PerformTaskStateMachine(task, currentService, exceptionHandling, completedHandling);
+			await PerformTaskStateMachine(task, currentService, exceptionHandling, completedHandling).ConfigureAwait(false);
 		}
 
-		private static void PerformTaskStateMachine(InternalRoutedTask task, IRoutedTaskRoutingHandler currentService, Action<Exception> exceptionHandling, Action<InternalRoutedTask> completedHandling) {
+		private static async Task PerformTaskStateMachine(InternalRoutedTask task, IRoutedTaskRoutingHandler currentService, Action<Exception> exceptionHandling, Action<InternalRoutedTask> completedHandling) {
 
 			if(task.ExecutionStatus == RoutedTask.ExecutionStatuses.ChildrenCompleted) {
 				task.ExecutionStatus = RoutedTask.ExecutionStatuses.New;
@@ -70,20 +72,21 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 
 			if(task.ExecutionStatus == RoutedTask.ExecutionStatuses.New) {
 
-				Action run = null;
+				Func<Task> run = null;
 
 				if(task.RoutingStatus == RoutedTask.RoutingStatuses.Dispatched) {
 
-					run = () => {
+					run = async () => {
 						try {
 							// if we are inside a wallet transaction and we were sent here by the owner of the thread, then we want to pass on the thread access to this child thread.
-							if(currentService.TaskRouter.IsWalletProviderTransaction(task)) {
+							if(await currentService.TaskRouter.IsWalletProviderTransaction(task).ConfigureAwait(false)) {
 								// ok, we are in a wallet transaction. we must pass on the active thread Id to this one
 								//TODO: what to do here?
 								throw new ApplicationException();
 							} else {
 								// this is a regular call
-								task.TriggerBaseAction(currentService);
+								LockContext lc = null;
+								await task.TriggerBaseAction(currentService, lc).ConfigureAwait(false);
 							}
 
 						} catch(NotReadyForProcessingException nrex) {
@@ -95,7 +98,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 						}
 					};
 				} else if(task.RoutingStatus == RoutedTask.RoutingStatuses.Returned) {
-					run = () => {
+					run = async () => {
 						try {
 							task.TriggerDispatchReturned();
 
@@ -109,12 +112,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 						} catch(Exception ex) {
 							exceptionHandling(ex);
 						}
-
 					};
 				}
 
 				// run this dispatched event
-				run?.Invoke();
+				if(run != null) {
+					await run().ConfigureAwait(false);
+				}
 
 				if(task.ExecutionStatus == RoutedTask.ExecutionStatuses.ChildrenDispatched) {
 					// the task has been stashed, go no further for now
@@ -133,7 +137,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 
 					task.ExecutionStatus = RoutedTask.ExecutionStatuses.ChildrenDispatched;
 
-					task.ChildrenContext.ProcessNextTask(currentService);
+					await task.ChildrenContext.ProcessNextTask(currentService).ConfigureAwait(false);
 
 					if((task.Mode == RoutedTask.ExecutionMode.Async) && !task.ChildrenContext.IsRunning) {
 						throw new ApplicationException("The context is not running but we have a children dispatched status");

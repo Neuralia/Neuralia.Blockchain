@@ -45,10 +45,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public readonly TransactionType MODERATION_OPERATING_RULES;
 		public readonly TransactionType MODERATION_PRESENTATION;
 		public readonly TransactionType MODERATION_RECLAIM_ACCOUNTS;
+		public readonly TransactionType MODERATION_ASSIGN_ACCOUNT_CORRELATIONS;
+		
 
 		public readonly TransactionType NONE;
 		public readonly TransactionType SET_ACCOUNT_RECOVERY;
-		public readonly TransactionType SET_ACCOUNT_CORRELATION_ID;
+		public readonly TransactionType SET_ACCOUNT_CORRELATION;
 		public readonly TransactionType SIMPLE_PRESENTATION;
 
 		public readonly TransactionType GATED_JUDGEMENT_TRANSACTION;
@@ -64,7 +66,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.KEY_CHANGE = this.CreateBaseConstant();
 			this.ACCREDITATION_CERTIFICATE = this.CreateBaseConstant();
 			this.SET_ACCOUNT_RECOVERY = this.CreateBaseConstant();
-			this.SET_ACCOUNT_CORRELATION_ID = this.CreateBaseConstant();
+			this.SET_ACCOUNT_CORRELATION = this.CreateBaseConstant();
 
 			this.GATED_JUDGEMENT_TRANSACTION = this.CreateBaseConstant();
 
@@ -74,6 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.MODERATION_ACCOUNT_RESET = this.CreateBaseConstant();
 			this.MODERATION_ACCOUNT_RESET_WARNING = this.CreateBaseConstant();
 			this.MODERATION_RECLAIM_ACCOUNTS = this.CreateBaseConstant();
+			this.MODERATION_ASSIGN_ACCOUNT_CORRELATIONS = this.CreateBaseConstant();
 			this.MODERATION_PRESENTATION = this.CreateBaseConstant();
 			this.MODERATION_OPERATING_RULES = this.CreateBaseConstant();
 			this.MODERATION_ELECTION_POOL_PRESENTATION = this.CreateBaseConstant();

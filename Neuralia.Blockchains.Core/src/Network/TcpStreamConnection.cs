@@ -40,13 +40,13 @@ namespace Neuralia.Blockchains.Core.Network {
 		protected override Task<bool> CompleteWrite() {
 			this.networkStream.Flush();
 
-			return null;
+			return Task.FromResult(true);
 		}
 
 		protected override async Task<StreamReadingContext> ReadDataFrame(StreamReadingContext previousContext, CancellationToken ct) {
 
 			if(previousContext.AllDataRead) {
-				return new StreamReadingContext(await this.ReadData(ct));
+				return new StreamReadingContext(await this.ReadData(ct).ConfigureAwait(false));
 			}
 
 			// there is more data to read, so lets keep going
@@ -59,7 +59,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			while(true) {
 				
-				await Task.WhenAny(asyncReadTask, Task.Delay(1000, ct));
+				await Task.WhenAny(asyncReadTask, Task.Delay(1000, ct)).ConfigureAwait(false);
 				
 				if(ct.IsCancellationRequested) {
 					this.ReadTaskCancelled();
@@ -70,7 +70,9 @@ namespace Neuralia.Blockchains.Core.Network {
 					continue;
 				}
 
+				// ReSharper disable once AsyncConverter.AsyncWait
 				if(asyncReadTask.Result != 0) {
+					// ReSharper disable once AsyncConverter.AsyncWait
 					return this.buffer.Slice(0, asyncReadTask.Result);
 				}
 				

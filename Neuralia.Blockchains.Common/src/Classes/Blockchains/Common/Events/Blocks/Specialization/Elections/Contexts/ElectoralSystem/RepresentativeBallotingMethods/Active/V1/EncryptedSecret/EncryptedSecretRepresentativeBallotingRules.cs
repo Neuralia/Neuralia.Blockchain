@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
@@ -10,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		}
 
-		public EncryptedSecretRepresentativeBallotingRules(ushort firstTierTotal, ushort secondTierTotal, ushort thirdTierTotal) : base(firstTierTotal, secondTierTotal, thirdTierTotal) {
+		public EncryptedSecretRepresentativeBallotingRules(Dictionary<Enums.MiningTiers, ushort> miningTierTotals) : base(miningTierTotals) {
 
 		}
 

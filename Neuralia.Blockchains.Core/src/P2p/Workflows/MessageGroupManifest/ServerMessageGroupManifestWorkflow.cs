@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
@@ -11,6 +12,7 @@ using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
@@ -34,7 +36,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			this.Priority = Workflow.Priority.High;
 		}
 
-		protected override void PerformWork() {
+		protected override async Task PerformWork(LockContext lockContext) {
 			this.CheckShouldCancel();
 
 			// ok, we just received a trigger, lets examine it
@@ -44,7 +46,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			Log.Verbose($"Received {this.triggerMessage.Message.messageInfos.Count} gossip message hashes from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// here we check which messages in the group we have already received, and which ones are new
-			(var messageReceived, int alreadyReceivedCount) = this.PerpareGossipMessageAcceptations();
+			(var messageReceived, int alreadyReceivedCount) = await this.PrepareGossipMessageAcceptations().ConfigureAwait(false);
 
 			int refusingCount = messageReceived.Count(m => !m);
 
@@ -85,12 +87,12 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			}
 		}
 
-		protected virtual (List<bool> messageReceived, int alreadyReceivedCount) PerpareGossipMessageAcceptations() {
+		protected virtual async Task<(List<bool> messageReceived, int alreadyReceivedCount)> PrepareGossipMessageAcceptations() {
 			IMessageRegistryDal sqliteDal = this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet);
 
 			var gossipMessages = this.triggerMessage.Message.messageInfos.Select((mi, index) => (mi, index, mi.Hash)).ToList();
 
-			var messageReceived = sqliteDal.CheckMessagesReceived(gossipMessages.Select(mi => mi.Hash).ToList(), this.ClientConnection);
+			var messageReceived = await sqliteDal.CheckMessagesReceived(gossipMessages.Select(mi => mi.Hash).ToList(), this.ClientConnection).ConfigureAwait(false);
 
 			//TODO: here we can add rate limiting on messages by refusing messages if they come too quickly
 			int alreadyReceivedCount = messageReceived.Count(m => !m);

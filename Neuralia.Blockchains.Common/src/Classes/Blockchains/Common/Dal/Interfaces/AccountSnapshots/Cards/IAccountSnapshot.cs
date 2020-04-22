@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		/// </summary>
 		byte TrustLevel { get; set; }
 		
-		long? CorrelationId { get; set; }
+		bool Correlated { get; set; }
 
 		public ImmutableList<IAccountAttribute> AppliedAttributesBase { get; }
 

@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 				timeRange = TimeSpan.FromSeconds((int) ((decimal) timeRange.TotalSeconds * multiplier));
 
-				if((timeRange.Days == 0) && (timeRange.Hours == 0) && (timeRange.Minutes == 0)) {
+				if(timeRange.Days == 0 && timeRange.Hours == 0 && timeRange.Minutes == 0) {
 					return $"{timeRange.Seconds} second{(timeRange.Seconds == 1 ? "" : "s")}";
 				}
 

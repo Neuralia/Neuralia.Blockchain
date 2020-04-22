@@ -4,6 +4,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializatio
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Tags;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
@@ -25,6 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		///     The last block we have in our chain. we send it every time, as this number changes as we sync locally
 		/// </summary>
 		public BlockId ChainBlockHeight { get; set; } = new BlockId();
+		public BlockId PublicBlockHeight { get; set; } = new BlockId();
 
 		public SafeArrayHandle NextBlockHash { get; } = SafeArrayHandle.Create();
 
@@ -48,6 +50,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Slices.Dehydrate(dehydrator);
 
 			this.ChainBlockHeight.Dehydrate(dehydrator);
+			
+			AdaptiveLong1_9 delta = new AdaptiveLong1_9();
+			delta.Value = this.PublicBlockHeight - this.ChainBlockHeight;
+			delta.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.HasNextInfo);
 
@@ -68,6 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			nodesList.Add(this.Slices);
 
 			nodesList.Add(this.ChainBlockHeight);
+			nodesList.Add(this.PublicBlockHeight);
 
 			nodesList.Add(this.HasNextInfo);
 
@@ -89,6 +96,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Slices.Rehydrate(rehydrator);
 
 			this.ChainBlockHeight.Rehydrate(rehydrator);
+			
+			AdaptiveLong1_9 delta = new AdaptiveLong1_9();
+			delta.Rehydrate(rehydrator);
+			this.PublicBlockHeight = this.ChainBlockHeight + delta.Value;
 
 			this.HasNextInfo = rehydrator.ReadBool();
 

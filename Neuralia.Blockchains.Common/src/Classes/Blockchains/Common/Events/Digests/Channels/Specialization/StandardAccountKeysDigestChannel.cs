@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile;
@@ -8,7 +8,9 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 	public interface IStandardAccountKeysDigestChannel : IDigestChannel {
@@ -78,7 +80,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected override void BuildBandsIndices() {
 
-			this.channelBandIndexSet.AddIndex(1, new DualKeySingleKeyTrippleFileChannelBandIndex<AccountKeysDigestChannel.AccountKeysDigestChannelBands>(KEYS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys, new FileSystem()));
+			using var fileSystem = FileSystemWrapper.CreatePhysical();
+			this.channelBandIndexSet.AddIndex(1, new DualKeySingleKeyTrippleFileChannelBandIndex<AccountKeysDigestChannel.AccountKeysDigestChannelBands>(KEYS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, AccountKeysDigestChannel.AccountKeysDigestChannelBands.Keys, fileSystem));
 		}
 
 		protected override ComponentVersion<DigestChannelType> SetIdentity() {

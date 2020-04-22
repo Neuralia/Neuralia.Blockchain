@@ -38,7 +38,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		public int Height { get; }
 
 		public static implicit operator XMSSNodeId((int index, int height) d) {
-			return new XMSSNodeId(d.index, d.height);
+			(int index, int height) = d;
+
+			return new XMSSNodeId(index, height);
 		}
 
 	}

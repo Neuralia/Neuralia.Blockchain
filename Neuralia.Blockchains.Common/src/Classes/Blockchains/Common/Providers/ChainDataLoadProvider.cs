@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
@@ -33,6 +34,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
@@ -117,11 +119,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		bool TestFastKeysPath();
 
 		SafeArrayHandle LoadBlockPartialTransactionBytes(long blockId, int offset, int length);
-		(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
+		Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
 		bool FastKeyEnabled(byte ordinal);
-		List<(IBlockEnvelope envelope, long xxHash)> GetCachedUnvalidatedBlockGossipMessage(long blockId);
-		bool GetUnvalidatedBlockGossipMessageCached(long blockId);
-		bool CheckRegistryMessageInCache(long messagexxHash, bool validated);
+		Task<List<(IBlockEnvelope envelope, long xxHash)>> GetCachedUnvalidatedBlockGossipMessage(long blockId);
+		Task<bool> GetUnvalidatedBlockGossipMessageCached(long blockId);
+		Task<bool> CheckRegistryMessageInCache(long messagexxHash, bool validated);
 		
 		Dictionary<string, long> GetBlockFileSizes(long blockId);
 
@@ -198,14 +200,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.BlockchainEventSerializationFal.LoadDigestAccreditationCertificateCard(id);
 		}
 
-		public (SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)? LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
+		public Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
 			return this.BlockchainEventSerializationFal.LoadAccountKeyFromIndex(accountId, ordinal);
 		}
 
 		public bool FastKeyEnabled(byte ordinal) {
 			BlockChainConfigurations configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-			return configuration.EnableFastKeyIndex && ((configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Transactions) && (ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID)) || (configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Messages) && (ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID)));
+			return configuration.EnableFastKeyIndex && (configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Transactions) && ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID || configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Messages) && ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID);
 		}
 
 		public IMasterTransaction LoadMasterTransaction(PublishedAddress keyAddress) {
@@ -235,24 +237,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				SafeArrayHandle keyedBytes = this.BlockchainEventSerializationFal.LoadBlockPartialTransactionBytes(keyAddress, blockGroupIndex);
 
-				if((keyedBytes != null) && keyedBytes.HasData) {
+				if(keyedBytes != null && keyedBytes.HasData) {
 					IBlockchainEventsRehydrationFactory rehydrationFactory = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase;
 
-					using(IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes)) {
+					using IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes);
 
-						keyedRehydrator.ReadArraySize();
+					keyedRehydrator.ReadArraySize();
 
-						DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
-						dehydratedTransaction.Rehydrate(keyedRehydrator);
+					DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
+					dehydratedTransaction.Rehydrate(keyedRehydrator);
 
-						masterTransaction = rehydrationFactory.CreateMasterTransaction(dehydratedTransaction);
-						masterTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
-					}
+					masterTransaction = rehydrationFactory.CreateMasterTransaction(dehydratedTransaction);
+					masterTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
+
 				}
 			}
 
 			// ensure the key address transaction comes from the key address account
-			if((masterTransaction != null) && !masterTransaction.TransactionId.Account.Equals(keyAddress.DeclarationTransactionId.Account)) {
+			if(masterTransaction != null && !masterTransaction.TransactionId.Account.Equals(keyAddress.DeclarationTransactionId.Account)) {
 				throw new InvalidOperationException("The keyed transaction loaded does not match the calling key address account");
 			}
 
@@ -294,7 +296,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			var result = this.LoadBlockData(blockId);
 
-			if((result == null) || result.Entries.Values.All(e => (e == null) || e.IsEmpty)) {
+			if(result == null || result.Entries.Values.All(e => e == null || e.IsEmpty)) {
 				return default;
 			}
 
@@ -648,12 +650,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			var results = new Dictionary<string, long>();
 
-			if(this.centralCoordinator.FileSystem.Directory.Exists(folderPath)) {
-				foreach(string entry in this.centralCoordinator.FileSystem.Directory.GetFiles(folderPath)) {
+			if(this.centralCoordinator.FileSystem.DirectoryExists(folderPath)) {
+				foreach(string entry in this.centralCoordinator.FileSystem.EnumerateFiles(folderPath)) {
 					long size = 0;
 
-					if(this.centralCoordinator.FileSystem.File.Exists(entry)) {
-						size = this.centralCoordinator.FileSystem.FileInfo.FromFileName(entry).Length;
+					if(this.centralCoordinator.FileSystem.FileExists(entry)) {
+						size = this.centralCoordinator.FileSystem.GetFileLength(entry);
 					}
 
 					results.Add(Path.GetFileName(entry), size);
@@ -721,7 +723,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#region Message Cache
 
-		public bool CheckRegistryMessageInCache(long messagexxHash, bool validated) {
+		public Task<bool> CheckRegistryMessageInCache(long messagexxHash, bool validated) {
 			string walletPath = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath();
 
 			//TODO: must revise this below. caused by refactoring
@@ -732,7 +734,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		
-		public bool GetUnvalidatedBlockGossipMessageCached(long blockId) {
+		public Task<bool> GetUnvalidatedBlockGossipMessageCached(long blockId) {
 			string walletPath = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath();
 			IMessageRegistryDal messageRegistryDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(walletPath, this.centralCoordinator.BlockchainServiceSet);
 
@@ -741,16 +743,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public List<(IBlockEnvelope envelope, long xxHash)> GetCachedUnvalidatedBlockGossipMessage(long blockId) {
+		public async Task<List<(IBlockEnvelope envelope, long xxHash)>> GetCachedUnvalidatedBlockGossipMessage(long blockId) {
 			string walletPath = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath();
 			IMessageRegistryDal messageRegistryDal = this.centralCoordinator.BlockchainServiceSet.DataAccessService.CreateMessageRegistryDal(walletPath, this.centralCoordinator.BlockchainServiceSet);
 
-			List<long> messageHashes = null;
-
-			lock(this.locker) {
-				messageHashes = messageRegistryDal.GetCachedUnvalidatedBlockGossipMessage(blockId);
-			}
-
+			List<long> messageHashes = await messageRegistryDal.GetCachedUnvalidatedBlockGossipMessage(blockId).ConfigureAwait(false);
+			
 			string folderPath = this.GetBlocksGossipCacheFolderPath();
 			FileExtensions.EnsureDirectoryStructure(folderPath, this.centralCoordinator.FileSystem);
 
@@ -840,11 +838,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(masterTransaction is IKeyedTransaction keyedTransaction) {
 				ICryptographicKey key = keyedTransaction.Keyset.Keys[keyAddress.OrdinalId];
 
-				using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
-					key.Dehydrate(dehydrator);
+				using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
-					return dehydrator.ToArray();
-				}
+				key.Dehydrate(dehydrator);
+
+				return dehydrator.ToArray();
+
 			}
 
 			return null;

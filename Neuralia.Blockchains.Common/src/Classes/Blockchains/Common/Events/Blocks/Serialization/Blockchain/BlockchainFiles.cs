@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelIndex;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain {
 	/// <summary>
@@ -35,13 +38,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private readonly List<BlockChannelUtils.BlockChannelTypes> enabledChannels = new List<BlockChannelUtils.BlockChannelTypes>();
 
-		protected readonly IFileSystem fileSystem;
+		protected readonly FileSystemWrapper fileSystem;
 
 		protected readonly string folderPath;
 		protected readonly int mainBlockIndexL1Interval;
 		protected readonly int mainBlockIndexL2Interval;
 
-		public BlockchainFiles(string folderPath, int mainBlockIndexL1Interval, int mainBlockIndexL2Interval, BlockChannelUtils.BlockChannelTypes enabledChannels, IFileSystem fileSystem) {
+		public BlockchainFiles(string folderPath, int mainBlockIndexL1Interval, int mainBlockIndexL2Interval, BlockChannelUtils.BlockChannelTypes enabledChannels, FileSystemWrapper fileSystem) {
 
 			// we make sure the header is always set, this one is never optional
 
@@ -61,7 +64,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.mainBlockIndexL1Interval = mainBlockIndexL1Interval;
 			this.mainBlockIndexL2Interval = mainBlockIndexL2Interval;
 			this.folderPath = folderPath;
-			this.fileSystem = fileSystem ?? new FileSystem();
+			this.fileSystem = fileSystem ?? FileSystemWrapper.CreatePhysical();
 		}
 
 		public ChannelIndexSet CreateChannelSet() {
@@ -78,7 +81,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			// make sure the flags they ask for are enabled at the blockchain level
 			BlockChannelUtils.RunForFlags(channels, type => {
-				if(!this.enabledChannels.Contains(type) && (type != BlockChannelUtils.BlockChannelTypes.Keys)) {
+				if(!this.enabledChannels.Contains(type) && type != BlockChannelUtils.BlockChannelTypes.Keys) {
 					throw new InvalidOperationException("A requested channel type is not activated in this blockchain");
 				}
 			});
@@ -230,7 +233,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public bool BlockExists(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
-			if((channelIndexSet.ChannelTypes.Count > 1) || (channelIndexSet.ChannelTypes.First() != BlockChannelUtils.BlockChannelTypes.HighHeader)) {
+			if(channelIndexSet.ChannelTypes.Count > 1 || channelIndexSet.ChannelTypes.First() != BlockChannelUtils.BlockChannelTypes.HighHeader) {
 				channelIndexSet = this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader);
 			}
 
@@ -253,7 +256,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				startingId = channelIndexSet.MainChannelIndex.StartingId.Value;
 			}
 
-			if(startingId != (blockIndex.startingBlockId - 1)) {
+			if(startingId != blockIndex.startingBlockId - 1) {
 				//throw new ApplicationException($"block file starting Id '{startingId + 1}' does not match block index starting id '{blockIndex.startingBlockId}'");
 				//TODO: does this even matter?
 			}
@@ -273,9 +276,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <param name="l3ContentsFileSize"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		public SafeArrayHandle QueryPartialBlockHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length) {
+		public SafeArrayHandle QueryPartialBlockHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length){
 
-			return this.QueryPartialBlockBytes(blockId, blockIndex, new ChannelsEntries<(int offset, int length)>(BlockChannelUtils.BlockChannelTypes.HighHeader, (offset, length)), this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader)).HighHeaderData;
+			var channels = this.QueryPartialBlockBytes(blockId, blockIndex, new ChannelsEntries<(int offset, int length)>(BlockChannelUtils.BlockChannelTypes.HighHeader, (offset, length)), this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader));
+
+			return channels?.HighHeaderData;
 		}
 
 		/// <summary>

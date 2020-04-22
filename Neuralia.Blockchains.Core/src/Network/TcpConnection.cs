@@ -13,11 +13,15 @@ using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.Network.Protocols;
 using Neuralia.Blockchains.Core.Network.ReadingContexts;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Tools.Serialization;
+using Nito.AsyncEx;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
@@ -34,6 +38,8 @@ namespace Neuralia.Blockchains.Core.Network {
 		bool IsConnectedUuidProvidedSet { get; }
 
 		event TcpConnection.MessageBytesReceived DataReceived;
+		
+		event TcpConnection.MessageBytesSent DataSent;
 		event EventHandler<DisconnectedEventArgs> Disconnected;
 		event Action Connected;
 		event Action Disposing;
@@ -47,7 +53,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback);
 		bool CheckConnected(bool force = false);
 
-		bool PerformCounterConnection(int port);
+		Task<bool> PerformCounterConnection(int port);
 
 	}
 
@@ -61,6 +67,66 @@ namespace Neuralia.Blockchains.Core.Network {
 		public delegate void ExceptionOccured(Exception exception, ITcpConnection connection);
 
 		public delegate void MessageBytesReceived(SafeArrayHandle buffer);
+		public delegate void MessageBytesSent(SafeArrayHandle buffer);
+
+
+		/// <summary>
+		///     Here we try a quick counterconnect to establish if their connection port is open and available
+		/// </summary>
+		/// <param name="port"></param>
+		/// <returns></returns>
+		/// <exception cref="P2pException"></exception>
+		public static async Task<bool> PerformCounterConnection(IPAddress address, int port) {
+            Socket counterSocket = null;
+
+            try {
+
+                //TODO: this can be made more efficient by releasing the thread but keeping the timeout.
+                IPEndPoint endpoint = new IPEndPoint(address, port);
+
+                if(NodeAddressInfo.IsAddressIpV4(endpoint.Address)) {
+                    counterSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                } else {
+                    if(!Socket.OSSupportsIPv6) {
+                        throw new ApplicationException();
+                    }
+
+                    counterSocket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+                    counterSocket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+                }
+
+                counterSocket.InitializeSocketParameters();
+                
+                var task = Task.Factory.FromAsync(counterSocket.BeginConnect(endpoint, null, null), (result) => {
+                    if(counterSocket.Connected && counterSocket.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length) {
+                        return true;
+                    }
+
+                    return false;
+                }, TaskCreationOptions.None);
+
+                return await task.HandleTimeout(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+
+            } catch {
+                // do nothing, we got our answer
+            } finally {
+                
+                try {
+                    counterSocket?.Shutdown(SocketShutdown.Both);
+                } catch {
+                    // do nothing, we got our answer
+                }
+
+                try {
+                    counterSocket?.Dispose();
+                } catch {
+                    // do nothing, we got our answer
+                }
+
+            }
+
+            return false;
+        }
 
 		/// <summary>
 		///     All the protocol messages we support
@@ -89,8 +155,9 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		protected readonly bool isServer;
 
-		protected readonly object locker = new object();
-
+		protected readonly AsyncLock disposeLocker = new AsyncLock();
+		protected readonly AsyncLock sendBytesLocker = new AsyncLock();
+		
 		protected readonly ProtocolFactory protocolFactory = new ProtocolFactory();
 
 		private readonly ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters;
@@ -139,12 +206,19 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// </summary>
 		private static readonly Timer connectionCheckTimer = new Timer(state => {
 
-			foreach(var connState in connectionStates.ToArray()) {
-				if(connState.Value.IsDisposed) {
-					connectionStates.RemoveSafe(connState.Key);
-				} else if(connState.Value.State == ConnectionState.Connected) {
-					connState.Value.CheckConnected();
+			try{
+				foreach (var connState in connectionStates.ToArray()){
+					if (connState.Value.IsDisposed){
+						connectionStates.RemoveSafe(connState.Key);
+					}
+					else if (connState.Value.State == ConnectionState.Connected){
+						connState.Value.CheckConnected();
+					}
 				}
+			}
+			catch(Exception ex){
+				//TODO: do something?
+				Log.Error(ex, "Timer exception");
 			}
 
 		}, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(10));
@@ -176,7 +250,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			AddConnectionState(this);
 		}
-
+		
 		/// <summary>
 		///     Creates a TcpConnection from a given TCP Socket. usually called by the TcpServer
 		/// </summary>
@@ -252,7 +326,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					throw new SocketException((int) SocketError.Shutdown);
 				}
 
-				lock(this.locker) {
+				using(this.sendBytesLocker.Lock()){
 					if(sendSize) {
 						// write the size of the message first
 						this.sendByteShrinker.Value = (uint) bytes.Length;
@@ -260,9 +334,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					}
 
 					// now the message
-					var task = this.Write(bytes);
-
-					task?.Wait();
+					this.Write(bytes);
 				}
 			} catch(Exception e) {
 				P2pException he = new P2pException("Could not send data as an error occured.", P2pException.Direction.Send, P2pException.Severity.Casual, e);
@@ -279,33 +351,30 @@ namespace Neuralia.Blockchains.Core.Network {
 		public NetworkEndPoint EndPoint { get; }
 
 		public bool CheckConnected(bool force = false) {
-
+			
 			if(this.NextConnectedAliveCheck < DateTime.Now || force) {
 				this.NextConnectedAliveCheck = DateTime.Now + TimeSpan.FromSeconds(20);
 
 				if(this.State == ConnectionState.NotConnected) {
 					return false;
 				}
-
-				bool connected = false;
-
-				lock(this.locker) {
-					if(this.IsDisposed || this.IsDisposing) {
-						return false;
-					}
-
-					connected = this.socket.IsReallyConnected();
-				}
-				if(!connected) {
-					// yes, we try twice, just in case...
-					Thread.Sleep(300);
-					lock(this.locker) {
-						
+				bool CheckConnected() {
+					using(this.disposeLocker.Lock()){
 						if(this.IsDisposed || this.IsDisposing) {
 							return false;
 						}
-						connected = this.socket.IsReallyConnected();
+
+						return this.socket.IsReallyConnected();
 					}
+				}
+
+				bool connected = CheckConnected();
+				
+				if(!connected) {
+					// yes, we try twice, just in case...
+					Thread.Sleep(300);
+					connected = CheckConnected();
+					
 					if(!connected) {
 						// ok, we give up, connection is disconnected
 						this.State = ConnectionState.NotConnected;
@@ -326,7 +395,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		public ConnectionState State {
 
 			get {
-				lock(this.locker) {
+				using(this.disposeLocker.Lock()){
 					if(this.IsDisposed || this.IsDisposing) {
 						return ConnectionState.NotConnected;
 					}
@@ -337,7 +406,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			private set {
 
-				lock(this.locker) {
+				using(this.disposeLocker.Lock()){
 					if(this.IsDisposed || this.IsDisposing) {
 						return;
 					}
@@ -356,6 +425,8 @@ namespace Neuralia.Blockchains.Core.Network {
 		public bool IsDisposed { get; private set; }
 
 		public event TcpConnection.MessageBytesReceived DataReceived;
+		
+		public event TcpConnection.MessageBytesSent DataSent;
 		public event EventHandler<DisconnectedEventArgs> Disconnected;
 		public event Action Connected;
 		public event Action Disposing;
@@ -401,7 +472,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				if(this.socket.IsReallyConnected()) {
 
-					this.Connected?.Invoke();
+					if(					this.Connected != null){					this.Connected();}
 
 					this.SocketNewlyConnected();
 				} else {
@@ -438,70 +509,24 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			this.resetEvent.Reset();
-			;
+			
 		}
-
+		
 		/// <summary>
 		///     Here we try a quick counterconnect to establish if their connection port is open and available
 		/// </summary>
 		/// <param name="port"></param>
 		/// <returns></returns>
 		/// <exception cref="P2pException"></exception>
-		public bool PerformCounterConnection(int port) {
-
-			Socket counterSocket = null;
-
-			try {
-
-				IPEndPoint endpoint = new IPEndPoint(((IPEndPoint) this.RemoteEndPoint).Address, port);
-
-				if(NodeAddressInfo.IsAddressIpV4(endpoint.Address)) {
-					counterSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-				} else {
-					if(!Socket.OSSupportsIPv6) {
-						throw new P2pException("IPV6 not supported!", P2pException.Direction.Send, P2pException.Severity.Casual);
-					}
-
-					counterSocket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-					counterSocket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-				}
-
-				counterSocket.InitializeSocketParameters();
-
-				IAsyncResult result = counterSocket.BeginConnect(endpoint, null, null);
-
-				if(result.AsyncWaitHandle.WaitOne(1000 * 3, true)) {
-
-					if(counterSocket.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length) {
-						return true;
-					}
-				}
-			} catch {
-				// do nothing, we got our answer
-			} finally {
-				try {
-					counterSocket?.Disconnect(false);
-				} catch {
-					// do nothing, we got our answer
-				}
-
-				try {
-					counterSocket?.Dispose();
-				} catch {
-					// do nothing, we got our answer
-				}
-
-			}
-
-			return false;
+		public Task<bool> PerformCounterConnection(int port) {
+			return TcpConnection.PerformCounterConnection(((IPEndPoint) this.RemoteEndPoint).Address, port);
 		}
 
 		public bool SendMessage(long hash) {
 			MessageInstance message = null;
-
-			lock(this.locker) {
-				message = this.protocolFactory.WrapMessage(hash);
-			}
+			
+			message = this.protocolFactory.WrapMessage(hash);
+			
 
 			if(message == null) {
 				return false;
@@ -520,11 +545,12 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			MessageInstance messageInstance = null;
 
-			lock(this.locker) {
-				messageInstance = this.protocolFactory.WrapMessage(bytes, this.protocolMessageFilters);
-			}
+
+			messageInstance = this.protocolFactory.WrapMessage(bytes, this.protocolMessageFilters);
 
 			this.SendMessage(messageInstance);
+			
+			this.InvokeDataSent(bytes);
 		}
 
 		public void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback) {
@@ -561,7 +587,7 @@ namespace Neuralia.Blockchains.Core.Network {
 							this.Close();
 						} finally {
 							// inform the users we had a serious exception. We only invoke this when we receive data, since we want to capture evil peers. we trust ourselves, so we dont act on our own sending errors.
-							this.exceptionCallback?.Invoke(exception, this);
+if(							this.exceptionCallback != null){ 							this.exceptionCallback(exception, this);}
 						}
 					}
 				}
@@ -574,7 +600,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			try {
 
-				await this.ReadHandshake(ct);
+				await this.ReadHandshake(ct).ConfigureAwait(false);
 
 				if(this.handshakeStatus == HandshakeStatuses.NotStarted) {
 					throw new TcpApplicationException("Handshake protocol has failed");
@@ -597,7 +623,7 @@ namespace Neuralia.Blockchains.Core.Network {
 						// data received
 						this.InvokeDataReceived(bytes);
 					}
-				}, ct);
+				}, ct).ConfigureAwait(false);
 
 			} catch(InvalidPeerException ipex) {
 				// ok, we got an invalid peer. we dont need to do anything, lost let it go and disconnect
@@ -637,13 +663,11 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// </summary>
 		/// <param name="message"></param>
 		/// <returns></returns>
-		protected Task<bool> Write(in ReadOnlySpan<byte> message) {
+		protected bool Write(in ReadOnlySpan<byte> message) {
 
-			lock(this.locker) {
-				this.WritePart(message);
+			this.WritePart(message);
 
-				return this.CompleteWrite();
-			}
+			return this.CompleteWrite().GetAwaiter().GetResult();
 		}
 
 		/// <summary>
@@ -670,7 +694,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					throw new ApplicationException("Timeout out getting handshake");
 				}
 
-				read = await this.ReadDataFrame(default, cancellationNeuralium);
+				read = await this.ReadDataFrame(default, cancellationNeuralium).ConfigureAwait(false);
 
 				if(read.IsCanceled || read.IsCompleted) {
 					this.ReadTaskCancelled();
@@ -714,7 +738,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				// lets alert that we have a peer uuid, see if we accept it
 				try {
-					this.ConnectedUuidProvided?.Invoke(uuid);
+if(					this.ConnectedUuidProvided != null){ 					this.ConnectedUuidProvided(uuid);}
 				} catch {
 					// we can't go further, stop.
 					this.handshakeStatus = HandshakeStatuses.Unusable;
@@ -777,7 +801,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					throw new TaskCanceledException();
 				}
 
-				read = await this.ReadDataFrame(read, cancellationNeuralium);
+				read = await this.ReadDataFrame(read, cancellationNeuralium).ConfigureAwait(false);
 
 				if(read.IsCanceled) {
 					this.ReadTaskCancelled();
@@ -850,9 +874,7 @@ namespace Neuralia.Blockchains.Core.Network {
 								IMessageEntry messageEntry = null;
 
 								//we expect to read the header to start. if the header is corrupted, this will break and thats it.
-								lock(this.locker) {
-									messageEntry = this.protocolFactory.CreateMessageParser(mainBuffer.Branch()).RehydrateHeader(this.protocolMessageFilters);
-								}
+								messageEntry = this.protocolFactory.CreateMessageParser(mainBuffer.Branch()).RehydrateHeader(this.protocolMessageFilters);
 
 								// use the entry
 								IMessageEntry entry = messageEntry;
@@ -894,7 +916,7 @@ namespace Neuralia.Blockchains.Core.Network {
 										//an exception occured
 										throw new P2pException("An exception occured while processing a message response.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
 									}
-								}, cancellationNeuralium);
+								}, cancellationNeuralium).ConfigureAwait(false);
 
 							}
 						} else {
@@ -965,15 +987,19 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected void InvokeDataReceived(SafeArrayHandle bytes) {
-			this.DataReceived?.Invoke(bytes);
+if(			this.DataReceived != null){			this.DataReceived(bytes);}
 		}
 
+		protected void InvokeDataSent(SafeArrayHandle bytes) {
+if(			this.DataSent != null){			this.DataSent(bytes);}
+		}
+		
 		protected void InvokeDisconnected() {
 			DisconnectedEventArgs args = DisconnectedEventArgs.GetObject();
 
 			//Make a copy to avoid race condition between null check and invocation
 
-			this.Disconnected?.Invoke(this, args);
+if(			this.Disconnected != null){			this.Disconnected(this, args);}
 		}
 
 		protected bool WaitOnConnect(int timeout) {
@@ -984,7 +1010,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			bool disposingChanged = false;
 
-			lock(this.locker) {
+			using(this.disposeLocker.Lock()){
 				
 				if(this.IsDisposed || !disposing || this.IsDisposing) {
 					return;
@@ -1014,7 +1040,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 					this.DisposeAll();
 
-					this.Disposing?.Invoke();
+if(					this.Disposing != null){ 					this.Disposing();}
 				}
 			} finally {
 				this.IsDisposed = true;

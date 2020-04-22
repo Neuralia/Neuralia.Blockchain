@@ -1,15 +1,18 @@
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 	public interface ISingleEntryWalletFileInfo : IWalletFileInfo {
+
 	}
 
 	public interface ISingleEntryWalletFileInfo<in ENTRY_TYPE> : ISingleEntryWalletFileInfo {
 
-		void CreateEmptyFile(ENTRY_TYPE entry);
+		Task CreateEmptyFile(ENTRY_TYPE entry, LockContext lockContext);
 	}
 
 	public abstract class SingleEntryWalletFileInfo<ENTRY_TYPE> : WalletFileInfo {
@@ -17,15 +20,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		protected SingleEntryWalletFileInfo(string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails, int? fileCacheTimeout = null) : base(filename, chainConfiguration, serviceSet, serialisationFal, walletSecurityDetails, fileCacheTimeout) {
 		}
 
-		public virtual void CreateEmptyFile(ENTRY_TYPE entry) {
-			this.CreateEmptyFile();
+		public virtual async Task CreateEmptyFile(ENTRY_TYPE entry, LockContext lockContext) {
+			await CreateEmptyFile(lockContext).ConfigureAwait(false);
 
 			// add an entry in the database
-			this.InsertNewDbData(entry);
+			await this.InsertNewDbData(entry, lockContext).ConfigureAwait(false);
 
-			this.SaveFile();
+			await SaveFile(lockContext).ConfigureAwait(false);
 		}
 
-		protected abstract void InsertNewDbData(ENTRY_TYPE entry);
+		protected abstract Task InsertNewDbData(ENTRY_TYPE entry, LockContext lockContext);
 	}
 }

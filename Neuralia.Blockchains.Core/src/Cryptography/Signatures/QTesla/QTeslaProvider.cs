@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -56,7 +57,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 			return results;
 		}
 
-		public SafeArrayHandle Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
+		public async Task<SafeArrayHandle> Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
 
 			QTESLASigner signer = new QTESLASigner();
 
@@ -64,14 +65,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 
 			return ByteArray.WrapAndOwn(signer.generateSignature(content.ToExactByteArray()));
 		}
-
-		public override bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
+		
+		public override async Task<bool> Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
+			
 			QTESLASigner signer = new QTESLASigner();
 
 			signer.init(false, QTESLAPublicKeyParameters.Rehydrate(publicKey));
 
 			return signer.verifySignature(message.ToExactByteArray(), signature.ToExactByteArray());
-
 		}
 	}
 }

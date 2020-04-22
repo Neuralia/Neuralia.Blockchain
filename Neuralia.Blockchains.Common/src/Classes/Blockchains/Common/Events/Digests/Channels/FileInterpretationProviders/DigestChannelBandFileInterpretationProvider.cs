@@ -1,6 +1,8 @@
 using System.IO;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders {
 
@@ -22,9 +24,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where CARD_TYPE : class
 		where NAMING_PROVIDER : DigestChannelBandFileNamingProvider {
 
-		protected readonly IFileSystem fileSystem;
+		protected readonly FileSystemWrapper fileSystem;
 
-		protected DigestChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, IFileSystem fileSystem) {
+		protected DigestChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, FileSystemWrapper fileSystem) {
 			this.NamingProvider = namingProvider;
 			this.fileSystem = fileSystem;
 		}

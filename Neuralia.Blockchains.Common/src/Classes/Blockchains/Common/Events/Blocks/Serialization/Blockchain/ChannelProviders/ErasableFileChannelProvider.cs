@@ -1,10 +1,12 @@
 using System.IO;
-using System.IO.Abstractions;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
+
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders {
 	public class ErasableFileChannelProvider : IndependentFileChannelProvider {
 
-		public ErasableFileChannelProvider(string filename, string folderPath, IFileSystem fileSystem) : base(filename, folderPath, fileSystem) {
+		public ErasableFileChannelProvider(string filename, string folderPath, FileSystemWrapper fileSystem) : base(filename, folderPath, fileSystem) {
 		}
 
 		protected override string GetBlocksIndexFolderPath(long index) {

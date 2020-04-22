@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Tools;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 	public interface IChainOptionsDigestChannel : IDigestChannel {
@@ -53,7 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected override void BuildBandsIndices() {
 
-			var index = new SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int>(CHAIN_OPTIONS_BAND_NAME, this.baseFolder, this.scopeFolder, ChainOptionsDigestChannel.ChainOptionsDigestChannelBands.ChainOptions, new FileSystem(), key => key);
+			var index = new SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int>(CHAIN_OPTIONS_BAND_NAME, this.baseFolder, this.scopeFolder, ChainOptionsDigestChannel.ChainOptionsDigestChannelBands.ChainOptions, FileSystemWrapper.CreatePhysical(), key => key);
 			this.InitIndexGenerator(index);
 			
 			this.channelBandIndexSet.AddIndex(1, index);

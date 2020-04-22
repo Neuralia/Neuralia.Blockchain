@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using System.Net;
 using System.Security;
 using System.Threading;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI;
@@ -44,30 +45,26 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
-
-
 	public interface IBlockchainManager : IManagerBase {
 
+		Task<bool> BlockchainSyncing(LockContext lockContext);
+		Task<bool> BlockchainSynced(LockContext lockContext);
 
-		bool BlockchainSyncing { get; }
-		bool BlockchainSynced { get; }
+		Task<bool?> WalletSyncedNoWait(LockContext lockContext);
+		Task<bool>  WalletSynced(LockContext lockContext);
+		Task<bool>  WalletSyncing(LockContext lockContext);
 
-		bool? WalletSyncedNoWait { get; }
-		bool WalletSynced { get; }
-		bool WalletSyncing { get; }
-
-
-		void SynchronizeBlockchain(bool force);
-		void SynchronizeWallet(bool force, bool? allowGrowth = null);
-		void SynchronizeWallet(IBlock block, bool force, bool? allowGrowth = null);
-		void SynchronizeWallet(List<IBlock> blocks, bool force, bool? allowGrowth = null);
-		void SynchronizeWallet(List<IBlock> blocks, bool force, bool mobileForce, bool? allowGrowth = null);
-
-		void SynchronizeBlockchainExternal(string synthesizedBlock);
+		Task SynchronizeBlockchain(bool force, LockContext lockContext);
+		Task SynchronizeWallet(bool force, LockContext lockContext, bool? allowGrowth = null);
+		Task SynchronizeWallet(IBlock block, bool force, LockContext lockContext, bool? allowGrowth = null);
+		Task SynchronizeWallet(List<IBlock> blocks, bool force, LockContext lockContext, bool? allowGrowth = null);
+		Task SynchronizeWallet(List<IBlock> blocks, bool force, bool mobileForce, LockContext lockContext, bool? allowGrowth = null);
 	}
 
 	public interface IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IManagerBase<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IBlockchainManager
@@ -85,18 +82,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		protected readonly IBlockchainGuidService guidService;
 		protected readonly IBlockchainTimeService timeService;
 
-		
-
-		private int lastConnectionCount = 0;
+		private RecursiveAsyncLock asyncLocker         = new RecursiveAsyncLock();
+		private int                lastConnectionCount = 0;
 
 		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
 
 		// the sync workflow we keep as a reference.
 		private IClientChainSyncWorkflow chainSynchWorkflow;
-		private DateTime? nextBlockchainSynchCheck;
-		private DateTime? nextExpiredTransactionCheck;
-		private DateTime? nextWalletSynchCheck;
-		private ISyncWalletWorkflow synchWalletWorkflow;
+		private DateTime?                nextBlockchainSynchCheck;
+		private DateTime?                nextExpiredTransactionCheck;
+		private DateTime?                nextWalletSynchCheck;
+		private ISyncWalletWorkflow      synchWalletWorkflow;
 
 		public BlockchainManager(CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator, 1) {
 			this.timeService = centralCoordinator.BlockchainServiceSet.BlockchainTimeService;
@@ -109,105 +105,97 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <summary>
 		///     every once in a while, we check for the sync status
 		/// </summary>
-		protected override void ProcessLoop(IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext) {
-			base.ProcessLoop(workflow, taskRoutingContext);
+		protected override async Task ProcessLoop(IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+			await base.ProcessLoop(workflow, taskRoutingContext, lockContext).ConfigureAwait(false);
 
 			if(this.ShouldAct(ref this.nextBlockchainSynchCheck)) {
 
-				this.CheckBlockchainSynchronizationStatus();
+				await this.CheckBlockchainSynchronizationStatus(lockContext).ConfigureAwait(false);
 			}
 
 			if(this.ShouldAct(ref this.nextWalletSynchCheck)) {
 
-				this.CheckWalletSynchronizationStatus();
+				await this.CheckWalletSynchronizationStatus(lockContext).ConfigureAwait(false);
 			}
 
 			if(this.ShouldAct(ref this.nextExpiredTransactionCheck)) {
 
-				this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.ChainEventPoolProvider.DeleteExpiredTransactions();
+				await CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.ChainEventPoolProvider.DeleteExpiredTransactions().ConfigureAwait(false);
 
 				this.nextExpiredTransactionCheck = DateTime.UtcNow.AddMinutes(30);
 			}
 		}
 
-		
-
-		protected override void Initialize(IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext) {
-			base.Initialize(workflow, taskRoutingContext);
+		protected override async Task Initialize(IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+			await base.Initialize(workflow, taskRoutingContext, lockContext).ConfigureAwait(false);
 
 			this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PeerConnectionsCountUpdated += this.ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated;
 
 			// make sure we check our status when starting
-			this.CheckBlockchainSynchronizationStatus();
+			await this.CheckBlockchainSynchronizationStatus(lockContext).ConfigureAwait(false);
 
-			this.CheckWalletSynchronizationStatus();
+			await this.CheckWalletSynchronizationStatus(lockContext).ConfigureAwait(false);
 
 			// connect to the wallet events
-			this.SetPassphraseHandlers();
+			this.SetPassphraseHandlers(lockContext);
 
-			this.LoadWalletIfRequired();
+			await this.LoadWalletIfRequired(lockContext).ConfigureAwait(false);
 
-			this.RoutedTaskRoutingReceiver.CheckTasks();
+			await this.RoutedTaskRoutingReceiver.CheckTasks().ConfigureAwait(false);
 		}
 
-		protected virtual void LoadWalletIfRequired() {
-			bool LoadWallet() {
-				try {
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.EnsureWalletLoaded();
+		protected virtual async Task LoadWalletIfRequired(LockContext lockContext) {
 
-					return true;
-				} catch(WalletNotLoadedException ex) {
-					Log.Warning("Failed to load wallet. Not loaded.");
-				} catch(Exception ex) {
-					Log.Warning("Failed to load wallet. Not loaded.", ex);
+			var configuration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			if(configuration.LoadWalletOnStart && !this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
+
+				if(configuration.CreateMissingWallet && !await CentralCoordinator.ChainComponentProvider.WalletProviderBase.WalletFileExists(lockContext).ConfigureAwait(false)) {
+					//TODO: passphrases? this here is mostly for debug
+					// if we must, we will create a new wallet
+					
+						Dictionary<int, string> passphrases = new Dictionary<int, string>();
+						passphrases.Add(0, "toto");
+
+						if(!await CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(default, configuration.EncryptWallet, configuration.EncryptWalletKeys, false, passphrases.ToImmutableDictionary(), lockContext).ConfigureAwait(false)) {
+							throw new ApplicationException("Failed to create a new wallet");
+						}
+					
 				}
 
-				return false;
-			}
+				if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
+					try {
 
-			// if we must, we load the wallet at the begining
-			if(this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().LoadWalletOnStart) {
-				bool isLoaded = false;
-				isLoaded = LoadWallet();
+						await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(new CorrelationContext(), lockContext).ConfigureAwait(false);
+						await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.EnsureWalletLoaded(lockContext).ConfigureAwait(false);
 
-				if(!isLoaded) {
-					ChainConfigurations chainConfig = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
-
-					if(chainConfig.CreateMissingWallet) {
-
-						//TODO: passphrases? this here is mostly for debug
-						// if we must, we will create a new wallet
-						Repeater.Repeat(() => {
-							Dictionary<int, string> passphrases = new Dictionary<int, string>();
-							passphrases.Add(0, "toto");
-							if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(default, chainConfig.EncryptWallet, chainConfig.EncryptWalletKeys, false, passphrases.ToImmutableDictionary())) {
-								throw new ApplicationException("Failed to create a new wallet");
-							}
-						}, 2);
-
-						LoadWallet();
+					} catch(WalletNotLoadedException ex) {
+						Log.Warning("Failed to load wallet. Not loaded.");
+					} catch(Exception ex) {
+						Log.Warning("Failed to load wallet. Not loaded.", ex);
 					}
 				}
 			}
 		}
-		
-		protected virtual void SetPassphraseHandlers() {
+
+		protected virtual void SetPassphraseHandlers(LockContext lockContext) {
 			if(this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().PassphraseCaptureMethod == AppSettingsBase.PassphraseQueryMethod.Event) {
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetExternalPassphraseHandlers(this.WalletProviderOnWalletPassphraseRequest, this.WalletProviderOnWalletKeyPassphraseRequest, this.WalletProviderOnWalletCopyKeyFileRequest, this.CopyWalletRequest);
+				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetExternalPassphraseHandlers(this.WalletProviderOnWalletPassphraseRequest, this.WalletProviderOnWalletKeyPassphraseRequest, this.WalletProviderOnWalletCopyKeyFileRequest, this.CopyWalletRequest, lockContext).WaitAndUnwrapException();
 			}
 		}
-		
-		protected virtual void ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated(int count) {
+
+		protected virtual async Task ChainNetworkingProviderBaseOnPeerConnectionsCountUpdated(int count, LockContext lockContext) {
 
 			int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
 
 			if(this.lastConnectionCount < minimumSyncPeerCount && count >= minimumSyncPeerCount) {
 				// we just got enough peers to potentially first peer, let's sync
-				this.SynchronizeBlockchain(true);
+				await this.SynchronizeBlockchain(true, lockContext).ConfigureAwait(false);
 			}
 
 			this.lastConnectionCount = count;
 		}
+
 	#region blockchain sync
 
 		/// <summary>
@@ -218,7 +206,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <summary>
 		///     this method determine's if it is time to run a synchronization on our blockchain
 		/// </summary>
-		protected virtual void CheckBlockchainSynchronizationStatus() {
+		protected virtual async Task CheckBlockchainSynchronizationStatus(LockContext lockContext) {
 
 			if(this.CentralCoordinator.IsShuttingDown) {
 				return;
@@ -226,7 +214,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableSync && GlobalSettings.ApplicationSettings.P2PEnabled) {
 
-				this.SynchronizeBlockchain(false);
+				await this.SynchronizeBlockchain(false, lockContext).ConfigureAwait(false);
 
 				// lets check again in X seconds
 				if(this.hasBlockchainSyncedOnce) {
@@ -244,7 +232,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <summary>
 		///     Perform a blockchain sync
 		/// </summary>
-		public void SynchronizeBlockchain(bool force) {
+		public async Task SynchronizeBlockchain(bool force, LockContext lockContext) {
 			if(!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableSync && GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				if(force) {
@@ -252,17 +240,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = DateTime.MinValue;
 				}
 
-				if(!this.NetworkPaused && !this.BlockchainSyncing && !this.BlockchainSynced && this.CheckNetworkSyncable()) {
+				if((!NetworkPaused && !await BlockchainSyncing(lockContext).ConfigureAwait(false) && !await BlockchainSynced(lockContext).ConfigureAwait(false) && this.CheckNetworkSyncable())) {
 
 					IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 					// if we are not synchronized, we go ahead and do it.
 					if(!this.hasBlockchainSyncedOnce || chainStateProvider.IsChainDesynced) {
 						// that's it, we launch a chain sync
-						lock(this.locker) {
-							
-							if(this.chainSynchWorkflow != null && this.chainSynchWorkflow .IsCompleted) {
-								System.Threading.Tasks.Task.Run(() => this.chainSynchWorkflow?.Dispose());
+						using(var handle = await this.asyncLocker.LockAsync().ConfigureAwait(false)) {
+
+							if(this.chainSynchWorkflow != null && this.chainSynchWorkflow.IsCompleted) {
+								var task = Task.Run(() => this.chainSynchWorkflow?.Dispose());
 								this.chainSynchWorkflow = null;
 							}
 
@@ -274,8 +262,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 								this.chainSynchWorkflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ClientWorkflowFactoryBase.CreateChainSynchWorkflow(this.CentralCoordinator.FileSystem);
 
 								// when its done, we can clear it here. not necessary, but keeps things cleaner.
-								this.chainSynchWorkflow.Completed += (success, workflow) => {
-									lock(this.locker) {
+								this.chainSynchWorkflow.Completed += async (success, workflow) => {
+									LockContext innerLockContext = null;
+
+									using(var handle = await this.asyncLocker.LockAsync(innerLockContext).ConfigureAwait(false)) {
 
 										if(success && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
 											this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
@@ -301,7 +291,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// </summary>
 		/// <returns></returns>
 		protected virtual bool CheckNetworkSyncable() {
-			var networkingProvider = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase;
+			var networkingProvider   = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase;
 			int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
 
 			return networkingProvider.HasPeerConnections && networkingProvider.CurrentPeerCount >= minimumSyncPeerCount;
@@ -310,22 +300,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <summary>
 		///     are we in the active process of syncing?
 		/// </summary>
-		public bool BlockchainSyncing {
-			get {
-				lock(this.locker) {
-					return (this.chainSynchWorkflow != null) && !this.chainSynchWorkflow.IsCompleted;
-				}
+		public async Task<bool> BlockchainSyncing(LockContext lockContext) {
+
+			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return this.chainSynchWorkflow != null && !this.chainSynchWorkflow.IsCompleted;
 			}
+
 		}
 
 		/// <summary>
 		///     Is the chain not actively syncing and in a synched state?
 		/// </summary>
-		public bool BlockchainSynced {
-			get {
-				lock(this.locker) {
-					return (!this.BlockchainSyncing || (this.chainSynchWorkflow?.IsCompleted ?? true)) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced;
-				}
+		public async Task<bool> BlockchainSynced(LockContext lockContext) {
+
+			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return (!await this.BlockchainSyncing(handle).ConfigureAwait(false) || (this.chainSynchWorkflow?.IsCompleted ?? true)) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced;
+
 			}
 		}
 
@@ -341,7 +331,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <summary>
 		///     this method determine's if it is time to run a synchronization on our blockchain
 		/// </summary>
-		protected virtual void CheckWalletSynchronizationStatus() {
+		protected virtual async Task CheckWalletSynchronizationStatus(LockContext lockContext) {
 
 			if(this.CentralCoordinator.IsShuttingDown) {
 				return;
@@ -349,7 +339,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
 
-				this.SynchronizeWallet(false, true);
+				await this.SynchronizeWallet(false, lockContext, true).ConfigureAwait(false);
 
 				// lets check again in X seconds
 				if(this.hasWalletSyncedOnce) {
@@ -364,26 +354,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			}
 		}
 
-		public virtual void SynchronizeWallet(bool force, bool? allowGrowth = null) {
-			this.SynchronizeWallet((List<IBlock>) null, force, allowGrowth);
+		public virtual Task SynchronizeWallet(bool force, LockContext lockContext, bool? allowGrowth = null) {
+			return this.SynchronizeWallet((List<IBlock>) null, force, lockContext, allowGrowth);
 		}
 
 		/// <summary>
 		///     a new block has been received, lets sync our wallet
 		/// </summary>
 		/// <param name="block"></param>
-		public virtual void SynchronizeWallet(IBlock block, bool force, bool? allowGrowth = null) {
+		public virtual Task SynchronizeWallet(IBlock block, bool force, LockContext lockContext, bool? allowGrowth = null) {
 
-			this.SynchronizeWallet(new[] {block}.ToList(), force, allowGrowth);
+			return this.SynchronizeWallet(new[] {block}.ToList(), force, lockContext, allowGrowth);
 		}
 
-		public virtual void SynchronizeWallet(List<IBlock> blocks, bool force, bool? allowGrowth = null) {
-			this.SynchronizeWallet(blocks, force, false, allowGrowth);
+		public virtual Task SynchronizeWallet(List<IBlock> blocks, bool force, LockContext lockContext, bool? allowGrowth = null) {
+			return this.SynchronizeWallet(blocks, force, false, lockContext, allowGrowth);
 		}
 
-		public virtual void SynchronizeWallet(List<IBlock> blocks, bool force, bool mobileForce, bool? allowGrowth = null) {
+		public virtual async Task SynchronizeWallet(List<IBlock> blocks, bool force, bool mobileForce, LockContext lockContext, bool? allowGrowth = null) {
 
-			var walletSynced = this.WalletSyncedNoWait;
+			var walletSynced = await WalletSyncedNoWait(lockContext).ConfigureAwait(false);
 
 			if(!walletSynced.HasValue) {
 				// we could not verify, try again later
@@ -392,10 +382,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return;
 			}
 
-			if(!this.NetworkPaused && this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded && ((mobileForce && GlobalSettings.ApplicationSettings.SynclessMode) || (!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableWalletSync && force) || !walletSynced.Value)) {
-				lock(this.locker) {
-					if(this.synchWalletWorkflow != null && this.synchWalletWorkflow .IsCompleted) {
-						System.Threading.Tasks.Task.Run(() => this.synchWalletWorkflow?.Dispose());
+			if(!this.NetworkPaused && this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded && (mobileForce && GlobalSettings.ApplicationSettings.SynclessMode || !this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableWalletSync && force || !walletSynced.Value)) {
+				using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+					if(this.synchWalletWorkflow != null && this.synchWalletWorkflow.IsCompleted) {
+						var task = Task.Run(() => this.synchWalletWorkflow?.Dispose());
 						this.synchWalletWorkflow = null;
 					}
 
@@ -413,20 +403,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						}
 
 						// when its done, we can clear it here. not necessary, but keeps things cleaner.
-						this.synchWalletWorkflow.Completed += (success, workflow) => {
-							lock(this.locker) {
+						this.synchWalletWorkflow.Completed += async (success, workflow) => {
 
-								// ok, now we can wait the regular intervals
-								var walletIsSynced = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced;
-								
-								if(success && walletIsSynced.HasValue && walletIsSynced.Value && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
-									this.nextWalletSynchCheck = this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
-								} else {
-									this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(5);
-								}
+							// ok, now we can wait the regular intervals
+							LockContext lockContext2   = null;
+							var         walletIsSynced = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced(lockContext2).ConfigureAwait(false);
 
-								this.synchWalletWorkflow = null;
+							if(success && walletIsSynced.HasValue && walletIsSynced.Value && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
+								this.nextWalletSynchCheck = this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
+							} else {
+								this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(5);
 							}
+
+							this.synchWalletWorkflow = null;
+
 						};
 
 						this.CentralCoordinator.PostWorkflow(this.synchWalletWorkflow);
@@ -439,11 +429,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <summary>
 		///     are we in the active process of syncing?
 		/// </summary>
-		public bool WalletSyncing {
-			get {
-				lock(this.locker) {
-					return (this.synchWalletWorkflow != null) && !this.synchWalletWorkflow.IsCompleted;
+		public async Task<bool> WalletSyncing(LockContext lockContext) {
+
+			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return this.synchWalletWorkflow != null && !this.synchWalletWorkflow.IsCompleted;
+			}
+
+		}
+
+		/// <summary>
+		///     Is the chain not actively syncing and in a synched state?  if we got stuck by a wallet transaction, we dont wait
+		///     and return null, or uncertain state.
+		/// </summary>
+		public async Task<bool?> WalletSyncedNoWait(LockContext lockContext) {
+
+			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				var walletSynced = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait(handle).ConfigureAwait(false);
+
+				if(!walletSynced.HasValue) {
+					return null;
 				}
+
+				return (!await WalletSyncing(handle).ConfigureAwait(false) || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletSynced.Value;
+
 			}
 		}
 
@@ -451,83 +459,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		///     Is the chain not actively syncing and in a synched state?  if we got stuck by a wallet transaction, we dont wait
 		///     and return null, or uncertain state.
 		/// </summary>
-		public bool? WalletSyncedNoWait {
-			get {
-				lock(this.locker) {
-					var walletSynced = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait;
+		public async Task<bool> WalletSynced(LockContext lockContext) {
 
-					if(!walletSynced.HasValue) {
-						return null;
-					}
+			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				var walletIsSynced = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced(handle).ConfigureAwait(false);
 
-					return (!this.WalletSyncing || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletSynced.Value;
+				if(!walletIsSynced.HasValue) {
+					return false;
 				}
+
+				return (!await WalletSyncing(handle).ConfigureAwait(false) || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletIsSynced.Value;
 			}
-		}
 
-		/// <summary>
-		///     Is the chain not actively syncing and in a synched state?  if we got stuck by a wallet transaction, we dont wait
-		///     and return null, or uncertain state.
-		/// </summary>
-		public bool WalletSynced {
-			get {
-				lock(this.locker) {
-					var walletIsSynced = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced;
-
-					if(!walletIsSynced.HasValue) {
-						return false;
-					}
-					return (!this.WalletSyncing || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletIsSynced.Value;
-				}
-			}
-		}
-
-		/// <summary>
-		///     a special method to sync the wallet and chain from an external source.
-		/// </summary>
-		/// <param name="synthesizedBlock"></param>
-		public void SynchronizeBlockchainExternal(string synthesizedBlock) {
-			if(GlobalSettings.ApplicationSettings.SynclessMode) {
-				SynthesizedBlockAPI synthesizedBlockApi = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.DeserializeSynthesizedBlockAPI(synthesizedBlock);
-				SynthesizedBlock synthesizedBlockInstance = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ConvertApiSynthesizedBlock(synthesizedBlockApi);
-
-				// lets cache the results
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CacheSynthesizedBlock(synthesizedBlockInstance);
-
-				if(synthesizedBlockApi.BlockId == 1) {
-
-					// that's pretty important
-					
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception = DateTime.ParseExact(synthesizedBlockApi.SynthesizedGenesisBlockBase.Inception, "o", CultureInfo.InvariantCulture,  DateTimeStyles.AdjustToUniversal);
-				}
-
-				// we set the chain height to this block id
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DownloadBlockHeight = synthesizedBlockInstance.BlockId;
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight = synthesizedBlockInstance.BlockId;
-				this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight = synthesizedBlockInstance.BlockId;
-
-				// ensure that we run the general transactions
-				string cachePath = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetGeneralCachePath();
-
-				using(SerializationTransactionProcessor serializationTransactionProcessor = new SerializationTransactionProcessor(cachePath, this.CentralCoordinator.FileSystem)) {
-					this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateGeneralImpact(synthesizedBlockInstance, serializationTransactionProcessor);
-
-					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight = synthesizedBlockInstance.BlockId;
-					serializationTransactionProcessor.Commit();
-				}
-
-				// do a super force for mobile
-				this.SynchronizeWallet(null, true, true, true);
-			} else {
-				throw new ApplicationException("This can only be invoked in mobile mode.");
-			}
 		}
 
 	#endregion
 
-		#region wallet manager
+	#region wallet manager
 
-		private void CopyWalletRequest(CorrelationContext correlationContext, int attempt) {
+		private Task CopyWalletRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
 			Log.Information("Requesting loading wallet.");
 
 			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
@@ -541,77 +491,76 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// wait up to 5 minutes for the wallet to be ready to load
 				resetEvent.Wait(TimeSpan.FromMinutes(5));
 			}
-
-			int g = 0;
+			
+			return Task.CompletedTask;
 		}
 
-		private SecureString WalletProviderOnWalletPassphraseRequest(CorrelationContext correlationContext, int attempt) {
+		private Task<(SecureString passphrase, bool keysToo)> WalletProviderOnWalletPassphraseRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
 			Log.Information("Requesting wallet passphrase.");
 
-			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
+			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
-				if(correlationContext.IsNew) {
-					correlationContext.InitializeNew();
-				}
-
-				RequestWalletPassphraseSystemMessageTask loadWalletPassphraseTask = new RequestWalletPassphraseSystemMessageTask(attempt, () => {
-					resetEvent.Set();
-				});
-
-				this.PostChainEvent(loadWalletPassphraseTask, correlationContext);
-
-				// wait until we get the passphrase back
-				resetEvent.Wait();
-
-
-				return loadWalletPassphraseTask.Passphrase;
+			if(correlationContext.IsNew) {
+				correlationContext.InitializeNew();
 			}
-		}
 
-		private SecureString WalletProviderOnWalletKeyPassphraseRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt) {
-			Log.Information($"Requesting wallet key {keyname} passphrase.");
-
-			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
-
-				RequestWalletKeyPassphraseSystemMessageTask loadWalletKeyPasshraseTask = new RequestWalletKeyPassphraseSystemMessageTask(accountuuid, keyname, attempt, () => {
-					resetEvent.Set();
-				});
-
-				this.PostChainEvent(loadWalletKeyPasshraseTask);
-
-				// wait up to 5 hours for the wallet to be ready to load
-				resetEvent.Wait(TimeSpan.FromHours(5));
-
-
-				return loadWalletKeyPasshraseTask.Passphrase;
-			}
-		}
-
-		private void WalletProviderOnWalletCopyKeyFileRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt) {
-			Log.Information($"Requesting wallet key {keyname} passphrase.");
-
-			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
-
-				RequestCopyWalletKeyFileSystemMessageTask loadCopyWalletKeyFileTask = new RequestCopyWalletKeyFileSystemMessageTask(accountuuid, keyname, attempt, () => {
-					resetEvent.Set();
-				});
-
-				this.PostChainEvent(loadCopyWalletKeyFileTask);
-
-				// wait up to 5 hours for the wallet to be ready to load
-				resetEvent.Wait(TimeSpan.FromHours(5));
-			}
-		}
-
-		public void ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
-
-			this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
-				provider.ChangeWalletEncryption(correlationContext, encryptWallet, encryptKeys, encryptKeysIndividually, passphrases);
+			RequestWalletPassphraseSystemMessageTask loadWalletPassphraseTask = new RequestWalletPassphraseSystemMessageTask(attempt, () => {
+				resetEvent.Set();
 			});
 
+			this.PostChainEvent(loadWalletPassphraseTask, correlationContext);
+
+			// wait until we get the passphrase back
+			resetEvent.Wait();
+
+			return Task.FromResult((loadWalletPassphraseTask.Passphrase, loadWalletPassphraseTask.KeysToo));
+
 		}
+
+		private Task<SecureString> WalletProviderOnWalletKeyPassphraseRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt, LockContext lockContext) {
+			Log.Information($"Requesting wallet key {keyname} passphrase.");
+
+			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+
+			RequestWalletKeyPassphraseSystemMessageTask loadWalletKeyPasshraseTask = new RequestWalletKeyPassphraseSystemMessageTask(accountuuid, keyname, attempt, () => {
+				resetEvent.Set();
+			});
+
+			this.PostChainEvent(loadWalletKeyPasshraseTask);
+
+			// wait up to 5 hours for the wallet to be ready to load
+			resetEvent.Wait(TimeSpan.FromHours(5));
+
+			return Task.FromResult(loadWalletKeyPasshraseTask.Passphrase);
+
+		}
+
+		private Task WalletProviderOnWalletCopyKeyFileRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt, LockContext lockContext) {
+			Log.Information($"Requesting wallet key {keyname} passphrase.");
+
+			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+
+			RequestCopyWalletKeyFileSystemMessageTask loadCopyWalletKeyFileTask = new RequestCopyWalletKeyFileSystemMessageTask(accountuuid, keyname, attempt, () => {
+				resetEvent.Set();
+			});
+
+			this.PostChainEvent(loadCopyWalletKeyFileTask);
+
+			// wait up to 5 hours for the wallet to be ready to load
+			resetEvent.Wait(TimeSpan.FromHours(5));
+
+			return System.Threading.Tasks.Task.CompletedTask;
+		}
+
+		public Task ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, LockContext lockContext) {
+
+			return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token, lc) => {
+				return provider.ChangeWalletEncryption(correlationContext, encryptWallet, encryptKeys, encryptKeysIndividually, passphrases, lc);
+			}, lockContext);
+
+		}
+
 	#endregion
-	
 
 	}
 }

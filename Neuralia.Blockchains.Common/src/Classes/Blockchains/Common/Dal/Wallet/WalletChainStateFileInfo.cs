@@ -1,9 +1,12 @@
 using System;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
+using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public class WalletChainStateFileInfo : SingleEntryWalletFileInfo<WalletAccountChainState> {
@@ -17,47 +20,54 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		public IWalletAccount Account { get; }
 
-		public virtual WalletAccountChainState ChainState {
-			get {
-				if(this.chainState == null) {
-					this.chainState = this.RunQueryDbOperation(litedbDal => litedbDal.GetSingle<WalletAccountChainState>());
-				}
+		public virtual async Task<WalletAccountChainState> ChainState(LockContext lockContext) {
 
-				return this.chainState;
+			if(this.chainState == null) {
+				this.chainState = await RunQueryDbOperation((litedbDal, lc) => {
+
+					return Task.FromResult(litedbDal.GetSingle<WalletAccountChainState>());
+				}, lockContext).ConfigureAwait(false);
 			}
+
+			return this.chainState;
+
 		}
 
 		/// <summary>
 		///     Insert the new empty wallet
 		/// </summary>
 		/// <param name="wallet"></param>
-		protected override void InsertNewDbData(WalletAccountChainState chainState) {
-			lock(this.locker) {
+		protected override async Task InsertNewDbData(WalletAccountChainState chainState, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.chainState = chainState;
 
-				this.RunDbOperation(litedbDal => {
+				await RunDbOperation((litedbDal, lc) => {
 					litedbDal.Insert(chainState, c => c.AccountUuid);
-				});
-			}
 
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(false);
+
+			}
 		}
 
-		public override void Reset() {
-			base.Reset();
+		public override async Task Reset(LockContext lockContext) {
+			await base.Reset(lockContext).ConfigureAwait(false);
 
 			this.chainState = null;
 		}
 
-		protected override void CreateDbFile(LiteDBDAL litedbDal) {
+		protected override Task CreateDbFile(LiteDBDAL litedbDal, LockContext lockContext) {
 			litedbDal.CreateDbFile<WalletAccountChainState, Guid>(i => i.AccountUuid);
+
+			return Task.CompletedTask;
 		}
 
-		protected override void PrepareEncryptionInfo() {
-			this.CreateSecurityDetails();
+		protected override Task PrepareEncryptionInfo(LockContext lockContext) {
+			return this.CreateSecurityDetails(lockContext);
 		}
 
-		protected override void CreateSecurityDetails() {
-			lock(this.locker) {
+		protected override async Task CreateSecurityDetails(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
@@ -66,18 +76,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(this.EncryptionInfo.Encrypt) {
 
 						this.EncryptionInfo.EncryptionParameters = this.Account.KeyLogFileEncryptionParameters;
-						this.EncryptionInfo.Secret = () => this.Account.KeyLogFileSecret;
+						this.EncryptionInfo.Secret               = () => this.Account.KeyLogFileSecret;
 					}
 				}
 			}
 		}
 
-		protected override void UpdateDbEntry() {
-			this.RunDbOperation(litedbDal => {
+		protected override Task UpdateDbEntry(LockContext lockContext) {
+			return this.RunDbOperation((litedbDal, lc) => {
 				if(litedbDal.CollectionExists<WalletAccountChainState>()) {
-					litedbDal.Update(this.ChainState);
+					litedbDal.Update<WalletAccountChainState>(this.ChainState(lc).WaitAndUnwrapException());
 				}
-			});
+
+				return Task.CompletedTask;
+			}, lockContext);
 
 		}
 	}

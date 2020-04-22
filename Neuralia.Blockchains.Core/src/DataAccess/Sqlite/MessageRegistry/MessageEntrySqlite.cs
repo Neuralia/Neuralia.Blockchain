@@ -5,7 +5,8 @@ using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 	public class MessageEntrySqlite : IMessageEntry {
-		public List<MessagePeerSqlite> Peers { get; } = new List<MessagePeerSqlite>();
+		//private set is used to fix the "missing parameter name: frameworkName" error.
+		public List<MessagePeerSqlite> Peers { get; private set; } = new List<MessagePeerSqlite>();
 
 		[Key]
 		public long Hash { get; set; }

@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 				using(RecyclableMemoryStream input = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("compress", data.Bytes, data.Offset, data.Length)) {
 					
-					preProcessOutput?.Invoke(output);
+if(					preProcessOutput != null){					preProcessOutput(output);}
 					this.CompressData(input, output, level);
 					return ByteArray.Create(output);
 				}
@@ -43,7 +43,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 		protected override SafeArrayHandle DecompressData(Stream input, Action<Stream> preProcessInput = null) {
 			using(RecyclableMemoryStream output = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("output")) {
-				preProcessInput?.Invoke(input);
+if(				preProcessInput != null){				preProcessInput(input);}
 				this.DecompressData(input, output);
 
 				return ByteArray.Create(output);

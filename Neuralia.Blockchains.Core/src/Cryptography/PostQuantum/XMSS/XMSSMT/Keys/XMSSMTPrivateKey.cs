@@ -1,4 +1,5 @@
 ﻿using System;
+using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
@@ -59,7 +60,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		}
 		
 		
-		public XMSSMTNonceSet Nonces {
+		public XMSSNonceSet Nonces {
 			get => this.NoncePart.Nonces;
 			set => this.NoncePart.Nonces = value;
 		}
@@ -81,7 +82,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
 			
 			this.NoncePart = new KeyNoncePart(0) {NodeCache = new XMSSMTNodeCache()};
-			this.NoncePart.Nonces = new XMSSMTNonceSet();
+			this.NoncePart.Nonces = new XMSSNonceSet();
 			this.NoncePart.NodeCache = new XMSSMTNodeCache();
 		}
 
@@ -105,7 +106,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.SecretPart.SecretSeed = other.SecretPart.SecretSeed?.Clone();
 
 			this.NoncePart = new KeyNoncePart(this.HeaderPart.LeafCount);
-			this.NoncePart.Nonces = new XMSSMTNonceSet(other.NoncePart.Nonces.Nonces);
+			this.NoncePart.Nonces = new XMSSNonceSet(other.NoncePart.Nonces.Nonces);
 			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize);
 		}
 
@@ -113,14 +114,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		///     Instantiate a new XMSS Private Key
 		/// </summary>
 		/// <param name="heigth">Height (number of levels - 1) of the tree</param>
-		public XMSSMTPrivateKey(int heigth, int layer, ByteArray publicSeed, ByteArray secretSeed, ByteArray secretPrf, XMSSMTNonceSet nonces, XMSSExecutionContext xmssExecutionContext, long index = 0, ByteArray root = null) {
+		public XMSSMTPrivateKey(int heigth, int layer, ByteArray publicSeed, ByteArray secretSeed, ByteArray secretPrf, XMSSNonceSet nonces, XMSSExecutionContext xmssExecutionContext, long index = 0, ByteArray root = null) {
 
 			this.XmssExecutionContext = xmssExecutionContext;
 			
 			this.HeaderPart = new KeyHeaderPart(this.XmssExecutionContext.DigestSize);
 			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
 			
-			this.HeaderPart.LeafCount = 1 << heigth;
+			this.HeaderPart.LeafCount = 1 << (heigth/layer);
 			this.HeaderPart.Index = index;
 			this.HeaderPart.Height = (byte) heigth;
 			this.HeaderPart.Layers = (byte) layer;
@@ -132,7 +133,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.SecretPart.SecretSeed = secretSeed?.Clone();
 
 			this.NoncePart = new KeyNoncePart(this.HeaderPart.LeafCount);
-			this.NoncePart.Nonces = new XMSSMTNonceSet(nonces.Nonces);
+			this.NoncePart.Nonces = new XMSSNonceSet(nonces.Nonces);
 			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize);
 		}
 
@@ -142,6 +143,23 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.SecretPart.Dispose();
 		}
 
+		public override void LoadKey(ByteArray keyBytes) {
+			
+			BrotliCompression compression = new BrotliCompression();
+			using var deflatedPrivateKey = compression.Decompress(keyBytes);
+			
+			base.LoadKey(deflatedPrivateKey.Entry);
+		}
+
+		public override ByteArray SaveKey() {
+			using var privateKey = base.SaveKey();
+			
+			BrotliCompression compression = new BrotliCompression();
+			var compressedPrivateKey = compression.Compress(privateKey);
+
+			return compressedPrivateKey.Entry;
+		}
+		
 		protected override void Rehydrate(IDataRehydrator rehydrator) {
 
 			this.RehydrateParts(rehydrator, rehydrator, rehydrator);
@@ -323,7 +341,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 			public int LeafCount { get;set; }
 			
-			public XMSSMTNonceSet Nonces { get;set; }
+			public XMSSNonceSet Nonces { get;set; }
 			public XMSSMTNodeCache NodeCache { get;set; }
 			public void Rehydrate(IDataRehydrator rehydrator) {
 				this.NodeCache.Rehydrate(rehydrator);

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -10,42 +10,32 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 	public interface IRecursiveResourceAccessScheduler<T> : IDisposableExtended {
-		
-		bool ScheduleReadNoWait(Action<T> action);
-		
-		bool ScheduleRead(Action<T> action, int timeout = 60);
-		(K result, bool success) ScheduleRead<K>(Func<T, K> action, int timeout = 60);
-		
-		bool ScheduleWrite(Action<T> action, int timeout = 60);
-		(K result, bool success) ScheduleWrite<K>(Func<T, K> action, int timeout = 60);
-		
-		bool ScheduleRead(Action<T> action, TimeSpan timeout);
-		(K result, bool success) ScheduleRead<K>(Func<T, K> action, TimeSpan timeout);
-		
-		bool ScheduleWrite(Action<T> action, TimeSpan timeout);
-		(K result, bool success)ScheduleWrite<K>(Func<T, K> action, TimeSpan timeout);
-
-		bool ThreadLockInProgress { get; }
-		int CurrentActiveThread { get; }
-		bool IsActiveTransactionThread(int lookupThreadId);
-		bool IsCurrentActiveTransactionThread { get; }
+		Task<K>                        ScheduleRead<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60);
+		Task<K>                        ScheduleRead<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null);
+		Task<K>                        ScheduleReadNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext);
+		Task<(K result, bool success)> ScheduleReadSucceededNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null);
+		Task<(K result, bool success)> ScheduleReadSucceeded<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60);
+		Task<(K result, bool success)> ScheduleReadSucceeded<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null);
+		Task<K>                        ScheduleWrite<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60);
+		Task<K>                        ScheduleWrite<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null);
+		Task<K>                        ScheduleWriteNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext);
+		Task<(K result, bool success)> ScheduleWriteSucceededNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null);
+		Task<(K result, bool success)> ScheduleWriteSucceeded<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60);
+		Task<(K result, bool success)> ScheduleWriteSucceeded<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null);
 	}
 
 	/// <summary>
 	///     this is a more elaborate resource exclusion which permits recursive access.
 	/// </summary>
-	/// <remarks>DOES NOT WORK WITH ASYNC/AWAIT!</remarks>
 	public class RecursiveResourceAccessScheduler<T> : IRecursiveResourceAccessScheduler<T> {
-
-
-		private int threadId = 0;
 		
-		private readonly ReaderWriterLockSlim readerWriterLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+		private readonly RecursiveAsyncReaderWriterLock readerWriterLock = new RecursiveAsyncReaderWriterLock();
 
 		public RecursiveResourceAccessScheduler(T component) {
 			this.Component = component;
@@ -53,99 +43,81 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public T Component { get; }
 
-		public bool ScheduleRead(Action<T> action, int timeout = 60) {
-			return this.ScheduleRead(action, TimeSpan.FromSeconds(timeout));
+		public Task<K> ScheduleRead<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60) {
+			return this.ScheduleRead(action, TimeSpan.FromSeconds(timeout),lockContext);
 		}
 
-		public bool ScheduleRead(Action<T> action, TimeSpan timeout) {
-			
-			if(!this.readerWriterLock.TryEnterReadLock((int)timeout.TotalMilliseconds)) {
-				return false;
+		public async Task<K> ScheduleRead<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null) {
+
+			if(action == null) {
+				return default;
 			}
 
-			try {
-				action(this.Component);
+			using(var handle = await this.readerWriterLock.ReaderLockAsync(lockContext,timeout).ConfigureAwait(false)) {
 
-				return true;
-
-			} finally {
-				this.readerWriterLock.ExitReadLock();
+				return await action(this.Component, handle).ConfigureAwait(false);
 			}
 		}
 
-		public bool ScheduleReadNoWait(Action<T> action) {
-			return this.ScheduleRead(action, TimeSpan.FromMilliseconds(1));
-		}
-		public (K result, bool success) ScheduleReadNoWait<K>(Func<T, K> action) {
-			return this.ScheduleRead(action, TimeSpan.FromMilliseconds(1));
+		public Task<K> ScheduleReadNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext) {
+			return this.ScheduleRead<K>(action, TimeSpan.FromMilliseconds(1000), lockContext);
 		}
 		
-		public (K result, bool success) ScheduleRead<K>(Func<T, K> action, int timeout = 60) {
-			return this.ScheduleRead(action, TimeSpan.FromSeconds(timeout));
+		public  Task<(K result, bool success)> ScheduleReadSucceededNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null) {
+			return this.ScheduleReadSucceeded(action, TimeSpan.FromMilliseconds(1000), lockContext);
+		}
+		
+		public  Task<(K result, bool success)> ScheduleReadSucceeded<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60) {
+			return this.ScheduleReadSucceeded(action, TimeSpan.FromSeconds(timeout), lockContext);
 		}
 
-		public (K result, bool success) ScheduleRead<K>(Func<T, K> action, TimeSpan timeout) {
+		public async Task<(K result, bool success)> ScheduleReadSucceeded<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null) {
+			
+			try {
+				return (await ScheduleRead(action, timeout, lockContext).ConfigureAwait(false), true);
 
-			if(!this.readerWriterLock.TryEnterReadLock((int)timeout.TotalMilliseconds)) {
+			} catch(LockTimeoutException ex) {
+				// do nothing
 				return (default, false);
 			}
+		}
+		
+		public Task<K> ScheduleWrite<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60) {
+			return this.ScheduleWrite(action, TimeSpan.FromSeconds(timeout),lockContext);
+		}
 
-			try {
-				return (action(this.Component), true);
-			} finally {
-				this.readerWriterLock.ExitReadLock();
+		public async Task<K> ScheduleWrite<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null) {
+
+			if(action == null) {
+				return default;
 			}
+
+			using var handle = await this.readerWriterLock.WriterLockAsync(lockContext, timeout).ConfigureAwait(false);
+
+			return await action(this.Component, handle).ConfigureAwait(false);
 		}
 
-		public bool ScheduleWrite(Action<T> action, int timeout = 60) {
-			return this.ScheduleWrite(action, TimeSpan.FromSeconds(timeout));
+		public Task<K> ScheduleWriteNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext) {
+			return this.ScheduleWrite<K>(action, TimeSpan.FromMilliseconds(1), lockContext);
+		}
+		
+		public Task<(K result, bool success)> ScheduleWriteSucceededNoWait<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null) {
+			return this.ScheduleWriteSucceeded(action, TimeSpan.FromMilliseconds(1), lockContext);
+		}
+		
+		public Task<(K result, bool success)> ScheduleWriteSucceeded<K>(Func<T, LockContext, Task<K>> action, LockContext lockContext = null, int timeout = 60) {
+			return this.ScheduleWriteSucceeded(action, TimeSpan.FromSeconds(timeout), lockContext);
 		}
 
-		public bool ScheduleWrite(Action<T> action, TimeSpan timeout) {
+		public async Task<(K result, bool success)> ScheduleWriteSucceeded<K>(Func<T, LockContext, Task<K>> action, TimeSpan timeout, LockContext lockContext = null) {
 			
-			if(!this.readerWriterLock.TryEnterWriteLock((int)timeout.TotalMilliseconds)) {
-				return false;
-			}
-
-			//TODO: this is not atomic with the above enter write. is it a problem?  can we find a better way
 			try {
-				Interlocked.Exchange(ref this.threadId, Thread.CurrentThread.ManagedThreadId);
-				
-				action(this.Component);
+				return (await ScheduleWrite(action, timeout, lockContext).ConfigureAwait(false), true);
 
-				return true;
-
-			} finally {
-				Interlocked.Exchange(ref this.threadId, 0);
-				this.readerWriterLock.ExitWriteLock();
-			}
-		}
-		
-		public (K result, bool success) ScheduleWrite<K>(Func<T, K> action, int timeout = 60) {
-			return this.ScheduleWrite(action, TimeSpan.FromSeconds(timeout));
-		}
-		
-		public (K result, bool success) ScheduleWrite<K>(Func<T, K> action, TimeSpan timeout) {
-			if(!this.readerWriterLock.TryEnterWriteLock((int)timeout.TotalMilliseconds)) {
+			} catch(LockTimeoutException ex) {
+				// do nothing
 				return (default, false);
 			}
-			
-			try {
-				Interlocked.Exchange(ref this.threadId, Thread.CurrentThread.ManagedThreadId);
-				return (action(this.Component), true);
-			} finally {
-				Interlocked.Exchange(ref this.threadId, 0);
-				this.readerWriterLock.ExitWriteLock();
-			}
-		}
-
-		public int CurrentActiveThread => Interlocked.CompareExchange(ref this.threadId, 0, 0);
-		public bool ThreadLockInProgress => this.CurrentActiveThread != 0;
-
-		public bool IsCurrentActiveTransactionThread => this.IsActiveTransactionThread(Thread.CurrentThread.ManagedThreadId);
-		
-		public bool IsActiveTransactionThread(int lookupThreadId) {
-			return this.CurrentActiveThread == lookupThreadId;
 		}
 
 	#region Dispose
@@ -163,7 +135,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 				try {
 					try {
-						this.readerWriterLock?.Dispose();
+						
 					} catch(Exception ex) {
 						Log.Verbose("error occured", ex);
 					}

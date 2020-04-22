@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1 {
 
@@ -21,26 +23,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
 
-		Dictionary<long, List<Action<CONTEXT>>> CompileStandardAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT> create, Func<CONTEXT, AccountId, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT> update, Func<CONTEXT, AccountId, STANDARD_ACCOUNT_SNAPSHOT> delete)
-			where CONTEXT : DbContext;
-
-		Dictionary<long, List<Action<CONTEXT>>> CompileJointAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT> create, Func<CONTEXT, AccountId, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT> update, Func<CONTEXT, AccountId, JOINT_ACCOUNT_SNAPSHOT> delete)
-			where CONTEXT : DbContext;
-
-		Dictionary<long, List<Action<CONTEXT>>> CompileStandardAccountKeysHistorySets<CONTEXT>(Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT> create, Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT> update, Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT> delete)
-			where CONTEXT : DbContext;
-
-		Dictionary<long, List<Action<CONTEXT>>> CompileAccreditationCertificatesHistorySets<CONTEXT>(Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT> create, Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT> update, Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT> delete)
-			where CONTEXT : DbContext;
-
-		Dictionary<long, List<Action<CONTEXT>>> CompileChainOptionsHistorySets<CONTEXT>(Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> create, Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> update, Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT> delete)
-			where CONTEXT : DbContext;
-
 		List<long> CompileStandardAccountHistoryImpactedIds();
 		List<long> CompileJointAccountHistoryImpactedIds();
 		List<long> CompileStandardAccountKeysHistoryImpactedIds();
 		List<long> CompileAccreditationCertificatesHistoryImpactedIds();
 		List<long> CompileChainOptionsHistoryImpactedIds();
+
+		Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileStandardAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, STANDARD_ACCOUNT_SNAPSHOT, LockContext, Task<STANDARD_ACCOUNT_SNAPSHOT>> create, Func<CONTEXT, AccountId, STANDARD_ACCOUNT_SNAPSHOT, LockContext,  Task<STANDARD_ACCOUNT_SNAPSHOT>> update, Func<CONTEXT, AccountId, LockContext,  Task<STANDARD_ACCOUNT_SNAPSHOT>> delete)
+			where CONTEXT : DbContext;
+
+		Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileJointAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, JOINT_ACCOUNT_SNAPSHOT, LockContext,  Task<JOINT_ACCOUNT_SNAPSHOT>> create, Func<CONTEXT, AccountId, JOINT_ACCOUNT_SNAPSHOT, LockContext,  Task<JOINT_ACCOUNT_SNAPSHOT>> update, Func<CONTEXT, AccountId, LockContext,  Task<JOINT_ACCOUNT_SNAPSHOT>> delete)
+			where CONTEXT : DbContext;
+
+		Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileStandardAccountKeysHistorySets<CONTEXT>(Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, LockContext,  Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> create, Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, LockContext,  Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> update, Func<CONTEXT, (long AccountId, byte OrdinalId), LockContext,  Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> delete)
+			where CONTEXT : DbContext;
+
+		Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileAccreditationCertificatesHistorySets<CONTEXT>(Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, LockContext,  Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> create, Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, LockContext,  Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> update, Func<CONTEXT, int, LockContext,  Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> delete)
+			where CONTEXT : DbContext;
+
+		Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileChainOptionsHistorySets<CONTEXT>(Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, LockContext,  Task<CHAIN_OPTIONS_SNAPSHOT>> create, Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, LockContext,  Task<CHAIN_OPTIONS_SNAPSHOT>> update, Func<CONTEXT, int, LockContext,  Task<CHAIN_OPTIONS_SNAPSHOT>> delete)
+			where CONTEXT : DbContext;
 	}
 
 	public class SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ISnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
@@ -80,27 +82,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return this.chainOptions.Keys.Select(k => (long) k).Distinct().ToList();
 		}
 
-		public Dictionary<long, List<Action<CONTEXT>>> CompileStandardAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT> create, Func<CONTEXT, AccountId, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT> update, Func<CONTEXT, AccountId, STANDARD_ACCOUNT_SNAPSHOT> delete)
+		public Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileStandardAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, STANDARD_ACCOUNT_SNAPSHOT, LockContext, Task<STANDARD_ACCOUNT_SNAPSHOT>> create, Func<CONTEXT, AccountId, STANDARD_ACCOUNT_SNAPSHOT, LockContext,  Task<STANDARD_ACCOUNT_SNAPSHOT>> update, Func<CONTEXT, AccountId, LockContext,  Task<STANDARD_ACCOUNT_SNAPSHOT>> delete)
 			where CONTEXT : DbContext {
 			return this.CompileSubkeyHistorySets(this.simpleAccounts, create, update, delete).ToDictionary(e => e.Key.SequenceId, e => e.Value);
 		}
 
-		public Dictionary<long, List<Action<CONTEXT>>> CompileJointAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT> create, Func<CONTEXT, AccountId, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT> update, Func<CONTEXT, AccountId, JOINT_ACCOUNT_SNAPSHOT> delete)
+		public Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileJointAccountHistorySets<CONTEXT>(Func<CONTEXT, AccountId, AccountId, JOINT_ACCOUNT_SNAPSHOT, LockContext,  Task<JOINT_ACCOUNT_SNAPSHOT>> create, Func<CONTEXT, AccountId, JOINT_ACCOUNT_SNAPSHOT, LockContext,  Task<JOINT_ACCOUNT_SNAPSHOT>> update, Func<CONTEXT, AccountId, LockContext,  Task<JOINT_ACCOUNT_SNAPSHOT>> delete)
 			where CONTEXT : DbContext {
 			return this.CompileSubkeyHistorySets(this.jointAccounts, create, update, delete).ToDictionary(e => e.Key.SequenceId, e => e.Value);
 		}
 
-		public Dictionary<long, List<Action<CONTEXT>>> CompileStandardAccountKeysHistorySets<CONTEXT>(Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT> create, Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT> update, Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT> delete)
+		public Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileStandardAccountKeysHistorySets<CONTEXT>(Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, LockContext,  Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> create, Func<CONTEXT, (long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT, LockContext,  Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> update, Func<CONTEXT, (long AccountId, byte OrdinalId), LockContext,  Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> delete)
 			where CONTEXT : DbContext {
 			return this.CompileHistorySets(this.standardAccountKeys, create, update, delete).GroupBy(e => e.Key.AccountId.ToAccountId().SequenceId).ToDictionary(e => e.Key, e => e.SelectMany(e2 => e2.Value).ToList());
 		}
 
-		public Dictionary<long, List<Action<CONTEXT>>> CompileAccreditationCertificatesHistorySets<CONTEXT>(Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT> create, Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT> update, Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT> delete)
+		public Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileAccreditationCertificatesHistorySets<CONTEXT>(Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, LockContext,  Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> create, Func<CONTEXT, int, ACCREDITATION_CERTIFICATE_SNAPSHOT, LockContext,  Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> update, Func<CONTEXT, int, LockContext,  Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> delete)
 			where CONTEXT : DbContext {
 			return this.CompileHistorySets(this.accreditationCertificates, create, update, delete).ToDictionary(e => (long) e.Key, e => e.Value);
 		}
 
-		public Dictionary<long, List<Action<CONTEXT>>> CompileChainOptionsHistorySets<CONTEXT>(Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> create, Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> update, Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT> delete)
+		public Dictionary<long, List<Func<CONTEXT, LockContext, Task>>> CompileChainOptionsHistorySets<CONTEXT>(Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, LockContext,  Task<CHAIN_OPTIONS_SNAPSHOT>> create, Func<CONTEXT, int, CHAIN_OPTIONS_SNAPSHOT, LockContext,  Task<CHAIN_OPTIONS_SNAPSHOT>> update, Func<CONTEXT, int, LockContext,  Task<CHAIN_OPTIONS_SNAPSHOT>> delete)
 			where CONTEXT : DbContext {
 			return this.CompileHistorySets(this.chainOptions, create, update, delete).ToDictionary(e => (long) e.Key, e => e.Value);
 		}
@@ -109,28 +111,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return this.simpleAccounts.Any() || this.jointAccounts.Any() || this.standardAccountKeys.Any() || this.accreditationCertificates.Any() || this.chainOptions.Any();
 		}
 
-		private Dictionary<KEY, List<Action<CONTEXT>>> CompileHistorySets<CONTEXT, KEY, ENTRY>(Dictionary<KEY, List<(ENTRY entry, SnapshotCache.EntryStatus status)>> source, Func<CONTEXT, KEY, ENTRY, ENTRY> create, Func<CONTEXT, KEY, ENTRY, ENTRY> update, Func<CONTEXT, KEY, ENTRY> delete)
+		private Dictionary<KEY, List<Func<CONTEXT, LockContext, Task>>> CompileHistorySets<CONTEXT, KEY, ENTRY>(Dictionary<KEY, List<(ENTRY entry, SnapshotCache.EntryStatus status)>> source, Func<CONTEXT, KEY, ENTRY, LockContext, Task<ENTRY>> create, Func<CONTEXT, KEY, ENTRY, LockContext, Task<ENTRY>> update, Func<CONTEXT, KEY, LockContext, Task<ENTRY>> delete)
 			where CONTEXT : DbContext {
 
-			var results = new Dictionary<KEY, List<Action<CONTEXT>>>();
+			var results = new Dictionary<KEY, List<Func<CONTEXT, LockContext, Task>>>();
 
-			foreach(var entry in source) {
+			foreach((KEY key, var value) in source) {
 
-				if(!results.ContainsKey(entry.Key)) {
-					results.Add(entry.Key, new List<Action<CONTEXT>>());
+				if(!results.ContainsKey(key)) {
+					results.Add(key, new List<Func<CONTEXT, LockContext, Task>>());
 				}
 
-				var list = results[entry.Key];
+				var list = results[key];
 
-				foreach((ENTRY entry, SnapshotCache.EntryStatus status) timeEntry in entry.Value) {
+				foreach((ENTRY entry, SnapshotCache.EntryStatus status) timeEntry in value) {
 
 					if(timeEntry.status == SnapshotCache.EntryStatus.Existing) {
 					} else if(timeEntry.status == SnapshotCache.EntryStatus.New) {
-						list.Add(db => create(db, entry.Key, timeEntry.entry));
+						list.Add((db, lc) => create(db, key, timeEntry.entry, lc));
 					} else if(timeEntry.status == SnapshotCache.EntryStatus.Modified) {
-						list.Add(db => update(db, entry.Key, timeEntry.entry));
+						list.Add((db, lc) => update(db, key, timeEntry.entry, lc));
 					} else if(timeEntry.status == SnapshotCache.EntryStatus.Deleted) {
-						list.Add(db => delete(db, entry.Key));
+						list.Add((db, lc) => delete(db, key, lc));
 					}
 				}
 			}
@@ -138,15 +140,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return results;
 		}
 
-		private Dictionary<KEY, List<Action<CONTEXT>>> CompileSubkeyHistorySets<CONTEXT, KEY, ENTRY>(Dictionary<KEY, List<(ENTRY entry, KEY subKey, SnapshotCache.EntryStatus status)>> source, Func<CONTEXT, KEY, KEY, ENTRY, ENTRY> create, Func<CONTEXT, KEY, ENTRY, ENTRY> update, Func<CONTEXT, KEY, ENTRY> delete)
+		private Dictionary<KEY, List<Func<CONTEXT, LockContext, Task>>> CompileSubkeyHistorySets<CONTEXT, KEY, ENTRY>(Dictionary<KEY, List<(ENTRY entry, KEY subKey, SnapshotCache.EntryStatus status)>> source, Func<CONTEXT, KEY, KEY, ENTRY, LockContext, Task<ENTRY>> create, Func<CONTEXT, KEY, ENTRY, LockContext, Task<ENTRY>> update, Func<CONTEXT, KEY, LockContext, Task<ENTRY>> delete)
 			where CONTEXT : DbContext {
 
-			var results = new Dictionary<KEY, List<Action<CONTEXT>>>();
+			var results = new Dictionary<KEY, List<Func<CONTEXT, LockContext, Task>>>();
 
 			foreach(var entry in source) {
 
 				if(!results.ContainsKey(entry.Key)) {
-					results.Add(entry.Key, new List<Action<CONTEXT>>());
+					results.Add(entry.Key, new List<Func<CONTEXT, LockContext, Task>>());
 				}
 
 				var list = results[entry.Key];
@@ -156,11 +158,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					if(timeEntry.status == SnapshotCache.EntryStatus.Existing) {
 					} else if(timeEntry.status == SnapshotCache.EntryStatus.New) {
 
-						list.Add(db => create(db, entry.Key, timeEntry.subKey, timeEntry.entry));
+						list.Add((db, lc) => create(db, entry.Key, timeEntry.subKey, timeEntry.entry, lc));
 					} else if(timeEntry.status == SnapshotCache.EntryStatus.Modified) {
-						list.Add(db => update(db, entry.Key, timeEntry.entry));
+						list.Add((db, lc) => update(db, entry.Key, timeEntry.entry, lc));
 					} else if(timeEntry.status == SnapshotCache.EntryStatus.Deleted) {
-						list.Add(db => delete(db, entry.Key));
+						list.Add((db, lc) => delete(db, entry.Key, lc));
 					}
 				}
 			}

@@ -135,7 +135,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.I
 		}
 
 		public static bool operator <=(BlockId a, BlockId b) {
-			return (a == b) || (a < b);
+			return a == b || a < b;
 		}
 
 		public static bool operator >(BlockId a, BlockId b) {
@@ -152,7 +152,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.I
 		}
 
 		public static bool operator >=(BlockId a, BlockId b) {
-			return (a == b) || (a > b);
+			return a == b || a > b;
 		}
 
 		/// <summary>

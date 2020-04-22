@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile {
 	public abstract class SequentialFileChannelBandIndex<CHANEL_BANDS, INPUT_KEY> : DigestChannelBandIndex<CHANEL_BANDS, SafeArrayHandle, int, INPUT_KEY, (uint offset, uint length), GroupDigestChannelBandFileNamingProvider<uint>>
@@ -15,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		protected readonly ImmutableList<CHANEL_BANDS> EnabledBands;
 		protected CHANEL_BANDS ChannelBand => this.Providers.Single().Key;
 
-		protected SequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
+		protected SequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
 
 			var enabledBandsList = new List<CHANEL_BANDS>();
 
@@ -28,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.EnabledBands = enabledBandsList.ToImmutableList();
 		}
 
-		protected SequentialFileChannelBandIndex(List<(string filename, CHANEL_BANDS band)> filenames, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base("", baseFolder, scopeFolder, enabledBands, fileSystem) {
+		protected SequentialFileChannelBandIndex(List<(string filename, CHANEL_BANDS band)> filenames, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base("", baseFolder, scopeFolder, enabledBands, fileSystem) {
 		}
 
 		public DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS> QueryFiles(DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS> offsets, uint index) {

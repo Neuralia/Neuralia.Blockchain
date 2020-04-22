@@ -1,11 +1,13 @@
 using System;
 using System.Reflection;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.System;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
 
@@ -62,110 +64,111 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 		public ITaskRouter TaskRouter => this.RoutedTaskRoutingReceiver.TaskRouter;
 
-		public void StashTask(InternalRoutedTask task) {
-			this.RoutedTaskRoutingReceiver.StashTask(task);
+		public Task StashTask(InternalRoutedTask task) {
+			return this.RoutedTaskRoutingReceiver.StashTask(task);
 		}
 
-		public void RestoreStashedTask(InternalRoutedTask task) {
-			this.RoutedTaskRoutingReceiver.RestoreStashedTask(task);
+		public Task RestoreStashedTask(InternalRoutedTask task) {
+			return this.RoutedTaskRoutingReceiver.RestoreStashedTask(task);
 		}
 
-		public bool CheckSingleTask(Guid taskId) {
+		public Task<bool> CheckSingleTask(Guid taskId) {
 			return this.RoutedTaskRoutingReceiver.CheckSingleTask(taskId);
 		}
 
-		public void Wait() {
-			this.RoutedTaskRoutingReceiver.Wait();
+		public Task Wait() {
+			return this.RoutedTaskRoutingReceiver.Wait();
 		}
 
-		public void Wait(TimeSpan timeout) {
-			this.RoutedTaskRoutingReceiver.Wait(timeout);
+		public Task Wait(TimeSpan timeout) {
+			return this.RoutedTaskRoutingReceiver.Wait(timeout);
 		}
 
-		public void DispatchSelfTask(IRoutedTask task) {
-			this.RoutedTaskRoutingReceiver.DispatchSelfTask(task);
+		public Task DispatchSelfTask(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskRoutingReceiver.DispatchSelfTask(task, lockContext);
 		}
 
-		public void DispatchTaskAsync(IRoutedTask task) {
-			this.RoutedTaskRoutingReceiver.DispatchTaskAsync(task);
+		public Task DispatchTaskAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskRoutingReceiver.DispatchTaskAsync(task, lockContext);
 		}
 
-		public void DispatchTaskNoReturnAsync(IRoutedTask task) {
-			this.RoutedTaskRoutingReceiver.DispatchTaskNoReturnAsync(task);
+		public Task DispatchTaskNoReturnAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskRoutingReceiver.DispatchTaskNoReturnAsync(task, lockContext);
 		}
 
-		public bool DispatchTaskSync(IRoutedTask task) {
-			return this.RoutedTaskRoutingReceiver.DispatchTaskSync(task);
+		public Task<bool> DispatchTaskSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskRoutingReceiver.DispatchTaskSync(task, lockContext);
 		}
 
-		public bool DispatchTaskNoReturnSync(IRoutedTask task) {
-			return this.RoutedTaskRoutingReceiver.DispatchTaskNoReturnSync(task);
+		public Task<bool> DispatchTaskNoReturnSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskRoutingReceiver.DispatchTaskNoReturnSync(task, lockContext);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task) {
+		public Task<bool> WaitSingleTask(IRoutedTask task) {
 			return this.RoutedTaskRoutingReceiver.WaitSingleTask(task);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
+		public Task<bool> WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
 			return this.RoutedTaskRoutingReceiver.WaitSingleTask(task, timeout);
 		}
 
-		public override void Stop() {
-			base.Stop();
+		public override async Task Stop() {
+			await base.Stop().ConfigureAwait(false);
 			this.Awaken(); // just in case we were sleeping
 		}
 
-		protected override sealed void Initialize() {
-			base.Initialize();
+		protected override sealed async Task Initialize(LockContext lockContext) {
+			await base.Initialize(lockContext).ConfigureAwait(false);
 
-			if(this.IsOverride(nameof(Initialize), new[] {typeof(T), typeof(TaskRoutingContext)})) {
+			if(this.IsOverride(nameof(Initialize), new[] {typeof(T), typeof(TaskRoutingContext), typeof(LockContext)})) {
 				var task = new RoutedTask<T, bool>();
 
-				task.SetAction(this.Initialize);
+				task.SetAction((workflow, taskRoutingContext, lc) => this.Initialize(workflow, taskRoutingContext, lc));
 
-				this.DispatchSelfTask(task);
+				await this.DispatchSelfTask(task, lockContext).ConfigureAwait(false);
 			}
 		}
 
-		protected override sealed void Terminate(bool clean) {
-			base.Terminate(clean);
+		protected override sealed async Task Terminate(bool clean, LockContext lockContext) {
+			await base.Terminate(clean, lockContext).ConfigureAwait(false);
 
-			if(this.IsOverride(nameof(Terminate), new[] {typeof(bool), typeof(T), typeof(TaskRoutingContext)})) {
+			if(this.IsOverride(nameof(Terminate), new[] {typeof(bool), typeof(T), typeof(TaskRoutingContext), typeof(LockContext)})) {
 				var task = new RoutedTask<T, bool>();
 
-				task.SetAction((workflow, taskRoutingContext) => this.Terminate(clean, workflow, taskRoutingContext));
+				task.SetAction((workflow, taskRoutingContext, lc) => this.Terminate(clean, workflow, taskRoutingContext));
 
-				this.DispatchSelfTask(task);
+				await this.DispatchSelfTask(task, lockContext).ConfigureAwait(false);
 			}
 		}
 
-		protected override sealed void ProcessLoop() {
+		protected override sealed async Task ProcessLoop(LockContext lockContext) {
 
 			try {
-				if(this.IsOverride(nameof(ProcessLoop), new[] {typeof(T), typeof(TaskRoutingContext)})) {
+				if(this.IsOverride(nameof(ProcessLoop), new[] {typeof(T), typeof(TaskRoutingContext), typeof(LockContext)})) {
 					var task = new RoutedTask<T, bool>();
 
 					task.SetAction(this.ProcessLoop);
 
-					this.DispatchSelfTask(task);
+					await this.DispatchSelfTask(task, lockContext).ConfigureAwait(false);
 				} else {
-					this.RoutedTaskRoutingReceiver.CheckTasks(this.CheckShouldCancel);
+					await this.RoutedTaskRoutingReceiver.CheckTasks(async () => this.CheckShouldCancel()).ConfigureAwait(false);
 				}
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to process task loop");
 			}
 		}
 
-		protected virtual void Initialize(T workflow, TaskRoutingContext taskRoutingContext) {
-
+		protected virtual Task Initialize(T workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+			return Task.CompletedTask;
 		}
 
-		protected virtual void Terminate(bool clean, T workflow, TaskRoutingContext taskRoutingContext) {
+		protected virtual Task Terminate(bool clean, T workflow, TaskRoutingContext taskRoutingContext) {
 
+			return Task.CompletedTask;
 		}
 
-		protected virtual void ProcessLoop(T workflow, TaskRoutingContext taskRoutingContext) {
-
+		protected virtual Task ProcessLoop(T workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+			return Task.CompletedTask;
 		}
 
 		/// <summary>

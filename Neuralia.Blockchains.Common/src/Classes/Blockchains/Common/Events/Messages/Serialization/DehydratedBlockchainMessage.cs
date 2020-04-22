@@ -32,10 +32,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		}
 
 		public void Rehydrate(SafeArrayHandle data) {
-			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 
-				this.Rehydrate(rehydrator);
-			}
+			this.Rehydrate(rehydrator);
+
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator) {

@@ -2,15 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Blockchains.Tools.Serialization.V1;
+using Zio;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders {
 
@@ -46,7 +49,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		private readonly string baseFolder;
 		private readonly string scopeFolder;
 		private readonly string bandName;
-		public TrippleChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider,string baseFolder, string scopeFolder, string bandName, IFileSystem fileSystem) : base(namingProvider, fileSystem) {
+		public TrippleChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider,string baseFolder, string scopeFolder, string bandName, FileSystemWrapper fileSystem) : base(namingProvider, fileSystem) {
 			this.L1Interval = 1000;
 			this.L2Interval = 100;
 			
@@ -131,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		/// <returns></returns>
 		protected (int l1Index, long adjustedL2Id, int l2Index) GetIdSpecs(long id) {
 			int l1Index = (int) (id / this.L1Interval);
-			long adjustedL2Id = id - (l1Index * this.L1Interval);
+			long adjustedL2Id = id - l1Index * this.L1Interval;
 			int l2Index = (int) (adjustedL2Id / this.L2Interval);
 
 			return (l1Index, adjustedL2Id, l2Index);
@@ -145,12 +148,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.entryIndex = entryIndex;
 			this.fileSpecs.Clear();
 			this.fileSpecs.Add(L1_INDEX_BASE_NAME, this.CreateL1FileSpec(entryIndex));
-			this.fileSpecs.Add(L2_INDEX_BASE_NAME, new FileSpecs(this.GetExpandedL2IndexFile(this.bandName, entryIndex), new FileSystem()));
-			this.fileSpecs.Add(L3_INDEX_BASE_NAME, new FileSpecs(this.GetExpandedL3IndexFile(this.bandName,entryIndex), new FileSystem()));
+			this.fileSpecs.Add(L2_INDEX_BASE_NAME, new FileSpecs(this.GetExpandedL2IndexFile(this.bandName, entryIndex), FileSystemWrapper.CreatePhysical()));
+			this.fileSpecs.Add(L3_INDEX_BASE_NAME, new FileSpecs(this.GetExpandedL3IndexFile(this.bandName,entryIndex), FileSystemWrapper.CreatePhysical()));
 		}
 
 		private FileSpecs CreateL1FileSpec((uint index, long startingGroupId) groupIndex) {
-			return new FileSpecs(this.GetExpandedL1IndexFile(this.bandName,groupIndex), new FileSystem());
+			return new FileSpecs(this.GetExpandedL1IndexFile(this.bandName,groupIndex), FileSystemWrapper.CreatePhysical());
 		}
 
 		/// <summary>
@@ -164,14 +167,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			SafeArrayHandle bytes = null;
 
-			int offset = BLOCK_INDEX_INTRO + ((l1Index - 1) * this.L1_ENTRY_SIZE);
+			int offset = BLOCK_INDEX_INTRO + (l1Index - 1) * this.L1_ENTRY_SIZE;
 
 			//TODO: here we load all values even if we only need a few. This could be optimized to load only what we need.
 
 			int dataLength = this.L1_ENTRY_SIZE;
 
 			// check that we are within bounds
-			if((offset > this.L1_FileSpec.FileSize) || ((offset + dataLength) > this.L1_FileSpec.FileSize)) {
+			if(offset > this.L1_FileSpec.FileSize || offset + dataLength > this.L1_FileSpec.FileSize) {
 				return null;
 			}
 
@@ -183,7 +186,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				return null;
 			}
 
-			if((bytes == null) || !bytes.HasData) {
+			if(bytes == null || !bytes.HasData) {
 				return null;
 			}
 
@@ -211,14 +214,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			uint l2relativeSize = 0;
 			SafeArrayHandle bytes = null;
 
-			int offset = (l1Index * ((this.L1Interval / this.L2Interval) - 1) * this.L2_ENTRY_SIZE) + ((l2Index - 1) * this.L2_ENTRY_SIZE);
+			int offset = l1Index * (this.L1Interval / this.L2Interval - 1) * this.L2_ENTRY_SIZE + (l2Index - 1) * this.L2_ENTRY_SIZE;
 
 			//TODO: here we load all values even if we only need a few. This could be optimized to load only what we need.
 
 			int dataLength = this.L2_ENTRY_SIZE;
 
 			// check that we are within bounds
-			if((offset > this.L2_FileSpec.FileSize) || ((offset + dataLength) > this.L2_FileSpec.FileSize)) {
+			if(offset > this.L2_FileSpec.FileSize || offset + dataLength > this.L2_FileSpec.FileSize) {
 				return null;
 			}
 
@@ -228,7 +231,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				return null;
 			}
 
-			if((bytes == null) || !bytes.HasData) {
+			if(bytes == null || !bytes.HasData) {
 				return null;
 			}
 
@@ -269,11 +272,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				}
 
 				// check that we are within bounds
-				if((this.L3_FileSpec.FileSize == 0) || (l3RelativeSize > this.L3_FileSpec.FileSize)) {
+				if(this.L3_FileSpec.FileSize == 0 || l3RelativeSize > this.L3_FileSpec.FileSize) {
 					return null;
 				}
 
-				if((l3RelativeSize + l3Length) > this.L3_FileSpec.FileSize) {
+				if(l3RelativeSize + l3Length > this.L3_FileSpec.FileSize) {
 
 					// ok, we asked for a full section but we have less in file. we will take it to the end of the file and give it a try
 					l3Length = (ushort) (this.L3_FileSpec.FileSize - l3RelativeSize);
@@ -287,12 +290,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 				bytes = this.L3_FileSpec.ReadBytes(l3RelativeSize, l3Length);
 
-				if((bytes != null) && bytes.HasData) {
+				if(bytes != null && bytes.HasData) {
 					IDataRehydrator rehydrator = new DataRehydratorV1(bytes, false);
 
 					AdaptiveInteger2_5 value = new AdaptiveInteger2_5();
 
-					while(!rehydrator.IsEnd && (index <= count)) {
+					while(!rehydrator.IsEnd && index <= count) {
 
 						value.Rehydrate(rehydrator);
 
@@ -306,7 +309,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 						index++;
 					}
 
-					if(rehydrator.IsEnd && (index <= count)) {
+					if(rehydrator.IsEnd && index <= count) {
 						// we have less than was asked for. we fail here just in case.
 						return null;
 					}
@@ -365,7 +368,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				l1RelativeSize += entry.Value.l2relativeSize;
 			}
 
-			return (l1RelativeSize, l3RelativeSize, (specs.l1Index * this.L1Interval) + (specs.l2Index * this.L2Interval));
+			return (l1RelativeSize, l3RelativeSize, specs.l1Index * this.L1Interval + specs.l2Index * this.L2Interval);
 		}
 		
 		public (long start, int end)? QueryIndex(uint adjustedBlockId) {
@@ -381,7 +384,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			// first, lets artificially generate an id that would fall in the next section
 			// ok, here we must get the next l2 index, so we will artificially find an id that will fall into it
-			uint nextSectionId = (uint) ((specs.l1Index * this.L1Interval) + ((specs.l2Index + 1) * this.L2Interval));
+			uint nextSectionId = (uint) (specs.l1Index * this.L1Interval + (specs.l2Index + 1) * this.L2Interval);
 
 			// ok, we have the section start. but sadly, we dont have the length. we attempt to read the next one.  it's start is this one's end.
 			var nextSectionOffset = this.GetL3SectionOffsets(nextSectionId);

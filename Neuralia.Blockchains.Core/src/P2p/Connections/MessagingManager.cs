@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
@@ -21,6 +22,7 @@ using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
 
@@ -52,6 +54,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected readonly IGlobalsService globalsService;
 
 		protected readonly INetworkingService<R> networkingService;
+		
+		protected readonly IConnectionStore connectionStore;
 
 
 		/// <summary>
@@ -73,6 +77,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			this.globalsService = serviceSet.GlobalsService;
 			this.networkingService = (INetworkingService<R>) DIService.Instance.GetService<INetworkingService>();
+			this.connectionStore = this.networkingService.ConnectionStore;
 			this.timeService = serviceSet.TimeService;
 			this.dataAccessService = serviceSet.DataAccessService;
 
@@ -105,17 +110,16 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     handle any message (task) that we may have recived
 		/// </summary>
 		/// <param name="task"></param>
-		protected virtual void HandleTask(IColoredTask task) {
+		protected virtual async Task HandleTask(IColoredTask task) {
 			try {
 				if(task is MessageReceivedTask messageReceivedTask) {
-					System.Threading.Tasks.Task.Run(() => {
-						this.HandleMessageReceived(messageReceivedTask);
-					}, this.CancelNeuralium);
+					
+					await this.HandleMessageReceived(messageReceivedTask).ConfigureAwait(false);
 					
 				} else if(task is ForwardGossipMessageTask forwardGossipMessageTask) {
-					this.HandleForwardGossipMessageTask(forwardGossipMessageTask);
+					await this.HandleForwardGossipMessageTask(forwardGossipMessageTask).ConfigureAwait(false);
 				} else if(task is PostNewGossipMessageTask postNewGossipMessageTask) {
-					this.HandlePostNewGossipMessageTask(postNewGossipMessageTask);
+					await this.HandlePostNewGossipMessageTask(postNewGossipMessageTask).ConfigureAwait(false);
 				}
 
 			} catch(Exception ex) {
@@ -123,9 +127,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
-		protected virtual void CleanMesageCache() {
+		protected virtual async Task CleanMesageCache() {
 			try {
-				this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemStorageDirectoryPath(), this.serviceSet).CleanMessageCache();
+				await this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemStorageDirectoryPath(), this.serviceSet).CleanMessageCache().ConfigureAwait(false);
 			} catch(Exception ex) {
 				Log.Error(ex, "failed to clean the message cache.");
 			}
@@ -135,11 +139,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     here we handle the forwarding of a valid gossip message we have received, and will move ahead
 		/// </summary>
 		/// <param name="forwardGossipMessageTask"></param>
-		protected void HandleForwardGossipMessageTask(ForwardGossipMessageTask forwardGossipMessageTask) {
-
+		protected Task HandleForwardGossipMessageTask(ForwardGossipMessageTask forwardGossipMessageTask){
 			// ok, this is a valid message, it went through our hoops. so lets be nice and forward it to whoever will want it
-			this.ForwardValidGossipMessage(forwardGossipMessageTask.gossipMessageSet);
-
+			return this.ForwardValidGossipMessage(forwardGossipMessageTask.gossipMessageSet);
 		}
 
 		/// <summary>
@@ -147,7 +149,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <remarks>USE WITH CAUTION!! our peers can blacklist us if we abuse it.</remarks>
 		/// <param name="postNewGossipMessageTask"></param>
-		protected void HandlePostNewGossipMessageTask(PostNewGossipMessageTask sendGossipMessageTask) {
+		protected async Task HandlePostNewGossipMessageTask(PostNewGossipMessageTask sendGossipMessageTask) {
 			if(sendGossipMessageTask == null) {
 				throw new ApplicationException("Cannot send null gossip message");
 			}
@@ -160,40 +162,38 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 			// now we add it to our database as already received, we dont need to get it back from other peers. we set it as valid, since this is our own message
-			this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet).AddMessageToCache(sendGossipMessageTask.gossipMessageSet.BaseHeader.Hash, true, true);
+			await this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet).AddMessageToCache(sendGossipMessageTask.gossipMessageSet.BaseHeader.Hash, true, true).ConfigureAwait(false);
 
 			// ok, now we can forward it to our peers
-			this.ForwardValidGossipMessage(sendGossipMessageTask.gossipMessageSet);
+			await this.ForwardValidGossipMessage(sendGossipMessageTask.gossipMessageSet).ConfigureAwait(false);
 		}
 
-		public override void Stop() {
+		public override Task Stop() {
 			
 			this.groupManifestWorkflow?.Stop();
 			this.groupManifestWorkflow = null;
 			
-			base.Stop();
+			return base.Stop();
 		}
 
-		public override void Start() {
+		public override async Task Start() {
 			
 			this.groupManifestWorkflow = this.clientWorkflowFactory.CreateMessageGroupManifest();
 	
 			this.groupManifestWorkflow.Success += w => {
-				lock(this.locker) {
-					
-				}
+				return Task.CompletedTask;
+
 			};
 
 			this.groupManifestWorkflow.Error += (e, ex) => {
 				// lets make sure it will be attempted again
-				lock(this.locker) {
-					
-				}
+
+				return Task.CompletedTask;
 			};
 
-			this.networkingService.WorkflowCoordinator.AddWorkflow(this.groupManifestWorkflow);
+			await this.networkingService.WorkflowCoordinator.AddWorkflow(this.groupManifestWorkflow).ConfigureAwait(false);
 			
-			base.Start();
+			await base.Start().ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -203,7 +203,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="gossipHeader"></param>
 		/// <param name="task"></param>
 		/// <returns>result true if we should process the </returns>
-		protected (bool messageInCache, bool messageValid, IGossipMessageSet gossipMessageSet) ProcessReceivedGossipMessage(GossipHeader gossipHeader, MessageReceivedTask task) {
+		protected async Task<(bool messageInCache, bool messageValid, IGossipMessageSet gossipMessageSet)> ProcessReceivedGossipMessage(GossipHeader gossipHeader, MessageReceivedTask task) {
 			// ok, a gossip message, these are special, we must forward them if they are new
 
 			bool returnMessageToSender = false;
@@ -249,15 +249,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 			// next lets confirm we have not processed this message before, and record the gossip message so we dont process it again
-			(bool messageInCache, bool messageValid) = this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet).CheckRecordMessageInCache(gossipMessageSet.BaseHeader.Hash, task, returnMessageToSender);
+			(bool messageInCache, bool messageValid) = await this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet).CheckRecordMessageInCache(gossipMessageSet.BaseHeader.Hash, task, returnMessageToSender).ConfigureAwait(false);
 
 			if(messageInCache) {
 
 			}
 
-			if(messageValid) {
+			if(!messageInCache && messageValid) {
 				// if we get here, its because we had already processed it before, and it was valid. lets forward it to any peer that may not have received it since
-				this.ForwardValidGossipMessage(gossipMessageSet);
+				await this.ForwardValidGossipMessage(gossipMessageSet).ConfigureAwait(false);
 			}
 
 			return (messageInCache, messageValid, gossipMessageSet);
@@ -268,9 +268,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     this method will forward a gossip message to any connected peer that our cache indicates has never received it and
 		///     update the cache to reflect so
 		/// </summary>
-		private void ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet) {
+		private Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet) {
 
-			this.groupManifestWorkflow.ForwardValidGossipMessage(gossipMessageSet);
+			return this.groupManifestWorkflow.ForwardValidGossipMessage(gossipMessageSet);
 		}
 
 		
@@ -295,7 +295,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     lets handle the message and redirect it where it needs to go
 		/// </summary>
 		/// <param name="task"></param>
-		protected virtual void HandleMessageReceived(MessageReceivedTask task) {
+		protected virtual async Task HandleMessageReceived(MessageReceivedTask task) {
 
 			try {
 				// lets see what we just received
@@ -324,7 +324,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 						bool messageInCache = false;
 						IGossipMessageSet gossipMessageSet = null;
-						(messageInCache, _, gossipMessageSet) = this.ProcessReceivedGossipMessage(gossipHeader, task);
+						(messageInCache, _, gossipMessageSet) = await this.ProcessReceivedGossipMessage(gossipHeader, task).ConfigureAwait(false);
 
 						if(messageInCache) {
 							return; // we do not process any further
@@ -370,7 +370,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 											throw new ApplicationException("An unconfirmed connection must initiate a handshake");
 										}
 
-										this.networkingService.WorkflowCoordinator.AddWorkflow(workflow);
+										await this.networkingService.WorkflowCoordinator.AddWorkflow(workflow).ConfigureAwait(false);
 									}
 								} else {
 									if(triggeMessageSet.BaseMessage is WorkflowTriggerMessage<R>) {
@@ -429,12 +429,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
-		protected override void ProcessLoop() {
+		protected override async Task ProcessLoop(LockContext lockContext) {
 			try {
 				this.CheckShouldCancel();
 
 				// first thing, lets check if we have any tasks received to process
-				this.CheckTasks();
+				await this.CheckTasks().ConfigureAwait(false);
 
 				this.CheckShouldCancel();
 
@@ -443,7 +443,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					this.CheckShouldCancel();
 
 					// lets keep our database clean
-					this.CleanMesageCache();
+					await this.CleanMesageCache().ConfigureAwait(false);
 
 					this.CheckShouldCancel();
 
@@ -466,19 +466,20 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <summary>
 		///     Check if we received any tasks and process them
 		/// </summary>
+		/// <param name="lockContext"></param>
 		/// <param name="Process">returns true if satisfied to end the loop, false if it still needs to wait</param>
 		/// <returns></returns>
-		protected List<Guid> CheckTasks() {
-			return this.RoutedTaskReceiver.CheckTasks(() => {
+		protected Task<List<Guid>> CheckTasks(){
+			return this.RoutedTaskReceiver.CheckTasks(async () => {
 				// check this every loop, for responsiveness
 				this.CheckShouldCancel();
 			});
 		}
 
-		protected override void Initialize() {
-			base.Initialize();
+		protected override async Task Initialize(LockContext lockContext) {
+			await base.Initialize(lockContext).ConfigureAwait(false);
 
-			if(!NetworkInterface.GetIsNetworkAvailable() && !GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.LocalhostOnly) {
+			if(!this.connectionStore.GetIsNetworkAvailable && !GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.LocalhostOnly) {
 				throw new NetworkInformationException();
 			}
 		}
@@ -492,6 +493,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.data = data.Branch();
 				this.Connection = connection;
 				this.acceptedTriggers = acceptedTriggers;
+				
 			}
 
 			public MessageReceivedTask(SafeArrayHandle data, PeerConnection connection) : this(data, connection, new List<Type>(new[] {typeof(WorkflowTriggerMessage<R>)})) {

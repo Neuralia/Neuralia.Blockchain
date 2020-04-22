@@ -1,7 +1,10 @@
 using System;
-using System.IO.Abstractions;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
+using Nito.AsyncEx.Synchronous;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Transactions {
 
@@ -15,24 +18,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 	public interface IWalletSerializationTransactionExtension : IWalletSerializationTransaction {
 		void CommitTransaction();
 
-		void RollbackTransaction();
+		Task RollbackTransaction();
 
 		// called when the element is disposed.
-		event Action<long> Disposed;
+		event Func<long, Task> Disposed;
 	}
 
 	public class WalletSerializationTransaction : IWalletSerializationTransactionExtension {
 
 		private readonly WalletSerializationTransactionalLayer walletSerializationTransactionalLayer;
-		private bool completed;
+		private          bool                                  completed;
 
 		public WalletSerializationTransaction(WalletSerializationTransactionalLayer walletSerializationTransactionalLayer) {
 			this.walletSerializationTransactionalLayer = walletSerializationTransactionalLayer;
-			this.SessionId = GlobalRandom.GetNextLong();
+			this.SessionId                             = GlobalRandom.GetNextLong();
 		}
 
-		public IFileSystem FileSystem => this.walletSerializationTransactionalLayer.FileSystem;
-		public long SessionId { get; private set; }
+		public FileSystemWrapper FileSystem => this.walletSerializationTransactionalLayer.FileSystem;
+		public long              SessionId  { get; private set; }
 
 		public void CommitTransaction() {
 			if(!this.completed) {
@@ -42,16 +45,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		public void RollbackTransaction() {
+		public async Task RollbackTransaction() {
 			if(!this.completed) {
 				this.completed = true;
 				this.walletSerializationTransactionalLayer?.RollbackTransaction();
-				this.Disposed?.Invoke(this.SessionId);
+
+				if(this.Disposed != null) {
+					await this.Disposed(this.SessionId).ConfigureAwait(false);
+				}
+
 				this.SessionId = 0;
 			}
 		}
 
-		public event Action<long> Disposed;
+		public event Func<long, Task> Disposed;
 
 		public void ValidateSessionContext(IWalletSerializationTransaction walletSerializationTransaction) {
 			this.ValidateSessionContext(walletSerializationTransaction?.SessionId ?? 0);
@@ -75,7 +82,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		private void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				this.RollbackTransaction();
+				this.RollbackTransaction().WaitAndUnwrapException();
 			}
 
 			this.IsDisposed = true;

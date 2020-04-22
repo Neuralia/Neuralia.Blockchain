@@ -16,6 +16,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 		
 		long PublicBlockHeight { get; set; }
 		long DiskBlockHeight { get; set; }
+		long BlockHeight { get; set; }
+		
 		DateTime LastBlockTimestamp { get; set; }
 		ushort LastBlockLifespan { get; set; }
 		SafeArrayHandle LastBlockHash { get;  }
@@ -26,7 +28,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 		SafeArrayHandle ModeratorKey { get;  }
 		void CreateSnapshot();
 		void Commit();
-		void Uncommit();
+		void UnCommit();
 		void Rollback();
 		byte ModeratorKeyOrdinal { get; }
 	}
@@ -49,7 +51,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 
 		public long PublicBlockHeight { get; set; }
 		public long DiskBlockHeight { get; set; }
-
+		public long BlockHeight { get; set; }
+		
 		public DateTime LastBlockTimestamp { get; set; }
 		public ushort LastBlockLifespan { get; set; }
 		public SafeArrayHandle LastBlockHash { get;  } = SafeArrayHandle.Create();
@@ -69,15 +72,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 
 			this.PublicBlockHeight = chainStateProvider.PublicBlockHeight;
 			this.DiskBlockHeight = chainStateProvider.DiskBlockHeight;
+			this.BlockHeight = chainStateProvider.BlockHeight;
+			
 			this.LastBlockTimestamp = chainStateProvider.LastBlockTimestamp;
 			this.LastBlockLifespan = chainStateProvider.LastBlockLifespan;
-			this.LastBlockHash.Entry =  ByteArray.Wrap(chainStateProvider.LastBlockHash);
+			this.LastBlockHash.Entry =  ByteArray.WrapAndOwn(chainStateProvider.LastBlockHash);
 			this.BlockInsertionStatus = (int) chainStateProvider.BlockInterpretationStatus;
 
 			if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
 				this.ModeratorKey.Entry = chainStateProvider.GetModeratorKeyBytes(this.ModeratorKeyOrdinal).Entry;
 			}
-			else if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSSMT_ID) {
+			else if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID) {
 				this.ModeratorKey.Entry = chainStateProvider.GetModeratorKeyBytes(this.ModeratorKeyOrdinal).Entry;
 			}
 			
@@ -91,7 +96,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 			this.commited = true;
 		}
 
-		public void Uncommit() {
+		public void UnCommit() {
 			this.commited = false;
 		}
 
@@ -104,9 +109,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 				
 			List<Action> actions = new List<Action>();
 			
-			actions.Add(() => chainStateProvider.DiskBlockHeight = this.DiskBlockHeight);
-				
 			actions.Add(() => chainStateProvider.PublicBlockHeight = this.PublicBlockHeight);
+			actions.Add(() => chainStateProvider.DiskBlockHeight = this.DiskBlockHeight);
+			actions.Add(() => chainStateProvider.BlockHeight = this.BlockHeight);
+			
 			actions.Add(() => chainStateProvider.LastBlockTimestamp = this.LastBlockTimestamp);
 			actions.Add(() => chainStateProvider.LastBlockLifespan = this.LastBlockLifespan);
 			actions.Add(() => chainStateProvider.LastBlockHash = this.LastBlockHash.ToExactByteArrayCopy());
@@ -124,7 +130,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 				if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
 					chainStateProvider.UpdateModeratorKey(new TransactionId(), this.ModeratorKeyOrdinal, this.ModeratorKey);
 				}
-				else if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSSMT_ID) {
+				else if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID) {
 					chainStateProvider.UpdateModeratorKey(new TransactionId(),  this.ModeratorKeyOrdinal, this.ModeratorKey);
 				}
 			});

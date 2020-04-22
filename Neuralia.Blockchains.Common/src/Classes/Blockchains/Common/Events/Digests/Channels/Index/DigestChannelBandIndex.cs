@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
@@ -9,7 +9,9 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index {
 
@@ -62,10 +64,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		protected readonly string baseFolder;
 
 		protected readonly CHANEL_BANDS enabledBands;
-		protected readonly IFileSystem fileSystem;
+		protected readonly FileSystemWrapper fileSystem;
 		protected readonly string scopeFolder;
 
-		protected DigestChannelBandIndex(string filename, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem) {
+		protected DigestChannelBandIndex(string filename, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) {
 			this.enabledBands = enabledBands;
 
 			EnumsUtils.RunForFlags(enabledBands, flag => {
@@ -105,12 +107,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		protected void EnsureFileExtracted(string expandedFilename, string archivedFilename) {
-			if(!this.fileSystem.File.Exists(expandedFilename)) {
+			if(!this.fileSystem.FileExists(expandedFilename)) {
 
 				string directoryPath = Path.GetDirectoryName(expandedFilename);
 
-				if(!this.fileSystem.Directory.Exists(directoryPath)) {
-					this.fileSystem.Directory.CreateDirectory(directoryPath);
+				if(!this.fileSystem.DirectoryExists(directoryPath)) {
+					this.fileSystem.CreateDirectory(directoryPath);
 				}
 
 				// ok, expand the file
@@ -169,12 +171,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected SafeArrayHandle HashFile(string filename) {
 
-			if(!this.fileSystem.File.Exists(filename)) {
+			if(!this.fileSystem.FileExists(filename)) {
 				return new SafeArrayHandle();
 			}
-			using(var sliceHashNodes = new FileStreamSliceHashNodeList(filename, this.fileSystem)) {
-				return HashingUtils.Hash3(sliceHashNodes);
-			}
+
+			using var sliceHashNodes = new FileStreamSliceHashNodeList(filename, this.fileSystem);
+
+			return HashingUtils.Hash3(sliceHashNodes);
+
 		}
 	}
 }

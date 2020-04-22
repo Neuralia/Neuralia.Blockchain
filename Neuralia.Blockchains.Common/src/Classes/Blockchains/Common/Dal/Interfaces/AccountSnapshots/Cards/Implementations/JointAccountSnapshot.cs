@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 			this.MemberAccounts.Clear();
 		}
 
-		public void AddCollectionEntry(IJointMemberAccount entry) {
+		public virtual void AddCollectionEntry(IJointMemberAccount entry) {
 			TypedCollectionExposureUtil<IJointMemberAccount>.AddCollectionEntry(entry, this.MemberAccounts);
 		}
 

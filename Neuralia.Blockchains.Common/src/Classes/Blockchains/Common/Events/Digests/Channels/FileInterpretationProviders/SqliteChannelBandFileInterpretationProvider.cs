@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders {
 
@@ -19,11 +21,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected readonly Expression<Func<CARD_TYPE, object>> keyDeclaration;
 
-		public SqliteChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, IFileSystem fileSystem) : this(namingProvider, fileSystem, null, null) {
+		public SqliteChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, FileSystemWrapper fileSystem) : this(namingProvider, fileSystem, null, null) {
 
 		}
 
-		public SqliteChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, IFileSystem fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration, KEY_SELECTOR indexer) : base(namingProvider, fileSystem) {
+		public SqliteChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, FileSystemWrapper fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration, KEY_SELECTOR indexer) : base(namingProvider, fileSystem) {
 
 			this.keyDeclaration = keyDeclaration;
 			this.indexer = indexer;

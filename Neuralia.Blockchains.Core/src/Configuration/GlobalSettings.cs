@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public static bool TestingMode { get; set; } = false;
 
 		public AppSettingsBase AppSettings { get; private set; }
-		public SoftwareVersion CurrentSoftwareVersion { get; private set; }
+		public SoftwareVersion CurrentSoftwareVersion { get; private set; } = new SoftwareVersion();
 
 		public NodeInfo NodeInfo { get; private set; }
 		public int NetworkId { get; private set; }

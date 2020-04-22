@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Receivers;
@@ -9,6 +10,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases {
 	public interface INetworkChainWorkflow : ITargettedNetworkingWorkflow<IBlockchainEventsRehydrationFactory>, IChainWorkflow {
@@ -68,51 +70,51 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 
 		public ITaskRouter TaskRouter => this.RoutedTaskReceiver.TaskRouter;
 
-		public void StashTask(InternalRoutedTask task) {
-			this.RoutedTaskReceiver.StashTask(task);
+		public Task StashTask(InternalRoutedTask task) {
+			return this.RoutedTaskReceiver.StashTask(task);
 		}
 
-		public void RestoreStashedTask(InternalRoutedTask task) {
-			this.RoutedTaskReceiver.RestoreStashedTask(task);
+		public Task RestoreStashedTask(InternalRoutedTask task) {
+			return this.RoutedTaskReceiver.RestoreStashedTask(task);
 		}
 
-		public bool CheckSingleTask(Guid taskId) {
+		public Task<bool> CheckSingleTask(Guid taskId) {
 			return this.RoutedTaskReceiver.CheckSingleTask(taskId);
 		}
 
-		public void Wait() {
-			this.RoutedTaskReceiver.Wait();
+		public Task Wait() {
+			return this.RoutedTaskReceiver.Wait();
 		}
 
-		public void Wait(TimeSpan timeout) {
-			this.RoutedTaskReceiver.Wait(timeout);
+		public Task Wait(TimeSpan timeout) {
+			return this.RoutedTaskReceiver.Wait(timeout);
 		}
 
-		public void DispatchSelfTask(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchSelfTask(task);
+		public Task DispatchSelfTask(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchSelfTask(task, lockContext);
 		}
 
-		public void DispatchTaskAsync(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchTaskAsync(task);
+		public Task DispatchTaskAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskAsync(task, lockContext);
 		}
 
-		public void DispatchTaskNoReturnAsync(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchTaskNoReturnAsync(task);
+		public Task DispatchTaskNoReturnAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskNoReturnAsync(task, lockContext);
 		}
 
-		public bool DispatchTaskSync(IRoutedTask task) {
-			return this.RoutedTaskReceiver.DispatchTaskSync(task);
+		public Task<bool> DispatchTaskSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskSync(task, lockContext);
 		}
 
-		public bool DispatchTaskNoReturnSync(IRoutedTask task) {
-			return this.RoutedTaskReceiver.DispatchTaskNoReturnSync(task);
+		public Task<bool> DispatchTaskNoReturnSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskNoReturnSync(task, lockContext);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task) {
+		public Task<bool> WaitSingleTask(IRoutedTask task) {
 			return this.RoutedTaskReceiver.WaitSingleTask(task);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
+		public Task<bool> WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
 			return this.RoutedTaskReceiver.WaitSingleTask(task, timeout);
 		}
 

@@ -26,13 +26,15 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 		public static void Dehydrate<T>(Dictionary<AccountId, T> accountIds, IDataDehydrator dehydrator, bool onlyPublicAccounts, AccountIdGroupSerializerDehydrateParameters<T, AccountId> parameters = null) {
 
 			SequantialOffsetCalculator accountCalculator = GetOffsetCalculator(onlyPublicAccounts);
-			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
+			AdaptiveLong1_9            adaptiveLong      = new AdaptiveLong1_9();
 
 			var groups = accountIds.GroupBy(a => a.Key.AccountTypeRaw).OrderBy(g => g.Key).ToList();
 
-			int groupsCount = groups.Count();
+			int groupsCount = groups.Count;
 
-			parameters?.Initialize?.Invoke(groupsCount);
+			if(parameters?.Initialize != null) {
+				parameters?.Initialize(groupsCount);
+			}
 
 			adaptiveLong.Value = groupsCount;
 			adaptiveLong.Dehydrate(dehydrator);
@@ -44,7 +46,10 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 
 					int groupCount = group.Count();
 					accountCalculator.Reset();
-					parameters?.InitializeGroup?.Invoke(groupIndex, groupCount);
+
+					if(parameters?.InitializeGroup != null) {
+						parameters?.InitializeGroup(groupIndex, groupCount);
+					}
 
 					adaptiveLong.Value = groupCount;
 					adaptiveLong.Dehydrate(dehydrator);
@@ -63,14 +68,19 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 							adaptiveLong.Value = accountCalculator.CalculateOffset(entry.Key.SequenceId);
 							adaptiveLong.Dehydrate(dehydrator);
 
-							parameters?.DehydrateExtraData?.Invoke(entry.Value, entry.Key, adaptiveLong.Value, index, dehydrator);
+							if(parameters?.DehydrateExtraData != null) {
+								parameters?.DehydrateExtraData(entry.Value, entry.Key, adaptiveLong.Value, index, dehydrator);
+							}
 
 							accountCalculator.AddLastOffset();
 							index++;
 						}
 					}
 
-					parameters?.FinalizeGroup?.Invoke(groupIndex);
+					if(parameters?.FinalizeGroup != null) {
+						parameters?.FinalizeGroup(groupIndex);
+					}
+
 					groupIndex++;
 				}
 			}
@@ -79,11 +89,11 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 		public static void Dehydrate<T>(Dictionary<long, T> accountIds, IDataDehydrator dehydrator, bool onlyPublicAccounts, AccountIdGroupSerializerDehydrateParameters<T, long> parameters = null) {
 
 			SequantialOffsetCalculator accountCalculator = GetOffsetCalculator(onlyPublicAccounts);
-			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
+			AdaptiveLong1_9            adaptiveLong      = new AdaptiveLong1_9();
 
-			adaptiveLong.Value = accountIds.Count();
+			adaptiveLong.Value = accountIds.Count;
 			adaptiveLong.Dehydrate(dehydrator);
-			dehydrator.Write((ushort) accountIds.Count());
+			dehydrator.Write((ushort) accountIds.Count);
 
 			if(accountIds.Any()) {
 
@@ -97,7 +107,9 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 					adaptiveLong.Value = accountCalculator.CalculateOffset(entry.Key);
 					adaptiveLong.Dehydrate(dehydrator);
 
-					parameters?.DehydrateExtraData?.Invoke(entry.Value, entry.Key, adaptiveLong.Value, index, dehydrator);
+					if(parameters?.DehydrateExtraData != null) {
+						parameters?.DehydrateExtraData(entry.Value, entry.Key, adaptiveLong.Value, index, dehydrator);
+					}
 
 					accountCalculator.AddLastOffset();
 					index++;
@@ -108,24 +120,29 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 		public static List<AccountId> Rehydrate(IDataRehydrator rehydrator, bool onlyPublicAccounts, AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = null) {
 
 			SequantialOffsetCalculator accountCalculator = GetOffsetCalculator(onlyPublicAccounts);
-			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
+			AdaptiveLong1_9            adaptiveLong      = new AdaptiveLong1_9();
 
 			var accountIds = new List<AccountId>();
 
 			adaptiveLong.Rehydrate(rehydrator);
 			int groupsCount = (int) adaptiveLong.Value;
 
-			parameters?.Initialize?.Invoke(groupsCount);
+			if(parameters?.Initialize != null) {
+				parameters?.Initialize(groupsCount);
+			}
 
 			if(groupsCount != 0) {
 
 				for(int groupIndex = 0; groupIndex < groupsCount; groupIndex++) {
 
 					adaptiveLong.Rehydrate(rehydrator);
-					int groupCount = (int) adaptiveLong.Value;
+					int                groupCount  = (int) adaptiveLong.Value;
 					Enums.AccountTypes accountType = (Enums.AccountTypes) rehydrator.ReadByte();
 
-					parameters?.InitializeGroup?.Invoke(groupIndex, groupCount, accountType);
+					if(parameters?.InitializeGroup != null) {
+						parameters?.InitializeGroup(groupIndex, groupCount, accountType);
+					}
+
 					accountCalculator.Reset();
 
 					if(groupCount != 0) {
@@ -139,13 +156,17 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 
 							accountIds.Add(accountId);
 
-							parameters?.RehydrateExtraData?.Invoke(accountId, adaptiveLong.Value, i, rehydrator);
+							if(parameters?.RehydrateExtraData != null) {
+								parameters?.RehydrateExtraData(accountId, adaptiveLong.Value, i, rehydrator);
+							}
 
 							accountCalculator.AddLastOffset();
 						}
 					}
 
-					parameters?.FinalizeGroup?.Invoke(groupIndex);
+					if(parameters?.FinalizeGroup != null) {
+						parameters?.FinalizeGroup(groupIndex);
+					}
 				}
 			}
 
@@ -155,14 +176,16 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 		public static List<long> RehydrateLong(IDataRehydrator rehydrator, bool onlyPublicAccounts, AccountIdGroupSerializerRehydrateParameters<long> parameters = null) {
 
 			SequantialOffsetCalculator accountCalculator = GetOffsetCalculator(onlyPublicAccounts);
-			var accountIds = new List<long>();
+			var                        accountIds        = new List<long>();
 
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 
 			adaptiveLong.Rehydrate(rehydrator);
 			int count = (int) adaptiveLong.Value;
 
-			parameters?.Initialize?.Invoke(count);
+			if(parameters?.Initialize != null) {
+				parameters?.Initialize(count);
+			}
 
 			for(int i = 0; i < count; i++) {
 
@@ -171,7 +194,9 @@ namespace Neuralia.Blockchains.Common.Classes.Tools.Serialization {
 
 				accountIds.Add(accountId);
 
-				parameters?.RehydrateExtraData?.Invoke(accountId, adaptiveLong.Value, i, rehydrator);
+				if(parameters?.RehydrateExtraData != null) {
+					parameters?.RehydrateExtraData(accountId, adaptiveLong.Value, i, rehydrator);
+				}
 
 				accountCalculator.AddLastOffset();
 			}

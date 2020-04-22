@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainPool;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
@@ -26,97 +27,95 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		}
 
-		public void InsertTransactionEntry(ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
+		public async Task InsertTransactionEntry(ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
 			CHAIN_POOL_PUBLIC_TRANSACTIONS entry = new CHAIN_POOL_PUBLIC_TRANSACTIONS();
 
-			this.ClearExpiredTransactions();
+			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
 			this.PrepareTransactionEntry(entry, transactionEnvelope, chainInception);
 
-			this.PerformOperation(db => {
+			await this.PerformOperationAsync(db => {
 				db.PublicTransactions.Add(entry);
 
-				db.SaveChanges();
-			});
+				return db.SaveChangesAsync();
+			}).ConfigureAwait(false);
 		}
 
-		public void RemoveTransactionEntry(TransactionId transactionId) {
+		public async Task RemoveTransactionEntry(TransactionId transactionId) {
 
-			this.ClearExpiredTransactions();
+			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
-			this.PerformOperation(db => {
+			await this.PerformOperationAsync(async db => {
 				string transactionString = transactionId.ToCompactString();
-				CHAIN_POOL_PUBLIC_TRANSACTIONS transactionEntry = db.PublicTransactions.SingleOrDefault(t => t.TransactionId == transactionString);
+				CHAIN_POOL_PUBLIC_TRANSACTIONS transactionEntry = await db.PublicTransactions.SingleOrDefaultAsync(t => t.TransactionId == transactionString).ConfigureAwait(false);
 
 				if(transactionEntry != null) {
 					db.PublicTransactions.Remove(transactionEntry);
 
-					db.SaveChanges();
+					await db.SaveChangesAsync().ConfigureAwait(false);
 				}
-			});
+			}).ConfigureAwait(false);
 		}
 
-		public List<TransactionId> GetTransactions() {
-			this.ClearExpiredTransactions();
+		public async Task<List<TransactionId>> GetTransactions() {
+			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
-			return this.PerformOperation(db => {
+			return await this.PerformOperationAsync(async db => {
 
-				return db.PublicTransactions.Select(t => t.TransactionId).ToList().Select(TransactionId.FromCompactString).ToList();
-			});
+				return (await db.PublicTransactions.Select(t => t.TransactionId).ToListAsync().ConfigureAwait(false)).Select(TransactionId.FromCompactString).ToList();
+			}).ConfigureAwait(false);
 		}
 
-		public void ClearExpiredTransactions() {
+		public async Task ClearExpiredTransactions() {
 			try {
-				this.PerformOperation(db => {
+				await this.PerformOperationAsync(db => {
 
 					db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => t.Expiration < DateTime.UtcNow));
 
-					db.SaveChanges();
-				});
+					return db.SaveChangesAsync();
+				}).ConfigureAwait(false);
 			} catch(Exception ex) {
 				//TODO: what to do?
 				Log.Error("Failed to clear expired transactions", ex);
 			}
 		}
 
-		public void ClearTransactions() {
-			this.PerformOperation(db => {
+		public Task ClearTransactions() {
+			return this.PerformOperationAsync(db => {
 
 				db.PublicTransactions.RemoveRange(db.PublicTransactions);
 
-				db.SaveChanges();
+				return db.SaveChangesAsync();
 			});
 		}
 
-		public void ClearTransactions(List<TransactionId> transactionIds) {
+		public async Task ClearTransactions(List<TransactionId> transactionIds) {
 			var stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
 
-			this.PerformOperation(db => {
+			await this.PerformOperationAsync(db => {
 				db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => stringTransactionIds.Contains(t.TransactionId)));
 
-				db.SaveChanges();
-			});
+				return db.SaveChangesAsync();
+			}).ConfigureAwait(false);
 
-			this.ClearExpiredTransactions();
+			await this.ClearExpiredTransactions().ConfigureAwait(false);
 		}
 
-		public void RemoveTransactionEntries(List<TransactionId> transactionIds) {
+		public async Task RemoveTransactionEntries(List<TransactionId> transactionIds) {
 
-			this.ClearExpiredTransactions();
+			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
 			if(transactionIds.Any()) {
 				var stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
 
-				this.PerformOperation(db => {
+				await this.PerformOperationAsync(db => {
 
-					var transactions = db.PublicTransactions.Where(t => stringTransactionIds.Contains(t.TransactionId));
-
-					foreach(CHAIN_POOL_PUBLIC_TRANSACTIONS transaction in transactions) {
+					foreach(CHAIN_POOL_PUBLIC_TRANSACTIONS transaction in db.PublicTransactions.Where(t => stringTransactionIds.Contains(t.TransactionId))) {
 						db.PublicTransactions.Remove(transaction);
 					}
 
-					db.SaveChanges();
-				});
+					return db.SaveChangesAsync();
+				}).ConfigureAwait(false);
 			}
 		}
 

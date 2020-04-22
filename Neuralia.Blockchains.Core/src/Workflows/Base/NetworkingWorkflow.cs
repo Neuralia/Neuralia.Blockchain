@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
@@ -11,6 +12,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Exceptions;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Workflows.Base {
@@ -78,8 +80,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// </summary>
 		public Guid ClientId { get; protected set; }
 
-		public override void Stop() {
-			base.Stop();
+		public override async Task Stop() {
+			await base.Stop().ConfigureAwait(false);
 
 			// just in case
 			this.Awaken();
@@ -172,8 +174,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			}
 		}
 
-		protected override void Initialize() {
-			base.Initialize();
+		protected override Task Initialize(LockContext lockContext) {
+			return base.Initialize(lockContext);
 
 		}
 
@@ -210,7 +212,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 				}).Distinct();
 
-				if(messages.Count() == 1) {
+				if(messages.Count == 1) {
 					// the are the same message repeated. lets just take one.
 					return messages.First() as SPECIALIZED_MESSAGE_SET;
 				}

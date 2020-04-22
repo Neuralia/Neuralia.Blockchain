@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
@@ -57,7 +58,7 @@ namespace Neuralia.Blockchains.Core.Network {
 	/// <inheritdoc />
 	public class TcpServer : ITcpServer {
 
-		public delegate void MessageBytesReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer);
+		public delegate Task MessageBytesReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer);
 
 		protected readonly List<ITcpConnection> connections = new List<ITcpConnection>();
 
@@ -160,7 +161,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		private void InvokeNewConnection(SafeArrayHandle bytes, ITcpConnection connection) {
-			this.NewConnection?.Invoke(this, connection, bytes);
+if(			this.NewConnection != null){			this.NewConnection(this, connection, bytes);}
 		}
 
 		private static void AcceptCallback(IAsyncResult result) {
@@ -271,7 +272,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			// make sure this connection is acceptable and not already created
-			this.NewConnectionRequestReceived?.Invoke(tcpConnection);
+if(			this.NewConnectionRequestReceived != null){			this.NewConnectionRequestReceived(tcpConnection);}
 
 			//Wait for handshake
 			tcpConnection.StartWaitingForHandshake(bytes => {

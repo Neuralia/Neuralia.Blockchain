@@ -34,7 +34,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks {
 		public virtual Action<T> Action { get; set; }
 
 		public virtual void TriggerAction(T sender) {
-			this.Action?.Invoke(sender);
+if(			this.Action != null){			this.Action(sender);}
 		}
 	}
 }

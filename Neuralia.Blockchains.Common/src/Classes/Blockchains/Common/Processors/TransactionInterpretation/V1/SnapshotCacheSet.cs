@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading.Tasks;
 using MoreLinq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1 {
 
@@ -19,65 +21,65 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		where JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttribute, new()
 		where JOINT_ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccount, new() {
 
-		ACCOUNT_SNAPSHOT GetAccountSnapshotReadonly(AccountId newAccountId);
-		ACCOUNT_SNAPSHOT GetAccountSnapshotModify(AccountId newAccountId);
+		Task<ACCOUNT_SNAPSHOT> GetAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext);
+		Task<ACCOUNT_SNAPSHOT> GetAccountSnapshotModify(AccountId newAccountId, LockContext lockContext);
 
-		T GetAccountSnapshotReadonly<T>(AccountId newAccountId)
+		Task<T> GetAccountSnapshotReadonly<T>(AccountId newAccountId, LockContext lockContext)
 			where T : class, IAccountSnapshot;
 
-		T GetAccountSnapshotModify<T>(AccountId newAccountId)
+		Task<T> GetAccountSnapshotModify<T>(AccountId newAccountId, LockContext lockContext)
 			where T : class, IAccountSnapshot;
 
-		STANDARD_ACCOUNT_SNAPSHOT CreateNewStandardAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash);
-		bool CheckStandardAccountSnapshotExists(AccountId newAccountId);
-		void DeleteAccountSnapshot(AccountId newAccountId);
+		Task<STANDARD_ACCOUNT_SNAPSHOT> CreateNewStandardAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext);
+		Task<bool> CheckStandardAccountSnapshotExists(AccountId newAccountId, LockContext lockContext);
+		void DeleteAccountSnapshot(AccountId newAccountId, LockContext lockContext);
 
-		STANDARD_ACCOUNT_SNAPSHOT CreateLooseStandardAccountSnapshot(AccountId newAccountId);
-		STANDARD_ACCOUNT_SNAPSHOT GetStandardAccountSnapshotReadonly(AccountId newAccountId);
-		STANDARD_ACCOUNT_SNAPSHOT GetStandardAccountSnapshotModify(AccountId newAccountId);
-		JOINT_ACCOUNT_SNAPSHOT CreateNewJointAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash);
+		Task<STANDARD_ACCOUNT_SNAPSHOT> CreateLooseStandardAccountSnapshot(AccountId newAccountId, LockContext lockContext);
+		Task<STANDARD_ACCOUNT_SNAPSHOT> GetStandardAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext);
+		Task<STANDARD_ACCOUNT_SNAPSHOT> GetStandardAccountSnapshotModify(AccountId newAccountId, LockContext lockContext);
+		Task<JOINT_ACCOUNT_SNAPSHOT> CreateNewJointAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext);
 
-		void DeleteStandardAccountSnapshot(AccountId newAccountId);
+		void DeleteStandardAccountSnapshot(AccountId newAccountId, LockContext lockContext);
 
-		JOINT_ACCOUNT_SNAPSHOT CreateLooseJointAccountSnapshot(AccountId newAccountId);
-		JOINT_ACCOUNT_SNAPSHOT GetJointAccountSnapshotReadonly(AccountId newAccountId);
-		JOINT_ACCOUNT_SNAPSHOT GetJointAccountSnapshotModify(AccountId newAccountId);
-		bool CheckJointAccountSnapshotExists(AccountId newAccountId);
-		void DeleteJointAccountSnapshot(AccountId newAccountId);
+		Task<JOINT_ACCOUNT_SNAPSHOT> CreateLooseJointAccountSnapshot(AccountId newAccountId, LockContext lockContext);
+		Task<JOINT_ACCOUNT_SNAPSHOT> GetJointAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext);
+		Task<JOINT_ACCOUNT_SNAPSHOT> GetJointAccountSnapshotModify(AccountId newAccountId, LockContext lockContext);
+		Task<bool> CheckJointAccountSnapshotExists(AccountId newAccountId, LockContext lockContext);
+		void DeleteJointAccountSnapshot(AccountId newAccountId, LockContext lockContext);
 	}
 
 	public interface IAccountkeysSnapshotCacheSet<STANDARD_ACCOUNT_KEY_SNAPSHOT>
 		where STANDARD_ACCOUNT_KEY_SNAPSHOT : class, IStandardAccountKeysSnapshot {
 
-		STANDARD_ACCOUNT_KEY_SNAPSHOT CreateNewAccountKeySnapshot((long AccountId, byte OrdinalId) key);
-		STANDARD_ACCOUNT_KEY_SNAPSHOT CreateLooseAccountKeySnapshot((long AccountId, byte OrdinalId) key);
-		STANDARD_ACCOUNT_KEY_SNAPSHOT GetAccountKeySnapshotReadonly((long AccountId, byte OrdinalId) key);
-		STANDARD_ACCOUNT_KEY_SNAPSHOT GetAccountKeySnapshotModify((long AccountId, byte OrdinalId) key);
-		bool CheckAccountKeySnapshotExists((long AccountId, byte OrdinalId) key);
-		void DeleteJointAccountSnapshot((long AccountId, byte OrdinalId) key);
+		Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> CreateNewAccountKeySnapshot((long AccountId, byte OrdinalId) key, LockContext lockContext);
+		Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> CreateLooseAccountKeySnapshot((long AccountId, byte OrdinalId) key, LockContext lockContext);
+		Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> GetAccountKeySnapshotReadonly((long AccountId, byte OrdinalId) key, LockContext lockContext);
+		Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> GetAccountKeySnapshotModify((long AccountId, byte OrdinalId) key, LockContext lockContext);
+		Task<bool> CheckAccountKeySnapshotExists((long AccountId, byte OrdinalId) key, LockContext lockContext);
+		void DeleteJointAccountSnapshot((long AccountId, byte OrdinalId) key, LockContext lockContext);
 	}
 
 	public interface IAccreditationCertificateSnapshotCacheSet<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_SNAPSHOT : class, IAccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount {
 
-		ACCREDITATION_CERTIFICATE_SNAPSHOT CreateNewAccreditationCertificateSnapshot(int id);
-		ACCREDITATION_CERTIFICATE_SNAPSHOT CreateLooseAccreditationCertificateSnapshot(int id);
-		ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccreditationCertificateSnapshotReadonly(int id);
-		ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccreditationCertificateSnapshotModify(int id);
-		bool CheckAccreditationCertificateSnapshotExists(int id);
-		void DeleteAccreditationCertificateSnapshot(int id);
+		Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> CreateNewAccreditationCertificateSnapshot(int id, LockContext lockContext);
+		Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> CreateLooseAccreditationCertificateSnapshot(int id, LockContext lockContext);
+		Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificateSnapshotReadonly(int id, LockContext lockContext);
+		Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificateSnapshotModify(int id, LockContext lockContext);
+		Task<bool> CheckAccreditationCertificateSnapshotExists(int id, LockContext lockContext);
+		void DeleteAccreditationCertificateSnapshot(int id, LockContext lockContext);
 	}
 
 	public interface IChainOptionsSnapshotCacheSet<CHAIN_OPTIONS_SNAPSHOT>
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot {
 
-		CHAIN_OPTIONS_SNAPSHOT CreateNewChainOptionsSnapshot(int id);
-		CHAIN_OPTIONS_SNAPSHOT CreateLooseChainOptionsSnapshot(int id);
-		CHAIN_OPTIONS_SNAPSHOT GetChainOptionsSnapshotReadonly(int id);
-		CHAIN_OPTIONS_SNAPSHOT GetChainOptionsSnapshotModify(int id);
-		bool CheckChainOptionsSnapshotExists(int id);
-		void DeleteChainOptionsSnapshot(int id);
+		Task<CHAIN_OPTIONS_SNAPSHOT> CreateNewChainOptionsSnapshot(int id, LockContext lockContext);
+		Task<CHAIN_OPTIONS_SNAPSHOT> CreateLooseChainOptionsSnapshot(int id, LockContext lockContext);
+		Task<CHAIN_OPTIONS_SNAPSHOT> GetChainOptionsSnapshotReadonly(int id, LockContext lockContext);
+		Task<CHAIN_OPTIONS_SNAPSHOT> GetChainOptionsSnapshotModify(int id, LockContext lockContext);
+		Task<bool> CheckChainOptionsSnapshotExists(int id, LockContext lockContext);
+		void DeleteChainOptionsSnapshot(int id, LockContext lockContext);
 	}
 
 	public interface ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : IAccountsSnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT>, IAccountkeysSnapshotCacheSet<STANDARD_ACCOUNT_KEY_SNAPSHOT>, IAccreditationCertificateSnapshotCacheSet<ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>, IChainOptionsSnapshotCacheSet<CHAIN_OPTIONS_SNAPSHOT>
@@ -92,22 +94,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		where ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT : class, IAccreditationCertificateSnapshotAccount, new()
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
 
-		event Func<STANDARD_ACCOUNT_SNAPSHOT> RequestCreateNewStandardAccountSnapshot;
-		event Func<JOINT_ACCOUNT_SNAPSHOT> RequestCreateNewJointAccountSnapshot;
-		event Func<STANDARD_ACCOUNT_KEY_SNAPSHOT> RequestCreateNewAccountKeySnapshot;
-		event Func<ACCREDITATION_CERTIFICATE_SNAPSHOT> RequestCreateNewAccreditationCertificateSnapshot;
-		event Func<CHAIN_OPTIONS_SNAPSHOT> RequestCreateNewChainOptionSnapshot;
-		event Func<List<AccountId>, Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>> RequestStandardAccountSnapshots;
-		event Func<List<AccountId>, Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>> RequestJointAccountSnapshots;
-		event Func<List<(long AccountId, byte OrdinalId)>, Dictionary<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT>> RequestAccountKeySnapshots;
-		event Func<List<int>, Dictionary<int, ACCREDITATION_CERTIFICATE_SNAPSHOT>> RequestAccreditationCertificateSnapshots;
-		event Func<List<int>, Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>> RequestChainOptionSnapshots;
+		event Func<LockContext, Task<STANDARD_ACCOUNT_SNAPSHOT>> RequestCreateNewStandardAccountSnapshot;
+		event Func<LockContext, Task<JOINT_ACCOUNT_SNAPSHOT>> RequestCreateNewJointAccountSnapshot;
+		event Func<LockContext, Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> RequestCreateNewAccountKeySnapshot;
+		event Func<LockContext, Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> RequestCreateNewAccreditationCertificateSnapshot;
+		event Func<LockContext, Task<CHAIN_OPTIONS_SNAPSHOT>> RequestCreateNewChainOptionSnapshot;
+		
+		event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>>> RequestStandardAccountSnapshots;
+		event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>>> RequestJointAccountSnapshots;
+		event Func<List<(long AccountId, byte OrdinalId)>, LockContext, Task<Dictionary<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT>>> RequestAccountKeySnapshots;
+		event Func<List<int>, LockContext, Task<Dictionary<int, ACCREDITATION_CERTIFICATE_SNAPSHOT>>> RequestAccreditationCertificateSnapshots;
+		event Func<List<int>, LockContext, Task<Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>>> RequestChainOptionSnapshots;
 		void Initialize();
 		void Reset();
 		void BeginTransaction();
 		void CommitTransaction();
 		void RollbackTransaction();
-		void EnsureSnapshots(SnapshotKeySet snapshotKeySet);
+		Task EnsureSnapshots(SnapshotKeySet snapshotKeySet, LockContext lockContext);
 	}
 
 	public interface ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> : ISnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
@@ -154,17 +157,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.chainOptionsSnapshotCache = new SnapshotCache<CHAIN_OPTIONS_SNAPSHOT, int>(cardUtils);
 		}
 
-		public event Func<STANDARD_ACCOUNT_SNAPSHOT> RequestCreateNewStandardAccountSnapshot;
-		public event Func<JOINT_ACCOUNT_SNAPSHOT> RequestCreateNewJointAccountSnapshot;
-		public event Func<STANDARD_ACCOUNT_KEY_SNAPSHOT> RequestCreateNewAccountKeySnapshot;
-		public event Func<ACCREDITATION_CERTIFICATE_SNAPSHOT> RequestCreateNewAccreditationCertificateSnapshot;
-		public event Func<CHAIN_OPTIONS_SNAPSHOT> RequestCreateNewChainOptionSnapshot;
+		public event Func<LockContext, Task<STANDARD_ACCOUNT_SNAPSHOT>> RequestCreateNewStandardAccountSnapshot;
+		public event Func<LockContext, Task<JOINT_ACCOUNT_SNAPSHOT>> RequestCreateNewJointAccountSnapshot;
+		public event Func<LockContext, Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> RequestCreateNewAccountKeySnapshot;
+		public event Func<LockContext, Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> RequestCreateNewAccreditationCertificateSnapshot;
+		public event Func<LockContext, Task<CHAIN_OPTIONS_SNAPSHOT>> RequestCreateNewChainOptionSnapshot;
 
-		public event Func<List<AccountId>, Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>> RequestStandardAccountSnapshots;
-		public event Func<List<AccountId>, Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>> RequestJointAccountSnapshots;
-		public event Func<List<(long AccountId, byte OrdinalId)>, Dictionary<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT>> RequestAccountKeySnapshots;
-		public event Func<List<int>, Dictionary<int, ACCREDITATION_CERTIFICATE_SNAPSHOT>> RequestAccreditationCertificateSnapshots;
-		public event Func<List<int>, Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>> RequestChainOptionSnapshots;
+		public event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>>> RequestStandardAccountSnapshots;
+		public event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>>> RequestJointAccountSnapshots;
+		public event Func<List<(long AccountId, byte OrdinalId)>, LockContext, Task<Dictionary<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT>>> RequestAccountKeySnapshots;
+		public event Func<List<int>, LockContext, Task<Dictionary<int, ACCREDITATION_CERTIFICATE_SNAPSHOT>>> RequestAccreditationCertificateSnapshots;
+		public event Func<List<int>, LockContext, Task<Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>>> RequestChainOptionSnapshots;
 
 		public void Initialize() {
 
@@ -194,46 +197,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		}
 
-		public void EnsureSnapshots(SnapshotKeySet snapshotKeySet) {
+		public async Task EnsureSnapshots(SnapshotKeySet snapshotKeySet, LockContext lockContext) {
 			// since we dont know which is which, we try to load from both. the odds its a simple account are high, so lets try this first
-			this.simpleAccountSnapshotCache.EnsureSnapshots(snapshotKeySet.standardAccounts);
-			this.jointAccountSnapshotCache.EnsureSnapshots(snapshotKeySet.jointAccounts);
-			this.accountKeySnapshotCache.EnsureSnapshots(snapshotKeySet.accountKeys);
-			this.accreditationCertificateSnapshotCache.EnsureSnapshots(snapshotKeySet.accreditationCertificates);
-			this.chainOptionsSnapshotCache.EnsureSnapshots(snapshotKeySet.chainOptions);
+			await this.simpleAccountSnapshotCache.EnsureSnapshots(snapshotKeySet.standardAccounts, lockContext).ConfigureAwait(false);
+			await this.jointAccountSnapshotCache.EnsureSnapshots(snapshotKeySet.jointAccounts, lockContext).ConfigureAwait(false);
+			await this.accountKeySnapshotCache.EnsureSnapshots(snapshotKeySet.accountKeys, lockContext).ConfigureAwait(false);
+			await this.accreditationCertificateSnapshotCache.EnsureSnapshots(snapshotKeySet.accreditationCertificates, lockContext).ConfigureAwait(false);
+			await this.chainOptionsSnapshotCache.EnsureSnapshots(snapshotKeySet.chainOptions, lockContext).ConfigureAwait(false);
 		}
 
-		public ACCOUNT_SNAPSHOT GetAccountSnapshotReadonly(AccountId newAccountId) {
-			STANDARD_ACCOUNT_SNAPSHOT result = this.GetStandardAccountSnapshotReadonly(newAccountId);
+		public async Task<ACCOUNT_SNAPSHOT> GetAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext) {
+			STANDARD_ACCOUNT_SNAPSHOT result = await this.GetStandardAccountSnapshotReadonly(newAccountId, lockContext).ConfigureAwait(false);
 
 			if(result != null) {
 				return result;
 			}
 
-			return this.GetJointAccountSnapshotReadonly(newAccountId);
+			return await this.GetJointAccountSnapshotReadonly(newAccountId, lockContext).ConfigureAwait(false);
 		}
 
-		public T GetAccountSnapshotReadonly<T>(AccountId newAccountId)
+		public async Task<T> GetAccountSnapshotReadonly<T>(AccountId newAccountId, LockContext lockContext)
 			where T : class, IAccountSnapshot {
-			return this.GetAccountSnapshotReadonly(newAccountId) as T;
+			return await this.GetAccountSnapshotReadonly(newAccountId, lockContext).ConfigureAwait(false) as T;
 		}
 
-		public T GetAccountSnapshotModify<T>(AccountId newAccountId)
+		public async Task<T> GetAccountSnapshotModify<T>(AccountId newAccountId, LockContext lockContext)
 			where T : class, IAccountSnapshot {
-			return this.GetAccountSnapshotModify(newAccountId) as T;
+			return await this.GetAccountSnapshotModify(newAccountId, lockContext).ConfigureAwait(false) as T;
 		}
 
-		public ACCOUNT_SNAPSHOT GetAccountSnapshotModify(AccountId newAccountId) {
-			STANDARD_ACCOUNT_SNAPSHOT result = this.GetStandardAccountSnapshotModify(newAccountId);
+		public async Task<ACCOUNT_SNAPSHOT> GetAccountSnapshotModify(AccountId newAccountId, LockContext lockContext) {
+			STANDARD_ACCOUNT_SNAPSHOT result = await this.GetStandardAccountSnapshotModify(newAccountId, lockContext).ConfigureAwait(false);
 
 			if(result != null) {
 				return result;
 			}
 
-			return this.GetJointAccountSnapshotModify(newAccountId);
+			return await this.GetJointAccountSnapshotModify(newAccountId, lockContext).ConfigureAwait(false);
 		}
 
-		public STANDARD_ACCOUNT_SNAPSHOT CreateNewStandardAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash) {
+		public async Task<STANDARD_ACCOUNT_SNAPSHOT> CreateNewStandardAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext) {
 			
 			STANDARD_ACCOUNT_SNAPSHOT entry = this.simpleAccountSnapshotCache.LastNew(newAccountId);
 			
@@ -241,7 +244,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return entry;
 			}
 			
-			entry = this.CreateLooseStandardAccountSnapshot(newAccountId);
+			entry = await CreateLooseStandardAccountSnapshot(newAccountId, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -253,34 +256,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return entry;
 		}
 
-		public bool CheckStandardAccountSnapshotExists(AccountId newAccountId) {
-			return this.simpleAccountSnapshotCache.CheckEntryExists(newAccountId);
+		public Task<bool> CheckStandardAccountSnapshotExists(AccountId newAccountId, LockContext lockContext) {
+			return this.simpleAccountSnapshotCache.CheckEntryExists(newAccountId, lockContext);
 		}
 
-		public void DeleteAccountSnapshot(AccountId newAccountId) {
+		public void DeleteAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
 
-			if(this.GetStandardAccountSnapshotReadonly(newAccountId) != null) {
-				this.DeleteStandardAccountSnapshot(newAccountId);
+			if(this.GetStandardAccountSnapshotReadonly(newAccountId, lockContext) != null) {
+				this.DeleteStandardAccountSnapshot(newAccountId, lockContext);
 			}
 
-			if(this.GetJointAccountSnapshotReadonly(newAccountId) != null) {
-				this.DeleteJointAccountSnapshot(newAccountId);
+			if(this.GetJointAccountSnapshotReadonly(newAccountId, lockContext) != null) {
+				this.DeleteJointAccountSnapshot(newAccountId, lockContext);
 			}
 		}
 
-		public STANDARD_ACCOUNT_SNAPSHOT CreateLooseStandardAccountSnapshot(AccountId newAccountId) {
-			return this.RequestCreateNewStandardAccountSnapshot?.Invoke();
+		public Task<STANDARD_ACCOUNT_SNAPSHOT> CreateLooseStandardAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
+			if(this.RequestCreateNewStandardAccountSnapshot != null) {
+				return this.RequestCreateNewStandardAccountSnapshot(lockContext);
+			}
+
+			return Task.FromResult((STANDARD_ACCOUNT_SNAPSHOT)null);
 		}
 
-		public STANDARD_ACCOUNT_SNAPSHOT GetStandardAccountSnapshotReadonly(AccountId newAccountId) {
-			return this.simpleAccountSnapshotCache.GetEntryReadonly(newAccountId);
+		public Task<STANDARD_ACCOUNT_SNAPSHOT> GetStandardAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext) {
+			return this.simpleAccountSnapshotCache.GetEntryReadonly(newAccountId, lockContext);
 		}
 
-		public STANDARD_ACCOUNT_SNAPSHOT GetStandardAccountSnapshotModify(AccountId newAccountId) {
-			return this.simpleAccountSnapshotCache.GetEntryModify(newAccountId);
+		public Task<STANDARD_ACCOUNT_SNAPSHOT> GetStandardAccountSnapshotModify(AccountId newAccountId, LockContext lockContext) {
+			return this.simpleAccountSnapshotCache.GetEntryModify(newAccountId, lockContext);
 		}
 
-		public JOINT_ACCOUNT_SNAPSHOT CreateNewJointAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash) {
+		public async Task<JOINT_ACCOUNT_SNAPSHOT> CreateNewJointAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext) {
 			
 			JOINT_ACCOUNT_SNAPSHOT entry = this.jointAccountSnapshotCache.LastNew(newAccountId);
 			
@@ -288,7 +295,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return entry;
 			}
 
-			entry = this.CreateLooseJointAccountSnapshot(newAccountId);
+			entry = await CreateLooseJointAccountSnapshot(newAccountId, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -300,35 +307,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return entry;
 		}
 
-		public void DeleteStandardAccountSnapshot(AccountId newAccountId) {
+		public void DeleteStandardAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
 
-			this.simpleAccountSnapshotCache.DeleteEntry(newAccountId);
+			this.simpleAccountSnapshotCache.DeleteEntry(newAccountId, lockContext);
 		}
 
-		public JOINT_ACCOUNT_SNAPSHOT CreateLooseJointAccountSnapshot(AccountId newAccountId) {
-			return this.RequestCreateNewJointAccountSnapshot?.Invoke();
+		public Task<JOINT_ACCOUNT_SNAPSHOT> CreateLooseJointAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
+			if(this.RequestCreateNewJointAccountSnapshot != null) {
+				return this.RequestCreateNewJointAccountSnapshot(lockContext);
+			}
+
+			return Task.FromResult((JOINT_ACCOUNT_SNAPSHOT)null);
 		}
 
-		public JOINT_ACCOUNT_SNAPSHOT GetJointAccountSnapshotReadonly(AccountId newAccountId) {
-			return this.jointAccountSnapshotCache.GetEntryReadonly(newAccountId);
+		public Task<JOINT_ACCOUNT_SNAPSHOT> GetJointAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext) {
+			return this.jointAccountSnapshotCache.GetEntryReadonly(newAccountId, lockContext);
 		}
 
-		public JOINT_ACCOUNT_SNAPSHOT GetJointAccountSnapshotModify(AccountId newAccountId) {
-			return this.jointAccountSnapshotCache.GetEntryModify(newAccountId);
+		public Task<JOINT_ACCOUNT_SNAPSHOT> GetJointAccountSnapshotModify(AccountId newAccountId, LockContext lockContext) {
+			return this.jointAccountSnapshotCache.GetEntryModify(newAccountId, lockContext);
 		}
 
-		public bool CheckJointAccountSnapshotExists(AccountId newAccountId) {
-			return this.jointAccountSnapshotCache.CheckEntryExists(newAccountId);
+		public Task<bool> CheckJointAccountSnapshotExists(AccountId newAccountId, LockContext lockContext) {
+			return this.jointAccountSnapshotCache.CheckEntryExists(newAccountId, lockContext);
 		}
 
-		public void DeleteJointAccountSnapshot(AccountId newAccountId) {
+		public void DeleteJointAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
 
-			this.jointAccountSnapshotCache.DeleteEntry(newAccountId);
+			this.jointAccountSnapshotCache.DeleteEntry(newAccountId, lockContext);
 		}
 
 		protected abstract ICardUtils GetCardUtils();
 		
-		public STANDARD_ACCOUNT_KEY_SNAPSHOT CreateNewAccountKeySnapshot((long AccountId, byte OrdinalId) key) {
+		public async Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> CreateNewAccountKeySnapshot((long AccountId, byte OrdinalId) key, LockContext lockContext) {
 			
 			STANDARD_ACCOUNT_KEY_SNAPSHOT entry = this.accountKeySnapshotCache.LastNew(key);
 			
@@ -336,7 +347,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return entry;
 			}
 
-			entry = this.CreateLooseAccountKeySnapshot(key);
+			entry = await CreateLooseAccountKeySnapshot(key, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -351,28 +362,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return entry;
 		}
 
-		public STANDARD_ACCOUNT_KEY_SNAPSHOT CreateLooseAccountKeySnapshot((long AccountId, byte OrdinalId) key) {
-			return this.RequestCreateNewAccountKeySnapshot?.Invoke();
+		public Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> CreateLooseAccountKeySnapshot((long AccountId, byte OrdinalId) key, LockContext lockContext) {
+			if(this.RequestCreateNewAccountKeySnapshot != null) {
+				return this.RequestCreateNewAccountKeySnapshot(lockContext);
+			}
+
+			return Task.FromResult((STANDARD_ACCOUNT_KEY_SNAPSHOT)null);
 		}
 
-		public STANDARD_ACCOUNT_KEY_SNAPSHOT GetAccountKeySnapshotReadonly((long AccountId, byte OrdinalId) key) {
-			return this.accountKeySnapshotCache.GetEntryReadonly(key);
+		public Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> GetAccountKeySnapshotReadonly((long AccountId, byte OrdinalId) key, LockContext lockContext) {
+			return this.accountKeySnapshotCache.GetEntryReadonly(key, lockContext);
 		}
 
-		public STANDARD_ACCOUNT_KEY_SNAPSHOT GetAccountKeySnapshotModify((long AccountId, byte OrdinalId) key) {
-			return this.accountKeySnapshotCache.GetEntryModify(key);
+		public Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> GetAccountKeySnapshotModify((long AccountId, byte OrdinalId) key, LockContext lockContext) {
+			return this.accountKeySnapshotCache.GetEntryModify(key, lockContext);
 		}
 
-		public bool CheckAccountKeySnapshotExists((long AccountId, byte OrdinalId) key) {
-			return this.accountKeySnapshotCache.CheckEntryExists(key);
+		public Task<bool> CheckAccountKeySnapshotExists((long AccountId, byte OrdinalId) key, LockContext lockContext) {
+			return this.accountKeySnapshotCache.CheckEntryExists(key, lockContext);
 		}
 
-		public void DeleteJointAccountSnapshot((long AccountId, byte OrdinalId) key) {
+		public void DeleteJointAccountSnapshot((long AccountId, byte OrdinalId) key, LockContext lockContext) {
 
-			this.accountKeySnapshotCache.DeleteEntry(key);
+			this.accountKeySnapshotCache.DeleteEntry(key, lockContext);
 		}
 
-		public ACCREDITATION_CERTIFICATE_SNAPSHOT CreateNewAccreditationCertificateSnapshot(int id) {
+		public async Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> CreateNewAccreditationCertificateSnapshot(int id, LockContext lockContext) {
 			
 			ACCREDITATION_CERTIFICATE_SNAPSHOT entry = this.accreditationCertificateSnapshotCache.LastNew(id);
 			
@@ -380,7 +395,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return entry;
 			}
 
-			entry = this.CreateLooseAccreditationCertificateSnapshot(id);
+			entry = await CreateLooseAccreditationCertificateSnapshot(id, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -392,28 +407,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return entry;
 		}
 
-		public ACCREDITATION_CERTIFICATE_SNAPSHOT CreateLooseAccreditationCertificateSnapshot(int id) {
-			return this.RequestCreateNewAccreditationCertificateSnapshot?.Invoke();
+		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> CreateLooseAccreditationCertificateSnapshot(int id, LockContext lockContext) {
+			if(this.RequestCreateNewAccreditationCertificateSnapshot != null) {
+				return this.RequestCreateNewAccreditationCertificateSnapshot(lockContext);
+			}
+
+			return Task.FromResult((ACCREDITATION_CERTIFICATE_SNAPSHOT)null);
 		}
 
-		public ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccreditationCertificateSnapshotReadonly(int id) {
-			return this.accreditationCertificateSnapshotCache.GetEntryReadonly(id);
+		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificateSnapshotReadonly(int id, LockContext lockContext) {
+			return this.accreditationCertificateSnapshotCache.GetEntryReadonly(id, lockContext);
 		}
 
-		public ACCREDITATION_CERTIFICATE_SNAPSHOT GetAccreditationCertificateSnapshotModify(int id) {
-			return this.accreditationCertificateSnapshotCache.GetEntryModify(id);
+		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificateSnapshotModify(int id, LockContext lockContext) {
+			return this.accreditationCertificateSnapshotCache.GetEntryModify(id, lockContext);
 		}
 
-		public bool CheckAccreditationCertificateSnapshotExists(int id) {
-			return this.accreditationCertificateSnapshotCache.CheckEntryExists(id);
+		public Task<bool> CheckAccreditationCertificateSnapshotExists(int id, LockContext lockContext) {
+			return this.accreditationCertificateSnapshotCache.CheckEntryExists(id, lockContext);
 		}
 
-		public void DeleteAccreditationCertificateSnapshot(int id) {
+		public void DeleteAccreditationCertificateSnapshot(int id, LockContext lockContext) {
 
-			this.accreditationCertificateSnapshotCache.DeleteEntry(id);
+			this.accreditationCertificateSnapshotCache.DeleteEntry(id, lockContext);
 		}
 
-		public CHAIN_OPTIONS_SNAPSHOT CreateNewChainOptionsSnapshot(int id) {
+		public async Task<CHAIN_OPTIONS_SNAPSHOT> CreateNewChainOptionsSnapshot(int id, LockContext lockContext) {
 
 			CHAIN_OPTIONS_SNAPSHOT entry = this.chainOptionsSnapshotCache.LastNew(id);
 			
@@ -421,7 +440,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return entry;
 			}
 			
-			entry = this.CreateLooseChainOptionsSnapshot(id);
+			entry = await CreateLooseChainOptionsSnapshot(id, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -432,25 +451,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return entry;
 		}
 
-		public CHAIN_OPTIONS_SNAPSHOT CreateLooseChainOptionsSnapshot(int id) {
-			return this.RequestCreateNewChainOptionSnapshot?.Invoke();
+		public Task<CHAIN_OPTIONS_SNAPSHOT> CreateLooseChainOptionsSnapshot(int id, LockContext lockContext) {
+			if(this.RequestCreateNewChainOptionSnapshot != null) {
+				return this.RequestCreateNewChainOptionSnapshot(lockContext);
+			}
+
+			return Task.FromResult((CHAIN_OPTIONS_SNAPSHOT)null);
 		}
 
-		public CHAIN_OPTIONS_SNAPSHOT GetChainOptionsSnapshotReadonly(int id) {
-			return this.chainOptionsSnapshotCache.GetEntryReadonly(id);
+		public Task<CHAIN_OPTIONS_SNAPSHOT> GetChainOptionsSnapshotReadonly(int id, LockContext lockContext) {
+			return this.chainOptionsSnapshotCache.GetEntryReadonly(id, lockContext);
 		}
 
-		public CHAIN_OPTIONS_SNAPSHOT GetChainOptionsSnapshotModify(int id) {
-			return this.chainOptionsSnapshotCache.GetEntryModify(id);
+		public Task<CHAIN_OPTIONS_SNAPSHOT> GetChainOptionsSnapshotModify(int id, LockContext lockContext) {
+			return this.chainOptionsSnapshotCache.GetEntryModify(id, lockContext);
 		}
 
-		public bool CheckChainOptionsSnapshotExists(int id) {
-			return this.chainOptionsSnapshotCache.CheckEntryExists(id);
+		public Task<bool> CheckChainOptionsSnapshotExists(int id, LockContext lockContext) {
+			return this.chainOptionsSnapshotCache.CheckEntryExists(id, lockContext);
 		}
 
-		public void DeleteChainOptionsSnapshot(int id) {
+		public void DeleteChainOptionsSnapshot(int id, LockContext lockContext) {
 
-			this.chainOptionsSnapshotCache.DeleteEntry(id);
+			this.chainOptionsSnapshotCache.DeleteEntry(id, lockContext);
 		}
 
 		public SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> GetEntriesModificationStack() {

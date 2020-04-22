@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Gated;
@@ -43,24 +46,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		/// <summary>
 		///     Register all the base transaction types and their behaviors
 		/// </summary>
-		protected virtual void RegisterTransactionImpactSets() {
+		protected virtual async Task RegisterTransactionImpactSets() {
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IStandardPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IStandardPresentationTransaction>(async (t, affectedSnapshots, lockContext) => {
 				affectedSnapshots.standardAccounts.Add(t.AssignedAccountId);
 
 				foreach(var ordinal in t.Keyset.Keys.Keys) {
 					affectedSnapshots.accountKeys.Add((t.AssignedAccountId.ToLongRepresentation(), ordinal));
 				}
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 
-				STANDARD_ACCOUNT_SNAPSHOT snapshot = parameters.snapshotCache.CreateNewStandardAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account);
+				STANDARD_ACCOUNT_SNAPSHOT snapshot = await parameters.snapshotCache.CreateNewStandardAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account, lockContext).ConfigureAwait(false);
 
 				STANDARD_ACCOUNT_SNAPSHOT newSnapshot = snapshot;
 
 				newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
 
 				newSnapshot.InceptionBlockId = parameters.blockId;
-				newSnapshot.CorrelationId = t.CorrelationId;
+				newSnapshot.Correlated = t.CorrelationId.HasValue;
 
 				foreach(ITransactionAccountAttribute entry in t.Attributes) {
 
@@ -70,29 +73,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 					newSnapshot.AppliedAttributes.Add(newEntry);
 				}
-			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 
-				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.AssignedAccountId)) {
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && await this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.AssignedAccountId).ConfigureAwait(false)) {
 					// we dont need to set the keys in sumlated mode.
-					STANDARD_ACCOUNT_KEY_SNAPSHOT key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
+					STANDARD_ACCOUNT_KEY_SNAPSHOT key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.TransactionCryptographicKey.Id), lockContext).ConfigureAwait(false);
 
 					string transactionId = t.TransactionId.ToString();
 					key.PublicKey = this.Dehydratekey(t.TransactionCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 
-					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.MessageCryptographicKey.Id));
+					key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.MessageCryptographicKey.Id), lockContext).ConfigureAwait(false);
 					key.PublicKey = this.Dehydratekey(t.MessageCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 
-					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
+					key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.ChangeCryptographicKey.Id), lockContext).ConfigureAwait(false);
 					key.PublicKey = this.Dehydratekey(t.ChangeCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 
-					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.SuperCryptographicKey.Id));
+					key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.AssignedAccountId.ToLongRepresentation(), t.SuperCryptographicKey.Id), lockContext).ConfigureAwait(false);
 					key.PublicKey = this.Dehydratekey(t.SuperCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 				}
-			}, collectStandardAccountFastKeysFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 				List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
 
 				if(parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
@@ -106,16 +109,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				parameters.results = keys;
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IJointPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IJointPresentationTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.jointAccounts.Add(t.AssignedAccountId);
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 
-				JOINT_ACCOUNT_SNAPSHOT newSnapshot = parameters.snapshotCache.CreateNewJointAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account);
+				JOINT_ACCOUNT_SNAPSHOT newSnapshot = await parameters.snapshotCache.CreateNewJointAccountSnapshot(t.AssignedAccountId, t.TransactionId.Account, lockContext).ConfigureAwait(false);
 
 				newSnapshot.AccountId = t.AssignedAccountId.ToLongRepresentation();
 				newSnapshot.InceptionBlockId = parameters.blockId;
-				newSnapshot.CorrelationId = t.CorrelationId;
+				newSnapshot.Correlated = t.CorrelationId.HasValue;
 
 				foreach(ITransactionAccountAttribute entry in t.Attributes) {
 
@@ -137,20 +140,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IStandardAccountKeyChangeTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IStandardAccountKeyChangeTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				AccountId accountId = t.TransactionId.Account;
 				affectedSnapshots.accountKeys.Add((accountId.ToLongRepresentation(), t.NewCryptographicKey.Id));
 				affectedSnapshots.standardAccounts.Add(accountId);
 
-			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+			}, interpretTransactionStandardAccountKeysFunc: async (t, parameters, lockContext) => {
 
-				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.TransactionId.Account)) {
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && await this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.TransactionId.Account).ConfigureAwait(false)) {
 					(long SequenceId, byte Id) key = (t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id);
 
 					string transactionId = t.TransactionId.ToString();
 
-					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.GetAccountKeySnapshotModify(key);
+					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = await parameters.snapshotCache.GetAccountKeySnapshotModify(key, lockContext).ConfigureAwait(false);
 
 					accountKeySnapshot.PublicKey = this.Dehydratekey(t.NewCryptographicKey);
 					accountKeySnapshot.DeclarationTransactionId = transactionId;
@@ -158,37 +161,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					if(t.IsChangingChangeKey) {
 						(long SequenceId, byte SUPER_KEY_ORDINAL_ID) superKey = (t.TransactionId.Account.ToLongRepresentation(), t.NextSuperCryptographicKey.Id);
 
-						STANDARD_ACCOUNT_KEY_SNAPSHOT accountSuperKeySnapshot = parameters.snapshotCache.GetAccountKeySnapshotModify(superKey);
+						STANDARD_ACCOUNT_KEY_SNAPSHOT accountSuperKeySnapshot = await parameters.snapshotCache.GetAccountKeySnapshotModify(superKey, lockContext).ConfigureAwait(false);
 						accountSuperKeySnapshot.PublicKey = this.Dehydratekey(t.NextSuperCryptographicKey);
 						accountSuperKeySnapshot.DeclarationTransactionId = transactionId;
 					}
 				}
-			}, collectStandardAccountFastKeysFunc: (t, parameters) => {
+			}, collectStandardAccountFastKeysFunc: async (t, parameters, lockContext) => {
 				List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
 
-				if((t.NewCryptographicKey.Id == GlobalsService.TRANSACTION_KEY_ORDINAL_ID && parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) || (t.NewCryptographicKey.Id == GlobalsService.MESSAGE_KEY_ORDINAL_ID && parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Messages))) {
+				if(t.NewCryptographicKey.Id == GlobalsService.TRANSACTION_KEY_ORDINAL_ID && parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions) || t.NewCryptographicKey.Id == GlobalsService.MESSAGE_KEY_ORDINAL_ID && parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
 					keys.Add(new FastKeyMetadata() {AccountId = t.TransactionId.Account, Ordinal = t.NewCryptographicKey.Id, PublicKey = this.Dehydratekey(t.NewCryptographicKey)});
 				}
 
 				parameters.results = keys;
 			});
-
-			// this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountCorrelationIdTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			
+			// this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountRecoveryTransaction>(getImpactedSnapshotsFunc: async (t, affectedSnapshots, lockContext) => {
 			//
 			// 	affectedSnapshots.AddAccountId(t.TransactionId.Account);
-			// }, interpretTransactionAccountsFunc: (t, parameters) => {
-			//
-			// 	ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
-			//
-			// 	if(accountSnapshot != null && !accountSnapshot.CorrelationId.HasValue) {
-			// 		accountSnapshot.CorrelationId = t.CorrelationId;
-			// 	}
-			// });
-
-			// this.TransactionImpactSets.RegisterTransactionImpactSet<ISetAccountRecoveryTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
-			//
-			// 	affectedSnapshots.AddAccountId(t.TransactionId.Account);
-			// }, interpretTransactionAccountsFunc: (t, parameters) => {
+			// }, interpretTransactionAccountsFunc: async (t, parameters, lockContext) => {
 			//
 			// 	ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.TransactionId.Account);
 			//
@@ -210,32 +201,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			// 	}
 			// });
 			//
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IGatedJudgementTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IGatedJudgementTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.AddAccounts(t.TargetAccounts);
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 
 
-				//TODO: anything here?
+				//lockContext: anything here?
 			});
 			
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IThreeWayGatedTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IThreeWayGatedTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.AddAccounts(t.TargetAccounts);
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 
-				//TODO: anything here?
+				//lockContext: anything here?
 			});
 
 			//----------------------- moderator transactions ----------------------------
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetWarningTransaction>((t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetWarningTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.standardAccounts.Add(t.Account);
 
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IAccountResetTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.standardAccounts.Add(t.Account);
 
@@ -244,39 +235,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
 				affectedSnapshots.accountKeys.Add((t.Account.ToLongRepresentation(), t.SuperCryptographicKey.Id));
 
-			}, interpretTransactionAccountsFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 
-				ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(t.Account);
+				ACCOUNT_SNAPSHOT accountSnapshot = await parameters.snapshotCache.GetAccountSnapshotModify(t.Account, lockContext).ConfigureAwait(false);
 
 				IAccountAttribute attribute = accountSnapshot.GetCollectionEntry(entry => entry.AttributeType == AccountAttributesTypes.Instance.RESETABLE_ACCOUNT);
 
 				if(attribute != null) {
 					attribute.Context = t.NextRecoveryHash.ToExactByteArrayCopy();
 				}
-			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 
-				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.Account)) {
+				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real && await this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.IsAccountTracked(t.Account).ConfigureAwait(false)) {
 					// we dont need to set the keys in sumlated mode.
 
 					string transactionId = t.TransactionId.ToString();
 
-					STANDARD_ACCOUNT_KEY_SNAPSHOT key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.TransactionCryptographicKey.Id));
+					STANDARD_ACCOUNT_KEY_SNAPSHOT key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.TransactionCryptographicKey.Id), lockContext).ConfigureAwait(false);
 					key.PublicKey = this.Dehydratekey(t.TransactionCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 
-					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.MessageCryptographicKey.Id));
+					key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.MessageCryptographicKey.Id), lockContext).ConfigureAwait(false);
 					key.PublicKey = this.Dehydratekey(t.MessageCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 
-					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.ChangeCryptographicKey.Id));
+					key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.ChangeCryptographicKey.Id), lockContext).ConfigureAwait(false);
 					key.PublicKey = this.Dehydratekey(t.ChangeCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 
-					key = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.SuperCryptographicKey.Id));
+					key = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.Account.ToLongRepresentation(), t.SuperCryptographicKey.Id), lockContext).ConfigureAwait(false);
 					key.PublicKey = this.Dehydratekey(t.SuperCryptographicKey);
 					key.DeclarationTransactionId = transactionId;
 				}
-			}, collectStandardAccountFastKeysFunc: (t, parameters) => {
+			}, async (t, parameters, lockContext) => {
 				List<FastKeyMetadata> keys = new List<FastKeyMetadata>();
 
 				if(parameters.types.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
@@ -290,19 +281,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				parameters.results = keys;
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IChainAccreditationCertificateTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IChainAccreditationCertificateTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				if(t.CertificateOperation != ChainAccreditationCertificateTransaction.CertificateOperationTypes.Create) {
 					affectedSnapshots.accreditationCertificates.Add((int) t.CertificateId.Value);
 				}
-			}, interpretTransactionAccreditationCertificatesFunc: (t, parameters) => {
+			}, interpretTransactionAccreditationCertificatesFunc: async (t, parameters, lockContext) => {
 
 				ACCREDITATION_CERTIFICATE_SNAPSHOT certificate = null;
 
 				if(t.CertificateOperation == ChainAccreditationCertificateTransaction.CertificateOperationTypes.Create) {
-					certificate = parameters.snapshotCache.CreateNewAccreditationCertificateSnapshot((int) t.CertificateId.Value);
+					certificate = await parameters.snapshotCache.CreateNewAccreditationCertificateSnapshot((int) t.CertificateId.Value, lockContext).ConfigureAwait(false);
 				} else {
-					certificate = parameters.snapshotCache.GetAccreditationCertificateSnapshotModify((int) t.CertificateId.Value);
+					certificate = await parameters.snapshotCache.GetAccreditationCertificateSnapshotModify((int) t.CertificateId.Value, lockContext).ConfigureAwait(false);
 				}
 
 				certificate.CertificateId = (int) t.CertificateId.Value;
@@ -336,20 +327,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				}
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IChainOperatingRulesTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IChainOperatingRulesTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.chainOptions.Add(1);
 
-			}, interpretTransactionChainOptionsFunc: (t, parameters) => {
+			}, interpretTransactionChainOptionsFunc: async (t, parameters, lockContext) => {
 
 				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real) {
 
 					CHAIN_OPTIONS_SNAPSHOT options = null;
 
-					if(parameters.snapshotCache.CheckChainOptionsSnapshotExists(1)) {
-						options = parameters.snapshotCache.GetChainOptionsSnapshotModify(1);
+					if(await parameters.snapshotCache.CheckChainOptionsSnapshotExists(1, lockContext).ConfigureAwait(false)) {
+						options = await parameters.snapshotCache.GetChainOptionsSnapshotModify(1, lockContext).ConfigureAwait(false);
 					} else {
-						options = parameters.snapshotCache.CreateNewChainOptionsSnapshot(1);
+						options = await parameters.snapshotCache.CreateNewChainOptionsSnapshot(1, lockContext).ConfigureAwait(false);
 					}
 
 					options.MaximumVersionAllowed = t.MaximumVersionAllowed.ToString();
@@ -360,12 +351,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				}
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisModeratorAccountPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisModeratorAccountPresentationTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.AddAccounts(t.TargetAccounts);
 				
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.CommunicationsCryptographicKey.Id));
-				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksXmssMTCryptographicKey.Id));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksXmssCryptographicKey.Id));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BlocksChangeCryptographicKey.Id));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.DigestBlocksCryptographicKey.Id));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.DigestBlocksChangeCryptographicKey.Id));
@@ -373,130 +364,43 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.SuperChangeCryptographicKey.Id));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.PtahCryptographicKey.Id));
 
-			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+			}, interpretTransactionStandardAccountKeysFunc: async (t, parameters, lockContext) => {
 
 				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real) {
-					NtruCryptographicKey key = t.CommunicationsCryptographicKey;
-					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key.Id));
 
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					}
-					
-					
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
-
-					XmssmtCryptographicKey key3 = t.BlocksXmssMTCryptographicKey;
-					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key3.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
+					async Task SetAccountEntry(ICryptographicKey key){
+						var accountKeySnapshot = await parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key.Id), lockContext).ConfigureAwait(false);
+						accountKeySnapshot.PublicKey = this.Dehydratekey(key);
+						accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 					}
 
-					
-					
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
-
-					SecretPentaCryptographicKey key2 = t.BlocksChangeCryptographicKey;
-					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key2.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					}
-
-					
-
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
-
-					key3 = t.DigestBlocksCryptographicKey;
-					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key3.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					}
-
-					
-
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
-
-					key2 = t.DigestBlocksChangeCryptographicKey;
-					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key2.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					}
-
-					
-
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
-
-					key3 = t.BinaryCryptographicKey;
-					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key3.Id));
-
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key3.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					}
-
-					
-
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
-
-					key2 = t.SuperChangeCryptographicKey;
-					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key2.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					}
-
-					
-
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
-
-					key2 = t.PtahCryptographicKey;
-					accountKeySnapshot = parameters.snapshotCache.CreateNewAccountKeySnapshot((t.ModeratorAccountId.ToLongRepresentation(), key2.Id));
-
-					using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
-						key2.Dehydrate(dehydrator);
-						using SafeArrayHandle bytes = dehydrator.ToArray();
-						accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
-					}
-
-					
-
-					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
+					await SetAccountEntry(t.CommunicationsCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.BlocksXmssCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.BlocksChangeCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.DigestBlocksCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.DigestBlocksChangeCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.BinaryCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.SuperChangeCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.PtahCryptographicKey).ConfigureAwait(false);
 				}
 			});
 
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisAccountPresentationTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IGenesisAccountPresentationTransaction>(async (t, affectedSnapshots, lockContext) => {
 				affectedSnapshots.AddAccounts(t.TargetAccounts);
-			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+			}, interpretTransactionStandardAccountKeysFunc: async (t, parameters, lockContext) => {
 
 			});
 			
-			this.TransactionImpactSets.RegisterTransactionImpactSet<IModeratorKeyChangeTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IModeratorKeyChangeTransaction>(async (t, affectedSnapshots, lockContext) => {
 
 				affectedSnapshots.accountKeys.Add((t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id));
 
-			}, interpretTransactionStandardAccountKeysFunc: (t, parameters) => {
+			}, interpretTransactionStandardAccountKeysFunc: async (t, parameters, lockContext) => {
 
 				if(parameters.operationModes == TransactionImpactSet.OperationModes.Real) {
 					(long SequenceId, byte Id) key = (t.TransactionId.Account.ToLongRepresentation(), t.NewCryptographicKey.Id);
 
-					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = parameters.snapshotCache.GetAccountKeySnapshotModify(key);
+					STANDARD_ACCOUNT_KEY_SNAPSHOT accountKeySnapshot = await parameters.snapshotCache.GetAccountKeySnapshotModify(key, lockContext).ConfigureAwait(false);
 
 					using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 					t.NewCryptographicKey.Dehydrate(dehydrator);
@@ -504,25 +408,47 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					accountKeySnapshot.PublicKey = bytes.ToExactByteArrayCopy();
 					accountKeySnapshot.DeclarationTransactionId = t.TransactionId.ToString();
 
-					//TODO: what else?
+					//lockContext: what else?
 				}
 			});
 
-			// this.TransactionImpactSets.RegisterTransactionImpactSet<IReclaimAccountsTransaction>(getImpactedSnapshotsFunc: (t, affectedSnapshots) => {
+			// this.TransactionImpactSets.RegisterTransactionImpactSet<IReclaimAccountsTransaction>(async (t, affectedSnapshots, lockContext) => {
 			//
+			// 	affectedSnapshots.AddAccounts(t.Accounts.Select(e => e.Account).ToList());
+			//
+			// }, async (t, parameters, lockContext) => {
+			// 	
 			// 	foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
-			// 		affectedSnapshots.AddAccountId(accountset.Account);
-			// 	}
-			// }, interpretTransactionAccountsFunc: (t, parameters) => {
+			// 		//ACCOUNT_SNAPSHOT accountSnapshot = await parameters.snapshotCache.GetAccountSnapshotModify(accountset.Account);
 			//
-			// 	foreach(ReclaimAccountsTransaction.AccountReset accountset in t.Accounts) {
-			// 		ACCOUNT_SNAPSHOT accountSnapshot = parameters.snapshotCache.GetAccountSnapshotModify(accountset.Account);
-			//
-			// 		//TODO: what to do here?
+			// 		//lockContext: what to do here? perhaps we need to delete the accounts
+			// 		
 			// 	}
 			// });
 			
+			this.TransactionImpactSets.RegisterTransactionImpactSet<IAssignAccountCorrelationsTransaction>(async (t, affectedSnapshots, lockContext) => {
+			
+				affectedSnapshots.AddAccounts(t.EnableAccounts);
+				affectedSnapshots.AddAccounts(t.DisableAccounts);
 
+			}, async (t, parameters, lockContext) => {
+			
+				foreach(var accountId in t.EnableAccounts) {
+					ACCOUNT_SNAPSHOT accountSnapshot = await parameters.snapshotCache.GetAccountSnapshotModify(accountId, lockContext).ConfigureAwait(false);
+
+					if (accountSnapshot != null){
+						accountSnapshot.Correlated = true;
+					}
+				}
+				
+				foreach(var accountId in t.DisableAccounts) {
+					ACCOUNT_SNAPSHOT accountSnapshot = await parameters.snapshotCache.GetAccountSnapshotModify(accountId, lockContext).ConfigureAwait(false);
+
+					if (accountSnapshot != null){
+						accountSnapshot.Correlated = false;
+					}
+				}
+			});
 		}
 	}
 }

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Tools;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 	public interface IAccreditationCertificateDigestChannel : IDigestChannel {
@@ -53,7 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected override void BuildBandsIndices() {
 
-			var index = new SingleSqliteChannelBandIndex<AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands, ACCREDITATION_CARD, int, int, int>(CERTIFICATES_BAND_NAME, this.baseFolder, this.scopeFolder, AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands.Certificates, new FileSystem(), key => key);
+			var index = new SingleSqliteChannelBandIndex<AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands, ACCREDITATION_CARD, int, int, int>(CERTIFICATES_BAND_NAME, this.baseFolder, this.scopeFolder, AccreditationCertificateDigestChannel.AccreditationCertificateDigestChannelBands.Certificates, FileSystemWrapper.CreatePhysical(), key => key);
 			this.InitIndexGenerator(index);
 			
 			this.channelBandIndexSet.AddIndex(1, index);

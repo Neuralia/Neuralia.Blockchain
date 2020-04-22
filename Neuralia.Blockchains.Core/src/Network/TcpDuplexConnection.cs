@@ -74,7 +74,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			async ValueTask<bool> Awaited(ValueTask<FlushResult> incomplete) {
-				return GetResult(await incomplete);
+				return GetResult(await incomplete.ConfigureAwait(false));
 			}
 
 			var flushTask = writer.FlushAsync();
@@ -83,7 +83,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		protected override async Task<PipelineReadingContext> ReadDataFrame(PipelineReadingContext previousContext, CancellationToken ct) {
-			return new PipelineReadingContext(await this.clientPipe.Input.ReadAsync(ct), this.clientPipe.Input);
+			return new PipelineReadingContext(await this.clientPipe.Input.ReadAsync(ct).ConfigureAwait(false), this.clientPipe.Input);
 		}
 
 		protected override void ReadTaskCancelled() {
@@ -93,6 +93,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		protected override void DisposeSocket() {
 
 			try {
+				// ReSharper disable once AsyncConverter.AsyncWait
 				this.CompleteWrite().Wait(TimeSpan.FromSeconds(3));
 			}catch {
 				// do nothing, we tried

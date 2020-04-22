@@ -23,11 +23,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			return secretCryptographicKey;
 		}
 
-		public static IXmssmtCryptographicKey ConvertToXmssMTKey(IXmssBlockNextAccountSignature source, byte ordinalId) {
-			IXmssmtCryptographicKey secretCryptographicKey = new XmssmtCryptographicKey();
+		public static IXmssCryptographicKey ConvertToXmssMTKey(IXmssBlockNextAccountSignature source, byte ordinalId) {
+			IXmssCryptographicKey secretCryptographicKey = new XmssCryptographicKey();
 
 			secretCryptographicKey.TreeHeight = source.TreeHeight;
-			secretCryptographicKey.TreeLayer = source.TreeLayers;
 			secretCryptographicKey.BitSize = source.HashBits;
 			secretCryptographicKey.Key.Entry = source.PublicKey.Entry;
 
@@ -42,20 +41,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		public static SafeArrayHandle ConvertToDehydratedKey(ISecretDoubleCryptographicKey secretKey) {
 
-			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
-				secretKey.Dehydrate(dehydrator);
-				return dehydrator.ToArray();
-			}
+			secretKey.Dehydrate(dehydrator);
+			return dehydrator.ToArray();
+
 		}
 		
-		public static SafeArrayHandle ConvertToDehydratedKey(IXmssmtCryptographicKey secretKey) {
+		public static SafeArrayHandle ConvertToDehydratedKey(IXmssCryptographicKey secretKey) {
 
-			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
-				secretKey.Dehydrate(dehydrator);
-				return dehydrator.ToArray();
-			}
+			secretKey.Dehydrate(dehydrator);
+			return dehydrator.ToArray();
+
 		}
 	}
 }

@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public class WalletElectionCacheFileInfo : SingleEntryWalletFileInfo<WalletElectionCache> {
@@ -22,32 +24,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     Insert the new empty wallet
 		/// </summary>
 		/// <param name="wallet"></param>
-		protected override void InsertNewDbData(WalletElectionCache transactionCache) {
+		protected override Task InsertNewDbData(WalletElectionCache transactionCache, LockContext lockContext) {
 
-			this.RunDbOperation(litedbDal => {
+			return this.RunDbOperation((litedbDal, lc) => {
 				litedbDal.Insert(transactionCache, c => c.TransactionId);
-			});
+
+				return Task.CompletedTask;
+			}, lockContext);
 
 		}
 
-		public override void CreateEmptyFile(object data = null) {
-			lock(this.locker) {
+		public override async Task CreateEmptyFile(LockContext lockContext, object data = null) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.DeleteFile();
 
-				base.CreateEmptyFile();
+				await base.CreateEmptyFile(handle).ConfigureAwait(false);
 			}
 		}
 
-		protected override void CreateDbFile(LiteDBDAL litedbDal) {
+		protected override Task CreateDbFile(LiteDBDAL litedbDal, LockContext lockContext) {
 			litedbDal.CreateDbFile<WalletElectionCache, TransactionId>(i => i.TransactionId);
+
+			return Task.CompletedTask;
 		}
 
-		protected override void PrepareEncryptionInfo() {
-			this.CreateSecurityDetails();
+		protected override Task PrepareEncryptionInfo(LockContext lockContext) {
+			return this.CreateSecurityDetails(lockContext);
 		}
 
-		protected override void CreateSecurityDetails() {
-			lock(this.locker) {
+		protected override async Task CreateSecurityDetails(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
@@ -56,33 +62,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(this.EncryptionInfo.Encrypt) {
 
 						this.EncryptionInfo.EncryptionParameters = this.account.KeyLogFileEncryptionParameters;
-						this.EncryptionInfo.Secret = () => this.account.KeyLogFileSecret;
+						this.EncryptionInfo.Secret               = () => this.account.KeyLogFileSecret;
 					}
 				}
 			}
 		}
 
-		protected override void UpdateDbEntry() {
+		protected override Task UpdateDbEntry(LockContext lockContext) {
 			// do nothing, we dont udpate
 
+			return Task.CompletedTask;
 		}
 
-		public void InsertElectionCacheEntry(WalletElectionCache transactionCacheEntry) {
+		public async Task InsertElectionCacheEntry(WalletElectionCache transactionCacheEntry, LockContext lockContext) {
 
-			lock(this.locker) {
-				this.RunDbOperation(litedbDal => {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await RunDbOperation((litedbDal, lc) => {
 
 					litedbDal.Insert(transactionCacheEntry, k => k.TransactionId);
-				});
 
-				this.Save();
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(false);
+
+				await Save(handle).ConfigureAwait(false);
 			}
 		}
 
-		public void InsertElectionCacheEntries(List<WalletElectionCache> transactions) {
-			lock(this.locker) {
+		public async Task InsertElectionCacheEntries(List<WalletElectionCache> transactions, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(transactions.Any()) {
-					this.RunDbOperation(litedbDal => {
+					await RunDbOperation((litedbDal, lc) => {
 
 						var ids = transactions.Select(t => t.TransactionId).ToList();
 
@@ -94,67 +103,73 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 							litedbDal.Insert(transaction, k => k.TransactionId);
 						}
-					});
 
-					this.Save();
+						return Task.CompletedTask;
+					}, handle).ConfigureAwait(false);
+
+					await Save(handle).ConfigureAwait(false);
 				}
 			}
 		}
 
-		public bool ElectionExists(TransactionId transactionId) {
+		public Task<bool> ElectionExists(TransactionId transactionId, LockContext lockContext) {
 
-			return this.RunQueryDbOperation(litedbDal => {
+			return this.RunQueryDbOperation((litedbDal, lc) => {
 				if(!litedbDal.CollectionExists<WalletElectionCache>()) {
-					return false;
+					return Task.FromResult(false);
 				}
 
-				return litedbDal.Exists<WalletElectionCache>(k => k.TransactionId == transactionId);
-			});
+				return Task.FromResult(litedbDal.Exists<WalletElectionCache>(k => k.TransactionId == transactionId));
+			}, lockContext);
 		}
 
-		public bool ElectionAnyExists(List<TransactionId> transactions) {
+		public async Task<bool> ElectionAnyExists(List<TransactionId> transactions, LockContext lockContext) {
 
-			lock(this.locker) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(transactions.Any()) {
-					return this.RunQueryDbOperation(litedbDal => {
+					return await RunQueryDbOperation((litedbDal, lc) => {
 						if(!litedbDal.CollectionExists<WalletElectionCache>()) {
-							return false;
+							return Task.FromResult(false);
 						}
 
-						return litedbDal.Exists<WalletElectionCache>(k => transactions.Contains(k.TransactionId));
-					});
+						return Task.FromResult(litedbDal.Exists<WalletElectionCache>(k => transactions.Contains(k.TransactionId)));
+					}, handle).ConfigureAwait(false);
 				}
 
 				return false;
 			}
 		}
 
-		public void RemoveElection(TransactionId transactionId) {
-			lock(this.locker) {
-				this.RunDbOperation(litedbDal => {
+		public async Task RemoveElection(TransactionId transactionId, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await RunDbOperation((litedbDal, lc) => {
 					if(litedbDal.CollectionExists<WalletElectionCache>()) {
 						litedbDal.Remove<WalletElectionCache>(k => k.TransactionId == transactionId);
 					}
-				});
 
-				this.Save();
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(true);
+
+				await Save(handle).ConfigureAwait(false);
 			}
 		}
 
-		public void RemoveElections(List<TransactionId> transactions) {
+		public async Task RemoveElections(List<TransactionId> transactions, LockContext lockContext) {
 
-			lock(this.locker) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(transactions.Any()) {
-					this.RunDbOperation(litedbDal => {
+					await RunDbOperation((litedbDal, lc) => {
 						if(litedbDal.CollectionExists<WalletElectionCache>()) {
 							foreach(TransactionId transaction in transactions) {
 
 								litedbDal.Remove<WalletElectionCache>(k => k.TransactionId == transaction);
 							}
 						}
-					});
 
-					this.Save();
+						return Task.CompletedTask;
+					}, handle).ConfigureAwait(false);
+
+					await Save(handle).ConfigureAwait(false);
 				}
 			}
 		}
@@ -163,16 +178,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     Remove all transactions associated with the block ID
 		/// </summary>
 		/// <param name="blockId"></param>
-		public void RemoveBlockElection(long blockId) {
-			lock(this.locker) {
-				this.RunDbOperation(litedbDal => {
+		public async Task RemoveBlockElection(long blockId, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await RunDbOperation((litedbDal, lc) => {
 					if(litedbDal.CollectionExists<WalletElectionCache>()) {
 						litedbDal.Remove<WalletElectionCache>(k => k.BlockId == blockId);
 					}
 
-				});
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(false);
 
-				this.Save();
+				await Save(handle).ConfigureAwait(false);
 			}
 		}
 
@@ -181,27 +197,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <param name="transactions"></param>
-		public void RemoveBlockElectionTransactions(long blockId, List<TransactionId> transactions) {
-			lock(this.locker) {
-				this.RunDbOperation(litedbDal => {
+		public async Task RemoveBlockElectionTransactions(long blockId, List<TransactionId> transactions, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await RunDbOperation((litedbDal, lc) => {
 					if(litedbDal.CollectionExists<WalletElectionCache>()) {
-						litedbDal.Remove<WalletElectionCache>(k => (k.BlockId == blockId) || transactions.Contains(k.TransactionId));
+						litedbDal.Remove<WalletElectionCache>(k => k.BlockId == blockId || transactions.Contains(k.TransactionId));
 					}
 
-				});
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(false);
 
-				this.Save();
+				await Save(handle).ConfigureAwait(false);
 			}
 		}
 
-		public List<TransactionId> GetAllTransactions() {
-			return this.RunQueryDbOperation(litedbDal => {
-				
-				return litedbDal.Open(db => {
-					return litedbDal.CollectionExists<WalletElectionCache>(db) ? litedbDal.All<WalletElectionCache>(db).Select(t => t.TransactionId).ToList() : new List<TransactionId>();
-				});
+		public Task<List<TransactionId>> GetAllTransactions(LockContext lockContext) {
+			return this.RunQueryDbOperation((litedbDal, lc) => {
 
-			});
+				return Task.FromResult(litedbDal.Open(db => {
+					return litedbDal.CollectionExists<WalletElectionCache>(db) ? litedbDal.All<WalletElectionCache>(db).Select(t => t.TransactionId).ToList() : new List<TransactionId>();
+				}));
+
+			}, lockContext);
 		}
+
 	}
 }

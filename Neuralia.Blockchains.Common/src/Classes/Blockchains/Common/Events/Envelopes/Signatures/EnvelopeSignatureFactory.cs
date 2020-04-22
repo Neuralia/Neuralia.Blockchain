@@ -21,6 +21,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			} else if(version == EnvelopeSignatureTypes.Instance.Joint) {
 				envelopeSignature = new JointEnvelopeSignature();
+			} else if(version == EnvelopeSignatureTypes.Instance.JointPublished) {
+				envelopeSignature = new JointPublishedEnvelopeSignature();
 			} else if(version == EnvelopeSignatureTypes.Instance.Presentation) {
 				envelopeSignature = new PresentationEnvelopeSignature();
 			}

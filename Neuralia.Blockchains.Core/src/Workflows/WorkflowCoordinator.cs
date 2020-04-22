@@ -16,13 +16,13 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		where R : IRehydrationFactory {
 
 		int WaitingWorkflows { get; }
-		void AddWorkflow(WORKFLOW workflow, bool immediateStart = false);
-		void AddImmediateWorkflow(WORKFLOW workflow);
+		Task AddWorkflow(WORKFLOW workflow, bool immediateStart = false);
+		Task AddImmediateWorkflow(WORKFLOW workflow);
 		bool WorkflowExists(WorkflowId Id);
 
 		WORKFLOW GetExecutingWorkflow(WorkflowId Id);
 		WORKFLOW GetWorkflow(WorkflowId Id);
-		bool AttemptStart(WorkflowId Id, Action<WORKFLOW> started, Action<WORKFLOW> failed);
+		Task<bool> AttemptStart(WorkflowId Id, Action<WORKFLOW> started, Action<WORKFLOW> failed);
 	}
 
 	/// <summary>
@@ -64,20 +64,19 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			GC.SuppressFinalize(this);
 		}
 
-		public void AddImmediateWorkflow(WORKFLOW workflow) {
-			this.AddWorkflow(workflow, true);
+		public Task AddImmediateWorkflow(WORKFLOW workflow) {
+			return this.AddWorkflow(workflow, true);
 		}
 
-		public void AddWorkflow(WORKFLOW workflow, bool immediateStart = false) {
+		public async Task AddWorkflow(WORKFLOW workflow, bool immediateStart = false) {
 
 			Task DisposeWorkflow(WORKFLOW disposeWorkflow) {
 				return Task.Run(disposeWorkflow.Dispose);
 			}
 				
-			Task DisposeRemoveWorkflow(WORKFLOW disposeWorkflow) {
-				var task = DisposeWorkflow(disposeWorkflow);
-				this.RemoveWorkflow(false, disposeWorkflow);
-				return task;
+			async Task DisposeRemoveWorkflow(WORKFLOW disposeWorkflow) {
+				await DisposeWorkflow(disposeWorkflow).ConfigureAwait(false);
+				await this.RemoveWorkflow(false, disposeWorkflow).ConfigureAwait(false);
 			}
 			
 			lock(this.locker) {
@@ -94,7 +93,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 				//return, we dont run the SAME workflow twice
 				Log.Verbose($"A workflow of type '{workflow.GetType().FullName}' that was already added was being added again. ignoring.");
 
-				DisposeWorkflow(workflow);
+				await DisposeWorkflow(workflow).ConfigureAwait(false);
 				return;
 			}
 
@@ -109,7 +108,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 						// remove all the duplicates
 						foreach(var obsoleteWf in workingWorkflows) {
 							
-							DisposeRemoveWorkflow(obsoleteWf.Value);
+							await DisposeRemoveWorkflow(obsoleteWf.Value).ConfigureAwait(false);
 						}
 					} else {
 
@@ -117,13 +116,13 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 						// we already have one, so we ignore it
 						if(active.Value.ExecutionMode != Workflow.ExecutingMode.SingleRepleacable) {
-							DisposeWorkflow(workflow);
+							await DisposeWorkflow(workflow).ConfigureAwait(false);
 
 							return;
 						}
 						
 						// ok, it is replaceable, lets do that and remove the current one so we can add it again
-						DisposeRemoveWorkflow(active.Value);
+						await DisposeRemoveWorkflow(active.Value).ConfigureAwait(false);
 					}
 				}
 			}
@@ -158,7 +157,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			}
 
 			if(canStartWorkflow) {
-				this.StartWorkflow(workflow);
+				await this.StartWorkflow(workflow).ConfigureAwait(false);
 			} else {
 				this.queuedWorkflows.Enqueue(workflow);
 			}
@@ -170,7 +169,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		/// <param name="Id"></param>
 		/// <param name="started"></param>
 		/// <returns></returns>
-		public bool AttemptStart(WorkflowId Id, Action<WORKFLOW> started, Action<WORKFLOW> failed) {
+		public async Task<bool> AttemptStart(WorkflowId Id, Action<WORKFLOW> started, Action<WORKFLOW> failed) {
 			WORKFLOW workflow = this.GetWorkflow(Id);
 
 			if((workflow != null) && !workflow.IsCompleted && !workflow.IsStarted) {
@@ -194,14 +193,14 @@ namespace Neuralia.Blockchains.Core.Workflows {
 				}
 
 				if(canStart) {
-					this.StartWorkflow(workflow);
-					started?.Invoke(workflow);
+					await this.StartWorkflow(workflow).ConfigureAwait(false);
+if(					started != null){ 					started(workflow);}
 
 					return true;
 				}
 			}
 
-			failed?.Invoke(workflow);
+if(			failed != null){ 			failed(workflow);}
 
 			return false;
 		}
@@ -263,7 +262,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			return this.workflows[Id].IsStarted;
 		}
 
-		private void StartWorkflow(WORKFLOW workflow) {
+		private async Task StartWorkflow(WORKFLOW workflow) {
 
 			if(!this.executingWorkflows.ContainsKey(workflow.Id)) {
 				this.executingWorkflows.AddSafe(workflow.Id, (workflow, DateTime.UtcNow));
@@ -271,24 +270,24 @@ namespace Neuralia.Blockchains.Core.Workflows {
 				// make sure we are alerted when it completes in any way
 				workflow.Completed += this.WorkflowCompleted;
 
-				workflow.Start();
+				await workflow.Start().ConfigureAwait(false);
 			}
 		}
 
-		protected void WorkflowCompleted(bool success, object sender) {
+		protected Task WorkflowCompleted(bool success, object sender) {
 			WORKFLOW workflow = (WORKFLOW) sender;
 
-			this.WorkflowCompleted(success, workflow);
+			return this.WorkflowCompleted(success, workflow);
 		}
 
 		/// <summary>
 		///     a workflow is completed, so we clean up and let it die
 		/// </summary>
 		/// <param name="sender"></param>
-		protected void WorkflowCompleted(bool success, WORKFLOW workflow) {
+		protected async Task WorkflowCompleted(bool success, WORKFLOW workflow) {
 			
 			try {
-				this.RemoveWorkflow(success, workflow);
+				await this.RemoveWorkflow(success, workflow).ConfigureAwait(false);
 			} finally {
 				workflow?.Dispose();
 
@@ -298,7 +297,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			}
 		}
 
-		protected void RemoveWorkflow(bool success, WORKFLOW workflow) {
+		protected async Task RemoveWorkflow(bool success, WORKFLOW workflow) {
 			
 			bool canStartNextWorkflow = false;
 			try {
@@ -348,7 +347,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 							}
 						}
 
-						this.StartWorkflow(nextWorkflow);
+						await this.StartWorkflow(nextWorkflow).ConfigureAwait(false);
 						numToStart--;
 					}
 				}

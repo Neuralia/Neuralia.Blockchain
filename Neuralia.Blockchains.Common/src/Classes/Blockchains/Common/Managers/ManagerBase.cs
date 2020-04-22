@@ -21,13 +21,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		protected ManagerBase(CENTRAL_COORDINATOR centralCoordinator, int maxParallelTasks) : base(centralCoordinator, maxParallelTasks) {
 
-			this.Error2 += (sender, ex) => {
+			this.Error2 += async (sender, ex) => {
 				ExceptionOccured(ex);
 			};
 		}
 
 		protected ManagerBase(CENTRAL_COORDINATOR centralCoordinator, int maxParallelTasks, int sleepTime) : base(centralCoordinator, maxParallelTasks, sleepTime) {
-			this.Error2 += (sender, ex) => {
+			this.Error2 += async (sender, ex) => {
 				ExceptionOccured(ex);
 			};
 		}

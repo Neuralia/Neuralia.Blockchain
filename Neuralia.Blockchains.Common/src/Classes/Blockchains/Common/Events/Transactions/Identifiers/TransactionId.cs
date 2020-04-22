@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.General.Json.Converters;
 using Neuralia.Blockchains.Core;
@@ -149,7 +150,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			this.Scope = new TransactionScope();
 
-			if((items.Length == 3) && !string.IsNullOrWhiteSpace(items[2])) {
+			if(items.Length == 3 && !string.IsNullOrWhiteSpace(items[2])) {
 				this.Scope = new TransactionScope(items[2]);
 			}
 		}
@@ -159,7 +160,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public string ToCompositeKey() {
-			return this.Account.ToLongRepresentation().ToString() + "_" +  this.Timestamp.ToString() + "_" + this.Scope.ToString();
+			return this.Account.ToLongRepresentation().ToString(CultureInfo.InvariantCulture) + "_" +  this.Timestamp + "_" + this.Scope;
 		}
 		
 		protected virtual void DehydrateTail(IDataDehydrator dehydrator) {
@@ -273,6 +274,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// <returns></returns>
 		public static TransactionId FromCompactString(string compact) {
 
+			if(string.IsNullOrWhiteSpace(compact)) {
+				return null;
+			}
+
 			var items = compact.Split(new[] {COMPACT_SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
 
 			AccountId accountId = AccountId.FromCompactString(items[0]);
@@ -285,7 +290,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			short scope = 0;
 
-			if((items.Length == 3) && !string.IsNullOrWhiteSpace(items[2])) {
+			if(items.Length == 3 && !string.IsNullOrWhiteSpace(items[2])) {
 				buffer = ByteArray.FromBase94(items[2]);
 				fullbuffer = stackalloc byte[sizeof(short)];
 				buffer.Entry.CopyTo(fullbuffer);
@@ -327,6 +332,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// <param name="transactionId"></param>
 		/// <returns></returns>
 		public static Guid TransactionIdToGuid(TransactionId transactionId) {
+			
+			if(transactionId == null) {
+				return Guid.Empty;
+			}
+			
 			Span<byte> guidSpan = stackalloc byte[16];
 
 			Span<byte> span = stackalloc byte[8];

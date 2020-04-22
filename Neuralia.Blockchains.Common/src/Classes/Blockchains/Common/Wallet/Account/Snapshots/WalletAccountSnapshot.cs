@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.
 
 		public long InceptionBlockId { get; set; }
 		public byte TrustLevel { get; set; }
-		public long? CorrelationId { get; set; }
+		public bool Correlated { get; set; }
 		public ImmutableList<IAccountAttribute> AppliedAttributesBase => this.AppliedAttributes.Cast<IAccountAttribute>().ToImmutableList();
 		public List<ACCOUNT_ATTRIBUTE> AppliedAttributes { get; } = new List<ACCOUNT_ATTRIBUTE>();
 

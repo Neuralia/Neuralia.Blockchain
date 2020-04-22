@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Configuration;
@@ -28,6 +29,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		protected AccountSnapshotSqliteDal(int groupSize, string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, Func<AppSettingsBase.SerializationTypes, ACCOUNT_SNAPSHOT_CONTEXT> contextInstantiator, AppSettingsBase.SerializationTypes serializationType) : base(groupSize, folderPath, serviceSet, softwareVersion, contextInstantiator, serializationType) {
 		}
 
-		public abstract void InsertNewAccount(AccountId accountId, List<(byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId)> keys, long inceptionBlockId, long? correlationId);
+		public abstract Task InsertNewAccount(AccountId accountId, List<(byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId)> keys, long inceptionBlockId, bool correlated);
 	}
 }

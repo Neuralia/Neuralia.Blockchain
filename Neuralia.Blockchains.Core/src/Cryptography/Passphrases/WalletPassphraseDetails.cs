@@ -5,6 +5,7 @@ using System.Threading;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 	public class WalletPassphraseDetails : PassphraseDetails {
@@ -85,11 +86,17 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			if(passphraseTimeout.HasValue) {
 				this.walletPassphraseTimer = new Timer(state => {
 
-					// lets clear everything
-					this.ClearWalletPassphrase();
+					try{
+						// lets clear everything
+						this.ClearWalletPassphrase();
 
-					this.walletPassphraseTimer.Dispose();
-					this.walletPassphraseTimer = null;
+						this.walletPassphraseTimer.Dispose();
+						this.walletPassphraseTimer = null;
+					}
+					catch(Exception ex){
+						//TODO: do something?
+						Log.Error(ex, "Timer exception");
+					}
 
 				}, this, TimeSpan.FromMinutes(passphraseTimeout.Value), new TimeSpan(-1));
 			}

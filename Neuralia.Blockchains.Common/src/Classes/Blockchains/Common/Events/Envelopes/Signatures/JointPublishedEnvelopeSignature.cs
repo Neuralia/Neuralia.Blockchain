@@ -1,6 +1,7 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -38,6 +39,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			base.Rehydrate(rehydrator);
 
 			this.Address.Rehydrate(rehydrator);
+		}
+		
+		protected override ComponentVersion<EnvelopeSignatureType> SetIdentity() {
+			return (EnvelopeSignatureTypes.Instance.JointPublished, 1, 0);
 		}
 	}
 }

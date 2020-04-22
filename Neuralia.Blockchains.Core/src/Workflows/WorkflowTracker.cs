@@ -2,6 +2,7 @@ using System;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
+using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Core.Workflows {
 
@@ -53,7 +54,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 						workflow = w;
 					}, w => {
 						workflow = w;
-					});
+					}).WaitAndUnwrapException();
 				}
 			}
 

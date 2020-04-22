@@ -1,14 +1,19 @@
 using System;
 using System.IO;
-using System.IO.Abstractions;
+
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
+using Zio;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.FastKeyIndex {
 	/// <summary>
@@ -24,12 +29,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public readonly int ACCOUNT_ENTRY_SIZE;
 
 		private readonly ChainConfigurations.FastKeyTypes enabledKeyTypes;
-
-		protected readonly IFileSystem fileSystem;
+		
 		protected readonly string folder;
 
-		public FastKeyProvider(string folder, ChainConfigurations.FastKeyTypes enabledKeyTypes, IFileSystem fileSystem) {
-			this.fileSystem = fileSystem;
+		public FastKeyProvider(string folder, ChainConfigurations.FastKeyTypes enabledKeyTypes) {
+			
 			this.folder = folder;
 			this.enabledKeyTypes = enabledKeyTypes;
 
@@ -45,11 +49,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		private void TestKeyValidity(byte ordinal) {
-			if((ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) && !this.enabledKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
+			if(ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID && !this.enabledKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Transactions)) {
 				throw new ApplicationException("Transaction keys are not enabled in this fastkey provider");
 			}
 
-			if((ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) && !this.enabledKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
+			if(ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID && !this.enabledKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Messages)) {
 				throw new ApplicationException("Message keys are not enabled in this fastkey provider");
 			}
 		}
@@ -66,7 +70,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			string path = this.GetBasePath();
 			try {
-				bool result = this.fileSystem.File.Exists(path);
+				using var fileSystem = FileSystemWrapper.CreatePhysical();
+				bool result = fileSystem.FileExists(path);
 				Log.Verbose($"testing for existance of fast key provider file at path {path}. File '{(result?"":"does not")} exist'");
 
 				return result;
@@ -78,22 +83,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return false;
 		}
 
-		public void EnsureBaseFileExists() {
-			string baseFileName = this.GetBasePath();
-			if(!this.fileSystem.File.Exists(baseFileName)) {
+		public void EnsureBaseFileExists(FileSystemWrapper fileSystem) {
 
-				FileExtensions.EnsureFileExists(baseFileName, this.fileSystem);
+			string baseFileName = this.GetBasePath();
+			if(!fileSystem.FileExists(baseFileName)) {
+
+				FileExtensions.EnsureFileExists(baseFileName, fileSystem);
 
 				// ok, write a raw file
-				using(Stream fs = this.fileSystem.File.Create(baseFileName)) {
+				using(Stream fs = fileSystem.CreateFile(baseFileName)) {
 					
 				}
 			}
 		}
-		public (SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits) LoadKeyFile(AccountId accountId, byte ordinal) {
+		public async Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)> LoadKeyFileAsync(AccountId accountId, byte ordinal, FileSystemWrapper fileSystem = null) {
 
 			this.TestKeyValidity(ordinal);
-
+			if(fileSystem == null) {
+				fileSystem = FileSystemWrapper.CreatePhysical();
+			}
 			long adjustedAccountId = this.AdjustAccountId(accountId);
 
 			int page = this.GetPage(adjustedAccountId);
@@ -104,16 +112,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			string fileName = this.GetKeyFileName(page);
 
-			if(!this.fileSystem.File.Exists(fileName) || this.fileSystem.FileInfo.FromFileName(fileName).Length == 0) {
+			if(!fileSystem.FileExists(fileName) || fileSystem.GetFileLength(fileName) == 0) {
 				return default;
 			}
 
-			SafeArrayHandle results = FileExtensions.ReadBytes(fileName, byteOffsets + offset, size, this.fileSystem);
+			SafeArrayHandle results = await FileExtensions.ReadBytesAsync(fileName, byteOffsets + offset, size, fileSystem).ConfigureAwait(false);
 
 			ByteArray keySimpleBytes = ByteArray.Create(this.GetKeySize(ordinal));
 			results.Entry.Slice(2).CopyTo(keySimpleBytes.Span);
 
 			return (keySimpleBytes, results[0], (Enums.KeyHashBits)results[1]);
+		}
+		
+		public Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)> LoadKeyFile(AccountId accountId, byte ordinal, FileSystemWrapper fileSystem = null) {
+
+			return this.LoadKeyFileAsync(accountId, ordinal, fileSystem);
 		}
 
 		private int GetKeySize(byte ordinal) {
@@ -124,20 +137,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID ? TRANSACTION_ENTRY_SIZE : MESSAGE_ENTRY_SIZE;
 		}
 
-		public void WriteKey(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal) {
+		public async Task WriteKey(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal, FileSystemWrapper fileSystem = null) {
 
 			this.TestKeyValidity(ordinal);
 
-			if((ordinal != GlobalsService.TRANSACTION_KEY_ORDINAL_ID) && (ordinal != GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
+			if(ordinal != GlobalsService.TRANSACTION_KEY_ORDINAL_ID && ordinal != GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
 				throw new ApplicationException("Invalid key ordinal");
 			}
 
-			if((ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) && (key.Length != TRANSACTION_KEY_SIZE)) {
+			if(ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID && key.Length != TRANSACTION_KEY_SIZE) {
 				throw new ApplicationException("Invalid key size");
 			}
 
-			if((ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) && (key.Length != MESSAGE_KEY_SIZE)) {
+			if(ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID && key.Length != MESSAGE_KEY_SIZE) {
 				throw new ApplicationException("Invalid key size");
+			}
+
+			if(fileSystem == null) {
+				fileSystem = FileSystemWrapper.CreatePhysical();
 			}
 
 			long adjustedAccountId = this.AdjustAccountId(accountId);
@@ -151,30 +168,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			long dataLength = PAGE_SIZE * this.ACCOUNT_ENTRY_SIZE;
 
-			if(!this.fileSystem.File.Exists(fileName) || (this.fileSystem.FileInfo.FromFileName(fileName).Length < dataLength)) {
+			if(!fileSystem.FileExists(fileName) || fileSystem.GetFileLength(fileName) < dataLength) {
 
-				FileExtensions.EnsureFileExists(fileName, this.fileSystem);
+				FileExtensions.EnsureFileExists(fileName, fileSystem);
 
 				// ok, write a raw file
-				using(Stream fs = this.fileSystem.File.OpenWrite(fileName)) {
+				await using(Stream fs = fileSystem.OpenFile(fileName, FileMode.Open, FileAccess.Write, FileShare.Write)) {
 
 					fs.Seek(dataLength - 1, SeekOrigin.Begin);
-					fs.WriteByte(0);
+					await fs.WriteAsync(new byte[] {0}, 0, 1).ConfigureAwait(false);
 				}
 			}
 
 			int entrySize = this.GetEntrySize(ordinal);
 			int keySize = this.GetKeySize(ordinal);
 
-			Span<byte> dataEntry = stackalloc byte[entrySize];
+			byte[] dataEntry = new byte[entrySize];
 			dataEntry[0] = treeHeight;
 			dataEntry[1] = (byte)hashBits;
-			key.Span.CopyTo(dataEntry.Slice(2, keySize));
+			key.Span.CopyTo(dataEntry.AsSpan().Slice(2, keySize));
 
-			using(Stream fs = this.fileSystem.File.OpenWrite(fileName)) {
+			await using(Stream fs = fileSystem.OpenFile(fileName, FileMode.Open, FileAccess.Write, FileShare.Write)) {
 
 				fs.Seek((int) (byteOffsets + offset), SeekOrigin.Begin);
-				fs.Write(dataEntry.ToArray(), 0, dataEntry.Length);
+				await fs.WriteAsync(dataEntry, 0, dataEntry.Length).ConfigureAwait(false);
 			}
 		}
 
@@ -222,7 +239,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		private int GetPageOffset(long accountId, int page) {
-			return (int) (accountId - (page * PAGE_SIZE));
+			return (int) (accountId - page * PAGE_SIZE);
 		}
 
 		private long GetPageByteOffset(int pageOffset) {

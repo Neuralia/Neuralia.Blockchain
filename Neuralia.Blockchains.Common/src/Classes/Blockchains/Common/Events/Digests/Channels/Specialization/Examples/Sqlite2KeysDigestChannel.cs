@@ -1,6 +1,6 @@
 //using System;
 //using System.Collections.Generic;
-//using System.IO.Abstractions;
+//
 //using Neuralia.Blockchains.Common.Classes.Neuralia.Blockchains.Common.Events.Digests.Channels.Index;
 //using Neuralia.Blockchains.Common.Classes.Neuralia.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 //using Neuralia.Blockchains.Tools.Data;
@@ -25,7 +25,7 @@
 //
 //		protected override void BuildBandsIndices() {
 //
-//			this.channelBandIndexSet.AddIndex(1, new GroupSplitSqliteMultiKeyChannelBandIndex<Sqlite2KeysDigestChannel.Sqlite2KeysDigestChannelBands, ACCREDITATION_CARD, byte>(KEYS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, Sqlite2KeysDigestChannel.Sqlite2KeysDigestChannelBands.Keys, new FileSystem(), entry => new {entry.Scope, entry.Ordinal}, entry => new object[]{entry.id, entry.ordinal}));
+//			this.channelBandIndexSet.AddIndex(1, new GroupSplitSqliteMultiKeyChannelBandIndex<Sqlite2KeysDigestChannel.Sqlite2KeysDigestChannelBands, ACCREDITATION_CARD, byte>(KEYS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, Sqlite2KeysDigestChannel.Sqlite2KeysDigestChannelBands.Keys, FileSystemWrapper.CreatePhysical(), entry => new {entry.Scope, entry.Ordinal}, entry => new object[]{entry.id, entry.ordinal}));
 //		}
 //
 //		public override DigestChannelTypes ChannelType => DigestChannelTypes.AccountKeys;

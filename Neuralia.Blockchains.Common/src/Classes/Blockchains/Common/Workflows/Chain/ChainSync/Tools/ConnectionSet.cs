@@ -82,11 +82,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			public void ReleaseObsoleteRejections() {
 
 				// reset the grace period if we passed it
-				if(this.lastRejection != null && (this.lastRejection.Value + RejectionGracePeriod) < DateTime.UtcNow) {
+				if(this.lastRejection != null && this.lastRejection.Value + RejectionGracePeriod < DateTime.UtcNow) {
 					this.lastRejection = null;
 				}
 
-				this.rejections.RemoveAll(r => (r.Timestamp + RejectionTimeout) < DateTime.UtcNow);
+				this.rejections.RemoveAll(r => r.Timestamp + RejectionTimeout < DateTime.UtcNow);
 			}
 
 			public override bool Equals(object obj) {

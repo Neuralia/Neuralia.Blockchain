@@ -65,9 +65,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			dehydrator.Write(this.Minor);
 			dehydrator.Write(this.Revision);
 
-			foreach((int nonce1, int nonce2) nonce in this.Nonces) {
-				dehydrator.Write(nonce.nonce1);
-				dehydrator.Write(nonce.nonce2);
+			foreach((int nonce1, int nonce2) in this.Nonces) {
+				dehydrator.Write(nonce1);
+				dehydrator.Write(nonce2);
 			}
 		}
 	}

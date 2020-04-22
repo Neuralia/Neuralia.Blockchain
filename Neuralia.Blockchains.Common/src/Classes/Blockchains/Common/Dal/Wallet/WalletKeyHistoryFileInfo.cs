@@ -1,10 +1,12 @@
 using System;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public class WalletKeyHistoryFileInfo : SingleEntryWalletFileInfo<WalletKeyHistory> {
@@ -20,24 +22,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     Insert the new empty wallet
 		/// </summary>
 		/// <param name="wallet"></param>
-		protected override void InsertNewDbData(WalletKeyHistory keyHistory) {
+		protected override Task InsertNewDbData(WalletKeyHistory keyHistory, LockContext lockContext) {
 
-			this.RunDbOperation(litedbDal => {
+			return this.RunDbOperation((litedbDal, lc) => {
 				litedbDal.Insert(keyHistory, c => c.Id);
-			});
+
+				return Task.CompletedTask;
+			}, lockContext);
 
 		}
 
-		protected override void CreateDbFile(LiteDBDAL litedbDal) {
+		protected override Task CreateDbFile(LiteDBDAL litedbDal, LockContext lockContext) {
 			litedbDal.CreateDbFile<IWalletKeyHistory, Guid>(i => i.Id);
+
+			return Task.CompletedTask;
 		}
 
-		protected override void PrepareEncryptionInfo() {
-			this.CreateSecurityDetails();
+		protected override Task PrepareEncryptionInfo(LockContext lockContext) {
+			return this.CreateSecurityDetails(lockContext);
 		}
 
-		protected override void CreateSecurityDetails() {
-			lock(this.locker) {
+		protected override async Task CreateSecurityDetails(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
@@ -46,29 +52,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(this.EncryptionInfo.Encrypt) {
 
 						this.EncryptionInfo.EncryptionParameters = this.account.KeyHistoryFileEncryptionParameters;
-						this.EncryptionInfo.Secret = () => this.account.KeyHistoryFileSecret;
+						this.EncryptionInfo.Secret               = () => this.account.KeyHistoryFileSecret;
 					}
 				}
 			}
 		}
 
-		protected override void UpdateDbEntry() {
+		protected override Task UpdateDbEntry(LockContext lockContext) {
 			// do nothing, we dont udpate
 
+			return Task.CompletedTask;
 		}
 
-		public void InsertKeyHistoryEntry(IWalletKey key, WalletKeyHistory walletAccountKeyHistory) {
-			lock(this.locker) {
+		public async Task InsertKeyHistoryEntry(IWalletKey key, WalletKeyHistory walletAccountKeyHistory, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 
 				walletAccountKeyHistory.Copy(key);
 
-				this.RunDbOperation(litedbDal => {
+				await RunDbOperation((litedbDal, lc) => {
 					// lets check the last one inserted, make sure it was a lower key height than ours now
 
 					litedbDal.Insert(walletAccountKeyHistory, k => k.Id);
-				});
 
-				this.Save();
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(false);
+
+				await Save(handle).ConfigureAwait(false);
 			}
 		}
 	}

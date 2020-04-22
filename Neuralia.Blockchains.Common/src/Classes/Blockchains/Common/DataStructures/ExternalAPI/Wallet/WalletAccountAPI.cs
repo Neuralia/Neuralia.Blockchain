@@ -19,9 +19,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string FriendlyName { get; set; }
 		public bool IsActive { get; set; }
 		public int Status { get; set; }
-		public long DeclarationBlockid { get; set; }
+		public long DeclarationBlockId { get; set; }
 		public bool KeysEncrypted { get; set; }
 		public int AccountType { get; set; }
 		public int TrustLevel { get; set; }
+		public bool Correlated { get; set; }
 	}
 }

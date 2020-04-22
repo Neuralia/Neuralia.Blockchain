@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
 using System.Text.Json;
@@ -24,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public TransactionScope(TransactionScope other) : this(other.Value) {
 		}
 		
-		public TransactionScope(string scope) : this(ushort.Parse(scope)) {
+		public TransactionScope(string scope) : this(ushort.Parse(scope, CultureInfo.InvariantCulture)) {
 
 		}
 
@@ -57,6 +58,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public TransactionScope Clone => new TransactionScope(this);
 
 		public int CompareTo(TransactionScope other) {
+			if(other == null) {
+				return -1;
+			}
 			return this.Value.CompareTo(other.Value);
 		}
 
@@ -92,7 +96,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public override string ToString() {
-			return this.Value.ToString();
+			return this.Value.ToString(CultureInfo.InvariantCulture);
 		}
 
 		public static implicit operator TransactionScope(short value) {
@@ -134,5 +138,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public static bool operator !=(TransactionScope left, ushort right) {
 			return !(left == right);
 		}
-	}
+
+        public TransactionScope ToTransactionScope() {
+	        return this.Clone;
+        }
+    }
 }

@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Abstractions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Zio;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
@@ -17,17 +18,17 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		private readonly string filename;
 		private readonly long fileSize;
-		private readonly IFileSystem fileSystem;
+		private readonly FileSystemWrapper fileSystem;
 		private readonly int sizeSize = 64;
 
 		private Stream fileStream;
 		private readonly object locker = new object();
 		
-		public FileStreamSliceHashNodeList(string filename, IFileSystem fileSystem, int sizeSize = 64): this(filename, fileSystem.FileInfo.FromFileName(filename).Length, fileSystem, sizeSize){
+		public FileStreamSliceHashNodeList(string filename, FileSystemWrapper fileSystem, int sizeSize = 64): this(filename, fileSystem.GetFileLength(filename), fileSystem, sizeSize){
 
 		}
 
-		public FileStreamSliceHashNodeList(string filename, long fileSize, IFileSystem fileSystem, int sizeSize = 64) {
+		public FileStreamSliceHashNodeList(string filename, long fileSize, FileSystemWrapper fileSystem, int sizeSize = 64) {
 			this.filename = filename;
 			this.fileSystem = fileSystem;
 			this.sizeSize = sizeSize;
@@ -42,7 +43,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				lock(this.locker) {
 					if(this.fileStream == null) {
 
-						this.fileStream = this.fileSystem.FileStream.Create(this.filename, FileMode.Open, FileAccess.Read);
+						this.fileStream = this.fileSystem.CreateFile(this.filename);
 					}
 				}
 

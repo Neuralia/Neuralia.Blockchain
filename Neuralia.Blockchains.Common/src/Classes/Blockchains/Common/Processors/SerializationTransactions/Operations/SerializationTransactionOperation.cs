@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -25,6 +26,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 
 		protected abstract void SetType();
 
-		public abstract void Undo();
+		public abstract Task Undo();
 	}
 }

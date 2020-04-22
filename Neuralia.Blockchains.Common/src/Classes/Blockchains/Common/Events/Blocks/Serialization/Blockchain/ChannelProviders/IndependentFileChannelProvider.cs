@@ -1,6 +1,8 @@
 using System.IO;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders {
 	/// <summary>
@@ -13,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		protected readonly string filename;
 
-		public IndependentFileChannelProvider(string filename, string folderPath, IFileSystem fileSystem) : base(filename, folderPath, fileSystem) {
+		public IndependentFileChannelProvider(string filename, string folderPath, FileSystemWrapper fileSystem) : base(filename, folderPath, fileSystem) {
 			this.filename = filename;
 		}
 

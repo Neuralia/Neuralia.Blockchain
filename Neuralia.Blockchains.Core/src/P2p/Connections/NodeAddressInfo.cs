@@ -21,6 +21,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private IPAddress cacheAdjustedV6Address;
 		public bool Locked { get; set; }
 
+		/// <summary>
+		/// used for ad hoc time stamping
+		/// </summary>
+		public DateTime? Timestamp { get; set; }
+
 		public NodeAddressInfo(string ip, int port, NodeInfo peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = port == 0 ? null : (int?) port;

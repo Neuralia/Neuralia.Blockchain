@@ -10,10 +10,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.AccountAt
 		}
 
 		public void Rehydrate(SafeArrayHandle context) {
-			using(var rehydrator = DataSerializationFactory.CreateRehydrator(context)) {
+			using var rehydrator = DataSerializationFactory.CreateRehydrator(context);
 
-				this.Rehydrate(rehydrator);
-			}
+			this.Rehydrate(rehydrator);
+
 		}
 
 		public byte[] DehydrateContext() {
@@ -24,11 +24,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.AccountAt
 		}
 
 		public SafeArrayHandle Dehydrate() {
-			using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+			using var dehydrator = DataSerializationFactory.CreateDehydrator();
 
-				this.Dehydrate(dehydrator);
-				return dehydrator.ToArray();
-			}
+			this.Dehydrate(dehydrator);
+			return dehydrator.ToArray();
+
 		}
 
 		protected virtual void Rehydrate(IDataRehydrator rehydrator) {

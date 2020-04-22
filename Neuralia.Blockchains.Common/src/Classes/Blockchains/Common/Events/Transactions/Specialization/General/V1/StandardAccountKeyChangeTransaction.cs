@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			ICryptographicKey changeKey = null;
 
-			if((changeOrdinalId == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || (changeOrdinalId == GlobalsService.MESSAGE_KEY_ORDINAL_ID) || (changeOrdinalId == GlobalsService.CHANGE_KEY_ORDINAL_ID)) {
+			if(changeOrdinalId == GlobalsService.TRANSACTION_KEY_ORDINAL_ID || changeOrdinalId == GlobalsService.MESSAGE_KEY_ORDINAL_ID || changeOrdinalId == GlobalsService.CHANGE_KEY_ORDINAL_ID) {
 				changeKey = new XmssCryptographicKey();
 			} else {
 				changeKey = new SecretCryptographicKey();

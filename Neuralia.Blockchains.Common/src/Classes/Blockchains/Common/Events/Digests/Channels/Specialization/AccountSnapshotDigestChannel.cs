@@ -1,12 +1,14 @@
 using System;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 
@@ -42,23 +44,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				return null;
 			}
 
-			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(results[this.channelBand])) {
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(results[this.channelBand]);
 
-				Enums.AccountTypes accountType = AccountSnapshotDigestChannelCard.GetAccountType(rehydrator);
+			Enums.AccountTypes accountType = AccountSnapshotDigestChannelCard.GetAccountType(rehydrator);
 
-				ACCOUNT_SNAPSHOT_CARD card = this.CreateNewCardInstance();
+			ACCOUNT_SNAPSHOT_CARD card = this.CreateNewCardInstance();
 
-				card.Rehydrate(rehydrator);
+			card.Rehydrate(rehydrator);
 
-				card.AccountId = new AccountId(accountId, this.AccountType).ToLongRepresentation();
+			card.AccountId = new AccountId(accountId, this.AccountType).ToLongRepresentation();
 
-				return card;
-			}
+			return card;
+
 		}
 
 		protected override void BuildBandsIndices() {
 
-			this.channelBandIndexSet.AddIndex(1, new SingleKeyTrippleFileChannelBandIndex<CHANEL_BANDS>(this.bandName, this.baseFolder, this.scopeFolder, this.groupSize, this.channelBand, new FileSystem()));
+			this.channelBandIndexSet.AddIndex(1, new SingleKeyTrippleFileChannelBandIndex<CHANEL_BANDS>(this.bandName, this.baseFolder, this.scopeFolder, this.groupSize, this.channelBand, FileSystemWrapper.CreatePhysical()));
 		}
 
 		protected override ComponentVersion<DigestChannelType> SetIdentity() {

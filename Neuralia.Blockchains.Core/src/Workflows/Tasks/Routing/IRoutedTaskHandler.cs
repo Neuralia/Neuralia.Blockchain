@@ -1,4 +1,6 @@
 using System;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 	public interface IRoutedTaskHandler {
@@ -31,18 +33,18 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		ITaskRouter TaskRouter { get; }
 		void ReceiveTask(IRoutedTask task);
 		void ReceiveTaskSynchronous(IRoutedTask task);
-		void StashTask(InternalRoutedTask task);
-		void RestoreStashedTask(InternalRoutedTask task);
-		bool CheckSingleTask(Guid taskId);
-		void Wait();
-		void Wait(TimeSpan timeout);
-		void DispatchSelfTask(IRoutedTask task);
-		void DispatchTaskAsync(IRoutedTask task);
-		void DispatchTaskNoReturnAsync(IRoutedTask task);
-		bool DispatchTaskSync(IRoutedTask task);
-		bool DispatchTaskNoReturnSync(IRoutedTask task);
-		bool WaitSingleTask(IRoutedTask task);
-		bool WaitSingleTask(IRoutedTask task, TimeSpan timeout);
+		Task StashTask(InternalRoutedTask task);
+		Task RestoreStashedTask(InternalRoutedTask task);
+		Task<bool> CheckSingleTask(Guid taskId);
+		Task Wait();
+		Task Wait(TimeSpan timeout);
+		Task DispatchSelfTask(IRoutedTask task, LockContext lockContext);
+		Task DispatchTaskAsync(IRoutedTask task, LockContext lockContext);
+		Task DispatchTaskNoReturnAsync(IRoutedTask task, LockContext lockContext);
+		Task<bool> DispatchTaskSync(IRoutedTask task, LockContext lockContext);
+		Task<bool> DispatchTaskNoReturnSync(IRoutedTask task, LockContext lockContext);
+		Task<bool> WaitSingleTask(IRoutedTask task);
+		Task<bool> WaitSingleTask(IRoutedTask task, TimeSpan timeout);
 	}
 
 	public interface IRoutedTaskRoutingHandler<U> : IRoutedTaskRoutingHandler

@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			base.JsonDehydrate(jsonDeserializer);
 
 			jsonDeserializer.SetProperty(nameof(this.BlockId), this.BlockId.ToString());
-			jsonDeserializer.SetProperty(nameof(this.TransactionIndex), (this.TransactionIndex==null?"": this.TransactionIndex.ToString()));
+			jsonDeserializer.SetProperty(nameof(this.TransactionIndex), this.TransactionIndex==null?"": this.TransactionIndex.ToString());
 			
 			jsonDeserializer.SetProperty(nameof(this.SelectedTransactionSection), this.SelectedTransactionSection.ToString());
 			jsonDeserializer.SetProperty(nameof(this.SelectedComponent), this.SelectedComponent.ToString());

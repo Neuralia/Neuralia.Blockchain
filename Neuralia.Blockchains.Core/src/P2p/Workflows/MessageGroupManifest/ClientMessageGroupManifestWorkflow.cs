@@ -21,6 +21,7 @@ using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Exceptions;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
@@ -70,7 +71,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 		///     this method will forward a gossip message to any connected peer that our cache indicates has never received it and
 		///     update the cache to reflect so
 		/// </summary>
-		public void ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet) {
+		public Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet) {
 
 			// gossip messages are only sent to nodes that support them
 			var gossipConnections = this.networkingService.ConnectionStore.BasicGossipConnectionsList;
@@ -80,23 +81,23 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				gossipConnections = this.networkingService.ConnectionStore.FullGossipConnectionsList;
 			}
 
-			this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet).ForwardValidGossipMessage(gossipMessageSet.BaseHeader.Hash, gossipConnections.Select(c => c.ScoppedIp).ToList(), peerNotReceived => {
-				// first update our peers to match any new connection since
-				this.UpdatePeerConnections();
+			var dal =this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet);
+				return dal.ForwardValidGossipMessage(gossipMessageSet.BaseHeader.Hash, gossipConnections.Select(c => c.ScoppedIp).ToList(), peerNotReceived => {
+					// first update our peers to match any new connection since
+					this.UpdatePeerConnections();
 
-				var sentIps = new List<string>();
+					var sentIps = new List<string>();
 
-				// and send the message to those who have not received it (as far as we know)
-				foreach(string sendpeer in peerNotReceived) // thats it, now we add the outbound message to this peer
-				{
-					try {
-						var peers = gossipConnections.Where(p => p.ScoppedIp == sendpeer).ToList();
+					// and send the message to those who have not received it (as far as we know)
+					foreach(string sendpeer in peerNotReceived) // thats it, now we add the outbound message to this peer
+					{
+						try {
+							var peers = gossipConnections.Where(p => p.ScoppedIp == sendpeer).ToList();
 
-						if(!peers.Any()) {
-							continue;
-						}
-
-						lock(this.locker) {
+							if(!peers.Any()) {
+								continue;
+							}
+						
 							foreach(PeerConnection peer in peers) {
 								if(!this.peerMessageQueues.ContainsKey(peer.ClientUuid)) {
 									continue;
@@ -104,17 +105,17 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 								this.peerMessageQueues[peer.ClientUuid].outboundMessagesQueue.Add(gossipMessageSet);
 							}
+						
+							sentIps.Add(sendpeer);
+						} catch(Exception ex) {
+							//not much to do here, just eat it up. what matters is that we send it to others
+							Log.Error(ex, "Failed to forward valid gossip message");
 						}
-						sentIps.Add(sendpeer);
-					} catch(Exception ex) {
-						//not much to do here, just eat it up. what matters is that we send it to others
-						Log.Error(ex, "Failed to forward valid gossip message");
 					}
-				}
 
-				// return the list of peers we forwarded it to
-				return sentIps;
-			});
+					// return the list of peers we forwarded it to
+					return sentIps;
+				});
 		}
 		
 		/// <summary>
@@ -158,20 +159,20 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 		private bool loop = true;
 		private readonly ManualResetEventSlim autoResetEvent = new ManualResetEventSlim(false);
-		protected override void DisposeAll() {
+		protected override Task DisposeAllAsync() {
 
 			try {
 				this.autoResetEvent?.Dispose();
 			} catch {
 				
 			}
-			base.DisposeAll();
+			return base.DisposeAllAsync();
 		}
 
 		private DateTime? nextGossipMessageDispatch;
 		private DateTime? nextincomingGossipMessageCheck;
 		
-		protected override void PerformWork() {
+		protected override async Task PerformWork(LockContext lockContext) {
 
 			while(this.loop) {
 				
@@ -181,7 +182,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 					try {
 						this.CleanTimeouts();
 						
-						this.DisatchMessageQueues();
+						await this.DisatchMessageQueues().ConfigureAwait(false);
 					} catch(Exception ex) {
 						//TODO: what shouldwe do here?
 					}
@@ -196,7 +197,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				}
 
 				try {
-					this.ProcessIncomingResponses();
+					await this.ProcessIncomingResponses().ConfigureAwait(false);
 				} catch(Exception ex) {
 					//TODO: what shouldwe do here?
 				}
@@ -224,13 +225,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			return false;
 		}
 
-		public override void Stop() {
+		public override Task Stop() {
 
 			this.loop = false;
 			this.autoResetEvent.Set();
 			this.CancelTokenSource?.Cancel(); 
 			
-			base.Stop();
+			return base.Stop();
 		}
 
 		private void CleanTimeouts() {
@@ -262,7 +263,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			}
 		}
 		
-		private void ProcessIncomingResponses() {
+		private async Task ProcessIncomingResponses() {
 
 			while(this.HasMessages) {
 
@@ -339,7 +340,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			}
 		}
 
-		private void DisatchMessageQueues() {
+		private async Task DisatchMessageQueues() {
 			this.CheckShouldCancel();
 
 			var actions = new List<Action>();
@@ -358,7 +359,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			// now the new messages
 			foreach(var queuesGroup in this.peerMessageQueues.Where(q => q.Value.outboundMessagesQueue.Any()).ToArray()) {
 
-				actions.Add(() => {
+				actions.Add(async () => {
 
 					this.CheckShouldCancel();
 					
@@ -375,11 +376,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 					List<IGossipMessageSet> messages = new List<IGossipMessageSet>();
 
-					lock(this.locker) {
-						while(queue.outboundMessagesQueue.TryTake(out IGossipMessageSet message)) {
-							messages.Add(message);
-						}
+					while(queue.outboundMessagesQueue.TryTake(out IGossipMessageSet message)) {
+						messages.Add(message);
 					}
+					
 					
 					// make sure the peer supports these gossip messages
 					messageSendSession.messages.AddRange(messages.Where(m => NodeInfo.DoesPeerTypeSupport(messageSendSession.Connection.NodeInfo, m.MinimumNodeGossipSupport)));

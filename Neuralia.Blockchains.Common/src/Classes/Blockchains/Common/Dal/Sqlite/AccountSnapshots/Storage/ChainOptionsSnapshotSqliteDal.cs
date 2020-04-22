@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage;
@@ -9,6 +10,7 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AccountSnapshots.Storage {
 
@@ -30,23 +32,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		public void EnsureEntryCreated(Action<ACCOUNT_SNAPSHOT_CONTEXT> operation) {
 			this.PerformOperation(operation);
 		}
+		
 
-		public List<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshots(Func<ACCOUNT_SNAPSHOT_CONTEXT, List<CHAIN_OPTIONS_SNAPSHOT>> operation) {
-			return this.PerformOperation(operation);
+		public Task<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshot(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task<CHAIN_OPTIONS_SNAPSHOT>> operation) {
+			return this.PerformOperationAsync(operation);
 		}
 
-		public void UpdateSnapshotDigestFromDigest(Action<ACCOUNT_SNAPSHOT_CONTEXT> operation) {
+		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation) {
 
-			this.PerformOperation(operation);
+			return this.PerformOperationAsync(operation);
 		}
 
-		public List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> PerformProcessingSet(Dictionary<long, List<Action<ACCOUNT_SNAPSHOT_CONTEXT>>> actions) {
+		public async Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
 			var result = new List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>();
 
-			(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction) trx = this.BeginHoldingTransaction();
+			(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction) trx = await this.BeginHoldingTransaction().ConfigureAwait(false);
 			result.Add(trx);
+			
+			LockContext lockContext = null;
+			List<Func<ACCOUNT_SNAPSHOT_CONTEXT, Task>> wrappedOperations = actions.SelectMany(e => e.Value).Select(o => {
 
-			this.PerformContextOperations(trx.db, actions.SelectMany(e => e.Value).ToList());
+				Task Func(ACCOUNT_SNAPSHOT_CONTEXT db) => o(db, lockContext);
+
+				return (Func<ACCOUNT_SNAPSHOT_CONTEXT, Task>) Func;
+			}).ToList();
+
+			await this.PerformContextOperationsAsync(trx.db, wrappedOperations ).ConfigureAwait(false);
 
 			return result;
 		}

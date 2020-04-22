@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.General {
 
@@ -14,52 +16,57 @@ namespace Neuralia.Blockchains.Core.General {
 
 		public delegate bool AfterFunction(PARAM parameter, R lastResult, ref R combinedResults);
 	
-		public void AddSet<T>(Func<T, PARAM, R> action) {
+		public void AddSet<T>(Func<T, PARAM, LockContext, Task<R>> action) {
 			this.CheckTypeNotAddedy<T>();
 			
 			this.basic.Add(typeof(T), new SimpleCaller<T, PARAM, R>(action));
 			this.Changed = true;
 		}
 	
-		public void AddOverrideSet<C, P>(Func<C, PARAM, Func<P, PARAM, R>, R> action) {
+		public void AddOverrideSet<C, P>(Func<C, PARAM, Func<P, PARAM, LockContext, Task<R>>, LockContext, Task<R>> action) {
 			
 			this.CheckTypeNotAddedy<C>();
 
-			this.overloads.Add(typeof(C), (typeof(P), new OverridenCaller<C, PARAM, R>((c, x, callParent) => {
+			this.overloads.Add(typeof(C), (typeof(P), new OverridenCaller<C, PARAM, R>((c, x, callParent, lc) => {
 					                              if(action == null) {
 						                              throw new ArgumentNullException("This class has no parent.");
 					                              }
-					                              
-					                              return action(c, x, (c2, x2) => {
+
+					                              return action(c, x, (c2, x2, lc2) => {
 
 						                              if(callParent == null) {
 							                              throw new ArgumentNullException("This class has no parent.");
 						                              }
-						                              return callParent.Run(c2, x2);
-					                              });
+						                              
+						                              return callParent.Run(c2, x2, lc2);
+					                              }, lc);
 				                              })));
 			
 			this.Changed = true;
 		}
 	
-		public R Run<T>(T item, PARAM parameter, out bool hasRun, AfterFunction after = null) {
+		public async Task<(R result, bool hashRun)> Run<T>(T item, PARAM parameter, LockContext lockContext, AfterFunction after = null) {
 	
 			R finalResult = default;
-			hasRun = false;
+			bool hasRun = false;
 			foreach(var entry in this.BuildHierarchy(item)) {
 	
 				if(entry.HasAction) {
-					R lastResult = entry.Run(item, parameter);
+					R lastResult = await entry.Run(item, parameter, lockContext).ConfigureAwait(false);
 					hasRun = true;
-					bool shouldContinue = after?.Invoke(parameter, lastResult, ref finalResult)??true;
-	
+					bool shouldContinue = true;
+
+					if(after != null) {
+						shouldContinue = after(parameter, lastResult, ref finalResult);
+					}
+
 					if(!shouldContinue) {
 						break;
 					}
 				}
 			}
 			
-			return finalResult;
+			return (finalResult, hasRun);
 		}
 	}
 
@@ -70,7 +77,7 @@ namespace Neuralia.Blockchains.Core.General {
 	public class OverrideSetAction<PARAM> : OverrideSet<PARAM, ICaller<PARAM>, IOverridenCaller<PARAM>>
 		where PARAM : class {
 
-		public void AddSet<T>(Action<T, PARAM> action) {
+		public void AddSet<T>(Func<T, PARAM, LockContext, Task> action) {
 
 			this.CheckTypeNotAddedy<T>();
 
@@ -78,25 +85,34 @@ namespace Neuralia.Blockchains.Core.General {
 			this.Changed = true;
 		}
 
-		public void AddSet<C, P>(Action<C, PARAM, Action<P, PARAM>> action) {
+		public void AddSet<C, P>(Func<C, PARAM, Func<P, PARAM, LockContext, Task>, LockContext, Task> action) {
 
 			this.CheckTypeNotAddedy<C>();
 
-			this.overloads.Add(typeof(C), (typeof(P), new OverridenCaller<C, PARAM>((c, x, callParent) => {
-					                              action?.Invoke(c, x, (c2, x2) => callParent?.Run(c2, x2));
+			this.overloads.Add(typeof(C), (typeof(P), new OverridenCaller<C, PARAM>((c, x, callParent, lc) => {
+					                              if(action == null) {
+						                              return Task.CompletedTask;
+					                              }
+					                              return action(c, x, (c2, x2, lc2) => callParent?.Run(c2, x2, lc2), lc);
 				                              })));
 
 			this.Changed = true;
 		}
 
-		public void Run<T>(T item, PARAM parameter, out bool hasRun) {
-			hasRun = false;
+		public async Task<bool> Run<T>(T item, PARAM parameter, LockContext lockContext) {
+			bool hasRun = false;
 			foreach(var entry in this.BuildHierarchy(item)) {
 				if(entry.HasAction) {
-					entry.Run(item, parameter);
+					var task = entry.Run(item, parameter, lockContext);
+
+					if(task != null) {
+						await task.ConfigureAwait(false);
+					}
 					hasRun = true;
 				}
 			}
+
+			return hasRun;
 		}
 	}
 
@@ -183,11 +199,11 @@ namespace Neuralia.Blockchains.Core.General {
 	}
 
 	public interface ICaller<in PARAM> : ICallerBase {
-		void Run(object entry, PARAM parameter);
+		Task Run(object entry, PARAM parameter, LockContext lockContext);
 	}
 
-	public interface ICaller<in PARAM, out R> : ICallerBase {
-		R Run(object entry, PARAM parameter);
+	public interface ICaller<in PARAM, R> : ICallerBase {
+		Task<R> Run(object entry, PARAM parameter, LockContext lockContext);
 	}
 
 	public interface IOverridenCallerBase<P> : ICallerBase
@@ -215,39 +231,39 @@ namespace Neuralia.Blockchains.Core.General {
 
 	public class SimpleCaller<T, PARAM> : CallerBase<T>, ICaller<PARAM> {
 
-		private readonly Action<T, PARAM> action;
+		private readonly Func<T, PARAM, LockContext, Task> action;
 
-		public SimpleCaller(Action<T, PARAM> action) {
+		public SimpleCaller(Func<T, PARAM, LockContext, Task> action) {
 			this.action = action;
 		}
 
 		public override bool HasAction => this.action != null;
 
-		public void Run(object entry, PARAM parameter) {
-			this.action((T) entry, parameter);
+		public Task Run(object entry, PARAM parameter, LockContext lockContext) {
+			return this.action((T) entry, parameter, lockContext);
 		}
 	}
 
 	public class SimpleCaller<T, PARAM, R> : CallerBase<T>, ICaller<PARAM, R> {
 
-		private readonly Func<T, PARAM, R> action;
+		private readonly Func<T, PARAM, LockContext, Task<R>> action;
 
-		public SimpleCaller(Func<T, PARAM, R> action) {
+		public SimpleCaller(Func<T, PARAM, LockContext, Task<R>> action) {
 			this.action = action;
 		}
 
 		public override bool HasAction => this.action != null;
 
-		public R Run(object entry, PARAM parameter) {
-			return this.action((T) entry, parameter) ?? default;
+		public Task<R> Run(object entry, PARAM parameter, LockContext lockContext) {
+			return this.action((T) entry, parameter, lockContext) ?? default;
 		}
 	}
 
 	public class OverridenCaller<T, PARAM> : CallerBase<T>, IOverridenCaller<PARAM> {
 
-		private readonly Action<T, PARAM, ICaller<PARAM>> action;
+		private readonly Func<T, PARAM, ICaller<PARAM>, LockContext, Task> action;
 
-		public OverridenCaller(Action<T, PARAM, ICaller<PARAM>> action) {
+		public OverridenCaller(Func<T, PARAM, ICaller<PARAM>, LockContext, Task> action) {
 			this.action = action;
 		}
 
@@ -256,16 +272,16 @@ namespace Neuralia.Blockchains.Core.General {
 
 		public override bool HasAction => this.action != null;
 		public bool HasParent=> this.Parent != null;
-		public void Run(object entry, PARAM parameter) {
-			this.action((T) entry, parameter, this.Parent);
+		public Task Run(object entry, PARAM parameter, LockContext lockContext) {
+			return this.action((T) entry, parameter, this.Parent, lockContext);
 		}
 	}
 
 	public class OverridenCaller<T, PARAM, R> : CallerBase<T>, IOverridenCaller<PARAM, R> {
 
-		private readonly Func<T, PARAM, ICaller<PARAM, R>, R> action;
+		private readonly Func<T, PARAM, ICaller<PARAM, R>, LockContext, Task<R>> action;
 
-		public OverridenCaller(Func<T, PARAM, ICaller<PARAM, R>, R> action) {
+		public OverridenCaller(Func<T, PARAM, ICaller<PARAM, R>, LockContext, Task<R>> action) {
 			this.action = action;
 		}
 
@@ -275,8 +291,8 @@ namespace Neuralia.Blockchains.Core.General {
 		public override bool HasAction => this.action != null;
 		public bool HasParent=> this.Parent != null;
 
-		public R Run(object entry, PARAM parameter) {
-			return this.action((T) entry, parameter, this.Parent);
+		public Task<R> Run(object entry, PARAM parameter, LockContext lockContext) {
+			return this.action((T) entry, parameter, this.Parent, lockContext);
 		}
 	}
 }

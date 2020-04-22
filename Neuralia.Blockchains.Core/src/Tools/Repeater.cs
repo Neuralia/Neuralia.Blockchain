@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return RepeatAsync<R>(index => action(), tries, afterFailed);
 		}
 		
-		public static Task RepeatAsync(Func<Task> action, int tries = 3, Action afterFailed = null) {
+		public static Task<bool> RepeatAsync(Func<Task> action, int tries = 3, Action afterFailed = null) {
 			return RepeatAsync(index => action(), tries, afterFailed);
 		}
 		
@@ -42,7 +42,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 						throw;
 					}
 
-					afterFailed?.Invoke();
+					if(afterFailed != null) {
+						afterFailed();
+					}
 				}
 
 				// this inside a lock is not great, but we want stability so we will just wait...
@@ -70,7 +72,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 						throw;
 					}
 
-					afterFailed?.Invoke();
+					if(afterFailed != null) {
+						afterFailed();
+					}
 				}
 
 				// this inside a lock is not great, but we want stability so we will just wait...
@@ -81,7 +85,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			throw new ApplicationException($"Falied to retry {tries} times.");
 		}
 		
-		public static async Task RepeatAsync(Func<int, Task> action, int tries = 3, Action afterFailed = null) {
+		public static async Task<bool> RepeatAsync(Func<int, Task> action, int tries = 3, Action afterFailed = null) {
 			int count = 1;
 
 			int time = 10;
@@ -89,9 +93,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 				try {
 
-					await action(count);
+					await action(count).ConfigureAwait(false);
 
-					return;
+					return true;
 
 				} catch(Exception ex) {
 
@@ -99,7 +103,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 						throw;
 					}
 
-					afterFailed?.Invoke();
+					if(afterFailed != null) {
+						afterFailed();
+					}
 				}
 
 				// this inside a lock is not great, but we want stability so we will just wait...
@@ -107,7 +113,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				time += 100;
 				count++;
 			}
-			throw new ApplicationException($"Falied to retry {tries} times.");
+			return false;
 		}
 		
 		public static async Task<R> RepeatAsync<R>(Func<int, Task<R>> action, int tries = 3, Action afterFailed = null) {
@@ -118,7 +124,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 				try {
 
-					return await action(count);
+					return await action(count).ConfigureAwait(false);
 					
 				} catch(Exception ex) {
 
@@ -126,7 +132,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 						throw;
 					}
 
-					afterFailed?.Invoke();
+					if(afterFailed != null) {
+						afterFailed();
+					}
 				}
 
 				// this inside a lock is not great, but we want stability so we will just wait...
@@ -134,7 +142,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				time += 100;
 				count++;
 			}
-			throw new ApplicationException($"Falied to retry {tries} times.");
+			throw new ApplicationException($"Failed to retry {tries} times.");
 		}
 	}
 }

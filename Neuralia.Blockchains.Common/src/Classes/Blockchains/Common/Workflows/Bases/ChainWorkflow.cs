@@ -1,11 +1,13 @@
 using System;
 using System.Reflection;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases {
 
@@ -53,103 +55,104 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 
 		public ITaskRouter TaskRouter => this.RoutedTaskReceiver.TaskRouter;
 
-		public void StashTask(InternalRoutedTask task) {
-			this.RoutedTaskReceiver.StashTask(task);
+		public Task StashTask(InternalRoutedTask task) {
+			return this.RoutedTaskReceiver.StashTask(task);
 		}
 
-		public void RestoreStashedTask(InternalRoutedTask task) {
-			this.RoutedTaskReceiver.RestoreStashedTask(task);
+		public Task RestoreStashedTask(InternalRoutedTask task) {
+			return this.RoutedTaskReceiver.RestoreStashedTask(task);
 		}
 
-		public bool CheckSingleTask(Guid taskId) {
+		public Task<bool> CheckSingleTask(Guid taskId) {
 			return this.RoutedTaskReceiver.CheckSingleTask(taskId);
 		}
 
-		public void Wait() {
-			this.RoutedTaskReceiver.Wait();
+		public Task Wait() {
+			return this.RoutedTaskReceiver.Wait();
 		}
 
-		public void Wait(TimeSpan timeout) {
-			this.RoutedTaskReceiver.Wait(timeout);
+		public Task Wait(TimeSpan timeout) {
+			return this.RoutedTaskReceiver.Wait(timeout);
 		}
 
-		public void DispatchSelfTask(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchSelfTask(task);
+		public Task DispatchSelfTask(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchSelfTask(task, lockContext);
 		}
 
-		public void DispatchTaskAsync(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchTaskAsync(task);
+		public Task DispatchTaskAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskAsync(task, lockContext);
 		}
 
-		public void DispatchTaskNoReturnAsync(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchTaskNoReturnAsync(task);
+		public Task DispatchTaskNoReturnAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskNoReturnAsync(task, lockContext);
 		}
 
-		public bool DispatchTaskSync(IRoutedTask task) {
-			return this.RoutedTaskReceiver.DispatchTaskSync(task);
+		public Task<bool> DispatchTaskSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskSync(task, lockContext);
 		}
 
-		public bool DispatchTaskNoReturnSync(IRoutedTask task) {
-			return this.RoutedTaskReceiver.DispatchTaskNoReturnSync(task);
+		public Task<bool> DispatchTaskNoReturnSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskNoReturnSync(task, lockContext);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task) {
+		public Task<bool> WaitSingleTask(IRoutedTask task) {
 			return this.RoutedTaskReceiver.WaitSingleTask(task);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
+		public Task<bool> WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
 			return this.RoutedTaskReceiver.WaitSingleTask(task, timeout);
 		}
 
-		protected override sealed void PerformWork() {
+		protected override sealed async Task PerformWork(LockContext lockContext) {
 			// here we delegate all the work to a task, so we can benefit from all it's strengths including stashing
 			if(!this.performWorkOverriden.HasValue) {
-				this.performWorkOverriden = this.IsOverride(nameof(PerformWork), new[] {typeof(IChainWorkflow), typeof(TaskRoutingContext)});
+				this.performWorkOverriden = this.IsOverride(nameof(PerformWork), new[] {typeof(IChainWorkflow), typeof(TaskRoutingContext), typeof(LockContext)});
 			}
 
 			if(this.performWorkOverriden.Value) {
 				var task = new RoutedTask<IChainWorkflow, bool>();
 
-				task.SetAction(this.PerformWork);
+				task.SetAction((workflow, taskRoutingContext, lc) => this.PerformWork(workflow, taskRoutingContext, lc));
 
-				this.DispatchSelfTask(task);
+				await this.DispatchSelfTask(task, lockContext).ConfigureAwait(false);
 			}
+
 		}
 
-		protected override sealed void Initialize() {
-			base.Initialize();
+		protected override sealed async Task Initialize(LockContext lockContext) {
+			await base.Initialize(lockContext).ConfigureAwait(false);
 
-			if(this.IsOverride(nameof(Initialize), new[] {typeof(IChainWorkflow), typeof(TaskRoutingContext)})) {
+			if(this.IsOverride(nameof(Initialize), new[] {typeof(IChainWorkflow), typeof(TaskRoutingContext), typeof(LockContext)})) {
 				var task = new RoutedTask<IChainWorkflow, bool>();
 
-				task.SetAction(this.Initialize);
+				task.SetAction((workflow, taskRoutingContext, lc) => this.Initialize(workflow, taskRoutingContext, lc));
 
-				this.DispatchSelfTask(task);
+				await this.DispatchSelfTask(task, lockContext).ConfigureAwait(false);
 			}
 		}
 
-		protected override sealed void Terminate(bool clean) {
-			base.Terminate(clean);
+		protected override sealed async Task Terminate(bool clean, LockContext lockContext) {
+			await base.Terminate(clean, lockContext).ConfigureAwait(false);
 
-			if(this.IsOverride(nameof(Terminate), new[] {typeof(bool), typeof(IChainWorkflow), typeof(TaskRoutingContext)})) {
+			if(this.IsOverride(nameof(Terminate), new[] {typeof(bool), typeof(IChainWorkflow), typeof(TaskRoutingContext), typeof(LockContext)})) {
 				var task = new RoutedTask<IChainWorkflow, bool>();
 
-				task.SetAction((workflow, taskRoutingContext) => this.Terminate(clean, workflow, taskRoutingContext));
+				task.SetAction((workflow, taskRoutingContext, lc) => this.Terminate(clean, workflow, taskRoutingContext));
 
-				this.DispatchSelfTask(task);
+				await this.DispatchSelfTask(task, lockContext).ConfigureAwait(false);
 			}
 		}
 
-		protected virtual void Initialize(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
-
+		protected virtual Task Initialize(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+			return Task.CompletedTask;
 		}
 
-		protected virtual void Terminate(bool clean, IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
-
+		protected virtual Task Terminate(bool clean, IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
+			return Task.CompletedTask;
 		}
 
-		protected virtual void PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext) {
-
+		protected virtual Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+			return Task.CompletedTask;
 		}
 
 		/// <summary>

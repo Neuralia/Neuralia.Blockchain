@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public void Reset(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
-			if((this.adjustedBlockId == adjustedBlockId) && (this.blockIndex == blockIndex)) {
+			if(this.adjustedBlockId == adjustedBlockId && this.blockIndex == blockIndex) {
 				return;
 			}
 

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Messages {
@@ -29,12 +31,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		}
 
-		protected override void EventGenerationCompleted(IMessageEnvelope envelope) {
+		protected override async Task EventGenerationCompleted(IMessageEnvelope envelope, LockContext lockContext) {
 
 			//  we add it to our trusted cache, until it gets confirmed.
 
 			try {
-				this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.DispatchNewMessage(envelope, this.correlationContext);
+				await this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.DispatchNewMessage(envelope, this.correlationContext).ConfigureAwait(false);
 				Log.Information("Dispatch of miner registration blockchain message completed");
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to dispatch miner registration blockchain message");
@@ -50,16 +52,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			// }
 		}
 
-		protected override void ExceptionOccured(Exception ex) {
-			base.ExceptionOccured(ex);
+		protected override Task ExceptionOccured(Exception ex) {
+			return base.ExceptionOccured(ex);
 
 			// if(ex is EventGenerationException evex && evex.Envelope is IMessageEnvelope envelope) {
 			// 	this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionError(envelope.Contents.Uuid, null), this.correlationContext);
 			// }
 		}
 
-		protected override void PerformSanityChecks() {
-			base.PerformSanityChecks();
+		protected override async Task PerformSanityChecks(LockContext lockContext) {
+			await base.PerformSanityChecks(lockContext).ConfigureAwait(false);
 
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 

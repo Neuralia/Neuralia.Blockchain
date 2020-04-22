@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Extra;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet;
 using Neuralia.Blockchains.Common.Classes.Tools;
@@ -11,42 +12,44 @@ using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 	public interface IUserWalletFileInfo : ISingleEntryWalletFileInfo {
-		IUserWallet WalletBase { get; }
+		Task<IUserWallet> WalletBase(LockContext lockContext);
 
 		Dictionary<Guid, IAccountFileInfo> Accounts { get; }
 
 		string WalletPath { get; }
-		
-		void ChangeKeysEncryption();
+
+		Task ChangeKeysEncryption(LockContext lockContext);
 
 		/// <summary>
 		///     force a full load of all components of the wallet
 		/// </summary>
-		void LoadComplete(bool includeWalletItems, bool includeKeys);
+		Task LoadComplete(bool includeWalletItems, bool includeKeys, LockContext lockContext);
 
 		/// <summary>
 		///     Load the security details from the wallet file
 		/// </summary>
 		/// <exception cref="ApplicationException"></exception>
-		void LoadFileSecurityDetails();
+		Task LoadFileSecurityDetails(LockContext lockContext);
 
-		void CreateEmptyFileBase(IUserWallet entry);
+		Task CreateEmptyFileBase(IUserWallet entry, LockContext lockContext);
 	}
 
 	public interface IUserWalletFileInfo<ENTRY_TYPE> : ISingleEntryWalletFileInfo
 		where ENTRY_TYPE : class, IUserWallet {
-		void CreateEmptyFile(ENTRY_TYPE entry);
+		Task CreateEmptyFile(ENTRY_TYPE entry, LockContext lockContext);
 	}
 
 	public abstract class UserWalletFileInfo<ENTRY_TYPE> : SingleEntryWalletFileInfo<ENTRY_TYPE>, IUserWalletFileInfo<ENTRY_TYPE>
 		where ENTRY_TYPE : UserWallet {
 
-		public readonly Dictionary<Guid, IAccountFileInfo> accounts = new Dictionary<Guid, IAccountFileInfo>();
-		private readonly string walletCryptoFile;
+		public readonly  Dictionary<Guid, IAccountFileInfo> accounts = new Dictionary<Guid, IAccountFileInfo>();
+		private readonly string                             walletCryptoFile;
 
 		private ENTRY_TYPE wallet;
 
@@ -57,66 +60,62 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		public Dictionary<Guid, IAccountFileInfo> Accounts => this.accounts;
 
-		public IUserWallet WalletBase => this.Wallet;
+		public async Task<IUserWallet> WalletBase(LockContext lockContext) => (await Wallet(lockContext).ConfigureAwait(false));
 
-		public ENTRY_TYPE Wallet {
-			get {
-				lock(this.locker) {
-					if(this.wallet == null) {
-						this.wallet = this.RunQueryDbOperation(litedbDal => litedbDal.CollectionExists<ENTRY_TYPE>() ? litedbDal.GetSingle<ENTRY_TYPE>() : null);
-					}
+		public async Task<ENTRY_TYPE> Wallet(LockContext lockContext) {
+
+			using(var handle = this.locker.Lock(lockContext)) {
+				if(this.wallet == null) {
+					this.wallet = await this.RunQueryDbOperation<ENTRY_TYPE>((litedbDal, lc) => Task.FromResult(litedbDal.CollectionExists<ENTRY_TYPE>() ? litedbDal.GetSingle<ENTRY_TYPE>() : null), handle).ConfigureAwait(false);
 				}
-
-				return this.wallet;
 			}
+
+			return this.wallet;
 		}
 
 		public string WalletPath => this.serialisationFal.GetWalletFolderPath();
-		
-		public override void Save(object data = null) {
-			this.RunCryptoOperation(() => {
-				lock(this.locker) {
-					lock(this.locker) {
-						base.Save();
 
-						foreach(IAccountFileInfo account in this.accounts.Values) {
-							account.Save();
-						}
+		public override Task Save(LockContext lockContext, object data = null) {
+			return this.RunCryptoOperation(async () => {
+				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					await base.Save(handle).ConfigureAwait(false);
+
+					foreach(IAccountFileInfo account in this.accounts.Values) {
+						await account.Save(handle).ConfigureAwait(false);
 					}
 				}
 			}, data);
 		}
 
-		public override void Reset() {
-			lock(this.locker) {
-				base.Reset();
+		public override async Task Reset(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await base.Reset(handle).ConfigureAwait(false);
 
 				foreach(IAccountFileInfo account in this.accounts.Values) {
-					account.Reset();
+					await account.Reset(handle).ConfigureAwait(false);
 				}
 
 				this.wallet = null;
 			}
 		}
 
-		public override void ReloadFileBytes(object data = null) {
-			this.RunCryptoOperation(() => {
-				lock(this.locker) {
-					lock(this.locker) {
-						base.ReloadFileBytes();
+		public override Task ReloadFileBytes(LockContext lockContext, object data = null) {
+			return this.RunCryptoOperation(async () => {
+				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					await base.ReloadFileBytes(handle).ConfigureAwait(false);
 
-						foreach(IAccountFileInfo account in this.accounts.Values) {
-							account.ReloadFileBytes();
-						}
+					foreach(IAccountFileInfo account in this.accounts.Values) {
+						await account.ReloadFileBytes(handle).ConfigureAwait(false);
 					}
 				}
+
 			}, data);
 		}
 
-		public override void ChangeEncryption(object data = null) {
-			this.RunCryptoOperation(() => {
-				lock(this.locker) {
-					base.ChangeEncryption(data);
+		public override Task ChangeEncryption(LockContext lockContext, object data = null) {
+			return this.RunCryptoOperation(async () => {
+				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					await base.ChangeEncryption(handle, data).ConfigureAwait(false);
 
 					if(!this.WalletSecurityDetails.EncryptWallet) {
 						// ltes delete the crypto file
@@ -128,16 +127,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					//now the attached files
 					foreach(IAccountFileInfo account in this.accounts.Values) {
-						account.ChangeEncryption();
+						await account.ChangeEncryption(handle).ConfigureAwait(false);
 					}
 				}
 			}, data);
 
 		}
 
-		public override void CreateEmptyFile(ENTRY_TYPE entry) {
-			lock(this.locker) {
-				this.CreateSecurityDetails();
+		public override async Task CreateEmptyFile(ENTRY_TYPE entry, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await CreateSecurityDetails(handle).ConfigureAwait(false);
 
 				if(this.EncryptionInfo.Encrypt) {
 					bool walletCryptoFileExists = this.serialisationFal.TransactionalFileSystem.FileExists(this.walletCryptoFile);
@@ -147,7 +146,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					}
 				}
 
-				base.CreateEmptyFile(entry);
+				await base.CreateEmptyFile(entry, handle).ConfigureAwait(false);
 
 				if(this.EncryptionInfo.Encrypt) {
 
@@ -161,11 +160,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}
 		}
 
-		public void ChangeKeysEncryption() {
-			lock(this.locker) {
+		public async Task ChangeKeysEncryption(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				foreach(IAccountFileInfo account in this.accounts.Values) {
 					foreach(WalletKeyFileInfo key in account.WalletKeysFileInfo.Values) {
-						key.ChangeEncryption();
+						await key.ChangeEncryption(handle).ConfigureAwait(false);
 					}
 				}
 			}
@@ -174,48 +173,48 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// <summary>
 		///     force a full load of all components of the wallet
 		/// </summary>
-		public void LoadComplete(bool includeWalletItems, bool includeKeys) {
-			lock(this.locker) {
+		public async Task LoadComplete(bool includeWalletItems, bool includeKeys, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				foreach(IAccountFileInfo account in this.accounts.Values) {
 					if(includeWalletItems) {
-						account.Load();
+						await account.Load(handle).ConfigureAwait(false);
 					}
 
 					if(includeKeys) {
 						foreach(WalletKeyFileInfo key in account.WalletKeysFileInfo.Values) {
-							key.Load();
+							await key.Load(handle).ConfigureAwait(false);
 						}
 					}
 				}
 			}
 		}
 
-		public void CreateEmptyFileBase(IUserWallet entry) {
+		public Task CreateEmptyFileBase(IUserWallet entry, LockContext lockContext) {
 			if(entry is ENTRY_TYPE entryType) {
-				this.CreateEmptyFile(entryType);
+				return this.CreateEmptyFile(entryType, lockContext);
 			} else {
 				throw new InvalidCastException();
 			}
 		}
 
-		protected override void LoadFileBytes(object data = null) {
-			this.RunCryptoOperation(() => {
-				lock(this.locker) {
-					this.Filebytes.Entry = this.serialisationFal.LoadFile(this.Filename, this.EncryptionInfo, true).Entry;
+		protected override Task LoadFileBytes(LockContext lockContext, object data = null) {
+			return this.RunCryptoOperation(async () => {
+				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					this.Filebytes.Entry = (await serialisationFal.LoadFile(Filename, EncryptionInfo, true).ConfigureAwait(false)).Entry;
 				}
 			}, data);
 		}
 
-		protected override void SaveFileBytes(object data = null) {
-			this.RunCryptoOperation(() => {
-				lock(this.locker) {
-					this.serialisationFal.SaveFile(this.Filename, this.Filebytes, this.EncryptionInfo, true);
+		protected override Task SaveFileBytes(LockContext lockContext, object data = null) {
+			return this.RunCryptoOperation(async () => {
+				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					await this.serialisationFal.SaveFile(this.Filename, this.Filebytes, this.EncryptionInfo, true).ConfigureAwait(false);
 				}
 			}, data);
 		}
 
-		protected override void CreateDbFile(LiteDBDAL litedbDal) {
-			lock(this.locker) {
+		protected override async Task CreateDbFile(LiteDBDAL litedbDal, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				litedbDal.CreateDbFile<ENTRY_TYPE, Guid>(i => i.Id);
 			}
 		}
@@ -224,20 +223,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     Insert the new empty wallet
 		/// </summary>
 		/// <param name="wallet"></param>
-		protected override void InsertNewDbData(ENTRY_TYPE wallet) {
-			lock(this.locker) {
+		protected override async Task InsertNewDbData(ENTRY_TYPE wallet, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.wallet = wallet;
 
-				this.RunDbOperation(litedbDal => {
+				await RunDbOperation((litedbDal, lc) => {
 					litedbDal.Insert(wallet, c => c.Id);
-				});
+
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(false);
 			}
 		}
 
-		protected override void PrepareEncryptionInfo() {
-			lock(this.locker) {
+		protected override async Task PrepareEncryptionInfo(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
-					this.LoadFileSecurityDetails();
+					await LoadFileSecurityDetails(handle).ConfigureAwait(false);
 				}
 			}
 		}
@@ -246,8 +247,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     Load the security details from the wallet file
 		/// </summary>
 		/// <exception cref="ApplicationException"></exception>
-		public void LoadFileSecurityDetails() {
-			lock(this.locker) {
+		public async Task LoadFileSecurityDetails(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.EncryptionInfo = new EncryptionInfo();
 
 				this.WalletSecurityDetails.EncryptWallet = this.serialisationFal.IsFileWalleteEncrypted();
@@ -262,14 +263,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					this.EncryptionInfo.Secret = () => this.WalletSecurityDetails.WalletPassphraseBytes;
 
-					ByteArray cryptoParameterSimpleBytes = ByteArray.Wrap(this.serialisationFal.TransactionalFileSystem.ReadAllBytes(this.walletCryptoFile));
+					ByteArray cryptoParameterSimpleBytes = ByteArray.Wrap(await this.serialisationFal.TransactionalFileSystem.ReadAllBytesAsync(this.walletCryptoFile).ConfigureAwait(false));
 					this.EncryptionInfo.EncryptionParameters = EncryptorParameters.RehydrateEncryptor(cryptoParameterSimpleBytes);
 				}
 			}
 		}
 
-		protected override void CreateSecurityDetails() {
-			lock(this.locker) {
+		protected override async Task CreateSecurityDetails(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.EncryptionInfo = new EncryptionInfo();
 
 				this.EncryptionInfo.Encrypt = this.WalletSecurityDetails.EncryptWallet;
@@ -283,16 +284,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					this.EncryptionInfo.EncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(this.chainConfiguration);
 				}
-			}
 
+			}
 		}
 
-		protected override void UpdateDbEntry() {
-			this.RunDbOperation(litedbDal => {
+		protected override Task UpdateDbEntry(LockContext lockContext) {
+			return this.RunDbOperation(async (litedbDal, lc) => {
 				if(litedbDal.CollectionExists<ENTRY_TYPE>()) {
-					litedbDal.Update(this.Wallet);
+					litedbDal.Update<ENTRY_TYPE>(this.Wallet(lc).WaitAndUnwrapException());
+
 				}
-			});
+			}, lockContext);
 
 		}
 	}

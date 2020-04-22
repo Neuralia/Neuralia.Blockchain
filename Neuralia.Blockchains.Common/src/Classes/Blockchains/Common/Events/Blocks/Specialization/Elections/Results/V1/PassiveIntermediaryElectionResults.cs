@@ -35,10 +35,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 			adaptiveLong.Rehydrate(rehydrator);
-			uint count = (uint) adaptiveLong.Value;
+			int count = (int) adaptiveLong.Value;
 
-			SafeArrayHandle typeBytes = rehydrator.ReadArray((int) Math.Ceiling((double) (count * 2) / 8));
-			TwoBitArray electorTypesArray = new TwoBitArray(typeBytes, (int) count);
+			SafeArrayHandle typeBytes = rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, count));
+			using SpecialIntegerSizeArray electorTypesArray = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, typeBytes, count);
 			
 			this.ElectedCandidates.Clear();
 			var parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();

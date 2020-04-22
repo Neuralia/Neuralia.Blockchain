@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
@@ -22,9 +23,11 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Base;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 // ReSharper disable ReplaceWithSingleAssignment.False
@@ -106,7 +109,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected ChainConfigurations ChainConfiguration => this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
 		
-		protected override void PerformWork() {
+		protected override async Task PerformWork(LockContext lockContext) {
 			try {
 				this.CheckShouldStopThrow();
 
@@ -122,7 +125,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				try {
 					this.CentralCoordinator.ShutdownRequested += this.CentralCoordinatorOnShutdownRequested;
 					
-					this.PerformServerWork();
+					await this.PerformServerWork().ConfigureAwait(false);
 				} finally {
 					this.CentralCoordinator.ShutdownRequested -= this.CentralCoordinatorOnShutdownRequested;
 				}
@@ -135,7 +138,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected virtual void PrepareHandshake(CHAIN_SYNC_TRIGGER trigger, BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> serverHandshake) {
 			if(this.ChainStateProvider.ChainInception == DateTime.MinValue) {
 				serverHandshake.Message.Status = ServerTriggerReply.SyncHandshakeStatuses.Synching;
-			} else if((trigger.ChainInception != DateTime.MinValue) && (this.ChainStateProvider.ChainInception != trigger.ChainInception)) {
+			} else if(trigger.ChainInception != DateTime.MinValue && this.ChainStateProvider.ChainInception != trigger.ChainInception) {
 				// this is a pretty serious error actually. it should always be the same for everybody
 				serverHandshake.Message.Status = ServerTriggerReply.SyncHandshakeStatuses.Error;
 			} else if(this.ChainStateProvider.DiskBlockHeight < trigger.DiskBlockHeight) {
@@ -151,7 +154,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected void CheckShouldStopThrow() {
 			if(this.CheckShouldStop()) {
 				this.CancelTokenSource.Cancel();
-				this.CancelNeuralium.ThrowIfCancellationRequested();
+				this.CancelToken.ThrowIfCancellationRequested();
 			}
 		}
 		
@@ -179,13 +182,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 		
-		protected virtual void PerformServerWork() {
+		protected virtual async Task PerformServerWork() {
 
 			if(this.CheckShouldStop()) {
 				return;
 			}
 
 			try {
+				LockContext lockContext = null;
 				IChainSyncMessageFactory chainSyncMessageFactory = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.GetChainSyncMessageFactory();
 
 				// ok, we just received a trigger, lets examine it
@@ -209,18 +213,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return;
 				}
 
+				long diskBlockHeight1 = this.ChainStateProvider.DiskBlockHeight;
+				
 				// ok, getting here, it seems we can help them. we will send them our own information
 				serverHandshake.Message.ChainInception = this.ChainStateProvider.ChainInception;
-				serverHandshake.Message.DiskBlockHeight = this.ChainStateProvider.DiskBlockHeight;
+				serverHandshake.Message.DiskBlockHeight = diskBlockHeight1;
 				serverHandshake.Message.DigestHeight = this.ChainStateProvider.DigestHeight;
 				serverHandshake.Message.ShareType = this.ShareType;
 
 				serverHandshake.Message.EarliestBlockHeight = 0;
 
-				if(this.ShareType.OnlyBlocks || this.ShareType.HasDigestsAndBlocks || (this.ChainStateProvider.DigestHeight == 0)) {
-					if(this.ChainStateProvider.DiskBlockHeight == 1) {
+				
+				if(this.ShareType.OnlyBlocks || this.ShareType.HasDigestsAndBlocks || this.ChainStateProvider.DigestHeight == 0){
+					
+					if(diskBlockHeight1 == 1) {
 						serverHandshake.Message.EarliestBlockHeight = 1;
-					} else if(this.ChainStateProvider.DiskBlockHeight > 1) {
+					} else if(diskBlockHeight1 > 1) {
 						// in this case, the earliest block we have is the second one, since we skip the genesis which everyone has
 						serverHandshake.Message.EarliestBlockHeight = 2;
 					}
@@ -229,7 +237,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					serverHandshake.Message.EarliestBlockHeight = this.ChainStateProvider.DigestBlockHeight;
 
 					// but if we have more than the digest, then its always digest block +1
-					if(this.ChainStateProvider.DiskBlockHeight > this.ChainStateProvider.DigestBlockHeight) {
+					if(diskBlockHeight1 > this.ChainStateProvider.DigestBlockHeight) {
 						serverHandshake.Message.EarliestBlockHeight = this.ChainStateProvider.DigestBlockHeight + 1;
 					}
 				}
@@ -257,18 +265,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						while(DateTime.Now <= timeout) {
 						
-							if(this.CheckShouldStop()) {
-								
-								var closeMessage = (BlockchainTargettedMessageSet<CLOSE_CONNECTION>) chainSyncMessageFactory.CreateSyncWorkflowFinishSyncSet(this.triggerMessage.BaseHeader);
-
-								closeMessage.Message.Reason = FinishSync.FinishReason.Busy;
-
-								try {
-									// lets be nice, lets inform them that we will close the connection for this workflow
-									this.Send(closeMessage);
-								} catch(Exception ex) {
-									Log.Error(ex, "Failed to close peer connection but workflow is over.");
-								}
+							if(this.ChecSyncShouldStop(chainSyncMessageFactory)) {
 								return;
 							}
 							
@@ -280,7 +277,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								break;
 							}
 						}
-
+						
 						if(hasMessages == false) {
 							// we timed out it seems
 							Log.Verbose($"The sync with peer {this.PeerConnection.AdjustedIp} has timed out.");
@@ -296,7 +293,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								break;
 							}
 
-							this.CheckShouldStopThrow();
+							if(this.ChecSyncShouldStop(chainSyncMessageFactory)) {
+								return;
+							}
 
 							if(requestSet?.BaseMessage is REQUEST_BLOCK_INFO blockInfoRequestMessage) {
 								Log.Verbose($"Sending block id {blockInfoRequestMessage.Id} info to peer {this.PeerConnection.ScoppedAdjustedIp}.");
@@ -305,11 +304,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								var sendBlockInfoMessage = (BlockchainTargettedMessageSet<SEND_BLOCK_INFO>) chainSyncMessageFactory.CreateServerSendBlockInfo(this.triggerMessage.Header);
 
-								if((blockInfoRequestMessage.Id > 0) && (blockInfoRequestMessage.Id <= this.ChainStateProvider.DiskBlockHeight)) {
+								var blockchainProvider = this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase;
+
+								// make sure we get these two values atomically, so there is no insert happening at the same time chaning the values
+								(long usableDiskBlocHeight, long usablePublicBlockHeight) = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation<(long, long)>((lc) => Task.FromResult((this.ChainStateProvider.DiskBlockHeight, this.ChainStateProvider.PublicBlockHeight)), lockContext).ConfigureAwait(false);
+
+								if(blockInfoRequestMessage.Id > 0 && blockInfoRequestMessage.Id <= usableDiskBlocHeight){
 
 									sendBlockInfoMessage.Message.Id = blockInfoRequestMessage.Id;
-									sendBlockInfoMessage.Message.ChainBlockHeight = this.ChainStateProvider.DiskBlockHeight;
-									sendBlockInfoMessage.Message.PublicBlockHeight = this.ChainStateProvider.PublicBlockHeight;
+									sendBlockInfoMessage.Message.ChainBlockHeight = usableDiskBlocHeight;
+									// here we ensure that we offer only the blocks that are now unlocked for sync.
+									sendBlockInfoMessage.Message.PublicBlockHeight = usablePublicBlockHeight;
 
 									if(blockInfoRequestMessage.IncludeBlockDetails) {
 										// set the block data
@@ -348,9 +353,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							if(requestSet?.BaseMessage is REQUEST_BLOCK blockRequestMessage) {
 								var sendBlockMessage = (BlockchainTargettedMessageSet<SEND_BLOCK>) chainSyncMessageFactory.CreateServerSendBlock(this.triggerMessage.Header);
 
-								long diskBlockHeight = this.ChainStateProvider.DiskBlockHeight;
+								var blockchainProvider = this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase;
 
-								if((blockRequestMessage.Id == 0) || (blockRequestMessage.Id > diskBlockHeight)) {
+								// when requesting actual blocks, we always offer the real block height. they are too far ahead in the process to be lied to.
+								(long usableDiskBlocHeight, long usablePublicBlockHeight) = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation<(long, long)>((lc) => Task.FromResult((this.ChainStateProvider.DiskBlockHeight, this.ChainStateProvider.PublicBlockHeight)), lockContext).ConfigureAwait(false);
+
+
+								if(blockRequestMessage.Id == 0 || blockRequestMessage.Id > usableDiskBlocHeight) {
 
 									// send a default empty message
 									if(!this.Send(sendBlockMessage)) {
@@ -367,8 +376,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								sendBlockMessage.Message.Id = blockRequestMessage.Id;
 
 								// lets send them our latest chain block, sicne it may have moved since
-								sendBlockMessage.Message.ChainBlockHeight = diskBlockHeight;
-
+								sendBlockMessage.Message.ChainBlockHeight = usableDiskBlocHeight;
+								sendBlockMessage.Message.PublicBlockHeight = usablePublicBlockHeight;
+								
 								var offsets = new ChannelsEntries<(int offset, int length)>();
 
 								sendBlockMessage.Message.Slices.FileId = blockRequestMessage.SlicesInfo.FileId;
@@ -380,7 +390,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								long nextBlockId = 0;
 								long potentialNextBlockId = blockRequestMessage.Id + 1;
 
-								if(blockRequestMessage.IncludeNextInfo && potentialNextBlockId <= diskBlockHeight) {
+								if(blockRequestMessage.IncludeNextInfo && potentialNextBlockId <= usableDiskBlocHeight) {
 									nextBlockId = potentialNextBlockId;
 								}
 
@@ -433,7 +443,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								long diskBlockHeight = this.ChainStateProvider.DiskBlockHeight;
 
-								if((requestBlockSliceHashes.Id == 0) || (requestBlockSliceHashes.Id > diskBlockHeight)) {
+								if(requestBlockSliceHashes.Id == 0 || requestBlockSliceHashes.Id > diskBlockHeight) {
 
 									// send a default empty message
 									if(!this.Send(sendBlockMessage)) {
@@ -578,6 +588,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
+		/// <summary>
+		/// check if the sync should stop, and send a message that we are stopping
+		/// </summary>
+		/// <param name="chainSyncMessageFactory"></param>
+		/// <returns></returns>
+		protected bool ChecSyncShouldStop(IChainSyncMessageFactory chainSyncMessageFactory) {
+			if(this.CheckShouldStop()) {
+								
+				var closeMessage = (BlockchainTargettedMessageSet<CLOSE_CONNECTION>) chainSyncMessageFactory.CreateSyncWorkflowFinishSyncSet(this.triggerMessage.BaseHeader);
+
+				closeMessage.Message.Reason = FinishSync.FinishReason.Busy;
+
+				try {
+					// lets be nice, lets inform them that we will close the connection for this workflow
+					this.Send(closeMessage);
+				} catch(Exception ex) {
+					Log.Error(ex, "Failed to close peer connection but workflow is over.");
+				}
+				return true;
+			}
+
+			return false;
+		}
 		/// <summary>
 		/// remove hooks on all blocks
 		/// </summary>

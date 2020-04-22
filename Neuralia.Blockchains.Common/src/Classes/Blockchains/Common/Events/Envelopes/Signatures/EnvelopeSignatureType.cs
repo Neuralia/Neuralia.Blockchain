@@ -27,6 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public sealed class EnvelopeSignatureTypes : UShortConstantSet<EnvelopeSignatureType> {
 
 		public readonly EnvelopeSignatureType Joint;
+		public readonly EnvelopeSignatureType JointPublished;
 		public readonly EnvelopeSignatureType Presentation;
 		public readonly EnvelopeSignatureType Published;
 		public readonly EnvelopeSignatureType SingleSecret;
@@ -38,6 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		private EnvelopeSignatureTypes() : base(1000) {
 			this.Published = this.CreateBaseConstant();
 			this.Joint = this.CreateBaseConstant();
+			this.JointPublished = this.CreateBaseConstant();
 			this.SingleSecret = this.CreateBaseConstant();
 			this.SingleSecretCombo = this.CreateBaseConstant();
 			this.Presentation = this.CreateBaseConstant();

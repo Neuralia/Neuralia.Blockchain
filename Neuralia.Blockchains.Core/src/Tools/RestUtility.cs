@@ -40,6 +40,12 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return this.PerformCall(url, action, Method.POST, parameters, files);
 		}
 
+		public Task<IRestResponse> Get(string url, string action)
+		{
+
+			return this.PerformCall(url, action, Method.GET, null, null);
+		}
+
 		private Task<IRestResponse> PerformCall(string url, string action, Method method, Dictionary<string, object> parameters, Dictionary<string, byte[]> files = null) {
 
 			RestClient client = new RestClient(url);
@@ -74,7 +80,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			request.Timeout = 5000; // 5 seconds
 
-			return client.ExecuteTaskAsync(request);
+			return client.ExecuteAsync(request);
 
 		}
 	}

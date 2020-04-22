@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			base.PerformCustomMappings(db);
 			
 			db.ModelBuilders.Add((modelBuilder) => {
-				this.ModelBuilder?.Invoke(modelBuilder);
+if(				this.ModelBuilder != null){	this.ModelBuilder(modelBuilder);}
 			});
 		}
 	}

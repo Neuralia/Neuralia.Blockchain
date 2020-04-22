@@ -109,6 +109,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 				return false;
 			}
 
+			//TODO: should this be saved to disk?
 			this.ActiveAccount = activeAccount.AccountUuid;
 
 			return true;

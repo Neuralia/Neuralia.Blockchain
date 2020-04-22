@@ -33,7 +33,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		public XMSSTreeSignature XmssTreeSignature { get; }
 
 		public void Load(ByteArray signature, WotsPlus wotsPlusProvider, int height) {
-			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature);
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(signature);
 
 			this.Rehydrate(rehydrator, wotsPlusProvider, height);
 

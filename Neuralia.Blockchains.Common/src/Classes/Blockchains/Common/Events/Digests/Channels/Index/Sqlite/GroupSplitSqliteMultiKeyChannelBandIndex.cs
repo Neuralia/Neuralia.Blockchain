@@ -1,12 +1,14 @@
 using System;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq.Expressions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite {
 
@@ -16,11 +18,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected readonly Func<(uint id, B ordinal), Tuple<uint, B>> indexer;
 
-		public GroupSplitSqliteMultiKeyChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : this(bandName, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem, null, null) {
+		public GroupSplitSqliteMultiKeyChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : this(bandName, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem, null, null) {
 
 		}
 
-		public GroupSplitSqliteMultiKeyChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration, Func<(uint id, B ordinal), Tuple<uint, B>> indexer) : base(bandName, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem, keyDeclaration) {
+		public GroupSplitSqliteMultiKeyChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration, Func<(uint id, B ordinal), Tuple<uint, B>> indexer) : base(bandName, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem, keyDeclaration) {
 			this.indexer = indexer;
 		}
 

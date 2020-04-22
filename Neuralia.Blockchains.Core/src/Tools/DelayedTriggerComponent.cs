@@ -44,7 +44,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			lock(this.locker) {
 
 				if(this.started && (this.initedComponentsCount == this.initedComponentsTotal)) {
-					this.TriggerAchived?.Invoke();
+if(					this.TriggerAchived != null){					this.TriggerAchived();}
 				}
 			}
 		}

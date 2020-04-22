@@ -6,6 +6,7 @@ using System.Threading;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Serilog;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 	public class AccountPassphraseDetails : PassphraseDetails {
@@ -64,7 +65,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 		public void SetKeysPassphrase(Guid identityUuid, string passphrase, int? timeout = null) {
 
-			this.SetKeysPassphrase(identityUuid, null, passphrase.ConvertToSecureString(), timeout);
+			this.SetKeysPassphrase(identityUuid, passphrase.ConvertToSecureString(), timeout);
+		}
+		
+		public void SetKeysPassphrase(Guid identityUuid, SecureString passphrase, int? timeout = null) {
+
+			this.SetKeysPassphrase(identityUuid, null, passphrase, timeout);
 		}
 
 		public void SetKeysPassphrase(Guid identityUuid, string keyname, SecureString passphrase, int? timeout = null) {
@@ -107,11 +113,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 			// clear previous entry
 			if(this.keys.ContainsKey(scoppedName)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
+				(SecureString keysPassphrase, Timer timer) = this.keys[scoppedName];
 				this.keys.Remove(scoppedName);
 
-				entry.keysPassphraseTimer?.Dispose();
-				entry.keysPassphrase?.Dispose();
+				timer?.Dispose();
+				keysPassphrase?.Dispose();
 			}
 
 			Timer keysPassphraseTimer = null;
@@ -120,20 +126,26 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			if(passphraseTimeout.HasValue) {
 				keysPassphraseTimer = new Timer(state => {
 
-					PassphraseDetails details = (PassphraseDetails) state;
+					try{
+						PassphraseDetails details = (PassphraseDetails) state;
 
-					if(this.keys.ContainsKey(scoppedName)) {
-						(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
+						if (this.keys.ContainsKey(scoppedName)){
+							(SecureString keysPassphrase, Timer timer) = this.keys[scoppedName];
 
-						// lets clear everything
-						entry.keysPassphrase.Clear();
-						entry.keysPassphrase.Dispose();
-						entry.keysPassphrase = null;
+							// lets clear everything
+							keysPassphrase.Clear();
+							keysPassphrase.Dispose();
+							keysPassphrase = null;
 
-						entry.keysPassphraseTimer.Dispose();
-						entry.keysPassphraseTimer = null;
+							timer.Dispose();
+							timer = null;
 
-						this.keys.Remove(scoppedName);
+							this.keys.Remove(scoppedName);
+						}
+					}
+					catch(Exception ex){
+						//TODO: do something?
+						Log.Error(ex, "Timer exception");
 					}
 
 				}, this, TimeSpan.FromMinutes(passphraseTimeout.Value), new TimeSpan(-1));
@@ -154,9 +166,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 
 			if(this.keys.ContainsKey(scoppedName)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
+				(SecureString keysPassphrase, _) = this.keys[scoppedName];
 
-				return !((entry.keysPassphrase == null) || (entry.keysPassphrase.Length == 0));
+				return !((keysPassphrase == null) || (keysPassphrase.Length == 0));
 			}
 
 			return false;
@@ -172,9 +184,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 
 			if(this.keys.ContainsKey(DEFAULT_NAME)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[DEFAULT_NAME];
+				(SecureString keysPassphrase, _) = this.keys[DEFAULT_NAME];
 
-				return !((entry.keysPassphrase == null) || (entry.keysPassphrase.Length == 0));
+				return !((keysPassphrase == null) || (keysPassphrase.Length == 0));
 			}
 
 			return false;
@@ -192,9 +204,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 
 			if(this.keys.ContainsKey(scoppedName)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[scoppedName];
+				(SecureString keysPassphrase, _) = this.keys[scoppedName];
 
-				return entry.keysPassphrase;
+				return keysPassphrase;
 			}
 
 			return null;
@@ -207,9 +219,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 
 			if(this.keys.ContainsKey(DEFAULT_NAME)) {
-				(SecureString keysPassphrase, Timer keysPassphraseTimer) entry = this.keys[DEFAULT_NAME];
+				(SecureString keysPassphrase, _) = this.keys[DEFAULT_NAME];
 
-				return entry.keysPassphrase;
+				return keysPassphrase;
 			}
 
 			return null;

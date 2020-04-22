@@ -1,7 +1,9 @@
 using System;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Base {
 	public interface IBlockchainTask : IRoutedTask {
@@ -29,7 +31,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		}
 
-		public BlockchainTask(Action<BLOCKCHAIN_MANAGER, TaskRoutingContext> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) : base(Enums.BLOCKCHAIN_SERVICE, newAction, newCompleted) {
+		public BlockchainTask(Func<BLOCKCHAIN_MANAGER, TaskRoutingContext, LockContext, Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) : base(Enums.BLOCKCHAIN_SERVICE, newAction, newCompleted) {
 
 		}
 	}

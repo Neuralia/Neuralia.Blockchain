@@ -14,19 +14,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			IElectionQuestion electionQuestion = null;
 
 			if(version.Type == ElectionQuestionTypes.Instance.BlockTransactionIndex) {
-				if((version.Major == 1) && (version.Minor == 0)) {
+				if(version.Major == 1 && version.Minor == 0) {
 					electionQuestion = new BlockTransactionIdElectionQuestion();
 				}
 			}
 			
 			if(version.Type == ElectionQuestionTypes.Instance.BlockByteset) {
-				if((version.Major == 1) && (version.Minor == 0)) {
+				if(version.Major == 1 && version.Minor == 0) {
 					electionQuestion = new BlockBytesetElectionQuestion();
 				}
 			}
 
 			if(version.Type == ElectionQuestionTypes.Instance.DigestByteset) {
-				if((version.Major == 1) && (version.Minor == 0)) {
+				if(version.Major == 1 && version.Minor == 0) {
 					electionQuestion = new DigestBytesetElectionQuestion();
 				}
 			}

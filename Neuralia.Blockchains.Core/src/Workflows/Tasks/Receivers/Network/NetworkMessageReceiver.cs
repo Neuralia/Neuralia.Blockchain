@@ -92,7 +92,9 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 			try {
 				this.messageQueue.AddSafe(message.GetHashCode(), message);
 
-				this.MessageReceived?.Invoke();
+				if(this.MessageReceived != null) {
+					this.MessageReceived();
+				}
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to post network message");
 			}

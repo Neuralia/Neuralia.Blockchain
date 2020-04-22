@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MoreLinq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
@@ -44,7 +45,9 @@ using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
@@ -56,17 +59,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
-		void InterpretNewBlockSnapshots(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor);
-		void InterpretNewBlockLocalWallet(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext);
+		Task InterpretNewBlockSnapshots(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext);
+		Task InterpretNewBlockLocalWallet(SynthesizedBlock synthesizedBlock, long lastSyncedBlockId, TaskRoutingContext taskRoutingContext, LockContext lockContext);
 
-		void InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock);
-		void InterpretGenesisBlockLocalWallet(SynthesizedBlock synthesizedBlockk, TaskRoutingContext taskRoutingContext);
+		Task InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock, LockContext lockContext);
+		Task InterpretGenesisBlockLocalWallet(SynthesizedBlock synthesizedBlockk, TaskRoutingContext taskRoutingContext, LockContext lockContext);
 
-		SynthesizedBlock SynthesizeBlock(IBlock block);
-		void ProcessBlockImmediateGeneralImpact(BlockId blockId, List<ITransaction> transactions, SerializationTransactionProcessor serializationTransactionProcessor);
-		void ProcessBlockImmediateGeneralImpact(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor);
-		void ProcessBlockImmediateGeneralImpact(SynthesizedBlock synthesizedBlock, SerializationTransactionProcessor serializationTransactionProcessor);
-		void ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock);
+		Task<SynthesizedBlock> SynthesizeBlock(IBlock block, LockContext lockContext);
+		void ProcessBlockImmediateGeneralImpact(BlockId blockId, List<ITransaction> transactions, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext);
+		void ProcessBlockImmediateGeneralImpact(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext);
+		void ProcessBlockImmediateGeneralImpact(SynthesizedBlock synthesizedBlock, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext);
+		Task ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock, long lastSyncedBlockId, LockContext lockContext);
 
 		SynthesizedBlock CreateSynthesizedBlock();
 	}
@@ -111,7 +114,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	///     <typeparam name="WALLET_IDENTITY"></typeparam>
 	///     <typeparam name="WALLET_KEY"></typeparam>
 	///     <typeparam name="WALLET_KEY_HISTORY"></typeparam>
-	public abstract class InterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_CONTEXT, BLOCK, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT, STANDARD_WALLET_ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_SNAPSHOT, JOINT_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT> : IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_CONTEXT, BLOCK, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
+	public abstract class InterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_CONTEXT, BLOCK, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT, STANDARD_WALLET_ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_SNAPSHOT, JOINT_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT> : ChainProvider, IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, JOINT_ACCOUNT_SNAPSHOT_CONTEXT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, CHAIN_OPTIONS_SNAPSHOT_CONTEXT, TRACKED_ACCOUNTS_CONTEXT, BLOCK, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where STANDARD_ACCOUNT_SNAPSHOT_CONTEXT : IStandardAccountSnapshotContext<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT>
@@ -155,35 +158,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected abstract ICardUtils CardUtils { get; }
 
-		public virtual void InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock) {
+		public virtual Task InterpretGenesisBlockSnapshots(IGenesisBlock genesisBlock, LockContext lockContext) {
 
 			// first thing, lets add the moderator keys to our chainState. these are pretty important
 
-			this.InterpretBlockSnapshots((BLOCK) genesisBlock, null);
+			return this.InterpretBlockSnapshots((BLOCK) genesisBlock, null, lockContext);
 		}
 
-		public virtual void InterpretGenesisBlockLocalWallet(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext) {
+		public virtual Task InterpretGenesisBlockLocalWallet(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
 			// first thing, lets add the moderator keys to our chainState. these are pretty important
 
-			this.InterpretBlockLocalWallet(synthesizedBlock, taskRoutingContext);
+			return this.InterpretBlockLocalWallet(synthesizedBlock, synthesizedBlock.BlockId - 1, taskRoutingContext, lockContext);
 		}
 
-		public void InterpretNewBlockSnapshots(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor) {
+		public async Task InterpretNewBlockSnapshots(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext) {
 
-			if((block.BlockId.Value == 1) && block is IGenesisBlock genesisBlock) {
-				this.InterpretGenesisBlockSnapshots(genesisBlock);
+			if(block.BlockId.Value == 1 && block is IGenesisBlock genesisBlock) {
+				await this.InterpretGenesisBlockSnapshots(genesisBlock, lockContext).ConfigureAwait(false);
 			} else {
-				this.InterpretBlockSnapshots((BLOCK) block, serializationTransactionProcessor);
+				await this.InterpretBlockSnapshots((BLOCK) block, serializationTransactionProcessor, lockContext).ConfigureAwait(false);
 			}
 		}
 
-		public void InterpretNewBlockLocalWallet(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext) {
+		public async Task InterpretNewBlockLocalWallet(SynthesizedBlock synthesizedBlock, long lastSyncedBlockId, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
 			if(synthesizedBlock.BlockId == 1) {
-				this.InterpretGenesisBlockLocalWallet(synthesizedBlock, taskRoutingContext);
+				await this.InterpretGenesisBlockLocalWallet(synthesizedBlock, taskRoutingContext, lockContext).ConfigureAwait(false);
 			} else {
-				this.InterpretBlockLocalWallet(synthesizedBlock, taskRoutingContext);
+				await this.InterpretBlockLocalWallet(synthesizedBlock, lastSyncedBlockId, taskRoutingContext, lockContext).ConfigureAwait(false);
 			}
 		}
 
@@ -192,31 +195,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="block"></param>
 		/// <returns></returns>
-		public SynthesizedBlock SynthesizeBlock(IBlock block) {
+		public async Task<SynthesizedBlock> SynthesizeBlock(IBlock block, LockContext lockContext) {
 
-			AccountCache accountCache = this.GetAccountCache();
+			AccountCache accountCache = await this.GetAccountCache(lockContext).ConfigureAwait(false);
 
 			// get the transactions that concern us
 			var blockConfirmedTransactions = block.GetAllConfirmedTransactions();
 
-			return this.SynthesizeBlock(block, accountCache, blockConfirmedTransactions);
+			return await this.SynthesizeBlock(block, accountCache, blockConfirmedTransactions, lockContext).ConfigureAwait(false);
 		}
 
-		public void ProcessBlockImmediateGeneralImpact(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor) {
+		public void ProcessBlockImmediateGeneralImpact(IBlock block, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext) {
 
-			this.ProcessBlockImmediateGeneralImpact(block.BlockId, block.GetAllConfirmedTransactions().Values.ToList(), serializationTransactionProcessor);
+			this.ProcessBlockImmediateGeneralImpact(block.BlockId, block.GetAllConfirmedTransactions().Values.ToList(), serializationTransactionProcessor, lockContext);
 		}
 
-		public void ProcessBlockImmediateGeneralImpact(SynthesizedBlock synthesizedBlock, SerializationTransactionProcessor serializationTransactionProcessor) {
+		public void ProcessBlockImmediateGeneralImpact(SynthesizedBlock synthesizedBlock, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext) {
 
-			this.ProcessBlockImmediateGeneralImpact(new BlockId(synthesizedBlock.BlockId), synthesizedBlock.ConfirmedGeneralTransactions.Values.ToList(), serializationTransactionProcessor);
+			this.ProcessBlockImmediateGeneralImpact(new BlockId(synthesizedBlock.BlockId), synthesizedBlock.ConfirmedGeneralTransactions.Values.ToList(), serializationTransactionProcessor, lockContext);
 		}
 
 		/// <summary>
 		///     determine any impact the block has on our general caches and files but NOT our personal wallet
 		/// </summary>
 		/// <param name="block"></param>
-		public void ProcessBlockImmediateGeneralImpact(BlockId blockId, List<ITransaction> transactions, SerializationTransactionProcessor serializationTransactionProcessor) {
+		public void ProcessBlockImmediateGeneralImpact(BlockId blockId, List<ITransaction> transactions, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext) {
 
 			IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
@@ -239,11 +242,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// first thing, lets process any transaction that might affect our wallet directly
 			foreach(IMasterTransaction trx in confirmedMasterTransactions) {
-				this.HandleConfirmedMasterGeneralTransaction(trx);
+				this.HandleConfirmedMasterGeneralTransaction(trx, lockContext);
 			}
 
 			foreach(ITransaction trx in confirmedTransactions) {
-				this.HandleConfirmedGeneralTransaction(trx);
+				this.HandleConfirmedGeneralTransaction(trx, lockContext);
 			}
 
 			this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockInterpretationStatus |= ChainStateEntryFields.BlockInterpretationStatuses.ImmediateImpactDone;
@@ -254,24 +257,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     determine any impact the block has on our general wallet
 		/// </summary>
 		/// <param name="block"></param>
-		public void ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock) {
+		public async Task ProcessBlockImmediateAccountsImpact(SynthesizedBlock synthesizedBlock, long lastSyncedBlockId, LockContext lockContext) {
 
-			var walletActionSets = new Dictionary<AccountId, (List<Func<List<Action>>> walletActions, SynthesizedBlock.SynthesizedBlockAccountSet scoppedSynthesizedBlock)>();
-			var serializationActions = new List<Action>();
+			var walletActionSets = new Dictionary<AccountId, (List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, SynthesizedBlock.SynthesizedBlockAccountSet scoppedSynthesizedBlock)>();
+			var serializationActions = new List<Func<LockContext, Task>>();
 
 			AccountCache accountCache = null;
 
-			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleRead(provider => {
-				accountCache = this.GetIncompleteAccountCache(provider, synthesizedBlock.BlockId, WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed);
+			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleRead(async (provider, lc) => {
+				accountCache = await this.GetIncompleteAccountCache(provider, lastSyncedBlockId + 1, WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed, lc).ConfigureAwait(false);
 
-				if((accountCache == null) || !accountCache.combinedAccounts.Any()) {
+				if(accountCache == null || !accountCache.combinedAccounts.Any()) {
 					// ok, the interpretation has been fully performed, we don't need to repeat it
 					return;
 				}
 
 				foreach(AccountId account in synthesizedBlock.Accounts) {
 
-					var walletActions = new List<Func<List<Action>>>();
+					var walletActions = new List<Func<LockContext, Task<List<Func<LockContext, Task>>>>>();
 					SynthesizedBlock.SynthesizedBlockAccountSet scoppedSynthesizedBlock = synthesizedBlock.AccountScopped[account];
 
 					var confirmedMasterTransactions = scoppedSynthesizedBlock.ConfirmedLocalTransactions.Select(t => t.Value).OfType<IMasterTransaction>().ToList();
@@ -285,10 +288,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					foreach(SynthesizedBlock.SynthesizedElectionResult finalElectionResult in synthesizedBlock.FinalElectionResults) {
 
 						if(finalElectionResult.ElectedAccounts.ContainsKey(account)) {
-							walletActions.Add(() => {
+							walletActions.Add(async (lc2) => {
 								AccountId currentAccount = account;
 								SynthesizedBlock.SynthesizedElectionResult synthesizedElectionResult = finalElectionResult;
-								provider.InsertElectionsHistoryEntry(synthesizedElectionResult, currentAccount);
+								await provider.InsertElectionsHistoryEntry(synthesizedElectionResult, currentAccount, lc2).ConfigureAwait(false);
 
 								return null;
 							});
@@ -299,52 +302,50 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					int index = 0;
 
 					foreach(IMasterTransaction trx in confirmedMasterTransactions) {
-						this.HandleConfirmedMasterTransaction(synthesizedBlock.BlockId, trx, index, accountCache, walletActions, serializationActions);
+						this.HandleConfirmedMasterTransaction(synthesizedBlock.BlockId, trx, index, accountCache, walletActions, serializationActions, lc);
 						index++;
 					}
 
 					foreach(ITransaction trx in confirmedTransactions) {
-						this.HandleConfirmedTransaction(synthesizedBlock.BlockId, trx, accountCache, walletActions);
+						await this.HandleConfirmedTransaction(synthesizedBlock.BlockId, trx, accountCache, walletActions, lc).ConfigureAwait(false);
 					}
 
 					foreach(RejectedTransaction trx in scoppedSynthesizedBlock.RejectedTransactions) {
-						this.HandleRejectedTransaction(synthesizedBlock.BlockId, trx, accountCache, walletActions);
+						this.HandleRejectedTransaction(synthesizedBlock.BlockId, trx, accountCache, walletActions, lc);
 					}
 
 					if(walletActions.Any()) {
 						walletActionSets.Add(account, (walletActions, scoppedSynthesizedBlock));
 					}
 				}
-			});
+			}, lockContext).ConfigureAwait(false);
 
-			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
+			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(async (provider, token, lc) => {
 
-				if(this.SetNewAccountsFlag(provider, synthesizedBlock.BlockId, WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed)) {
-					provider.SaveWallet();
-				}
+			await this.SetNewAccountsFlag(provider, lastSyncedBlockId + 1, WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed, lc).ConfigureAwait(false);
 
-				List<Action> transactionalSuccessActions = new List<Action>();
+				var transactionalSuccessActions = new List<Func<LockContext, Task>>();
 
 				foreach(var accountEntry in walletActionSets) {
 
-					IndependentActionRunner.Run(() => {
+					await IndependentActionRunner.RunAsync(lc, async (lc2) => {
 						var walletActions = accountEntry.Value.walletActions;
 
 						if(walletActions.Any()) {
 
 							// run any wallet tasks we may have
 							foreach(var action in walletActions.Where(a => a != null)) {
-								
-								var result = action();
+
+								var result = await action(lc).ConfigureAwait(false);
 
 								if(result != null) {
 									transactionalSuccessActions.AddRange(result);
 								}
 							}
 
-							provider.SaveWallet();
+							await provider.SaveWallet(lc).ConfigureAwait(false);
 						}
-					}, () => {
+					}, async (lc2) => {
 
 						// if there are any impacting transactions, let's add them now
 						if(accountEntry.Value.scoppedSynthesizedBlock.ConfirmedExternalsTransactions.Any()) {
@@ -352,11 +353,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							var impactedTransactions = accountEntry.Value.scoppedSynthesizedBlock.ConfirmedExternalsTransactions.ToImmutableList();
 
 							foreach(var entry in impactedTransactions) {
-								provider.InsertTransactionHistoryEntry(entry.Value, null);
+								await provider.InsertTransactionHistoryEntry(entry.Value, null, lc).ConfigureAwait(false);
 							}
 						}
 
-					});
+					}).ConfigureAwait(false);
 
 				}
 
@@ -364,39 +365,44 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				foreach(var account in accountCache.combinedAccounts) {
 
-					IAccountFileInfo accountEntry = provider.GetAccountFileInfo(provider.GetWalletAccount(account.Key).AccountUuid);
+					var walletAccount = await provider.GetWalletAccount(account.Key, lc).ConfigureAwait(false);
+					IAccountFileInfo accountEntry = await provider.GetAccountFileInfo(walletAccount.AccountUuid, lc).ConfigureAwait(false);
 
-					if(!((WalletAccountChainState.BlockSyncStatuses) accountEntry.WalletChainStatesInfo.ChainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed)) {
-						accountEntry.WalletChainStatesInfo.ChainState.BlockSyncStatus |= (int) WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed;
+					var chainState    = await accountEntry.WalletChainStatesInfo.ChainState(lc).ConfigureAwait(false);
+					
+					if(!((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed)) {
+						chainState.BlockSyncStatus |= (int) WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed;
 					}
 				}
 				
-				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.AddTransactionSuccessActions(transactionalSuccessActions);
-			});
+				await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.AddTransactionSuccessActions(transactionalSuccessActions, lc).ConfigureAwait(false);
+			}, lockContext).ConfigureAwait(false);;
 
 
-			Repeater.Repeat(() => {
+			await Repeater.RepeatAsync(async () => {
 				if(serializationActions.Any()) {
 
 					try {
 						//TODO: should we use serialization transactions here too?
-						this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RunTransactionalActions(serializationActions, null);
+						await this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RunTransactionalActions(serializationActions, null).ConfigureAwait(false);
 						
 					}catch(Exception ex) {
 						//TODO: what do we do here?
 						Log.Error(ex, "Failed to serialize");
+
+						throw;
 					}
 				}
-			});
+			}).ConfigureAwait(false);;
 		}
 
 		public abstract SynthesizedBlock CreateSynthesizedBlock();
 
-		protected virtual ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_SNAPSHOT, JOINT_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> CreateLocalTransactionInterpretationProcessor(List<IWalletAccount> accountsList) {
+		protected virtual async Task<ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_SNAPSHOT, JOINT_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>> CreateLocalTransactionInterpretationProcessor(List<IWalletAccount> accountsList, LockContext lockContext) {
 			// create two interpreters. one for our own transactions and one for the general snapshots
 			var transactionInterpretationProcessor = this.CreateWalletInterpretationProcessor();
 
-			transactionInterpretationProcessor.RequestStandardAccountSnapshots += accountId => {
+			transactionInterpretationProcessor.RequestStandardAccountSnapshots += async (accountId, lc) => {
 
 				var standardAccounts = accountId.Where(a => a.AccountType == Enums.AccountTypes.Standard).ToList();
 				var selectedAccounts = accountsList.Where(a => standardAccounts.Contains(a.GetAccountId())).ToList();
@@ -405,7 +411,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				foreach(IWalletAccount account in selectedAccounts) {
 
-					if(this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletFileInfoAccountSnapshot(account.AccountUuid) is STANDARD_WALLET_ACCOUNT_SNAPSHOT entry) {
+					if((await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletFileInfoAccountSnapshot(account.AccountUuid, lc).ConfigureAwait(false)) is STANDARD_WALLET_ACCOUNT_SNAPSHOT entry) {
 						accountSnapshots.Add(account.GetAccountId(), entry);
 					}
 				}
@@ -413,7 +419,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return accountSnapshots;
 			};
 
-			transactionInterpretationProcessor.RequestJointAccountSnapshots += accountId => {
+			transactionInterpretationProcessor.RequestJointAccountSnapshots += async (accountId, lc) => {
 
 				var jointAccounts = accountId.Where(a => a.AccountType == Enums.AccountTypes.Joint).ToList();
 				var selectedAccounts = accountsList.Where(a => jointAccounts.Contains(a.GetAccountId())).ToList();
@@ -421,7 +427,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				var accountSnapshots = new Dictionary<AccountId, JOINT_WALLET_ACCOUNT_SNAPSHOT>();
 
 				foreach(IWalletAccount account in selectedAccounts) {
-					if(this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletFileInfoAccountSnapshot(account.AccountUuid) is JOINT_WALLET_ACCOUNT_SNAPSHOT entry) {
+					if((await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletFileInfoAccountSnapshot(account.AccountUuid, lc).ConfigureAwait(false)) is JOINT_WALLET_ACCOUNT_SNAPSHOT entry) {
 						accountSnapshots.Add(account.GetAccountId(), entry);
 					}
 				}
@@ -429,12 +435,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return accountSnapshots;
 			};
 
-			transactionInterpretationProcessor.RequestCreateNewStandardAccountSnapshot += () => (STANDARD_WALLET_ACCOUNT_SNAPSHOT) this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshotEntry();
-			transactionInterpretationProcessor.RequestCreateNewJointAccountSnapshot += () => (JOINT_WALLET_ACCOUNT_SNAPSHOT) this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshotEntry();
+			transactionInterpretationProcessor.RequestCreateNewStandardAccountSnapshot += async (lc) => (STANDARD_WALLET_ACCOUNT_SNAPSHOT) (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshotEntry(lc).ConfigureAwait(false));
+			transactionInterpretationProcessor.RequestCreateNewJointAccountSnapshot += async (lc) => (JOINT_WALLET_ACCOUNT_SNAPSHOT) (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshotEntry(lc).ConfigureAwait(false));
 
 			transactionInterpretationProcessor.EnableLocalMode(true);
 
-			transactionInterpretationProcessor.AccountInfluencingTransactionFound += (isOwn, impactedLocalPublishedAccounts, impactedLocalDispatchedAccounts, transaction) => {
+			transactionInterpretationProcessor.AccountInfluencingTransactionFound += async (isOwn, impactedLocalPublishedAccounts, impactedLocalDispatchedAccounts, transaction, lc) => {
 				// alert when a transaction concerns us
 
 				var impactedLocalPublishedAccountsUuids = accountsList.Where(a => impactedLocalPublishedAccounts.Contains(a.GetAccountId())).Select(a => a.AccountUuid).ToList();
@@ -442,14 +448,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				if(!isOwn) {
 					// this is a foreign transaction that is targetting us. let's add it to our wallet
-					this.centralCoordinator.ChainComponentProvider.WalletProviderBase.InsertTransactionHistoryEntry(transaction, "");
+					await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.InsertTransactionHistoryEntry(transaction, "", lc).ConfigureAwait(false);
 				}
 
 				this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionReceived(impactedLocalPublishedAccounts, impactedLocalPublishedAccountsUuids, impactedLocalDispatchedAccounts, impactedLocalDispatchedAccountsUuids, transaction.TransactionId));
 			};
 
 			// we dont store keys in our wallet snapshots as we already have them in the wallet itself.
-			transactionInterpretationProcessor.IsAnyAccountKeysTracked = (ids, accounts) => false;
+			transactionInterpretationProcessor.IsAnyAccountKeysTracked = async (ids, accounts) => false;
 
 			return transactionInterpretationProcessor;
 		}
@@ -470,92 +476,99 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			};
 
 			// we track them all
-			transactionInterpretationProcessor.IsAnyAccreditationCertificateTracked = ids => true;
-			transactionInterpretationProcessor.IsAnyChainOptionTracked = ids => true;
+			transactionInterpretationProcessor.IsAnyAccreditationCertificateTracked = async ids => true;
+			transactionInterpretationProcessor.IsAnyChainOptionTracked = async ids => true;
 
-			transactionInterpretationProcessor.RequestStandardAccountSnapshots += accountIds => {
+			transactionInterpretationProcessor.RequestStandardAccountSnapshots += async (accountIds, lc) => {
 
 				var standardAccounts = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard).ToList();
 				var trackedAccounts = new List<AccountId>();
 
 				foreach(AccountId accountId in standardAccounts) {
-					if(this.AccountSnapshotsProvider.IsAccountTracked(accountId)) {
+					if(await this.AccountSnapshotsProvider.IsAccountTracked(accountId).ConfigureAwait(false)) {
 						trackedAccounts.Add(accountId);
 					}
 				}
 
-				return this.AccountSnapshotsProvider.LoadAccountSnapshots(trackedAccounts).ToDictionary(a => a.AccountId.ToAccountId(), a => (STANDARD_ACCOUNT_SNAPSHOT) a);
+				return (await this.AccountSnapshotsProvider.LoadAccountSnapshots(trackedAccounts).ConfigureAwait(false)).ToDictionary(a => a.AccountId.ToAccountId(), a => (STANDARD_ACCOUNT_SNAPSHOT) a);
 			};
 
-			transactionInterpretationProcessor.RequestJointAccountSnapshots += accountIds => {
+			transactionInterpretationProcessor.RequestJointAccountSnapshots += async (accountIds, lc) => {
 
 				var jointAccounts = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).ToList();
 				var trackedAccounts = new List<AccountId>();
 
 				foreach(AccountId accountId in jointAccounts) {
-					if(this.AccountSnapshotsProvider.IsAccountTracked(accountId)) {
+					if(await this.AccountSnapshotsProvider.IsAccountTracked(accountId).ConfigureAwait(false)) {
 						trackedAccounts.Add(accountId);
 					}
 				}
 
-				return this.AccountSnapshotsProvider.LoadAccountSnapshots(trackedAccounts).ToDictionary(a => a.AccountId.ToAccountId(), a => (JOINT_ACCOUNT_SNAPSHOT) a);
+				return (await this.AccountSnapshotsProvider.LoadAccountSnapshots(trackedAccounts).ConfigureAwait(false)).ToDictionary(a => a.AccountId.ToAccountId(), a => (JOINT_ACCOUNT_SNAPSHOT) a);
 			};
 
-			transactionInterpretationProcessor.RequestStandardAccountKeySnapshots += keys => {
+			transactionInterpretationProcessor.RequestStandardAccountKeySnapshots += async (keys, lc) => {
 				var trackedKeys = new List<(long accountId, byte ordinal)>();
 
 				BlockChainConfigurations configuration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 				foreach((long AccountId, byte OrdinalId) key in keys) {
-					if(configuration.EnableFastKeyIndex || this.AccountSnapshotsProvider.IsAccountTracked(new AccountId(key.AccountId, Enums.AccountTypes.Standard))) {
+					if(configuration.EnableFastKeyIndex || await this.AccountSnapshotsProvider.IsAccountTracked(new AccountId(key.AccountId, Enums.AccountTypes.Standard)).ConfigureAwait(false)) {
 						trackedKeys.Add(key);
 					}
 				}
 
-				return this.AccountSnapshotsProvider.LoadStandardAccountKeysSnapshots(trackedKeys).ToDictionary(a => (a.AccountId, a.OrdinalId), a => (STANDARD_ACCOUNT_KEY_SNAPSHOT) a);
+				return (await this.AccountSnapshotsProvider.LoadStandardAccountKeysSnapshots(trackedKeys).ConfigureAwait(false)).ToDictionary(a => (a.AccountId, a.OrdinalId), a => (STANDARD_ACCOUNT_KEY_SNAPSHOT) a);
 			};
 
-			transactionInterpretationProcessor.RequestAccreditationCertificateSnapshots += certificateIds => {
+			transactionInterpretationProcessor.RequestAccreditationCertificateSnapshots += async (certificateIds, lc) => {
 
-				return this.AccountSnapshotsProvider.LoadAccreditationCertificatesSnapshots(certificateIds).ToDictionary(a => a.CertificateId, a => (ACCREDITATION_CERTIFICATE_SNAPSHOT) a);
+				return (await this.AccountSnapshotsProvider.LoadAccreditationCertificatesSnapshots(certificateIds).ConfigureAwait(false)).ToDictionary(a => a.CertificateId, a => (ACCREDITATION_CERTIFICATE_SNAPSHOT) a);
 			};
 
-			transactionInterpretationProcessor.RequestChainOptionSnapshots += ids => {
-				return this.AccountSnapshotsProvider.LoadChainOptionsSnapshots(ids).ToDictionary(a => a.Id, a => (CHAIN_OPTIONS_SNAPSHOT) a);
+			transactionInterpretationProcessor.RequestChainOptionSnapshots += async (ids, lc) => {
+				var loadedChainOPtionSnapshots = await this.AccountSnapshotsProvider.LoadChainOptionsSnapshot().ConfigureAwait(false);
+
+				var results = new Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>();
+
+				if(loadedChainOPtionSnapshots != null) {
+					results.Add(loadedChainOPtionSnapshots.Id, loadedChainOPtionSnapshots as CHAIN_OPTIONS_SNAPSHOT);
+				}
+
+				return results;
+			};
+
+			transactionInterpretationProcessor.RequestCreateNewStandardAccountSnapshot += (lc) => {
+
+				return Task.FromResult((STANDARD_ACCOUNT_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewStandardAccountSnapshots());
+			};
+
+			transactionInterpretationProcessor.RequestCreateNewJointAccountSnapshot += (lc) => {
+
+				return Task.FromResult((JOINT_ACCOUNT_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewJointAccountSnapshots());
+			};
+
+			transactionInterpretationProcessor.RequestCreateNewAccountKeySnapshot += (lc) => {
+				return Task.FromResult((STANDARD_ACCOUNT_KEY_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewAccountKeySnapshots());
 
 			};
 
-			transactionInterpretationProcessor.RequestCreateNewStandardAccountSnapshot += () => {
+			transactionInterpretationProcessor.RequestCreateNewAccreditationCertificateSnapshot += (lc) => {
 
-				return (STANDARD_ACCOUNT_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewStandardAccountSnapshots();
+				return Task.FromResult((ACCREDITATION_CERTIFICATE_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewAccreditationCertificateSnapshots());
 			};
 
-			transactionInterpretationProcessor.RequestCreateNewJointAccountSnapshot += () => {
+			transactionInterpretationProcessor.RequestCreateNewChainOptionSnapshot += (lc) => {
 
-				return (JOINT_ACCOUNT_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewJointAccountSnapshots();
-			};
-
-			transactionInterpretationProcessor.RequestCreateNewAccountKeySnapshot += () => {
-				return (STANDARD_ACCOUNT_KEY_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewAccountKeySnapshots();
-
-			};
-
-			transactionInterpretationProcessor.RequestCreateNewAccreditationCertificateSnapshot += () => {
-
-				return (ACCREDITATION_CERTIFICATE_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewAccreditationCertificateSnapshots();
-			};
-
-			transactionInterpretationProcessor.RequestCreateNewChainOptionSnapshot += () => {
-
-				return (CHAIN_OPTIONS_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewChainOptionsSnapshots();
+				return Task.FromResult((CHAIN_OPTIONS_SNAPSHOT) this.AccountSnapshotsProvider.CreateNewChainOptionsSnapshots());
 			};
 
 			return transactionInterpretationProcessor;
 		}
 
-		protected void InsertChangedLocalAccountsEvent(Dictionary<AccountId, List<Action>> changedLocalAccounts, AccountId accountId, Action operation) {
+		protected void InsertChangedLocalAccountsEvent(Dictionary<AccountId, List<Func<Task>>> changedLocalAccounts, AccountId accountId, Func<Task> operation) {
 			if(!changedLocalAccounts.ContainsKey(accountId)) {
-				changedLocalAccounts.Add(accountId, new List<Action>());
+				changedLocalAccounts.Add(accountId, new List<Func<Task>>());
 			}
 
 			changedLocalAccounts[accountId].Add(operation);
@@ -565,21 +578,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return account.ContainsKey(accountId) ? account[accountId] : null;
 		}
 
-		protected virtual SynthesizedBlock SynthesizeBlock(IBlock block, AccountCache accountCache, Dictionary<TransactionId, ITransaction> blockConfirmedTransactions) {
+		protected virtual async Task<SynthesizedBlock> SynthesizeBlock(IBlock block, AccountCache accountCache, Dictionary<TransactionId, ITransaction> blockConfirmedTransactions, LockContext lockContext) {
 			SynthesizedBlock synthesizedBlock = this.CreateSynthesizedBlock();
 
 			synthesizedBlock.BlockId = block.BlockId.Value;
 
-			var localTransactionInterpretationProcessor = this.CreateLocalTransactionInterpretationProcessor(accountCache.combinedAccounts.Values.ToList());
+			var localTransactionInterpretationProcessor = await this.CreateLocalTransactionInterpretationProcessor(accountCache.combinedAccounts.Values.ToList(), lockContext).ConfigureAwait(false);
 
-			localTransactionInterpretationProcessor.IsAnyAccountTracked = accountIds => accountCache.combinedAccountsList.Any(accountIds.Contains);
-			localTransactionInterpretationProcessor.GetTrackedAccounts = accountIds => accountCache.combinedAccountsList.Where(accountIds.Contains).ToList();
+			localTransactionInterpretationProcessor.IsAnyAccountTracked = async accountIds => accountCache.combinedAccountsList.Any(accountIds.Contains);
+			localTransactionInterpretationProcessor.GetTrackedAccounts = async accountIds => accountCache.combinedAccountsList.Where(accountIds.Contains).ToList();
 			localTransactionInterpretationProcessor.SetLocalAccounts(accountCache.publishedAccountsList, accountCache.dispatchedAccountsList);
 
 			List<ITransaction> confirmedLocalTransactions = null;
 			List<(ITransaction transaction, AccountId targetAccount)> confirmedExternalsTransactions = null;
 			Dictionary<AccountId, List<TransactionId>> accountsTransactions = null;
-			(confirmedLocalTransactions, confirmedExternalsTransactions, accountsTransactions) = localTransactionInterpretationProcessor.GetImpactingTransactionsList(blockConfirmedTransactions.Values.ToList());
+
+			(confirmedLocalTransactions, confirmedExternalsTransactions, accountsTransactions) = await localTransactionInterpretationProcessor.GetImpactingTransactionsList(blockConfirmedTransactions.Values.ToList(), lockContext).ConfigureAwait(false);
 
 			foreach(AccountId account in accountCache.combinedAccountsList) {
 
@@ -635,8 +649,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return synthesizedElectionResult;
 		}
 
-		protected List<IWalletAccount> GetIncompleteAccountList(IWalletProvider walletProvider, long blockSyncHeight, WalletAccountChainState.BlockSyncStatuses flagFilter) {
-			return walletProvider.GetWalletSyncableAccounts(blockSyncHeight);
+		protected Task<List<IWalletAccount>> GetIncompleteAccountList(IWalletProvider walletProvider, long blockSyncHeight, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
+			return walletProvider.GetWalletSyncableAccounts(blockSyncHeight, lockContext);
 		}
 
 		/// <summary>
@@ -645,11 +659,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockSyncHeight"></param>
 		/// <param name="flagFilter"></param>
 		/// <returns></returns>
-		protected AccountCache GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, WalletAccountChainState.BlockSyncStatuses flagFilter) {
+		protected async Task<AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
 
-			var accountsList = this.GetIncompleteAccountList(walletProvider, blockSyncHeight, flagFilter);
+			var accountsList = await this.GetIncompleteAccountList(walletProvider, blockSyncHeight, flagFilter, lockContext).ConfigureAwait(false);
 
-			return this.GetIncompleteAccountCache(walletProvider, accountsList, flagFilter);
+			return await this.GetIncompleteAccountCache(walletProvider, accountsList, flagFilter, lockContext).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -658,11 +672,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockSyncHeight"></param>
 		/// <param name="flagFilter"></param>
 		/// <returns></returns>
-		protected AccountCache GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, WalletAccountChainState.BlockSyncStatuses flagFilter, IWalletAccount filterAccount) {
+		protected async Task<AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, WalletAccountChainState.BlockSyncStatuses flagFilter, IWalletAccount filterAccount, LockContext lockContext) {
 
-			var accountsList = this.GetIncompleteAccountList(walletProvider, blockSyncHeight, flagFilter).Where(a => a.AccountUuid == filterAccount.AccountUuid).ToList();
+			var accounts = await this.GetIncompleteAccountList(walletProvider, blockSyncHeight, flagFilter, lockContext).ConfigureAwait(false);
+			var accountsList = accounts.Where(a => a.AccountUuid == filterAccount.AccountUuid).ToList();
 
-			return this.GetIncompleteAccountCache(walletProvider, accountsList, flagFilter);
+			return await this.GetIncompleteAccountCache(walletProvider, accountsList, flagFilter, lockContext).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -671,25 +686,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockSyncHeight"></param>
 		/// <param name="flagFilter"></param>
 		/// <returns></returns>
-		protected AccountCache GetIncompleteAccountCache(IWalletProvider walletProvider, List<IWalletAccount> accountsList, WalletAccountChainState.BlockSyncStatuses flagFilter) {
+		protected async Task<AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, List<IWalletAccount> accountsList, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
 
-			accountsList = accountsList.Where(a => {
+			List<IWalletAccount> tempList = new List<IWalletAccount>();
+			foreach(var a in accountsList) {
+				var accountFileInfo = await walletProvider.GetAccountFileInfo(a.AccountUuid, lockContext).ConfigureAwait(false);
+				var chainState      = await accountFileInfo.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
-				return !((WalletAccountChainState.BlockSyncStatuses) walletProvider.GetAccountFileInfo(a.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus).HasFlag(flagFilter);
-			}).ToList();
+				var blockSyncStatus = (WalletAccountChainState.BlockSyncStatuses)chainState.BlockSyncStatus;
+				if (!blockSyncStatus.HasFlag(flagFilter)) {
+					tempList.Add(a);
+				}
+			}
 
-			return this.PrepareAccountCache(accountsList);
+			return this.PrepareAccountCache(tempList, lockContext);
 		}
 
 		/// <summary>
 		///     this method will return our local accounts in different forms and combinations
 		/// </summary>
 		/// <returns></returns>
-		protected AccountCache GetAccountCache(long? blockSyncHeight = null) {
+		protected async Task<AccountCache> GetAccountCache(LockContext lockContext, long? blockSyncHeight = null) {
 
-			var accountsList = blockSyncHeight.HasValue ? this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(blockSyncHeight.Value) : this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccounts();
+			var accountsList = blockSyncHeight.HasValue ? (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(blockSyncHeight.Value, lockContext).ConfigureAwait(false)) : (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccounts(lockContext).ConfigureAwait(false));
 
-			return this.PrepareAccountCache(accountsList);
+			return this.PrepareAccountCache(accountsList, lockContext);
 		}
 
 		/// <summary>
@@ -697,12 +718,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <param name="statusFlag"></param>
-		protected bool SetNewAccountsFlag(IWalletProvider provider, long blockId, WalletAccountChainState.BlockSyncStatuses statusFlag) {
+		protected async Task<bool> SetNewAccountsFlag(IWalletProvider provider, long blockId, WalletAccountChainState.BlockSyncStatuses statusFlag, LockContext lockContext) {
 			bool changed = false;
 
-			foreach(IWalletAccount account in provider.GetWalletSyncableAccounts(blockId).Where(a => a.Status == Enums.PublicationStatus.New)) {
-				if(!((WalletAccountChainState.BlockSyncStatuses) provider.GetAccountFileInfo(account.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus).HasFlag(statusFlag)) {
-					provider.GetAccountFileInfo(account.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus |= (int) statusFlag;
+			var syncableAccounts = await provider.GetWalletSyncableAccounts(blockId, lockContext).ConfigureAwait(false);
+			foreach(IWalletAccount account in syncableAccounts.Where(a => a.Status == Enums.PublicationStatus.New)) {
+				
+				var accountFileInfo = await provider.GetAccountFileInfo(account.AccountUuid, lockContext).ConfigureAwait(false);
+				var chainState      = await accountFileInfo.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+				
+				if(!((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(statusFlag)) {
+					
+					chainState.BlockSyncStatus |= (int) statusFlag;
 					changed = true;
 				}
 			}
@@ -710,7 +737,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return changed;
 		}
 
-		protected AccountCache PrepareAccountCache(List<IWalletAccount> accountsList) {
+		protected AccountCache PrepareAccountCache(List<IWalletAccount> accountsList, LockContext lockContext) {
 			AccountCache accountCache = new AccountCache();
 			accountCache.publishedAccounts = accountsList.Where(a => a.Status == Enums.PublicationStatus.Published).ToImmutableDictionary(a => a.PublicAccountId, a => a);
 			accountCache.dispatchedAccounts = accountsList.Where(a => a.Status == Enums.PublicationStatus.Dispatched).ToImmutableDictionary(a => a.AccountUuidHash, a => a);
@@ -737,8 +764,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     Receive and post a newly accepted transaction for processing
 		/// </summary>
 		/// <param name="transaction"></param>
-		protected virtual void InterpretBlockSnapshots(BLOCK block, SerializationTransactionProcessor serializationTransactionProcessor) {
-
+		protected virtual async Task InterpretBlockSnapshots(BLOCK block, SerializationTransactionProcessor serializationTransactionProcessor, LockContext lockContext) {
 			IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 			// refresh our accounts list
@@ -752,25 +778,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return;
 			}
 
-			var serializationActions = new List<Action>();
+			var serializationActions = new List<Func<LockContext, Task>>();
 
-			var snapshotsTransactionInterpretationProcessor = this.CreateSnapshotsTransactionInterpretationProcessor();
-
+			ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotsTransactionInterpretationProcessor = this.CreateSnapshotsTransactionInterpretationProcessor();
 			// now lets process the snapshots
 			snapshotsTransactionInterpretationProcessor.Reset();
 
 			var confirmedTransactions = block.GetAllConfirmedTransactions();
 
 			// now the transactions
-			
-			snapshotsTransactionInterpretationProcessor.InterpretTransactions(block.ConfirmedMasterTransactions.Cast<ITransaction>().ToList(), block.BlockId.Value);
-
+			await snapshotsTransactionInterpretationProcessor.InterpretTransactions(block.ConfirmedMasterTransactions.Cast<ITransaction>().ToList(), block.BlockId.Value, lockContext).ConfigureAwait(false);
 			// now just the published accounts
-			snapshotsTransactionInterpretationProcessor.InterpretTransactions(block.ConfirmedTransactions, block.BlockId.Value);
+			await snapshotsTransactionInterpretationProcessor.InterpretTransactions(block.ConfirmedTransactions, block.BlockId.Value, lockContext).ConfigureAwait(false);
+			// now, the elections
+			await snapshotsTransactionInterpretationProcessor.ApplyBlockElectionsInfluence(block.FinalElectionResults, confirmedTransactions, lockContext).ConfigureAwait(false);
 
-			// and finally, the elections
-			snapshotsTransactionInterpretationProcessor.ApplyBlockElectionsInfluence(block.FinalElectionResults, confirmedTransactions);
-
+			// finally, anything else
+			await this.ApplyBlockImpacts(snapshotsTransactionInterpretationProcessor, block.BlockId, lockContext).ConfigureAwait(false);
+			
+			
 			SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotsModificationHistoryStack = null;
 
 			bool interpretationSerializationDone = chainStateProvider.BlockInterpretationStatus.HasFlag(ChainStateEntryFields.BlockInterpretationStatuses.InterpretationSerializationDone);
@@ -784,7 +810,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// ok, commit the impacts of this interpretation
 
 			if(!interpretationSerializationDone) {
-
 				if(this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnableFastKeyIndex) {
 					var fastKeys = snapshotsTransactionInterpretationProcessor.GetImpactedFastKeys();
 
@@ -797,13 +822,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					try {
 						if(serializationActions.Any()) {
-
 							//throw new OutOfMemoryException();
-							this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RunTransactionalActions(serializationActions, serializationTransactionProcessor);
+							await this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RunTransactionalActions(serializationActions, serializationTransactionProcessor).ConfigureAwait(false);
 						}
 					} catch(Exception ex) {
 						//TODO: what do we do here?
 						Log.Error(ex, "Failed to perform serializations during block interpretation");
+
+						throw;
 					}
 				}
 
@@ -811,7 +837,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				chainStateProvider.BlockInterpretationStatus |= ChainStateEntryFields.BlockInterpretationStatuses.InterpretationSerializationDone;
 				interpretationSerializationDone = true;
 			} else {
-				
 				// ensure we load the operations that were saved in case we need them since we are not jsut creating them
 
 				try {
@@ -822,17 +847,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				} catch(Exception ex) {
 					//TODO: what do we do here?
 					Log.Error(ex, "Failed to serialize");
+
+					throw;
 				}
 
 			}
 
 			if(!snapshotInterpretationDone) {
-
 				// this is the very last step in block insertion. succeed here, and we are good to go
 				if(snapshotsModificationHistoryStack?.Any() ?? false) {
-					this.AccountSnapshotsProvider.ProcessSnapshotImpacts(snapshotsModificationHistoryStack);
+					await this.AccountSnapshotsProvider.ProcessSnapshotImpacts(snapshotsModificationHistoryStack).ConfigureAwait(false);
 				}
-
 				// now, alert the world of this new block!
 				chainStateProvider.BlockInterpretationStatus |= ChainStateEntryFields.BlockInterpretationStatuses.SnapshotInterpretationDone;
 				snapshotInterpretationDone = true;
@@ -844,7 +869,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     run interpretation on the wallet snapshot for our own accounts
 		/// </summary>
 		/// <param name="transaction"></param>
-		protected virtual void InterpretBlockLocalWallet(SynthesizedBlock synthesizedBlock, TaskRoutingContext taskRoutingContext) {
+		protected virtual async Task InterpretBlockLocalWallet(SynthesizedBlock synthesizedBlock, long lastSyncedBlockId, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
 			if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
 				// ok, the interpretation has been fully performed, we don't need to repeat it
@@ -856,96 +881,101 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			List<IWalletAccount> incompleteAccounts;
 			var incompleteAccountCaches = new List<(AccountCache accountCache, IWalletAccount account)>();
 
-			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleWrite(prov => {
+			await centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleWrite(async (prov, lc) => {
 
 				// new accounts can be updated systematically, they dont interpret anything
-				if(this.SetNewAccountsFlag(prov, synthesizedBlock.BlockId, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted)) {
-					prov.SaveWallet();
-				}
-			});
+				await SetNewAccountsFlag(prov, lastSyncedBlockId + 1, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted, lc).ConfigureAwait(false);
+			}, lockContext).ConfigureAwait(false);
 
-			this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleRead(provider => {
+			await centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleRead(async (provider, lc) => {
 
-				incompleteAccounts = this.GetIncompleteAccountList(provider, synthesizedBlock.BlockId, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted);
+				incompleteAccounts = await GetIncompleteAccountList(provider, lastSyncedBlockId + 1, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted, lc).ConfigureAwait(false);
 
 				foreach(IWalletAccount account in incompleteAccounts) {
-					AccountCache accountCache = this.GetIncompleteAccountCache(provider, synthesizedBlock.BlockId, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted, account);
+					AccountCache accountCache = await GetIncompleteAccountCache(provider, lastSyncedBlockId + 1, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted, account, lc).ConfigureAwait(false);
 
 					if(!accountCache.combinedAccountsList.Any()) {
 						continue;
 					}
 
 					incompleteAccountCaches.Add((accountCache, account));
+					
 				}
-			});
+				
+			}, lockContext).ConfigureAwait(false);
 
 			// lets perform interpretation before we create a transaction
-			var accountActions = new List<Action>();
+			var accountActions = new List<Func<LockContext, Task>>();
 
-			var modificationHistoryStacks = new Dictionary<AccountId, (ISnapshotHistoryStackSet snapshots, IWalletAccount account, AccountCache accountCache, Dictionary<AccountId, List<Action>> changedLocalAccounts)>();
+			var modificationHistoryStacks = new Dictionary<AccountId, (ISnapshotHistoryStackSet snapshots, IWalletAccount account, AccountCache accountCache, Dictionary<AccountId, List<Func<LockContext, Task>>> changedLocalAccounts)>();
 
-			foreach((AccountCache accountCache, IWalletAccount account) accountEntry in incompleteAccountCaches) {
+			foreach(var (accountCache, account) in incompleteAccountCaches) {
 
-				var localTransactionInterpretationProcessor = this.CreateLocalTransactionInterpretationProcessor(accountEntry.accountCache.combinedAccounts.Values.ToList());
-				AccountId currentAccountId = accountEntry.account.GetAccountId();
+				var localTransactionInterpretationProcessor = await this.CreateLocalTransactionInterpretationProcessor(accountCache.combinedAccounts.Values.ToList(), lockContext).ConfigureAwait(false);
+				AccountId currentAccountId = account.GetAccountId();
 
-				if(!((WalletAccountChainState.BlockSyncStatuses) this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(accountEntry.account.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone)) {
+				var accountFileInfo = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(account.AccountUuid, lockContext).ConfigureAwait(false);
+				var chainState = await accountFileInfo.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+				if(!((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone)) {
 
 					// all our accounts are tracked here
-					localTransactionInterpretationProcessor.IsAnyAccountTracked = accountIds => accountIds.Contains(currentAccountId);
-					localTransactionInterpretationProcessor.GetTrackedAccounts = accountIds => new[] {currentAccountId}.ToList();
+					localTransactionInterpretationProcessor.IsAnyAccountTracked = async accountIds => accountIds.Contains(currentAccountId);
+					localTransactionInterpretationProcessor.GetTrackedAccounts = async accountIds => new[] {currentAccountId}.ToList();
 
-					var publishedAccountsList = accountEntry.accountCache.publishedAccountsList.Where(a => a == currentAccountId).ToImmutableList();
-					var dispatchedAccountsList = accountEntry.accountCache.dispatchedAccountsList.Where(a => a == currentAccountId).ToImmutableList();
+					var publishedAccountsList = accountCache.publishedAccountsList.Where(a => a == currentAccountId).ToImmutableList();
+					var dispatchedAccountsList = accountCache.dispatchedAccountsList.Where(a => a == currentAccountId).ToImmutableList();
 
-					var changedLocalAccounts = new Dictionary<AccountId, List<Action>>();
+					var changedLocalAccounts = new Dictionary<AccountId, List<Func<Task>>>();
 
 					localTransactionInterpretationProcessor.SetLocalAccounts(publishedAccountsList, dispatchedAccountsList);
 
-					var keyedTransactions = synthesizedBlock.ConfirmedTransactions.Values.OfType<IMasterTransaction>().Cast<ITransaction>().ToList();
-					localTransactionInterpretationProcessor.InterpretTransactions(keyedTransactions, synthesizedBlock.BlockId);
+					var masterTransactions = synthesizedBlock.ConfirmedTransactions.Values.OfType<IMasterTransaction>().Cast<ITransaction>().ToList();
+					await localTransactionInterpretationProcessor.InterpretTransactions(masterTransactions, synthesizedBlock.BlockId, lockContext).ConfigureAwait(false);
 
 					// now just the published accounts
-					localTransactionInterpretationProcessor.IsAnyAccountTracked = accountIds => publishedAccountsList.Any(accountIds.Contains);
-					localTransactionInterpretationProcessor.GetTrackedAccounts = accountIds => publishedAccountsList.Where(accountIds.Contains).ToList();
+					localTransactionInterpretationProcessor.IsAnyAccountTracked = async accountIds => publishedAccountsList.Any(accountIds.Contains);
+					localTransactionInterpretationProcessor.GetTrackedAccounts = async accountIds => publishedAccountsList.Where(accountIds.Contains).ToList();
 					localTransactionInterpretationProcessor.SetLocalAccounts(publishedAccountsList);
 
 					var confirmedRegularTransactions = synthesizedBlock.ConfirmedTransactions.Values.Where(t => !(t is IMasterTransaction)).ToList();
 
-					localTransactionInterpretationProcessor.InterpretTransactions(confirmedRegularTransactions, synthesizedBlock.BlockId);
+					await localTransactionInterpretationProcessor.InterpretTransactions(confirmedRegularTransactions, synthesizedBlock.BlockId, lockContext).ConfigureAwait(false);
 
-					// and finally the elections
-					localTransactionInterpretationProcessor.ApplyBlockElectionsInfluence(synthesizedBlock.FinalElectionResults, confirmedRegularTransactions.ToDictionary(t => t.TransactionId, t => t));
+					// now, the elections
+					await localTransactionInterpretationProcessor.ApplyBlockElectionsInfluence(synthesizedBlock.FinalElectionResults, confirmedRegularTransactions.ToDictionary(t => t.TransactionId, t => t), lockContext).ConfigureAwait(false);
+
+					// finally, anything else
+					await this.ApplyBlockImpacts(localTransactionInterpretationProcessor, synthesizedBlock.BlockId, lockContext).ConfigureAwait(false);
 
 					var localModificationHistoryStack = localTransactionInterpretationProcessor.GetEntriesModificationStack();
 
-					accountActions.Add(() => {
+					accountActions.Add(async (lc) => {
 
 						// ok, commit the impacts of this interpretation
-						IndependentActionRunner.Run(() => {
+						await IndependentActionRunner.RunAsync(lc, async (lc2) => {
 
 							if(localModificationHistoryStack.Any()) {
 								// now lets process the results. first, anything impacting our wallet
 
 								// here we update our wallet snapshots
 
-								var operations = localModificationHistoryStack.CompileStandardAccountHistorySets<DbContext>((db, accountId, temporaryHashId, entry) => {
+								var operations = localModificationHistoryStack.CompileStandardAccountHistorySets<DbContext>(async (db, accountId, temporaryHashId, entry, lc3) => {
 									// it may have been created in the local wallet transactions
-									if(this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetStandardAccountSnapshot(accountId) == null) {
-										IWalletStandardAccountSnapshot accountSnapshot = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshotEntry();
-										this.CardUtils.Copy(entry, accountSnapshot);
-										this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshot(accountEntry.accountCache.combinedAccounts[temporaryHashId], accountSnapshot);
+									if((await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetStandardAccountSnapshot(accountId, lc3).ConfigureAwait(false)) == null) {
+										IWalletStandardAccountSnapshot accountSnapshot = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshotEntry(lc3).ConfigureAwait(false);
+                                        CardUtils.Copy(entry, accountSnapshot);
+										await CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshot(accountCache.combinedAccounts[temporaryHashId], accountSnapshot, lc3).ConfigureAwait(false);
 									}
 
 									return null;
-								}, (db, accountId, entry) => {
+								}, async (db, accountId, entry, lc3) => {
 
-									this.LocalAccountSnapshotEntryChanged(changedLocalAccounts, entry, this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountSnapshot(accountId));
+									this.LocalAccountSnapshotEntryChanged(changedLocalAccounts, entry, await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountSnapshot(accountId, lc3).ConfigureAwait(false), lc3);
 
-									this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(entry, accountEntry.accountCache.combinedAccounts[accountId].AccountUuid);
+									await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(entry, accountCache.combinedAccounts[accountId].AccountUuid, lc3).ConfigureAwait(false);
 
 									return null;
-								}, (db, accountId) => {
+								}, async (db, accountId, lc3) => {
 									//do we do anything here?  we dont really delete accounts
 									//TODO: delete an account in the wallet?
 									return null;
@@ -953,27 +983,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 								// run the operations
 								foreach(var operation in operations.SelectMany(e => e.Value)) {
-									operation(null);
+									await operation(null, lc2).ConfigureAwait(false);
 								}
 
 								//-------------------------------------------------------------------------------------------
-								operations = localModificationHistoryStack.CompileJointAccountHistorySets<DbContext>((db, accountId, temporaryHashId, entry) => {
+								operations = localModificationHistoryStack.CompileJointAccountHistorySets<DbContext>(async (db, accountId, temporaryHashId, entry, lc3) => {
 									// it may have been created in the local wallet transactions
-									if(this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetJointAccountSnapshot(accountId) == null) {
-										IWalletJointAccountSnapshot accountSnapshot = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshotEntry();
-										this.CardUtils.Copy(entry, accountSnapshot);
-										this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshot(accountEntry.accountCache.combinedAccounts[temporaryHashId], accountSnapshot);
+									if(await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetJointAccountSnapshot(accountId, lc3).ConfigureAwait(false) == null) {
+										IWalletJointAccountSnapshot accountSnapshot = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshotEntry(lc3).ConfigureAwait(false);
+                                        CardUtils.Copy(entry, accountSnapshot);
+										await CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshot(accountCache.combinedAccounts[temporaryHashId], accountSnapshot, lc3).ConfigureAwait(false);
 									}
 
 									return null;
-								}, (db, accountId, entry) => {
+								}, async (db, accountId, entry, lc3) => {
+ 
+									this.LocalAccountSnapshotEntryChanged(changedLocalAccounts, entry, await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountSnapshot(accountId, lc3).ConfigureAwait(false), lc3);
 
-									this.LocalAccountSnapshotEntryChanged(changedLocalAccounts, entry, this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountSnapshot(accountId));
-
-									this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(entry, accountEntry.accountCache.combinedAccounts[accountId].AccountUuid);
+									await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(entry, accountCache.combinedAccounts[accountId].AccountUuid, lc3).ConfigureAwait(false);
 
 									return null;
-								}, (db, accountId) => {
+								}, async (db, accountId,lc3) => {
 									//do we do anything here?  we dont really delete accounts
 									//TODO: delete an account in the wallet?
 									return null;
@@ -981,33 +1011,37 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 								// run the operations
 								foreach(var operation in operations.SelectMany(e => e.Value)) {
-									operation(null);
+									await operation(null, lc2).ConfigureAwait(false);
 								}
 
-								this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet();
+								await CentralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lc2).ConfigureAwait(false);
 
 								// fire any extra events
 								foreach(var entry in changedLocalAccounts) {
-									foreach(Action operation in entry.Value) {
-										operation?.Invoke();
+									foreach(var operation in entry.Value.Where(f => f != null)) {
+										await operation().ConfigureAwait(false);
 									}
 								}
 
 								// now, alert the world of this new block!
-								this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(accountEntry.account.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus |= (int) WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone;
+								var accountFileInfo = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(account.AccountUuid, lc2).ConfigureAwait(false);
+								var chainState = await accountFileInfo.WalletChainStatesInfo.ChainState(lc2).ConfigureAwait(false);
+								chainState.BlockSyncStatus |= (int) WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone;
 							}
-						}, () => {
+						}, async (lc2) => {
 
-							if(!((WalletAccountChainState.BlockSyncStatuses) this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(accountEntry.account.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone)) {
+							var accountFileInfo =  await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(account.AccountUuid, lc2).ConfigureAwait(false);
+							var chainState = await accountFileInfo.WalletChainStatesInfo.ChainState(lc2).ConfigureAwait(false);
+							if(!((WalletAccountChainState.BlockSyncStatuses)chainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone)) {
 
 								if(localModificationHistoryStack?.Any() ?? false) {
-									this.AccountSnapshotsProvider.ProcessSnapshotImpacts(localModificationHistoryStack);
+									await this.AccountSnapshotsProvider.ProcessSnapshotImpacts(localModificationHistoryStack).ConfigureAwait(false);
 								}
 
 								// now, alert the world of this new block!
-								this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountFileInfo(accountEntry.account.AccountUuid).WalletChainStatesInfo.ChainState.BlockSyncStatus |= (int) WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone;
+								chainState.BlockSyncStatus |= (int) WalletAccountChainState.BlockSyncStatuses.SnapshotInterpretationDone;
 							}
-						});
+						}).ConfigureAwait(false);
 
 					});
 
@@ -1016,31 +1050,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			if(accountActions.Any()) {
-				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token) => {
+				await centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token, lc) => {
 
 					// run for all accounts, try to get as much done as possible before we break for exceptions
-					IndependentActionRunner.Run(accountActions.ToArray());
-				});
+					return IndependentActionRunner.RunAsync(lc, accountActions.ToArray());
+					
+				}, lockContext).ConfigureAwait(false);
 			}
 
 		}
 
-		protected virtual void LocalAccountSnapshotEntryChanged(Dictionary<AccountId, List<Action>> changedLocalAccounts, IAccountSnapshot newEntry, IWalletAccountSnapshot original) {
+		protected virtual Task ApplyBlockImpacts(ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> snapshotsTransactionInterpretationProcessor, BlockId blockId, LockContext lockContext){
+			return Task.CompletedTask;
+		}
+		
+		protected virtual void LocalAccountSnapshotEntryChanged(Dictionary<AccountId, List<Func<Task>>> changedLocalAccounts, IAccountSnapshot newEntry, IWalletAccountSnapshot original, LockContext lockContext) {
 
 		}
 
-		protected void HandleConfirmedMasterGeneralTransaction(IMasterTransaction transaction) {
+		protected void HandleConfirmedMasterGeneralTransaction(IMasterTransaction transaction, LockContext lockContext) {
 			if(transaction is IModerationMasterTransaction moderationMasterTransaction) {
-				this.HandleModerationMasterGeneralImpactTransaction(moderationMasterTransaction);
+				this.HandleModerationMasterGeneralImpactTransaction(moderationMasterTransaction, lockContext);
 			}
 		}
 
-		protected void HandleConfirmedMasterTransaction(long BlockId, IMasterTransaction transaction, int keyedTransactionIndex, AccountCache accountCache, List<Func<List<Action>>> walletActions, List<Action> serializationActions) {
+		protected void HandleConfirmedMasterTransaction(long BlockId, IMasterTransaction transaction, int keyedTransactionIndex, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, List<Func<LockContext, Task>> serializationActions, LockContext lockContext) {
 
 			IWalletAccount publishedAccount = this.IsLocalAccount(accountCache.publishedAccounts, transaction.TransactionId.Account);
 			IWalletAccount dispatchedAccount = this.IsLocalAccount(accountCache.dispatchedAccounts, transaction.TransactionId.Account);
 
-			if((publishedAccount != null) && (dispatchedAccount != null)) {
+			if(publishedAccount != null && dispatchedAccount != null) {
 				//TODO: what to do?
 				throw new ApplicationException("This should never happen!");
 			}
@@ -1048,13 +1087,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(dispatchedAccount != null) {
 				if(transaction is IStandardPresentationTransaction presentationTransaction) {
 
-					this.AddConfirmedTransaction(transaction.TransactionId, walletActions);
+					this.AddConfirmedTransaction(transaction.TransactionId, walletActions, lockContext);
 
 					// ok, this is a very special case, its our presentation confirmation :D
-					this.ProcessLocalConfirmedStandardPresentationTransaction(BlockId, presentationTransaction, keyedTransactionIndex, dispatchedAccount, walletActions);
+					this.ProcessLocalConfirmedStandardPresentationTransaction(BlockId, presentationTransaction, keyedTransactionIndex, dispatchedAccount, walletActions, lockContext);
 				} else if(transaction is IJointPresentationTransaction jointPresentationTransaction) {
 					// ok, this is a very special case, its our presentation confirmation :D
-					this.ProcessLocalConfirmedJointPresentationTransaction(BlockId, jointPresentationTransaction, dispatchedAccount, walletActions);
+					this.ProcessLocalConfirmedJointPresentationTransaction(BlockId, jointPresentationTransaction, dispatchedAccount, walletActions, lockContext);
 				} else {
 					//TODO: what to do?
 					throw new ApplicationException("A dispatched transaction can only be a presentation one!");
@@ -1062,29 +1101,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			if(transaction is IModerationMasterTransaction moderationMasterTransaction) {
-				this.HandleModerationMasterLocalImpactTransaction(BlockId, moderationMasterTransaction, accountCache, walletActions, serializationActions);
+				this.HandleModerationMasterLocalImpactTransaction(BlockId, moderationMasterTransaction, accountCache, walletActions, serializationActions, lockContext);
 			} else {
 				if(publishedAccount != null) {
 
-					this.AddConfirmedTransaction(transaction.TransactionId, walletActions);
+					this.AddConfirmedTransaction(transaction.TransactionId, walletActions, lockContext);
 
 					if(transaction is IStandardAccountKeyChangeTransaction keyChangeTransaction) {
-						this.ProcessOwnConfirmedKeyChangeTransaction(BlockId, keyChangeTransaction, keyedTransactionIndex, publishedAccount, walletActions);
+						this.ProcessOwnConfirmedKeyChangeTransaction(BlockId, keyChangeTransaction, keyedTransactionIndex, publishedAccount, walletActions, lockContext);
 					}
 				}
 			}
 		}
 
-		private void HandleModerationMasterGeneralImpactTransaction(IModerationMasterTransaction moderationMasterTransaction) {
+		private void HandleModerationMasterGeneralImpactTransaction(IModerationMasterTransaction moderationMasterTransaction, LockContext lockContext) {
 
 			if(moderationMasterTransaction is IGenesisModeratorAccountPresentationTransaction genesisModeratorAccountPresentationTransaction) {
-				this.HandleGenesisModeratorAccountTransaction(genesisModeratorAccountPresentationTransaction);
+				this.HandleGenesisModeratorAccountTransaction(genesisModeratorAccountPresentationTransaction, lockContext);
 			} else if(moderationMasterTransaction is IModeratorKeyChangeTransaction moderatorKeyChangeTransaction) {
-				this.HandleModeratorKeyChangeTransaction(moderatorKeyChangeTransaction);
+				this.HandleModeratorKeyChangeTransaction(moderatorKeyChangeTransaction, lockContext);
 			}
 		}
 
-		private void HandleModerationMasterLocalImpactTransaction(long BlockId, IModerationMasterTransaction moderationMasterTransaction, AccountCache accountCache, List<Func<List<Action>>> walletActions, List<Action> serializationActions) {
+		private void HandleModerationMasterLocalImpactTransaction(long BlockId, IModerationMasterTransaction moderationMasterTransaction, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, List<Func<LockContext, Task>> serializationActions, LockContext lockContext) {
 
 			if(moderationMasterTransaction is IAccountResetTransaction accountResetTransaction) {
 
@@ -1092,24 +1131,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(accountCache.publishedAccounts.ContainsKey(accountResetTransaction.Account)) {
 
 					// ok, thats us!
-					this.ProcessLocalConfirmedAccountResetTransaction(BlockId, accountResetTransaction, accountCache.publishedAccounts[accountResetTransaction.Account], walletActions);
+					this.ProcessLocalConfirmedAccountResetTransaction(BlockId, accountResetTransaction, accountCache.publishedAccounts[accountResetTransaction.Account], walletActions, lockContext);
 				}
 			}
 		}
 
-		protected void HandleConfirmedGeneralTransaction(ITransaction transaction) {
+		protected void HandleConfirmedGeneralTransaction(ITransaction transaction, LockContext lockContext) {
 			if(transaction is IModerationTransaction moderationTransaction) {
-				this.HandleModerationGeneralImpactTransaction(moderationTransaction);
+				this.HandleModerationGeneralImpactTransaction(moderationTransaction, lockContext);
 			}
 		}
 
-		protected void HandleConfirmedTransaction(long BlockId, ITransaction transaction, AccountCache accountCache, List<Func<List<Action>>> walletActions) {
+		protected async Task HandleConfirmedTransaction(long BlockId, ITransaction transaction, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 
 			IWalletAccount dispatchedAccount = this.IsLocalAccount(accountCache.dispatchedAccounts, transaction.TransactionId.Account);
 
 			if(dispatchedAccount != null) {
 
-				this.AddConfirmedTransaction(transaction.TransactionId, walletActions);
+				this.AddConfirmedTransaction(transaction.TransactionId, walletActions, lockContext);
 
 				
 			}
@@ -1117,31 +1156,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IWalletAccount publishedAccount = this.IsLocalAccount(accountCache.publishedAccounts, transaction.TransactionId.Account);
 
 			if(transaction is IModerationTransaction moderationTransaction) {
-				this.HandleModerationLocalImpactTransaction(BlockId, moderationTransaction, accountCache, walletActions);
+				await this.HandleModerationLocalImpactTransaction(BlockId, moderationTransaction, accountCache, walletActions, lockContext).ConfigureAwait(false);
 			} else {
 
 				if(publishedAccount != null) {
 
-					this.AddConfirmedTransaction(transaction.TransactionId, walletActions);
+					this.AddConfirmedTransaction(transaction.TransactionId, walletActions, lockContext);
 
 					if(transaction is ISetAccountRecoveryTransaction setAccountRecoveryTransaction) {
-						this.ProcessLocalConfirmedSetAccountRecoveryTransaction(BlockId, setAccountRecoveryTransaction, publishedAccount, walletActions);
+						this.ProcessLocalConfirmedSetAccountRecoveryTransaction(BlockId, setAccountRecoveryTransaction, publishedAccount, walletActions, lockContext);
 					}
 
-					if(transaction is ISetAccountCorrelationIdTransaction setAccountCorrelationIdTransaction) {
-						this.ProcessLocalConfirmedSetAccountCorrelationIdTransaction(BlockId, setAccountCorrelationIdTransaction, publishedAccount, walletActions);
+					if(transaction is ISetAccountCorrelationTransaction setAccountCorrelationIdTransaction) {
+						this.ProcessLocalConfirmedSetAccountCorrelationIdTransaction(BlockId, setAccountCorrelationIdTransaction, publishedAccount, walletActions, lockContext);
 					}
 				}
 			}
 		}
 
-		private void HandleModerationGeneralImpactTransaction(IModerationTransaction moderationTransaction) {
+		private void HandleModerationGeneralImpactTransaction(IModerationTransaction moderationTransaction, LockContext lockContext) {
 			if(moderationTransaction is IChainOperatingRulesTransaction chainOperatingRulesTransaction) {
-				this.HandleChainOperatingRulesTransaction(chainOperatingRulesTransaction);
+				this.HandleChainOperatingRulesTransaction(chainOperatingRulesTransaction, lockContext);
 			}
 		}
 
-		private void HandleModerationLocalImpactTransaction(long BlockId, IModerationTransaction moderationTransaction, AccountCache accountCache, List<Func<List<Action>>> walletActions) {
+		private async Task HandleModerationLocalImpactTransaction(long BlockId, IModerationTransaction moderationTransaction, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 
 			if(moderationTransaction is IAccountResetWarningTransaction accountResetWarningTransaction) {
 				if(accountCache.publishedAccounts.ContainsKey(accountResetWarningTransaction.Account)) {
@@ -1164,14 +1203,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					//TODO: what do we do here??
 				}
 			}
+			
+			if(moderationTransaction is IAssignAccountCorrelationsTransaction assignAccountCorrelationsTransaction) {
+
+				// check if it concerns us
+
+				var ourEnableAccounts = accountCache.publishedAccountsList.Where(a => assignAccountCorrelationsTransaction.EnableAccounts.Contains(a)).ToImmutableList();
+				var ourDisableAccounts = accountCache.publishedAccountsList.Where(a => assignAccountCorrelationsTransaction.DisableAccounts.Contains(a)).ToImmutableList();
+
+				if(ourEnableAccounts.Any() || ourDisableAccounts.Any()) {
+
+					//ok, we can correlate our account
+					await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ChangeAccountsCorrelation(ourEnableAccounts, ourDisableAccounts, lockContext).ConfigureAwait(false);
+				}
+			}
 		}
 
-		protected void HandleRejectedTransaction(long BlockId, RejectedTransaction trx, AccountCache accountCache, List<Func<List<Action>>> walletActions) {
+		protected void HandleRejectedTransaction(long BlockId, RejectedTransaction trx, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 
 			IWalletAccount publishedAccount = this.IsLocalAccount(accountCache.publishedAccounts, trx.TransactionId.Account);
 			IWalletAccount dispatchedAccount = this.IsLocalAccount(accountCache.dispatchedAccounts, trx.TransactionId.Account);
 
-			if((publishedAccount != null) && (dispatchedAccount != null)) {
+			if(publishedAccount != null && dispatchedAccount != null) {
 				//TODO: what to do?
 				throw new ApplicationException("This should never happen!");
 			}
@@ -1179,33 +1232,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(dispatchedAccount != null) {
 
 				// handle our failed publication
-				this.ProcessLocalRejectedPresentationTransaction(BlockId, trx, dispatchedAccount, walletActions);
+				this.ProcessLocalRejectedPresentationTransaction(BlockId, trx, dispatchedAccount, walletActions, lockContext);
 
-				this.AddRejectedTransaction(trx.TransactionId, walletActions);
+				this.AddRejectedTransaction(trx.TransactionId, walletActions, lockContext);
 			} else if(publishedAccount != null) {
 
-				this.AddRejectedTransaction(trx.TransactionId, walletActions);
+				this.AddRejectedTransaction(trx.TransactionId, walletActions, lockContext);
 			}
 		}
 
-		protected void AddRejectedTransaction(TransactionId transactionId, List<Func<List<Action>>> walletActions) {
+		protected void AddRejectedTransaction(TransactionId transactionId, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionRefused(transactionId));
 
-			walletActions.Add(() => {
-				Repeater.Repeat(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemoveLocalTransactionCacheEntry(transactionId));
-				Repeater.Repeat(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionId, WalletTransactionHistory.TransactionStatuses.Rejected));
+			walletActions.Add(async (lc) => {
+				await Repeater.RepeatAsync(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemoveLocalTransactionCacheEntry(transactionId, lc)).ConfigureAwait(false);
+				await Repeater.RepeatAsync(() => CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionId, WalletTransactionHistory.TransactionStatuses.Rejected, lc)).ConfigureAwait(false);
 				
 				return null;
 			});
 		}
 
-		protected void AddConfirmedTransaction(TransactionId transactionId, List<Func<List<Action>>> walletActions) {
+		protected void AddConfirmedTransaction(TransactionId transactionId, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionConfirmed(transactionId));
 
-			walletActions.Add(() => {
+			walletActions.Add(async (lc) => {
 
-				Repeater.Repeat(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemoveLocalTransactionCacheEntry(transactionId));
-				Repeater.Repeat(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionId, WalletTransactionHistory.TransactionStatuses.Confirmed));
+				await Repeater.RepeatAsync(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemoveLocalTransactionCacheEntry(transactionId, lc)).ConfigureAwait(false);
+				await Repeater.RepeatAsync(() => CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionId, WalletTransactionHistory.TransactionStatuses.Confirmed, lc)).ConfigureAwait(false);
 				
 				return null;
 			});
@@ -1229,10 +1282,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#region Handle Local Transactions
 
-		protected virtual void ProcessLocalConfirmedStandardPresentationTransaction<T>(long BlockId, T trx, int keyedTransactionIndex, IWalletAccount account, List<Func<List<Action>>> walletActions)
+		protected virtual void ProcessLocalConfirmedStandardPresentationTransaction<T>(long BlockId, T trx, int keyedTransactionIndex, IWalletAccount account, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext)
 			where T : IStandardPresentationTransaction {
 
-			List<Action> Operation() {
+			async Task<List<Func<LockContext, Task>>> Operation(LockContext lc) {
 
 				Log.Verbose($"We just received confirmation that our presentation for simple account {account.AccountUuid} with temporary hash {account.AccountUuidHash} has been accepted. Our new encoded public account Id is '{trx.AssignedAccountId}'");
 
@@ -1245,30 +1298,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				account.ConfirmationBlockId = BlockId;
 
-				List<Action> successCalls = new List<Action>();
-				successCalls.Add(() => {
+				var successCalls = new List<Func<LockContext, Task>>();
+				successCalls.Add( (lc2) => {
 					this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, new object[] {account.AccountUuid, true, account.PublicAccountId.ToString()},  new CorrelationContext());
 					this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.ImportantWalletUpdate, new object[] {},  new CorrelationContext());
 
+					return Task.CompletedTask;
 				});
 
 				//this gives us the transaction's offsets for the keyaddress
 				foreach(var confirmedKey in trx.Keyset.Keys) {
 
-					using(IWalletKey key = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey(account.AccountUuid, confirmedKey.Key)) {
+					using IWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey(account.AccountUuid, confirmedKey.Key, lc).ConfigureAwait(false);
 
-						key.Status = Enums.KeyStatus.Ok;
+					key.Status = Enums.KeyStatus.Ok;
 
-						// store the address of our key inside the block
+					// store the address of our key inside the block
 
-						key.KeyAddress.MasterTransactionIndex = keyedTransactionIndex;
+					key.KeyAddress.MasterTransactionIndex = keyedTransactionIndex;
 
-						key.KeyAddress.AccountId = trx.AssignedAccountId;
-						key.KeyAddress.AnnouncementBlockId = BlockId;
-						key.AnnouncementBlockId = BlockId;
+					key.KeyAddress.AccountId = trx.AssignedAccountId;
+					key.KeyAddress.AnnouncementBlockId = BlockId;
+					key.AnnouncementBlockId = BlockId;
 
-						this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
-					}
+					await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
+
 				}
 
 				// anything to do with the keys here?
@@ -1278,16 +1332,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				// now lets mark our new account as fully synced up to this point, since it just comes into existance
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletChainStateSyncStatus(account.AccountUuid, BlockId, WalletAccountChainState.BlockSyncStatuses.FullySynced);
+				await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletChainStateSyncStatus(account.AccountUuid, BlockId, WalletAccountChainState.BlockSyncStatuses.FullySynced, lc).ConfigureAwait(false);
 
 				// now we create our account snap shot, we will need it forward on.
-				IWalletStandardAccountSnapshot newSnapshot = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshot(account);
+				IWalletStandardAccountSnapshot newSnapshot = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletStandardAccountSnapshot(account, lc).ConfigureAwait(false);
 
 				newSnapshot.AccountId = trx.AssignedAccountId.ToLongRepresentation();
 				newSnapshot.InceptionBlockId = BlockId;
-				newSnapshot.CorrelationId = trx.CorrelationId;
+				newSnapshot.Correlated = trx.CorrelationId.HasValue;
 
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(newSnapshot);
+				await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(newSnapshot, lc).ConfigureAwait(false);
 
 				return successCalls;
 			}
@@ -1295,10 +1349,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			walletActions.Add(Operation);
 		}
 
-		protected virtual void ProcessLocalConfirmedJointPresentationTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<List<Action>>> walletActions)
+		protected virtual void ProcessLocalConfirmedJointPresentationTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext)
 			where T : IJointPresentationTransaction {
 			
-			List<Action> Operation() {
+			async Task<List<Func<LockContext, Task>>> Operation(LockContext lc) {
 				
 				Log.Verbose($"We just received confirmation that our presentation for joint account {account.AccountUuid} with temporary hash {account.AccountUuidHash} has been accepted. Our new encoded public account Id is '{trx.AssignedAccountId}'");
 
@@ -1312,19 +1366,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				
 				
 				//TODO: presentation
-				List<Action> successCalls = new List<Action>();
-				successCalls.Add(() => {
+				var successCalls = new List<Func<LockContext, Task>>();
+				successCalls.Add(async (lc2) => {
 					this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, new object[] {account.AccountUuid, true, account.PublicAccountId.ToString()},  new CorrelationContext());
 					this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.ImportantWalletUpdate, new object[] {},  new CorrelationContext());
 
 				});
 
 				// now we create our account snap shot, we will need it forward on.
-				JOINT_WALLET_ACCOUNT_SNAPSHOT newSnapshot = (JOINT_WALLET_ACCOUNT_SNAPSHOT) this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshot(account);
+				JOINT_WALLET_ACCOUNT_SNAPSHOT newSnapshot = (JOINT_WALLET_ACCOUNT_SNAPSHOT) await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewWalletJointAccountSnapshot(account, lc).ConfigureAwait(false);
 
 				newSnapshot.AccountId = trx.AssignedAccountId.ToLongRepresentation();
 				newSnapshot.InceptionBlockId = BlockId;
-				newSnapshot.CorrelationId = trx.CorrelationId;
+				newSnapshot.Correlated = trx.CorrelationId.HasValue;
 
 				foreach(ITransactionJointAccountMember entry in trx.MemberAccounts) {
 					JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT newAccount = new JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT();
@@ -1334,10 +1388,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					newSnapshot.MemberAccounts.Add(newAccount);
 				}
 
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(newSnapshot);
+				await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletSnapshot(newSnapshot, lc).ConfigureAwait(false);
 
 				// now lets mark our new account as fully synced up to this point, since it just comes into existance
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletChainStateSyncStatus(account.AccountUuid, BlockId, WalletAccountChainState.BlockSyncStatuses.FullySynced);
+				await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateWalletChainStateSyncStatus(account.AccountUuid, BlockId, WalletAccountChainState.BlockSyncStatuses.FullySynced, lc).ConfigureAwait(false);
 
 				return successCalls;
 			}
@@ -1345,7 +1399,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			walletActions.Add(Operation);
 		}
 
-		protected virtual void ProcessOwnConfirmedKeyChangeTransaction<T>(long BlockId, T keyChangeTrx, int keyedTransactionIndex, IWalletAccount account, List<Func<List<Action>>> walletActions)
+		protected virtual void ProcessOwnConfirmedKeyChangeTransaction<T>(long BlockId, T keyChangeTrx, int keyedTransactionIndex, IWalletAccount account, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext)
 			where T : IStandardAccountKeyChangeTransaction {
 
 			// its our own
@@ -1355,10 +1409,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			string keyName = account.Keys.Single(k => k.Ordinal == keyChangeTrx.NewCryptographicKey.Id).Name;
 
-			List<Action> Operation() {
+			async Task<List<Func<LockContext, Task>>> Operation(LockContext lc) {
 
 				// swap the changed key
-				using(IWalletKey nextKey = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey(account.AccountUuid, keyName)) {
+				using(IWalletKey nextKey = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey(account.AccountUuid, keyName, lc).ConfigureAwait(false)) {
 
 					nextKey.Status = Enums.KeyStatus.Ok;
 
@@ -1368,33 +1422,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					nextKey.KeyAddress.AnnouncementBlockId = BlockId;
 					nextKey.AnnouncementBlockId = BlockId;
 
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey);
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SwapNextKey(nextKey);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey, lc).ConfigureAwait(false);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SwapNextKey(nextKey, lc).ConfigureAwait(false);
 
 					Log.Information($"Key named {nextKey.Name} is confirmed as changed.");
 				}
 
 				if(keyChangeTrx.IsChangingChangeKey) {
 					// we must also swap the super key
-					using(IWalletKey nextKey = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey(account.AccountUuid, GlobalsService.SUPER_KEY_NAME)) {
+					using IWalletKey nextKey = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey(account.AccountUuid, GlobalsService.SUPER_KEY_NAME, lc).ConfigureAwait(false);
 
-						nextKey.Status = Enums.KeyStatus.Ok;
+					nextKey.Status = Enums.KeyStatus.Ok;
 
-						// store the address of our key inside the block
-						nextKey.KeyAddress.MasterTransactionIndex = keyedTransactionIndex;
-						nextKey.KeyAddress.AccountId = account.GetAccountId();
-						nextKey.KeyAddress.AnnouncementBlockId = BlockId;
-						nextKey.AnnouncementBlockId = BlockId;
+					// store the address of our key inside the block
+					nextKey.KeyAddress.MasterTransactionIndex = keyedTransactionIndex;
+					nextKey.KeyAddress.AccountId = account.GetAccountId();
+					nextKey.KeyAddress.AnnouncementBlockId = BlockId;
+					nextKey.AnnouncementBlockId = BlockId;
 
-						this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey);
-						this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SwapNextKey(nextKey);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey, lc).ConfigureAwait(false);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SwapNextKey(nextKey, lc).ConfigureAwait(false);
 
-						Log.Information("Super Key is also confirmed as changed.");
-					}
+					Log.Information("Super Key is also confirmed as changed.");
+
 				}
 				
-				List<Action> successCalls = new List<Action>();
-				successCalls.Add(() => {
+				var successCalls = new List<Func<LockContext, Task>>();
+				successCalls.Add(async (lc2) => {
 
 					// alert important change
 					this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.ImportantWalletUpdate, new object[] {},  new CorrelationContext());
@@ -1407,29 +1461,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		}
 
-		protected virtual void ProcessLocalConfirmedAccountResetTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<List<Action>>> walletActions)
+		protected virtual void ProcessLocalConfirmedAccountResetTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext)
 			where T : IAccountResetTransaction {
 			//TODO: set this
 		}
 
-		protected virtual void ProcessLocalConfirmedSetAccountRecoveryTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<List<Action>>> walletActions)
+		protected virtual void ProcessLocalConfirmedSetAccountRecoveryTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext)
 			where T : ISetAccountRecoveryTransaction {
 
 			//TODO: set this
 		}
 
-		protected virtual void ProcessLocalConfirmedSetAccountCorrelationIdTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<List<Action>>> walletActions)
-			where T : ISetAccountCorrelationIdTransaction {
+		protected virtual void ProcessLocalConfirmedSetAccountCorrelationIdTransaction<T>(long BlockId, T trx, IWalletAccount account, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext)
+			where T : ISetAccountCorrelationTransaction {
 			
-			walletActions.Add(() => {
+			walletActions.Add(async (lc) => {
 				
-				account.CorrelationId = trx.CorrelationId;
+				account.Correlated = true;
 				
 				return null;
 			});
 		}
 
-		protected virtual void ProcessLocalRejectedPresentationTransaction(long BlockId, RejectedTransaction trx, IWalletAccount account, List<Func<List<Action>>> walletActions) {
+		protected virtual void ProcessLocalRejectedPresentationTransaction(long BlockId, RejectedTransaction trx, IWalletAccount account, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 			// thats it, this account is now rejected.
 			account.Status = Enums.PublicationStatus.Rejected;
 		}
@@ -1438,7 +1492,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#region handle moderator Transactions
 
-		protected virtual void HandleGenesisModeratorAccountTransaction<T>(T genesisModeratorAccountPresentationTransaction)
+		protected virtual void HandleGenesisModeratorAccountTransaction<T>(T genesisModeratorAccountPresentationTransaction, LockContext lockContext)
 			where T : IGenesisModeratorAccountPresentationTransaction {
 			// add the moderator keys
 			IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
@@ -1451,7 +1505,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId, cryptographicKey.Id, communicationsCryptographicKey);
 
-			cryptographicKey = genesisModeratorAccountPresentationTransaction.BlocksXmssMTCryptographicKey;
+			cryptographicKey = genesisModeratorAccountPresentationTransaction.BlocksXmssCryptographicKey;
 			dehydrator = DataSerializationFactory.CreateDehydrator();
 			cryptographicKey.Dehydrate(dehydrator);
 
@@ -1511,13 +1565,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId, cryptographicKey.Id, ptahCryptographicKey);
 		}
 
-		protected virtual void HandleGenesisAccountPresentationTransaction<T>(T genesisAccountPresentationTransaction)
+		protected virtual void HandleGenesisAccountPresentationTransaction<T>(T genesisAccountPresentationTransaction, LockContext lockContext)
 			where T : IGenesisAccountPresentationTransaction {
 
 			// do nothing
 		}
 
-		protected virtual void HandleModeratorKeyChangeTransaction<T>(T moderatorKeyChangeTransaction)
+		protected virtual void HandleModeratorKeyChangeTransaction<T>(T moderatorKeyChangeTransaction, LockContext lockContext)
 			where T : IModeratorKeyChangeTransaction {
 
 			// add the moderator keys
@@ -1532,7 +1586,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateProvider.UpdateModeratorKey(moderatorKeyChangeTransaction.TransactionId, cryptographicKey.Id, modifiedCryptographicKey);
 		}
 
-		protected virtual void HandleChainOperatingRulesTransaction(IChainOperatingRulesTransaction chainOperatingRulesTransaction) {
+		protected virtual void HandleChainOperatingRulesTransaction(IChainOperatingRulesTransaction chainOperatingRulesTransaction, LockContext lockContext) {
 
 			IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 

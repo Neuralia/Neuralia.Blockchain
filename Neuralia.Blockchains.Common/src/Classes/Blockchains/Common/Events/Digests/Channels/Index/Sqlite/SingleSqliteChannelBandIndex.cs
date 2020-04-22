@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite {
 	public class SingleSqliteChannelBandIndex<CHANEL_BANDS, CARD_TYPE, KEY, INPUT_QUERY_KEY, QUERY_KEY> : SqliteChannelBandIndex<CHANEL_BANDS, CARD_TYPE, SingleDigestChannelBandFileNamingProvider, KEY, INPUT_QUERY_KEY, QUERY_KEY>
@@ -19,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		protected readonly Func<INPUT_QUERY_KEY, QUERY_KEY> convertKeys;
 		public Action<ModelBuilder> ModelBuilder { get; set; }
 
-		public SingleSqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem, Func<INPUT_QUERY_KEY, QUERY_KEY> convertKeys, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base(bandName, baseFolder, scopeFolder, enabledBands, fileSystem, keyDeclaration) {
+		public SingleSqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem, Func<INPUT_QUERY_KEY, QUERY_KEY> convertKeys, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base(bandName, baseFolder, scopeFolder, enabledBands, fileSystem, keyDeclaration) {
 			this.convertKeys = convertKeys;
 		}
 

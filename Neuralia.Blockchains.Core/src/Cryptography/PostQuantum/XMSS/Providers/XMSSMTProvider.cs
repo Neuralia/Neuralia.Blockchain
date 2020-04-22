@@ -1,4 +1,7 @@
-﻿using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT;
+﻿using System;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Compression;
+using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -8,8 +11,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 	public class XMSSMTProvider : XMSSProviderBase {
 
 		//TODO: adjust this
-		public const int DEFAULT_XMSSMT_TREE_HEIGHT = 5; //20;
-		public const int DEFAULT_XMSSMT_TREE_LAYERS = 1; //2;
+		public const int DEFAULT_XMSSMT_TREE_HEIGHT = 6*2; //20;
+		public const int DEFAULT_XMSSMT_TREE_LAYERS = 2; //2;
 		public const Enums.KeyHashBits DEFAULT_HASH_BITS = Enums.KeyHashBits.SHA3_512;
 
 		protected XMSSMTEngine xmssmt;
@@ -41,16 +44,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			this.xmssmt = new XMSSMTEngine(XMSSOperationModes.Both,  this.threadMode, this.excutionContext, this.TreeHeight, this.TreeLayers);
 		}
 
-		public (ByteArray privateKey, ByteArray publicKey) GenerateKeys() {
-			(XMSSMTPrivateKey xmssmtPrivateKey, XMSSMTPublicKey xmssmtPublicKey) = this.xmssmt.GenerateKeys();
+		public async Task<(ByteArray privateKey, ByteArray publicKey)> GenerateKeys(bool buildCache = true, Func<int, int, int, Task> progressCallback = null) {
+			(XMSSMTPrivateKey xmssmtPrivateKey, XMSSMTPublicKey xmssmtPublicKey) = await this.xmssmt.GenerateKeys(buildCache, progressCallback).ConfigureAwait(false);
 
 			ByteArray publicKey = xmssmtPublicKey.SaveKey();
 			ByteArray privateKey = xmssmtPrivateKey.SaveKey();
-
+			
 			return (privateKey, publicKey);
 		}
 
-		public (ByteArray signature, ByteArray nextPrivateKey) Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
+		public Task<(ByteArray signature, ByteArray nextPrivateKey)> Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
 			return this.Sign(content.Entry, privateKey.Entry);
 		}
 
@@ -60,16 +63,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		
 
 		public XMSSMTPrivateKey LoadPrivateKey(ByteArray privateKey) {
+			
 			XMSSMTPrivateKey loadedPrivateKey = this.CreatePrivateKey();
 			loadedPrivateKey.LoadKey(privateKey);
 
 			return loadedPrivateKey;
 		}
 		
-		public (ByteArray signature, ByteArray nextPrivateKey) Sign(ByteArray content, ByteArray privateKey) {
+		public async Task<(ByteArray signature, ByteArray nextPrivateKey)> Sign(ByteArray content, ByteArray privateKey) {
+			
 			XMSSMTPrivateKey loadedPrivateKey = this.LoadPrivateKey(privateKey);
 
-			ByteArray result = this.Sign(content, loadedPrivateKey);
+			ByteArray result = await this.Sign(content, loadedPrivateKey).ConfigureAwait(false);
 
 			// export the new private key
 			ByteArray nextPrivateKey = loadedPrivateKey.SaveKey();
@@ -79,11 +84,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			return (result, nextPrivateKey);
 		}
 
-		public ByteArray Sign(ByteArray content, XMSSMTPrivateKey privateKey) {
+		public async Task<ByteArray> Sign(ByteArray content, XMSSMTPrivateKey privateKey) {
 
 			Log.Verbose($"Singing message using XMSS^MT (Key index: {privateKey.Index} of {this.MaximumHeight}, Tree height: {this.TreeHeight}, Tree layers: {this.TreeLayers}, Hash bits: {this.HashBits})");
 
-			ByteArray signature = this.xmssmt.Sign(content, privateKey);
+			ByteArray signature = await this.xmssmt.Sign(content, privateKey).ConfigureAwait(false);
 
 			// this is important, increment our key index
 			privateKey.IncrementIndex(this.xmssmt);
@@ -91,13 +96,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			return signature;
 		}
 
-		public override bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
+		public override Task<bool> Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
 
 			return this.Verify(message.Entry, signature.Entry, publicKey.Entry);
 		}
 		
-		public bool Verify(ByteArray message, ByteArray signature, ByteArray publicKey) {
-
+		public Task<bool> Verify(ByteArray message, ByteArray signature, ByteArray publicKey) {
+			
 			return this.xmssmt.Verify(signature, message, publicKey);
 		}
 

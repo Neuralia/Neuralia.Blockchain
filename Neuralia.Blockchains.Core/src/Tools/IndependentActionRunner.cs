@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.Tools {
 
@@ -11,12 +12,13 @@ namespace Neuralia.Blockchains.Core.Tools {
 	/// </summary>
 	public static class IndependentActionRunner {
 		
-		public static Task RunAsync(List<Func<Task>> actions) {
+		
+		public static Task RunAsync(LockContext lockContext,IEnumerable<Func<LockContext, Task>> actions) {
 
-			return RunAsync(actions.Select(a => new ActionSetAsync(a)).ToArray());
+			return RunAsync(lockContext, actions.Select(a => new ActionSetAsync(a)).ToArray());
 		}
 		
-		public static async Task RunAsync(params ActionSetAsync[] actions) {
+		public static async Task RunAsync(LockContext lockContext, params ActionSetAsync[] actions) {
 
 			List<Exception> exceptions = null;
 
@@ -25,7 +27,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				try {
 
 					if(action.action != null) {
-						await action.action();
+						await action.action(lockContext).ConfigureAwait(false);
 					}
 
 				} catch(Exception ex) {
@@ -35,7 +37,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 					}
 
 					try {
-						action.exception?.Invoke(ex);
+						if(action.exception != null) {
+							action.exception.Invoke(ex);
+						}
 					} catch(Exception ex2) {
 						exceptions.Add(ex2);
 					}
@@ -57,6 +61,11 @@ namespace Neuralia.Blockchains.Core.Tools {
 		public static void Run(params Action[] actions) {
 
 			Run(actions.Select(a => new ActionSet(a)).ToArray());
+		}
+		
+		public static Task RunAsync(LockContext lockContext, params Func<LockContext, Task>[] actions) {
+
+			return RunAsync(lockContext, actions.Select(a => new ActionSetAsync(a)).ToArray());
 		}
 
 		public static void Run(params ActionSet[] actions) {
@@ -92,12 +101,12 @@ namespace Neuralia.Blockchains.Core.Tools {
 		
 		public struct ActionSetAsync {
 
-			public ActionSetAsync(Func<Task> action, Action<Exception> exception = null) {
+			public ActionSetAsync(Func<LockContext, Task> action, Action<Exception> exception = null) {
 				this.action = action;
 				this.exception = exception;
 			}
 
-			public Func<Task> action;
+			public Func<LockContext, Task> action;
 			public Action<Exception> exception;
 		}
 

@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			if(isActive) {
 				if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-					if((version.Major == 1) && (version.Minor == 0)) {
+					if(version.Major == 1 && version.Minor == 0) {
 						representativeBallotingRules = new EncryptedSecretRepresentativeBallotingRules();
 					}
 				}
@@ -43,7 +43,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			IPassiveRepresentativeBallotingRules representativeBallotingRules = null;
 
 			if(version.Type == PassiveRepresentativeBallotingMethodTypes.Instance.TopLowestHashes) {
-				if((version.Major == 1) && (version.Minor == 0)) {
+				if(version.Major == 1 && version.Minor == 0) {
 					representativeBallotingRules = new TopLowestHashesRepresentativeBallotingRules();
 				}
 			}
@@ -64,7 +64,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			IActiveRepresentativeBallotingApplication representativeBallotingApplication = null;
 
 			if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-				if((version.Major == 1) && (version.Minor == 0)) {
+				if(version.Major == 1 && version.Minor == 0) {
 					representativeBallotingApplication = new EncryptedSecretRepresentativeBallotingApplication();
 				}
 			}
@@ -91,7 +91,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			IActiveRepresentativeBallotingProof representativeBallotingProof = null;
 
 			if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-				if((version.Major == 1) && (version.Minor == 0)) {
+				if(version.Major == 1 && version.Minor == 0) {
 					representativeBallotingProof = new EncryptedSecretRepresentativeBallotingProof();
 				}
 			}

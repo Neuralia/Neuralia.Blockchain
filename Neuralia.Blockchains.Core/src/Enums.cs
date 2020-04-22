@@ -111,12 +111,14 @@ namespace Neuralia.Blockchains.Core {
 			DigestAndBlocks = 3,
 			Full = DigestAndBlocks
 		}
-
-		[Flags]
+		
 		public enum MiningTiers : byte {
-			ThirdTier = 0,
-			SecondTier = 1,
-			FirstTier = 2 | SecondTier
+			
+			FirstTier = 1,
+			SecondTier = 2,
+			ThirdTier = 3,
+			FourthTier = 4,
+			Other = Byte.MaxValue
 		}
 		
 		
@@ -131,7 +133,7 @@ namespace Neuralia.Blockchains.Core {
 			Unknown = 0,
 			Mining = 1,
 			IpUsed = 2,
-			Error = byte.MaxValue
+			NotMining = byte.MaxValue
 		}
 
 		public enum ServiceExecutionTypes {

@@ -159,7 +159,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public static ComponentVersion<TransactionType> RehydrateTopHeader(IDataRehydrator rehydrator, TransactionId transactionId, AccountId accountId, TransactionTimestamp timestamp) {
 			var rehydratedVersion = rehydrator.Rehydrate<ComponentVersion<TransactionType>>();
 
-			if((accountId == null) && (timestamp == null)) {
+			if(accountId == null && timestamp == null) {
 				transactionId.Rehydrate(rehydrator);
 			} else {
 				transactionId.RehydrateRelative(rehydrator);

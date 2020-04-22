@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Threading.Tasks;
 using LiteDB;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -57,6 +58,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		}
 
 		public T Open<T>(Func<LiteDatabase, T> process) {
+			using(LiteDatabase db = this.GetDatabase()) {
+				return process(db);
+			}
+		}
+		
+		public Task<T> OpenAsync<T>(Func<LiteDatabase, Task<T>> process) {
 			using(LiteDatabase db = this.GetDatabase()) {
 				return process(db);
 			}
@@ -416,8 +423,11 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 				}
 
 				var all = col.FindAll();
-				all = sort?.Invoke(all);
 
+				if(sort != null) {
+					all = sort(all);
+				}
+				
 				foreach(T overflow in all.Skip(keep)) {
 					col.DeleteMany(e => getKey(e).Equals(getKey(overflow)));
 				}

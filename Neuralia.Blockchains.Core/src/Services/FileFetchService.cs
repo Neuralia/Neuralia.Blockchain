@@ -1,14 +1,16 @@
 ﻿using System;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
+using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Core.Services {
 
@@ -70,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public (SafeArrayHandle sha2, SafeArrayHandle sha3)? FetchGenesisHash(string hashuri, string genesisPath, string filename) {
 
 			string hashName = $"{filename.CapitallizeFirstLetter()}.hash";
-			FileExtensions.EnsureDirectoryStructure(genesisPath, new FileSystem());
+			FileExtensions.EnsureDirectoryStructure(genesisPath);
 			string filepath = Path.Combine(genesisPath, hashName);
 
 			if(!File.Exists(filepath)) {
@@ -95,7 +97,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string hashuri, string digestHashPath, int digestId) {
 
 			string hashName = $"digest-{digestId}.hash";
-			FileExtensions.EnsureDirectoryStructure(digestHashPath, new FileSystem());
+			FileExtensions.EnsureDirectoryStructure(digestHashPath);
 			string filepath = Path.Combine(digestHashPath, hashName);
 
 			if(!File.Exists(filepath)) {

@@ -1,5 +1,5 @@
 ﻿using System;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
@@ -11,12 +11,14 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 
 	public interface IChainDalCreationFactory {
 		// here are replaceable injection functions
-		Func<ChainConfigurations, BlockChannelUtils.BlockChannelTypes, string, string, IBlockchainDigestChannelFactory, IFileSystem, IBlockchainEventSerializationFalReadonly> CreateSerializedArchiveFal { get; }
+		Func<ChainConfigurations, BlockChannelUtils.BlockChannelTypes, string, string, IBlockchainDigestChannelFactory, FileSystemWrapper, IBlockchainEventSerializationFalReadonly> CreateSerializedArchiveFal { get; }
 
 		CHAIN_STATE_DAL CreateChainStateDal<CHAIN_STATE_DAL, CHAIN_STATE_SNAPSHOT>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_STATE_DAL : IChainStateDal
@@ -72,7 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
-		Func<CENTRAL_COORDINATOR, string, IFileSystem, IWalletSerialisationFal> CreateWalletSerialisationFal { get; }
+		Func<CENTRAL_COORDINATOR, string, FileSystemWrapper, IWalletSerialisationFal> CreateWalletSerialisationFal { get; }
 	}
 
 	/// <summary>
@@ -92,9 +94,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		public abstract CHAIN_POOL_DAL CreateChainPoolDal<CHAIN_POOL_DAL>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_POOL_DAL : IChainPoolDal;
 
-		public abstract Func<ChainConfigurations, BlockChannelUtils.BlockChannelTypes, string, string, IBlockchainDigestChannelFactory, IFileSystem, IBlockchainEventSerializationFalReadonly> CreateSerializedArchiveFal { get; }
+		public abstract Func<ChainConfigurations, BlockChannelUtils.BlockChannelTypes, string, string, IBlockchainDigestChannelFactory, FileSystemWrapper, IBlockchainEventSerializationFalReadonly> CreateSerializedArchiveFal { get; }
 
-		public abstract Func<CENTRAL_COORDINATOR, string, IFileSystem, IWalletSerialisationFal> CreateWalletSerialisationFal { get; }
+		public abstract Func<CENTRAL_COORDINATOR, string, FileSystemWrapper, IWalletSerialisationFal> CreateWalletSerialisationFal { get; }
 
 		// contexts
 

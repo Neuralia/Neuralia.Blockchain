@@ -1,15 +1,17 @@
 using System;
 using System.IO;
-using System.IO.Abstractions;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
@@ -48,7 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	/// <summary>
 	///     The base class for the data access providers
 	/// </summary>
-	public abstract class ChainDataProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainDataProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public abstract class ChainDataProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainProvider, IChainDataProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
@@ -102,7 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		private BlockGroupingConfigs? blockGroupingConfig;
 
-		protected IFileSystem fileSystem;
+		protected FileSystemWrapper fileSystem;
 
 		private MessageGroupingConfigs? messageGroupingConfig;
 
@@ -112,6 +114,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.timeService = centralCoordinator.BlockchainServiceSet.TimeService;
 			this.centralCoordinator = centralCoordinator;
 			this.fileSystem = centralCoordinator.FileSystem;
+		}
+
+		public override async Task PostInitialize(){
+			await base.PostInitialize().ConfigureAwait(false);
+
+			this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
+			this.BlockchainEventSerializationFal.TestFastKeysPath();
 		}
 
 		protected IBlockchainEventSerializationFalReadonly BlockchainEventSerializationFal {
@@ -134,7 +143,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					string blocksConfigFile = this.GetBlocksGroupingConfigPath();
 					FileExtensions.EnsureDirectoryStructure(this.GetBlocksFolderPath(), this.centralCoordinator.FileSystem);
 
-					if(this.centralCoordinator.FileSystem.File.Exists(blocksConfigFile)) {
+					if(this.centralCoordinator.FileSystem.FileExists(blocksConfigFile)) {
 
 						IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(FileExtensions.ReadAllBytes(blocksConfigFile, this.centralCoordinator.FileSystem));
 
@@ -169,7 +178,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					FileExtensions.EnsureDirectoryStructure(this.GetMessagesFolderPath(), this.centralCoordinator.FileSystem);
 
-					if(this.centralCoordinator.FileSystem.File.Exists(messagesConfigFile)) {
+					if(this.centralCoordinator.FileSystem.FileExists(messagesConfigFile)) {
 						IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(FileExtensions.ReadAllBytes(messagesConfigFile, this.centralCoordinator.FileSystem));
 
 						this.messageGroupingConfig = new MessageGroupingConfigs {GroupingCount = rehydrator.ReadInt()};
@@ -302,13 +311,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			string path = this.GetBlockSyncManifestCompletedFileName(blockId);
 
-			if(this.centralCoordinator.FileSystem.File.Exists(path)) {
+			if(this.centralCoordinator.FileSystem.FileExists(path)) {
 				return ChainDataProvider.BlockFilesetSyncManifestStatuses.Completed;
 			}
 
 			path = this.GetBlockSyncManifestFileName(blockId);
 
-			if(this.centralCoordinator.FileSystem.File.Exists(path)) {
+			if(this.centralCoordinator.FileSystem.FileExists(path)) {
 				return ChainDataProvider.BlockFilesetSyncManifestStatuses.InProgress;
 			}
 

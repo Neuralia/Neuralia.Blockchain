@@ -157,7 +157,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     Trigger when something is wrong with the connection and we need to clean up
 		/// </summary>
 		public void TriggerDisposed() {
-			this.Disposed?.Invoke(this);
+			if(this.Disposed != null) {
+				this.Disposed(this);
+			}
 		}
 
 		public void SetPeerNodes(NodeAddressInfoList peerNodes) {

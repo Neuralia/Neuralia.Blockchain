@@ -1,7 +1,10 @@
 using System;
-using System.IO.Abstractions;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Locking;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 
@@ -24,13 +27,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		///     The method that will create a new instance of our entire chain!
 		/// </summary>
 		/// <returns></returns>
-		public abstract CHAIN_INTERFACE CreateNewChain(IServiceProvider serviceProvider, ChainRuntimeConfiguration chainRuntimeConfiguration = null, IFileSystem fileSystem = null);
+		public abstract Task<CHAIN_INTERFACE> CreateNewChain(IServiceProvider serviceProvider, LockContext lockContext, ChainRuntimeConfiguration chainRuntimeConfiguration = null, FileSystemWrapper fileSystem = null);
 
 		/// <summary>
 		///     the main method which creates our central controller, which in turn will create the rest
 		/// </summary>
 		/// <returns></returns>
-		protected abstract CENTRAL_COORDINATOR CreateCentralCoordinator(BlockchainServiceSet serviceSet, ChainRuntimeConfiguration chainRuntimeConfiguration, IFileSystem fileSystem);
+		protected abstract CENTRAL_COORDINATOR CreateCentralCoordinator(BlockchainServiceSet serviceSet, ChainRuntimeConfiguration chainRuntimeConfiguration, FileSystemWrapper fileSystem);
 
 		/// <summary>
 		///     This is the method where we create all injected chain components

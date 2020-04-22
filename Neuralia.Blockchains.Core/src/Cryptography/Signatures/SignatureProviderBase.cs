@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -41,7 +42,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures {
 			return new BetterSecureRandom();
 		}
 
-		public abstract bool Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey);
+		public abstract Task<bool> Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey);
 
 		private void Dispose(bool disposing) {
 

@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 		ICreatePresentationTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreatePresentationTransactionChainWorkflow(CorrelationContext correlationContext, Guid? accountUuid, byte expiration = 0);
 		ICreateChangeKeyTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateChangeKeyTransactionWorkflow(byte changingKeyOrdinal, string note, CorrelationContext correlationContext, byte expiration = 0);
 
-		ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateSendElectionsCandidateRegistrationMessageWorkflow(AccountId candidateAccountId, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, AppSettingsBase.ContactMethods registrationMethod, CorrelationContext correlationContext);
+		ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateSendElectionsCandidateRegistrationMessageWorkflow(AccountId candidateAccountId, Enums.MiningTiers miningTier, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, AppSettingsBase.ContactMethods registrationMethod, CorrelationContext correlationContext);
 
 		ILoadWalletWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateLoadWalletWorkflow(CorrelationContext correlationContext, string passphrase = null);
 	}
@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 
 
 		// message workflows
-		public abstract ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateSendElectionsCandidateRegistrationMessageWorkflow(AccountId candidateAccountId, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, AppSettingsBase.ContactMethods registrationMethod, CorrelationContext correlationContext);
+		public abstract ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateSendElectionsCandidateRegistrationMessageWorkflow(AccountId candidateAccountId, Enums.MiningTiers miningTier, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, AppSettingsBase.ContactMethods registrationMethod, CorrelationContext correlationContext);
 		public abstract ILoadWalletWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateLoadWalletWorkflow(CorrelationContext correlationContext, string passphrase = null);
 	}
 }

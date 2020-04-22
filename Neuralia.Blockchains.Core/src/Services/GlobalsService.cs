@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.IO;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 
 namespace Neuralia.Blockchains.Core.Services {
 	public interface IAppRemote {
-		void Shutdown();
+		Task Shutdown();
 	}
 
 	public interface IGlobalsService {
@@ -78,7 +79,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		public const byte MODERATOR_COMMUNICATIONS_KEY_ID = 1;
 		public const byte MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID = 2;
-		public const byte MODERATOR_BLOCKS_KEY_XMSSMT_ID = 3;
+		public const byte MODERATOR_BLOCKS_KEY_XMSS_ID = 3;
 		public const byte MODERATOR_BLOCKS_CHANGE_KEY_ID = 4;
 		public const byte MODERATOR_DIGEST_BLOCKS_KEY_ID = 5;
 		public const byte MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID = 6;
@@ -105,6 +106,8 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// The aboslute timeout of a mining registration since the last update
 		/// </summary>
 		public const int MINING_REGISTRATION_TIMEOUT = UPDATE_MINING_REGISTRATION_DELAY * 2;
+		
+		public static readonly TimeSpan MinerSafeDelay = TimeSpan.FromMinutes(UPDATE_MINING_REGISTRATION_DELAY);
 		
 		/// <summary>
 		/// the timespan delay before a miner times out

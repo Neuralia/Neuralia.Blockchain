@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			ICandidatureMethod candidatureMethod = null;
 
 			if(version.Type == CandidatureMethodTypes.Instance.SimpleHash) {
-				if((version.Major == 1) && (version.Minor == 0)) {
+				if(version.Major == 1 && version.Minor == 0) {
 					candidatureMethod = new SimpleHashCandidatureMethod();
 				}
 			}

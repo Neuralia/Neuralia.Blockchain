@@ -19,6 +19,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		Enums.KeyTypes Type { get; }
 		void Rehydrate(byte id, IDataRehydrator rehydrator);
 		void SetFromWalletKey(IWalletKey walletKey);
+
+		SafeArrayHandle Dehydrate();
+		void Rehydrate(SafeArrayHandle bytes);
 	}
 
 	public abstract class CryptographicKey : ICryptographicKey {
@@ -48,6 +51,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			dehydrator.WriteNonNullable(this.Key);
 		}
 
+		public SafeArrayHandle Dehydrate(){
+			using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+				this.Dehydrate(dehydrator);
+				return dehydrator.ToArray();
+			}
+		}
+		public void Rehydrate(SafeArrayHandle bytes){
+			using(var rehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
+				this.Rehydrate(rehydrator);
+			}
+		}
+		
 		public void Rehydrate(IDataRehydrator rehydrator) {
 			Enums.KeyTypes type = (Enums.KeyTypes) rehydrator.ReadByte();
 

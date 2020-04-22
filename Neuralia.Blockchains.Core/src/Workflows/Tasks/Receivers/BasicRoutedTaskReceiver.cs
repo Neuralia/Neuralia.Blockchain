@@ -1,5 +1,7 @@
 using System;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
@@ -19,7 +21,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		///     here we handle only our own returning tasks
 		/// </summary>
 		/// <param name="task"></param>
-		protected override bool ProcessTask(T task) {
+		/// <param name="lockContext"></param>
+		protected override async Task<bool> ProcessTask(T task) {
 			try {
 				task.TriggerAction(this.parameter);
 			} catch(Exception ex) {

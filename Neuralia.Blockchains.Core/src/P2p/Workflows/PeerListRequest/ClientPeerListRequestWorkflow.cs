@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Base;
@@ -6,6 +7,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages;
 using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
@@ -22,7 +24,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			this.PeerUnique = true;
 		}
 
-		protected override void PerformWork() {
+		protected override async Task PerformWork(LockContext lockContext) {
 			this.CheckShouldCancel();
 
 			var peerListRequestTrigger = this.MessageFactory.CreatePeerListRequestWorkflowTriggerSet(this.CorrelationId);

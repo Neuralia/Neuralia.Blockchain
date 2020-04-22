@@ -77,15 +77,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			if(this.dehydratedEnvelopeBytes.IsEmpty) {
 				this.dehydratedEnvelopeBytes.Entry = data.Entry;
 
-				using(IDataRehydrator rh = DataSerializationFactory.CreateRehydrator(data)) {
+				using IDataRehydrator rh = DataSerializationFactory.CreateRehydrator(data);
 
-					this.Version.Rehydrate(rh);
+				this.Version.Rehydrate(rh);
 
-					this.Rehydrate(rh);
+				this.Rehydrate(rh);
 
-					// save the raw bytes for lazy loading
-					this.EventBytes.Entry = rh.ReadArrayToEnd();
-				}
+				// save the raw bytes for lazy loading
+				this.EventBytes.Entry = rh.ReadArrayToEnd();
+
 			}
 		}
 
@@ -95,9 +95,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 					throw new ApplicationException("Event bytes can not be null while rehydrating contents");
 				}
 
-				using(var rehydrator = DataSerializationFactory.CreateRehydrator(this.EventBytes)) {
-					this.Contents = this.RehydrateContents(rehydrator);
-				}
+				using var rehydrator = DataSerializationFactory.CreateRehydrator(this.EventBytes);
+
+				this.Contents = this.RehydrateContents(rehydrator);
+
 			}
 		}
 
@@ -114,7 +115,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		}
 
 		public void DehydrateContents() {
-			if((this.EventBytes == null) || this.EventBytes.IsEmpty) {
+			if(this.EventBytes == null || this.EventBytes.IsEmpty) {
 
 				if(!this.ContentsLoaded) {
 					throw new ApplicationException("Blockchain event must be loaded to dehydrate an envelope");

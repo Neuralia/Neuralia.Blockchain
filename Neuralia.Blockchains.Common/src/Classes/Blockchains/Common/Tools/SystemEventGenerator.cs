@@ -156,7 +156,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.BlockchainSyncStarted;
-			generator.Parameters = new object[] {blockId, publicBlockHeight,  (publicBlockHeight==0?0:((decimal)blockId) / publicBlockHeight)};
+			generator.Parameters = new object[] {blockId, publicBlockHeight,  publicBlockHeight==0?0:(decimal)blockId / publicBlockHeight};
 
 			return generator;
 		}
@@ -165,7 +165,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.BlockchainSyncEnded;
-			generator.Parameters = new object[] {blockId, publicBlockHeight, (publicBlockHeight==0?0:((decimal)blockId) / publicBlockHeight)};
+			generator.Parameters = new object[] {blockId, publicBlockHeight, publicBlockHeight==0?0:(decimal)blockId / publicBlockHeight};
 
 			return generator;
 		}
@@ -175,7 +175,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.BlockchainSyncUpdate;
-			generator.Parameters = new object[] {blockId, publicBlockHeight,  (publicBlockHeight==0?0:((decimal)blockId) / publicBlockHeight), estimatedTimeRemaining};
+			generator.Parameters = new object[] {blockId, publicBlockHeight,  publicBlockHeight==0?0:(decimal)blockId / publicBlockHeight, estimatedTimeRemaining};
 
 			return generator;
 		}
@@ -307,6 +307,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return generator;
 		}
 		
+		public static SystemEventGenerator TransactionHistoryUpdated(BlockchainType chainId) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType  = BlockchainSystemEventTypes.Instance.TransactionHistoryUpdated;
+			generator.Parameters = new object[] {chainId.Value};
+
+			return generator;
+		}
+		
 
 		public class CreationStepSet {
 
@@ -390,7 +399,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionConfirmed;
-			generator.Parameters = new object[] {new {transactionId = (transactionId!=null?transactionId.ToString():"")}};
+			generator.Parameters = new object[] {new {transactionId = transactionId!=null?transactionId.ToString():""}};
 
 			return generator;
 		}
@@ -399,7 +408,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionRefused;
-			generator.Parameters = new object[] {new {transactionId = (transactionId!=null?transactionId.ToString():"")}};
+			generator.Parameters = new object[] {new {transactionId = transactionId!=null?transactionId.ToString():""}};
 
 			return generator;
 		}
@@ -408,7 +417,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionCreated;
-			generator.Parameters = new object[] {(transactionId!=null?transactionId.ToString():"")};
+			generator.Parameters = new object[] {transactionId!=null?transactionId.ToString():""};
 
 			return generator;
 		}
@@ -417,7 +426,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionSent;
-			generator.Parameters = new object[] {(transactionId!=null?transactionId.ToString():"")};
+			generator.Parameters = new object[] {transactionId!=null?transactionId.ToString():""};
 
 			return generator;
 		}
@@ -428,7 +437,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionReceived;
 
 			generator.Parameters = new object[] {
-				(transactionId!=null?transactionId.ToString():""), /*transactionId*/
+				transactionId!=null?transactionId.ToString():"", /*transactionId*/
 				impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalPublishedAccounts*/
 				impactedLocalPublishedAccountsUuids.ToArray(), /*impactedLocalPublishedAccountsUuids*/
 				impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalDispatchedAccounts*/
@@ -443,7 +452,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionError;
-			generator.Parameters = new object[] {(transactionId!=null?transactionId.ToString():""), (errorCodes!=null?errorCodes.Select(e => e.Value).ToList():new List<ushort>())};
+			generator.Parameters = new object[] {transactionId!=null?transactionId.ToString():"", errorCodes!=null?errorCodes.Select(e => e.Value).ToList():new List<ushort>()};
 
 			return generator;
 		}

@@ -37,12 +37,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		[BsonId]
 		public Guid AccountUuid { get; set; }
 
-		public long LastBlockSynced { get; set; }
+		public long LastBlockSynced { get; set; } = 0;
 
 		/// <summary>
 		///     The status of the last block insertion
 		/// </summary>
-		public int BlockSyncStatus { get; set; }
+		public int BlockSyncStatus { get; set; } = (int)BlockSyncStatuses.FullySynced;
 
 		public Dictionary<byte, IWalletAccountChainStateKey> Keys { get; set; } = new Dictionary<byte, IWalletAccountChainStateKey>();
 	}

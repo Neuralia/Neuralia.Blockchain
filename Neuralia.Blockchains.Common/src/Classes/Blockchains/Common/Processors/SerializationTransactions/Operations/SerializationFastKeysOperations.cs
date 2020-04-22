@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Core;
@@ -21,9 +22,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			this.SerializationTransactionOperationType = SerializationTransactionOperationTypes.FastKeys;
 		}
 
-		public override void Undo() {
+		public override Task Undo() {
 
-			this.chainDataWriteProvider.SaveAccountKeyIndex(this.AccountId, this.Key, this.TreeHeight, this.HashBits, this.Ordinal);
+			return this.chainDataWriteProvider.SaveAccountKeyIndex(this.AccountId, this.Key, this.TreeHeight, this.HashBits, this.Ordinal);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {

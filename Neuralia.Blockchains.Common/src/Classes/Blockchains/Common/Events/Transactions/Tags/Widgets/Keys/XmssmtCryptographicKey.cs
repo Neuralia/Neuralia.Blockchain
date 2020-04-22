@@ -54,10 +54,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		
 		public override  void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
-
-			if(walletKey is IXmssMTWalletKey xmssMtWalletKey) {
-				this.TreeLayer = (byte)xmssMtWalletKey.TreeLayers;
-			}
 		}
 	}
 }

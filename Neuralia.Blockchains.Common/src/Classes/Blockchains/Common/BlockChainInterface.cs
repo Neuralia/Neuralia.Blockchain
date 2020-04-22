@@ -40,8 +40,11 @@ using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Extensions;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Blockchains.Tools.Threading;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
@@ -56,9 +59,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		ICentralCoordinator CentralCoordinatorBase { get; }
 		bool IsMiningAllowed { get; }
 		bool IsMiningEnabled { get; }
-		void StartChain();
+		Task StartChain(LockContext lockContext);
 
-		void StopChain();
+		Task StopChain(LockContext lockContext);
 		
 		void TriggerChainSynchronization();
 		void TriggerChainWalletSynchronization();
@@ -71,6 +74,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<bool> CreateNextXmssKey(Guid accountUuid, byte ordinal);
 		TaskResult<SafeArrayHandle> SignXmssMessage(Guid accountUuid, SafeArrayHandle message);
 		TaskResult<long> QueryBlockHeight();
+		TaskResult<long> QueryLowestAccountBlockSyncHeight();
+		
 		TaskResult<BlockchainInfo> QueryBlockChainInfo();
 		TaskResult<List<MiningHistory>> QueryMiningHistory(int page, int pageSize, byte maxLevel);
 
@@ -83,6 +88,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		TaskResult<bool> SyncBlockchain(bool force);
 		TaskResult<bool> SyncBlockchainExternal(string synthesizedBlock);
+		TaskResult<bool> SyncBlockchainExternalBatch(IEnumerable<string> synthesizedBlocks);
 		TaskResult<bool> WalletExists();
 
 		TaskResult<bool> LoadWallet(CorrelationContext correlationContext, string passphrase = null);
@@ -90,7 +96,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<bool> CreateNewWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, bool publishAccount);
 		TaskResult<bool> CreateAccount(CorrelationContext correlationContext, string accountName, bool publishAccount, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
 
-		TaskResult<bool> SetWalletPassphrase(int correlationId, int keyCorrelationCode, string passphrase);
+		TaskResult<bool> SetWalletPassphrase(int correlationId, int keyCorrelationCode, string passphrase, bool setKeysToo = false);
 		TaskResult<bool> SetWalletKeyPassphrase(int correlationId, int keyCorrelationCode, string passphrase);
 		TaskResult<bool> WalletKeyFileCopied(int correlationId, int keyCorrelationCode);
 
@@ -127,9 +133,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		event Delegates.ChainEventDelegate ChainEventRaised;
 
-		void EnableMining(AccountId delegateAccountId = null);
+		Task EnableMining(LockContext lockContext, AccountId delegateAccountId = null);
 
-		void DisableMining();
+		Task DisableMining(LockContext lockContext);
 
 		TaskResult<bool> QueryBlockchainSynced();
 		TaskResult<ElectionContextAPI> QueryElectionContext(long blockId);
@@ -141,6 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<Dictionary<TransactionId, byte[]>> QueryBlockBinaryTransactions(long blockId);
 
 		TaskResult<object> BackupWallet();
+		TaskResult<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, int iterations);
 
 		TaskResult<bool> CreateNewAccount(CorrelationContext correlationContext, string name, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
 		TaskResult<bool> SetActiveAccount(string name);
@@ -203,14 +210,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public CENTRAL_COORDINATOR CentralCoordinator => this.centralCoordinator;
 		public ICentralCoordinator CentralCoordinatorBase => this.centralCoordinator;
 
-		public void EnableMining(AccountId delegateAccountId = null) {
+		public Task EnableMining(LockContext lockContext, AccountId delegateAccountId = null) {
 
 			
-			this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.EnableMining(null, delegateAccountId);
+			return this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.EnableMining(null, delegateAccountId, lockContext);
 		}
 
-		public void DisableMining() {
-			this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.DisableMining();
+		public Task DisableMining(LockContext lockContext) {
+			return this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.DisableMining(lockContext);
 		}
 
 		public bool IsMiningAllowed => this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.MiningAllowed;
@@ -226,15 +233,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public event Action ImportantWalletUpdateRaised;
 		
 		// start our pletora of threads
-		public virtual void StartChain() {
+		public virtual async Task StartChain(LockContext lockContext) {
 			try {
 
 				Log.Information($"Starting blockchain {this.centralCoordinator.ChainName} with chain path: {this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainDirectoryPath()}");
 
 				// if anything was running, we stop it
-				this.StopChain();
+				await this.StopChain(lockContext).ConfigureAwait(false);
 
-				this.centralCoordinator.Start();
+				await this.centralCoordinator.Start().ConfigureAwait(false);
 
 				this.StartOtherChainComponents();
 				
@@ -254,7 +261,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				this.TriggerBlockchainLoaded();
 
 				// start polling for system events
-				this.StartEventsPoller();
+				await this.StartEventsPoller().ConfigureAwait(false);
 
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to start controllers");
@@ -263,15 +270,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}
 		}
 
-		public virtual void StopChain() {
+		public virtual async Task StopChain(LockContext lockContext) {
 			if(!this.centralCoordinator.IsCompleted && this.centralCoordinator.IsStarted) {
 				try {
-					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemovePIDLock();
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemovePIDLock().ConfigureAwait(false);
 
 					this.poller_active = false;
 					this.tasksPoller?.Dispose();
 					
-					this.centralCoordinator.Stop();
+					await this.centralCoordinator.Stop().ConfigureAwait(false);
 					this.centralCoordinator.Dispose();
 				} catch(Exception ex) {
 					Log.Error(ex, "Failed to stop controllers");
@@ -286,9 +293,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		public void TriggerChainSynchronization() {
-			this.RunBlockchainTaskMethod((service, taskRoutingContext) => {
+			this.RunBlockchainTaskMethod(async (service, taskRoutingContext, lc) => {
 
-				service.SynchronizeBlockchain(true);
+				await service.SynchronizeBlockchain(true, lc).ConfigureAwait(false);
 
 				return true;
 			}, (results, taskRoutingContext) => {
@@ -300,9 +307,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public void TriggerChainWalletSynchronization() {
 
-			this.RunBlockchainTaskMethod((service, taskRoutingContext) => {
+			this.RunBlockchainTaskMethod(async (service, taskRoutingContext, lc) => {
 
-				service.SynchronizeWallet(true, true);
+				await service.SynchronizeWallet(true, lc, true).ConfigureAwait(false);
 
 				return true;
 			}, (results, taskRoutingContext) => {
@@ -314,11 +321,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		
 		public void Pause() {
-			this.centralCoordinator.Pause();
+			this.centralCoordinator.Pause().WaitAndUnwrapException();
 		}
 
 		public void Resume() {
-			this.centralCoordinator.Resume();
+			this.centralCoordinator.Resume().WaitAndUnwrapException();
 		}
 		
 		/// <summary>
@@ -334,39 +341,42 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			return settings;
 		}
 
-		private void StartEventsPoller() {
+		private async Task StartEventsPoller() {
 
 			this.pollerResetEvent = new ManualResetEventSlim(false);
 
+			//TODO: a timer here would be better
 			// here we prepare the events poller that will check if we have events. This works better as a task than a timer.
-			this.eventsPoller = new Task<bool>(() => {
+			this.poller_active = true;
+			this.eventsPoller = Task<Task<bool>>.Factory.StartNew(async () => {
 
 				Thread.CurrentThread.IsBackground = true;
-				
+				LockContext lockContext = null;
 				while(this.poller_active) {
-
 					try {
-						this.ColoredRoutedTaskReceiver.CheckTasks();
+						await this.ColoredRoutedTaskReceiver.CheckTasks().ConfigureAwait(false);
 						
 					} catch(Exception ex) {
 						Log.Error(ex, "Failed to check for system events");
 					}
 
-					this.pollerResetEvent.Wait();
+					this.pollerResetEvent.Wait(TimeSpan.FromSeconds(3));
 					this.pollerResetEvent.Reset();
 				}
 
 				return true;
-			}, TaskCreationOptions.LongRunning);
+			}, TaskCreationOptions.LongRunning).Unwrap();
 			
-			this.poller_active = true;
-			this.eventsPoller.Start();
-			
-			
+	
 			// perform a check for any message that has arrived and invoke the callbacks if there are any on the calling thread
 			this.tasksPoller = new Timer(state => {
-				this.CheckTasks();
-				
+				try{
+					this.CheckTasks().WaitAndUnwrapException();
+				}
+				catch(Exception ex){
+					//TODO: do something?
+					Log.Error(ex, "Timer exception");
+				}
 			}, this, this.taskCheckSpan, this.taskCheckSpan);
 
 		}
@@ -385,69 +395,80 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<string> Test(string data) {
 			
-			return this.RunTaskMethod(() => {
+			return this.RunTaskMethodAsync(async (lc) => {
 
 
-				var card = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccountKeyCards(15);
+				//var card = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccounts(null).WaitAndUnwrapException();
+
+				var acc = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(null).WaitAndUnwrapException();
+
+				var dat = ByteArray.Create(8);
+				TypeSerializer.Serialize(1L, dat.Span);
+				var sig = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(acc.AccountUuid, dat, null).WaitAndUnwrapException();
+
 				
 				this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnectableChanged(true));
 
 				return "";
-			});
+			}, null);
 		}
 
-		public TaskResult<bool> SetWalletPassphrase(int correlationId, int keyCorrelationCode, string passphrase) {
+		public TaskResult<bool> SetWalletPassphrase(int correlationId, int keyCorrelationCode, string passphrase, bool setKeysToo = false) {
 
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethod((lc) => {
 
 				if(this.keyQueries.ContainsKey(keyCorrelationCode)) {
-					this.keyQueries[keyCorrelationCode]?.Invoke(passphrase);
+if(					this.keyQueries[keyCorrelationCode] != null){	this.keyQueries[keyCorrelationCode](passphrase, setKeysToo);}
 					this.keyQueries.Remove(keyCorrelationCode);
 				}
 
 				return true;
-			});
+			}, lockContext);
 		}
 
 		public TaskResult<bool> SetWalletKeyPassphrase(int correlationId, int keyCorrelationCode, string passphrase) {
-
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethod((lc) => {
 
 				if(this.keyQueries.ContainsKey(keyCorrelationCode)) {
-					this.keyQueries[keyCorrelationCode]?.Invoke(passphrase);
+if(					this.keyQueries[keyCorrelationCode] != null){ 					this.keyQueries[keyCorrelationCode](passphrase, false);}
 					this.keyQueries.Remove(keyCorrelationCode);
 				}
 
 				return true;
-			});
+			}, lockContext);
 		}
 
 		public TaskResult<bool> WalletKeyFileCopied(int correlationId, int keyCorrelationCode) {
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethod((lc) => {
 				if(this.keyQueries.ContainsKey(keyCorrelationCode)) {
-					this.keyQueries[keyCorrelationCode]?.Invoke(null);
+if(					this.keyQueries[keyCorrelationCode] != null){ 					this.keyQueries[keyCorrelationCode](null, false);}
 					this.keyQueries.Remove(keyCorrelationCode);
 				}
 
 				return true;
-			});
+			}, lockContext);
 		}
 
 		public TaskResult<bool> CreateNextXmssKey(Guid accountUuid, byte ordinal) {
 
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethodAsync(async (lc) => {
 
-				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNextXmssKey(accountUuid, ordinal);
+				await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNextXmssKey(accountUuid, ordinal, null).ConfigureAwait(false);
 
 				return true;
-			});
+			}, lockContext);
 		}
 
 		public TaskResult<SafeArrayHandle> SignXmssMessage(Guid accountUuid, SafeArrayHandle message) {
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethodAsync((lc) => {
 
-				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(accountUuid, message);
-			});
+				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(accountUuid, message, null);
+			}, lockContext);
 		}
 
 		/// <summary>
@@ -456,21 +477,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <returns></returns>
 		public TaskResult<long> QueryBlockHeight() {
 
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethod((lc) => {
 				return this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.GetBlockHeight();
-			});
+			}, lockContext);
+		}
+		
+		public TaskResult<long> QueryLowestAccountBlockSyncHeight() {
+
+			LockContext lockContext = null;
+			return this.RunTaskMethod((lc) => {
+				var result = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight(lc).WaitAndUnwrapException();
+
+				return (long)(result ?? 0L);
+			}, lockContext);
 		}
 
 		public TaskResult<BlockchainInfo> QueryBlockChainInfo() {
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethod((lc) => {
 				return this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.GetBlockchainInfo();
-			});
+			}, lockContext);
 		}
 
 		public TaskResult<List<MiningHistory>> QueryMiningHistory(int page, int pageSize, byte maxLevel) {
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethod((lc) => {
 				return this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.GetMiningHistory(page, pageSize, maxLevel).Select(e => e.ToApiHistory()).ToList();
-			});
+			}, lockContext);
 		}
 
 		public int QueryPeerCount() {
@@ -492,30 +526,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <returns></returns>
 		public TaskResult<ChainStatusAPI> QueryChainStatus() {
 
-			return this.RunTaskMethod(() => {
+			LockContext lockContext = null;
+			return this.RunTaskMethodAsync(async (lc) => {
+
+				LockContext lockContext = null;
 				IWalletProviderProxy walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
 
 				BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 				int minimumDispatchPeerCount = chainConfiguration.MinimumDispatchPeerCount;
 				int minigTier = (int)this.centralCoordinator.ChainComponentProvider.ChainMiningProviderBase.MiningTier;
 
-				return new ChainStatusAPI { WalletInfo = walletProvider.APIQueryWalletInfoAPI(), MinRequiredPeerCount = minimumDispatchPeerCount, MiningTier = minigTier};
-			});
+				return new ChainStatusAPI { WalletInfo = await walletProvider.APIQueryWalletInfoAPI(lockContext).ConfigureAwait(false), MinRequiredPeerCount = minimumDispatchPeerCount, MiningTier = minigTier};
+			}, lockContext);
 		}
-		
+
 		/// <summary>
 		///     Query various basic status variables about the chain and it's wallet
 		/// </summary>
+		/// <param name="lockContext"></param>
 		/// <returns></returns>
 		public TaskResult<WalletInfoAPI> QueryWalletInfo() {
-
-			return this.RunTaskMethod(() => {
-				return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletInfoAPI();
-			});
+			LockContext lockContext = null;
+			return this.RunTaskMethodAsync((lc) => {
+				return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletInfoAPI(lc);
+			}, lockContext);
 		}
 
 		public TaskResult<bool> IsBlockchainSynced() {
-			return this.RunBlockchainTaskMethod((service, taskRoutingContext) => service.BlockchainSynced, (results, taskRoutingContext) => {
+			return this.RunBlockchainTaskMethod((service, taskRoutingContext, lc) => service.BlockchainSynced(lc).WaitAndUnwrapException(), (results, taskRoutingContext) => {
 				if(results.Error) {
 					//TODO: what to do here?
 				}
@@ -528,9 +566,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		public TaskResult<bool> SyncBlockchain(bool force) {
-			return this.RunBlockchainTaskMethod((service, taskRoutingContext) => {
+			return this.RunBlockchainTaskMethodAsync(async (service, taskRoutingContext, lc) => {
 
-				service.SynchronizeBlockchain(force);
+				await service.SynchronizeBlockchain(force, lc).ConfigureAwait(false);
 
 				return true;
 			}, (results, taskRoutingContext) => {
@@ -541,38 +579,43 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		public TaskResult<bool> SyncBlockchainExternal(string synthesizedBlock) {
-			return this.RunBlockchainTaskMethod((service, taskRoutingContext) => {
-
-				service.SynchronizeBlockchainExternal(synthesizedBlock);
+			
+			return this.RunTaskMethodAsync(async (lc) => {
+				await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.SynchronizeBlockchainExternal(synthesizedBlock, lc).ConfigureAwait(false);
 
 				return true;
-			}, (results, taskRoutingContext) => {
-				if(results.Error) {
-					//TODO: what to do here?
-				}
+			});
+		}
+
+		public TaskResult<bool> SyncBlockchainExternalBatch(IEnumerable<string> synthesizedBlocks)
+		{
+			return this.RunTaskMethodAsync(async (lc) => {
+				await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.SynchronizeBlockchainExternalBatch(synthesizedBlocks, lc).ConfigureAwait(false);
+
+				return true;
 			});
 		}
 
 		public TaskResult<bool> IsWalletLoaded() {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded);
+			return this.RunTaskMethod((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded);
 
 		}
 
 		public TaskResult<bool> WalletExists() {
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.WalletFileExists);
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.WalletFileExists(lc));
 
 		}
 
 		public TaskResult<bool> LoadWallet(CorrelationContext correlationContext, string passphrase = null) {
 
-			return this.RunTaskMethod(() => {
+			return this.RunTaskMethodAsync(async (lc) => {
 
 				ILoadWalletWorkflow workflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateLoadWalletWorkflow(correlationContext, passphrase);
 
 				this.centralCoordinator.PostWorkflow(workflow);
 
-				workflow.Wait();
+                await workflow.Wait().ConfigureAwait(false);
 				
 				return true;
 			});
@@ -580,78 +623,77 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<bool> CreateNewWallet(CorrelationContext correlationContext, string accountName, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, bool publishAccount) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(correlationContext, accountName, encryptWallet, encryptKey, encryptKeysIndividually, passphrases));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(correlationContext, accountName, encryptWallet, encryptKey, encryptKeysIndividually, passphrases, lc));
 		}
 
 		public TaskResult<bool> CreateAccount(CorrelationContext correlationContext, string accountName, bool publishAccount, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteAccount(correlationContext, accountName, encryptKeys, encryptKeysIndividually, passphrases, lc));
 
 		}
 
 		public TaskResult<List<WalletTransactionHistoryHeaderAPI>> QueryWalletTransactionHistory(Guid accountUuid) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletTransactionHistory(accountUuid));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletTransactionHistory(accountUuid, lc));
 		}
 
 		public TaskResult<WalletTransactionHistoryDetailsAPI> QueryWalletTransationHistoryDetails(Guid accountUuid, string transactionId) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletTransationHistoryDetails(accountUuid, transactionId));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletTransactionHistoryDetails(accountUuid, transactionId, lc));
 		}
 
 		public TaskResult<List<WalletAccountAPI>> QueryWalletAccounts() {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccounts());
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccounts(lc));
 		}
 
 		public TaskResult<string> QueryDefaultWalletAccountId() {
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount().GetAccountId().ToString());
+			return this.RunTaskMethodAsync(async (lc) => (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lc).ConfigureAwait(false)).GetAccountId().ToString());
 		}
 		
 		public TaskResult<Guid> QueryDefaultWalletAccountUuid() {
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountUuid());
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountUuid(lc));
 		}
 		
 		public TaskResult<WalletAccountDetailsAPI> QueryWalletAccountDetails(Guid accountUuid) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccountDetails(accountUuid));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccountDetails(accountUuid, lc));
 		}
 
 		public TaskResult<TransactionId> QueryWalletAccountPresentationTransactionId(Guid accountUuid) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccountPresentationTransactionId(accountUuid));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletAccountPresentationTransactionId(accountUuid, lc));
 		}
 
 		public TaskResult<IBlock> LoadBlock(long blockId) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlock(new BlockId(blockId)));
+			return this.RunTaskMethod((lc) => this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlock(new BlockId(blockId)));
 		}
 
 		public TaskResult<string> QueryBlock(long blockId) {
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockJson(new BlockId(blockId)));
+			return this.RunTaskMethod((lc) => this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockJson(new BlockId(blockId)));
 		}
 
 		public TaskResult<byte[]> QueryCompressedBlock(long blockId) {
 			
-			return this.RunTaskMethod(() => {
+			return this.RunTaskMethod((lc) => {
 
 				string json = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockJson(new BlockId(blockId));
 				
 				BrotliCompression compressor = new BrotliCompression();
 
-				using(ByteArray simpleBytes = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(json))) {
+				using ByteArray simpleBytes = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(json));
 
-					using(SafeArrayHandle compressed = compressor.Compress(simpleBytes, CompressionLevelByte.Optimal)) {
-						return compressed.ToExactByteArrayCopy();
-					}
+				using SafeArrayHandle compressed = compressor.Compress(simpleBytes, CompressionLevelByte.Optimal);
 
-				}
+				return compressed.ToExactByteArrayCopy();
+
 			});
 		}
 
 		public TaskResult<Dictionary<TransactionId, byte[]>> QueryBlockBinaryTransactions(long blockId) {
 			
-			return this.RunTaskMethod(() => {
+			return this.RunTaskMethod((lc) => {
 
 				IBlock block = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlock(new BlockId(blockId));
 				
@@ -684,47 +726,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, Guid? accountUuid, byte expiration = 0) {
 
-			return this.RunTaskMethod(() => {
+			return this.RunTaskMethod((lc) => {
 
-				using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
+				using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
-					var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreatePresentationTransactionChainWorkflow(correlationContext, accountUuid, expiration);
+				var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreatePresentationTransactionChainWorkflow(correlationContext, accountUuid, expiration);
 
-					workflow.Success += w => {
-						resetEvent.Set();
-					};
+				workflow.Success += w => {
+					resetEvent.Set();
 
-					this.centralCoordinator.PostWorkflow(workflow);
+					return Task.CompletedTask;
+				};
 
-					resetEvent.Wait();
+				this.centralCoordinator.PostWorkflow(workflow);
 
-					return true;
-				}
+				resetEvent.Wait();
+
+				return true;
+
 			});
 		}
 
 		public TaskResult<bool> CreateNewAccount(CorrelationContext correlationContext, string name, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases) {
 
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteAccount(correlationContext, name, encryptKeys, encryptKeysIndividually, passphrases, null));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteAccount(correlationContext, name, encryptKeys, encryptKeysIndividually, passphrases, null));
 		}
 
 		public TaskResult<bool> SetActiveAccount(string name) {
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetActiveAccount(name));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetActiveAccount(name, lc));
 		}
 
 		public TaskResult<bool> SetActiveAccount(Guid accountUuid) {
-			return this.RunTaskMethod(() => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetActiveAccount(accountUuid));
+			return this.RunTaskMethodAsync((lc) => this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetActiveAccount(accountUuid, lc));
 
 		}
 
 		public TaskResult<bool> QueryBlockchainSynced() {
 
-			return this.RunBlockchainTaskMethod((service, taskRoutingContext) => {
+			return this.RunBlockchainTaskMethodAsync(async (service, taskRoutingContext, lc) => {
 
-				var synced = service.BlockchainSynced;
+				var synced = await service.BlockchainSynced(lc).ConfigureAwait(false);
 
 				if(!synced) {
-					service.SynchronizeBlockchain(false);
+					await service.SynchronizeBlockchain(false, lc).ConfigureAwait(false);
 				}
 
 				return synced;
@@ -737,15 +781,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<bool> QueryWalletSynced() {
 
-			return this.RunBlockchainTaskMethod((service, taskRoutingContext) => {
+			return this.RunBlockchainTaskMethodAsync(async (service, taskRoutingContext, lc) => {
 
-				var result = service.WalletSyncedNoWait;
+				var synced = await service.WalletSynced(lc).ConfigureAwait(false);
 				
-				if(result.HasValue && !result.Value) {
-					service.SynchronizeWallet(false);
+				if(synced) {
+					await service.SynchronizeWallet(false, lc).ConfigureAwait(false);
 				}
 
-				return result ?? false;
+				return synced;
 			}, (results, taskRoutingContext) => {
 				if(results.Error) {
 					//TODO: what to do here?
@@ -755,31 +799,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<object> BackupWallet() {
 
-			return this.RunTaskMethod(() => {
-				(string path, string passphrase, string salt, int iterations) results = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.BackupWallet();
+			return this.RunTaskMethodAsync(async (lc) => {
+				(string path, string passphrase, string salt, int iterations) results = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.BackupWallet(lc).ConfigureAwait(false);
 
 				return (object) new WalletBackupAPI(){Path = results.path, Passphrase = results.passphrase, Salt = results.salt, Iterations = results.iterations};
 			});
 		}
 
+		public TaskResult<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, int iterations)
+		{
+			return this.RunTaskMethodAsync(async (lc) =>
+			{
+				return await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RestoreWalletFromBackup(backupsPath, passphrase, salt, iterations, lc).ConfigureAwait(false);
+			});
+		}
+
 		public TaskResult<List<ElectedCandidateResultDistillate>> PerformOnDemandElection(BlockElectionDistillate blockElectionDistillate) {
 			
-			return this.RunTaskMethod(() => {
-				return this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformElectionComputation(blockElectionDistillate);
+			return this.RunTaskMethodAsync((lc) => {
+				return this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformElectionComputation(blockElectionDistillate, lc);
 
 			});
 		}
 
 		public TaskResult<bool> PrepareElectionCandidacyMessages(BlockElectionDistillate blockElectionDistillate, List<ElectedCandidateResultDistillate> electionResults) {
 			
-			return this.RunTaskMethod(() => {
-				return this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PrepareElectionCandidacyMessages(blockElectionDistillate, electionResults);
+			return this.RunTaskMethodAsync((lc) => {
+				return this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PrepareElectionCandidacyMessages(blockElectionDistillate, electionResults, lc);
 			});
 		}
 
 		public TaskResult<ElectionContextAPI> QueryElectionContext(long blockId) {
 			
-			return this.RunTaskMethod(() => {
+			return this.RunTaskMethod((lc) => {
 
 				IBlock block = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlock(new BlockId(blockId));
 				
@@ -787,13 +839,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 					BrotliCompression compressor = new BrotliCompression();
 
-					using(SafeArrayHandle compressed = compressor.Compress(electionBlock.DehydratedElectionContext, CompressionLevelByte.Maximum)) {
+					using SafeArrayHandle compressed = compressor.Compress(electionBlock.DehydratedElectionContext, CompressionLevelByte.Maximum);
 
-						return new ElectionContextAPI() {
-							Type = electionBlock.ElectionContext.Version.Type.Value.Value, ContextBytes = compressed.ToExactByteArrayCopy(), BlockId = blockId, MaturityId = blockId + electionBlock.ElectionContext.Maturity,
-							PublishId = blockId + electionBlock.ElectionContext.Maturity + electionBlock.ElectionContext.Publication
-						};
-					}
+					return new ElectionContextAPI() {
+						Type = electionBlock.ElectionContext.Version.Type.Value.Value, ContextBytes = compressed.ToExactByteArrayCopy(), BlockId = blockId, MaturityId = blockId + electionBlock.ElectionContext.Maturity,
+						PublishId = blockId + electionBlock.ElectionContext.Maturity + electionBlock.ElectionContext.Publication
+					};
+
 				}
 
 				return new ElectionContextAPI() {Type = 0};
@@ -802,20 +854,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<bool> ChangeKey(byte changingKeyOrdinal, string note, CorrelationContext correlationContext) {
 
-			return this.RunTaskMethod(() => {
-				using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
-					var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateChangeKeyTransactionWorkflow(changingKeyOrdinal, note, correlationContext);
+			return this.RunTaskMethod((lc) => {
+				using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
-					workflow.Success += w => {
-						resetEvent.Set();
-					};
+				var workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateChangeKeyTransactionWorkflow(changingKeyOrdinal, note, correlationContext);
 
-					this.centralCoordinator.PostWorkflow(workflow);
+				workflow.Success += w => {
+					resetEvent.Set();
+					
+					return Task.CompletedTask;
+				};
 
-					resetEvent.Wait();
+				this.centralCoordinator.PostWorkflow(workflow);
 
-					return true;
-				}
+				resetEvent.Wait();
+
+				return true;
+
 			});
 		}
 
@@ -849,20 +904,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				}
 
 				// send the message
-				this.DispatchTaskAsync(message);
+				//TODO: make this async
+				this.DispatchTaskAsync(message, null).WaitAndUnwrapException(ct);
 
 				if(((InternalRoutedTask) message).RoutingStatus == RoutedTask.RoutingStatuses.Disposed) {
 					// ok, seems it was executed in thread and tis all done. we can return now
-					results.awaitableTask = new TaskFactory<T>().StartNew(() => message.Results, ct);
+					results.awaitableTask = Task.FromResult(message.Results);
 
 					return results;
 				}
-
 				
-
 				// handle exceptions here
 				
-
 				message.OnCompleted += () => {
 					this.returnedQueries.AddSafe(message.Id, message);
 
@@ -893,23 +946,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}
 		}
 
-		public TaskResult<T> RunBlockchainTaskMethod<T>(Func<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, TaskRoutingContext, T> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) {
+		public TaskResult<T> RunBlockchainTaskMethod<T>(Func<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, TaskRoutingContext, LockContext, T> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) {
 			var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<T>();
 
-			blockchainTask.SetAction((service, taskRoutingContext) => {
+			blockchainTask.SetAction(async (service, taskRoutingContext, lc) => {
 
-				blockchainTask.Results = newAction(service, taskRoutingContext);
+				blockchainTask.Results = newAction(service, taskRoutingContext, lc);
 
 			}, newCompleted);
 
 			return this.RunMethod(blockchainTask);
 		}
 		
-		public TaskResult<T> RunTaskMethod<T>(Func<T> runner) {
+		public TaskResult<T> RunBlockchainTaskMethodAsync<T>(Func<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, TaskRoutingContext, LockContext, Task<T>> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) {
+			var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<T>();
+
+			blockchainTask.SetAction(async (service, taskRoutingContext, lc) => {
+
+				blockchainTask.Results = await newAction(service, taskRoutingContext, lc).ConfigureAwait(false);
+
+			}, newCompleted);
+
+			return this.RunMethod(blockchainTask);
+		}
+		
+		public TaskResult<T> RunTaskMethod<T>(Func<LockContext, T> runner, LockContext lockContext = null) {
 			var results = new TaskResult<T>();
 			
 			// and start listening for the response
-			results.awaitableTask = Task.Run(runner);
+			results.awaitableTask = Task.Run(() => runner(lockContext));
+			
+			// handle exceptions here
+			results.task = results.awaitableTask.WithAllExceptions().ContinueWith(t => {
+
+			}, TaskContinuationOptions.OnlyOnFaulted);
+
+			return results;
+		}
+
+		public TaskResult<T> RunTaskMethodAsync<T>(Func<LockContext, Task<T>> runner, LockContext lockContext = null) {
+			var results = new TaskResult<T>();
+			
+			// and start listening for the response
+			results.awaitableTask = runner(lockContext);
 			
 			// handle exceptions here
 			results.task = results.awaitableTask.WithAllExceptions().ContinueWith(t => {
@@ -924,36 +1003,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 	#region event triggers
 
 		public void TriggerBlockchainStarted() {
-			this.BlockchainStarted?.Invoke();
+if(			this.BlockchainStarted != null){this.BlockchainStarted();}
 		}
 
 		public void TriggerBlockchainLoaded() {
-			this.BlockchainLoaded?.Invoke();
+if(			this.BlockchainLoaded != null){	this.BlockchainLoaded();}
 		}
 
 		public void TriggerBlockChainSynced() {
-			this.BlockChainSynced?.Invoke();
+			if(this.BlockChainSynced != null) {
+				this.BlockChainSynced();
+			}
 		}
 
-		protected void TriggerRequestCopyWalletFileRequest(RequestCopyWalletSystemMessageTask requestCopyWalletSystemTask) {
-			this.CopyWalletFileRequest?.Invoke();
+		protected void  TriggerRequestCopyWalletFileRequest(RequestCopyWalletSystemMessageTask requestCopyWalletSystemTask) {
+if(			this.CopyWalletFileRequest != null){this.CopyWalletFileRequest();}
 
 			requestCopyWalletSystemTask.Completed();
 		}
 
-		private readonly Dictionary<int, Action<string>> keyQueries = new Dictionary<int, Action<string>>();
+		private readonly Dictionary<int, Action<string, bool>> keyQueries = new Dictionary<int, Action<string, bool>>();
 
 		protected void TriggerRequestWalletPassphrase(RequestWalletPassphraseSystemMessageTask requestWalletPassphraseSystemMessageTask) {
 
 			// store it for a callback
-			this.keyQueries.Add(requestWalletPassphraseSystemMessageTask.correlationCode, passphrase => {
+			this.keyQueries.Add(requestWalletPassphraseSystemMessageTask.correlationCode, (passphrase, keysToo) => {
 
 				if(string.IsNullOrWhiteSpace(passphrase)) {
 					throw new ApplicationException("Invalid passphrase");
 				}
 
 				requestWalletPassphraseSystemMessageTask.Passphrase = passphrase.ConvertToSecureString();
-
+				requestWalletPassphraseSystemMessageTask.KeysToo = keysToo;
+				
 				requestWalletPassphraseSystemMessageTask.Completed();
 			});
 		}
@@ -961,13 +1043,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		protected void TriggerRequestWalletKeyPassphrase(RequestWalletKeyPassphraseSystemMessageTask requestWalletKeyPassphraseSystemMessageTask) {
 
 			// store it for a callback
-			this.keyQueries.Add(requestWalletKeyPassphraseSystemMessageTask.correlationCode, passphrase => {
+			this.keyQueries.Add(requestWalletKeyPassphraseSystemMessageTask.correlationCode, (passphrase, keysToo) => {
 
 				if(string.IsNullOrWhiteSpace(passphrase)) {
 					throw new ApplicationException("Invalid key passphrase");
 				}
 
 				requestWalletKeyPassphraseSystemMessageTask.Passphrase = passphrase.ConvertToSecureString();
+
 
 				requestWalletKeyPassphraseSystemMessageTask.Completed();
 			});
@@ -976,19 +1059,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		protected void TriggerRequestCopyWalletKeyFile(RequestCopyWalletKeyFileSystemMessageTask requestCopyWalletKeyFileSystemMessageTask) {
 
 			// store it for a callback
-			this.keyQueries.Add(requestCopyWalletKeyFileSystemMessageTask.correlationCode, passphrase => {
+			this.keyQueries.Add(requestCopyWalletKeyFileSystemMessageTask.correlationCode, (passphrase, keysToo) => {
 
 				requestCopyWalletKeyFileSystemMessageTask.Completed();
 			});
 		}
 
 		protected void TriggerSystemEvent(CorrelationContext? correlationContext, BlockchainSystemEventType eventType, object[] parameters) {
-			this.ChainEventRaised?.Invoke(correlationContext, eventType, this.CentralCoordinator.ChainId, parameters);
+			if(this.ChainEventRaised != null) {
+				this.ChainEventRaised(correlationContext, eventType, this.CentralCoordinator.ChainId, parameters);
+			}
 
 		}
 
 		protected void TriggerImportantWalletUpdate() {
-			this.ImportantWalletUpdateRaised?.Invoke();
+if(			this.ImportantWalletUpdateRaised != null){		this.ImportantWalletUpdateRaised();}
 		}
 
 	#endregion
@@ -999,7 +1084,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			if(disposing && !this.IsDisposed) {
 
-				this.StopChain();
+				this.StopChain(null).WaitAndUnwrapException();
 				
 				this.centralCoordinator.Dispose();
 
@@ -1035,9 +1120,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// </summary>
 		/// <param name="Process">returns true if satisfied to end the loop, false if it still needs to wait</param>
 		/// <returns></returns>
-		protected List<Guid> CheckTasks() {
+		protected async Task<List<Guid>> CheckTasks() {
 			try {
-				return this.RoutedTaskReceiver.CheckTasks();
+				return await this.RoutedTaskReceiver.CheckTasks().ConfigureAwait(false);
 			} catch(Exception ex) {
 				Log.Error(ex, "Failed to check and run tasks.");
 			}
@@ -1064,55 +1149,55 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public bool StashingEnabled => this.RoutedTaskReceiver.StashingEnabled;
 		public ITaskRouter TaskRouter { get; }
 
-		public void StashTask(InternalRoutedTask task) {
-			this.RoutedTaskReceiver.StashTask(task);
+		public Task StashTask(InternalRoutedTask task) {
+			return this.RoutedTaskReceiver.StashTask(task);
 		}
 
-		public void RestoreStashedTask(InternalRoutedTask task) {
-			this.RoutedTaskReceiver.RestoreStashedTask(task);
+		public Task RestoreStashedTask(InternalRoutedTask task) {
+			return this.RoutedTaskReceiver.RestoreStashedTask(task);
 		}
 
-		public bool CheckSingleTask(Guid taskId) {
+		public Task<bool> CheckSingleTask(Guid taskId) {
 			return this.RoutedTaskReceiver.CheckSingleTask(taskId);
 		}
 
-		public void Wait() {
-			this.RoutedTaskReceiver.Wait();
+		public Task Wait() {
+			return this.RoutedTaskReceiver.Wait();
 		}
 
-		public void Wait(TimeSpan timeout) {
-			this.RoutedTaskReceiver.Wait(timeout);
+		public Task Wait(TimeSpan timeout) {
+			return this.RoutedTaskReceiver.Wait(timeout);
 		}
 
-		public void DispatchSelfTask(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchSelfTask(task);
+		public Task DispatchSelfTask(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchSelfTask(task, lockContext);
 		}
 
-		public void DispatchTaskAsync(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchTaskAsync(task);
+		public Task DispatchTaskAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskAsync(task, lockContext);
 		}
 
-		public void DispatchTaskNoReturnAsync(IRoutedTask task) {
-			this.RoutedTaskReceiver.DispatchTaskNoReturnAsync(task);
+		public Task DispatchTaskNoReturnAsync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskNoReturnAsync(task, lockContext);
 		}
 
-		public bool DispatchTaskSync(IRoutedTask task) {
-			return this.RoutedTaskReceiver.DispatchTaskSync(task);
+		public Task<bool> DispatchTaskSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskSync(task, lockContext);
 		}
 
-		public bool DispatchTaskNoReturnSync(IRoutedTask task) {
-			return this.RoutedTaskReceiver.DispatchTaskNoReturnSync(task);
+		public Task<bool> DispatchTaskNoReturnSync(IRoutedTask task, LockContext lockContext) {
+			return this.RoutedTaskReceiver.DispatchTaskNoReturnSync(task, lockContext);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task) {
+		public Task<bool> WaitSingleTask(IRoutedTask task) {
 			return this.RoutedTaskReceiver.WaitSingleTask(task);
 		}
 
-		public bool WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
+		public Task<bool> WaitSingleTask(IRoutedTask task, TimeSpan timeout) {
 			return this.RoutedTaskReceiver.WaitSingleTask(task, timeout);
 		}
 
-		public void ReceiveChainMessageTask(SystemMessageTask task) {
+		public async void ReceiveChainMessageTask(SystemMessageTask task) {
 			this.ColoredRoutedTaskReceiver.ReceiveTask(task);
 
 			// free the poller to pickup the event(s)
@@ -1120,29 +1205,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		public void ReceiveChainMessageTaskImmediate(SystemMessageTask task) {
-			this.HandleMessages(task);
+			this.HandleMessages(task).WaitAndUnwrapException();
 		}
 		
 		// handle labeledTasks
-		protected virtual void HandleMessages(IColoredTask task) {
+		protected virtual Task HandleMessages(IColoredTask task) {
 			//TODO: review this list of events
 			if(task is SystemMessageTask systemTask) {
 				if(systemTask.message == BlockchainSystemEventTypes.Instance.BlockchainSyncEnded) {
 					this.TriggerBlockChainSynced();
-				} else if((systemTask.message == BlockchainSystemEventTypes.Instance.WalletLoadingStarted) && systemTask is RequestCopyWalletSystemMessageTask loadWalletSystemTask) {
+				} else if(systemTask.message == BlockchainSystemEventTypes.Instance.WalletLoadingStarted && systemTask is RequestCopyWalletSystemMessageTask loadWalletSystemTask) {
 					// ok, request a load wallet
 					this.TriggerRequestCopyWalletFileRequest(loadWalletSystemTask);
-				} else if((systemTask.message == BlockchainSystemEventTypes.Instance.RequestWalletPassphrase) && systemTask is RequestWalletPassphraseSystemMessageTask requestWalletPassphraseSystemMessageTask) {
+				} else if(systemTask.message == BlockchainSystemEventTypes.Instance.RequestWalletPassphrase && systemTask is RequestWalletPassphraseSystemMessageTask requestWalletPassphraseSystemMessageTask) {
 					// ok, request a load wallet
 					this.TriggerRequestWalletPassphrase(requestWalletPassphraseSystemMessageTask);
-				} else if((systemTask.message == BlockchainSystemEventTypes.Instance.RequestKeyPassphrase) && systemTask is RequestWalletKeyPassphraseSystemMessageTask requestWalletKeyPassphraseSystemMessageTask) {
+				} else if(systemTask.message == BlockchainSystemEventTypes.Instance.RequestKeyPassphrase && systemTask is RequestWalletKeyPassphraseSystemMessageTask requestWalletKeyPassphraseSystemMessageTask) {
 					// ok, request a load wallet
 					this.TriggerRequestWalletKeyPassphrase(requestWalletKeyPassphraseSystemMessageTask);
-				} else if((systemTask.message == BlockchainSystemEventTypes.Instance.RequestCopyKeyFile) && systemTask is RequestCopyWalletKeyFileSystemMessageTask requestWalletKeyCopyFileSystemMessageTask) {
+				} else if(systemTask.message == BlockchainSystemEventTypes.Instance.RequestCopyKeyFile && systemTask is RequestCopyWalletKeyFileSystemMessageTask requestWalletKeyCopyFileSystemMessageTask) {
 					// ok, request a load wallet
 					this.TriggerRequestCopyWalletKeyFile(requestWalletKeyCopyFileSystemMessageTask);
 				}
-				else if((systemTask.message == BlockchainSystemEventTypes.Instance.ImportantWalletUpdate)) {
+				else if(systemTask.message == BlockchainSystemEventTypes.Instance.ImportantWalletUpdate) {
 					// ok, request a load wallet
 					this.TriggerImportantWalletUpdate();
 				}
@@ -1150,14 +1235,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				// no matter what, lets alert of this event
 				this.TriggerSystemEvent(systemTask.correlationContext, systemTask.message, systemTask.parameters);
 			} 
+			
+			return Task.CompletedTask;
+			
 		}
 
 		/// <summary>
 		///     ensure the data is routed to the central coordinator's workflow manager
 		/// </summary>
-		/// <param name="messageSet"></param>
+		/// <param name="header"></param>
 		/// <param name="data"></param>
 		/// <param name="connection"></param>
+		/// <param name="messageSet"></param>
 		public void RouteNetworkMessage(IRoutingHeader header, SafeArrayHandle data, PeerConnection connection) {
 			this.centralCoordinator.RouteNetworkMessage(header, data, connection);
 		}
@@ -1165,9 +1254,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <summary>
 		///     ensure the data is routed to the central coordinator's workflow manager
 		/// </summary>
+		/// <param name="gossipMessageSet"></param>
+		/// <param name="connection"></param>
 		/// <param name="messageSet"></param>
 		/// <param name="data"></param>
-		/// <param name="connection"></param>
 		public void RouteNetworkGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
 			this.centralCoordinator.RouteNetworkGossipMessage(gossipMessageSet, connection);
 		}

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelIndex {
 
@@ -33,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		protected readonly BlockChannelUtils.BlockChannelTypes blockchainEnabledChannels;
 
-		protected ChannelIndex(string folderPath, BlockChannelUtils.BlockChannelTypes blockchainEnabledChannels, IFileSystem fileSystem) : base(folderPath, fileSystem) {
+		protected ChannelIndex(string folderPath, BlockChannelUtils.BlockChannelTypes blockchainEnabledChannels, FileSystemWrapper fileSystem) : base(folderPath, fileSystem) {
 			this.blockchainEnabledChannels = blockchainEnabledChannels;
 
 			BlockChannelUtils.RunForFlags(blockchainEnabledChannels, flag => {

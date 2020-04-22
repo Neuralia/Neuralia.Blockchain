@@ -152,7 +152,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so its preferable to use. 
 		/// </summary>
-		public ContactMethods HubContactMethod { get; set; } = ContactMethods.Web;
+		public ContactMethods HubContactMethod { get; set; } = ContactMethods.WebOrGossip;
 		
 #if TESTNET
 		public string HubsGossipAddress { get; set; } = "test-hubs.neuralium.com";
@@ -512,12 +512,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     Use the rest webapi to register for mining. its simpler and faster, so its preferable to use. it is also required
 		///     if the peer can not open it's default port through the firewall
 		/// </summary>
-		public AppSettingsBase.ContactMethods ElectionsRegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.Gossip;
+		public AppSettingsBase.ContactMethods ElectionsRegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 		
 		/// <summary>
 		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so its preferable to use. 
 		/// </summary>
-		public AppSettingsBase.ContactMethods RegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.Gossip;
+		public AppSettingsBase.ContactMethods RegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 
 		/// <summary>
 		/// force a specific mining tier (if possible)

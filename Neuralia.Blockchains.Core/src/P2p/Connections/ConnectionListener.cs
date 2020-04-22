@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
@@ -52,13 +53,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						this.tcpServer.NewConnection += (listener, connection, buffer) => {
 							Log.Verbose("New connection received");
 
-							this.NewConnectionReceived?.Invoke(listener, connection, buffer);
+if(							this.NewConnectionReceived != null){							this.NewConnectionReceived(listener, connection, buffer);}
+
+							return Task.CompletedTask;
 						};
 
 						this.tcpServer.NewConnectionRequestReceived += connection => {
 							Log.Verbose("New connection request received");
 
-							this.NewConnectionRequestReceived?.Invoke(connection);
+if(							this.NewConnectionRequestReceived != null){							this.NewConnectionRequestReceived(connection);}
 						};
 
 						Log.Information($"Listening on port {this.port} in {ipMode}{(ipMode == IPMode.IPv6 ? " and " + IPMode.IPv4 : "")} mode");
@@ -87,7 +90,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public event TcpConnection.ExceptionOccured ExceptionOccured;
 
 		protected void TriggerExceptionOccured(Exception exception, ITcpConnection connection) {
-			this.ExceptionOccured?.Invoke(exception, connection);
+if(			this.ExceptionOccured != null){			this.ExceptionOccured(exception, connection);}
 		}
 
 		protected virtual void Dispose(bool disposing) {

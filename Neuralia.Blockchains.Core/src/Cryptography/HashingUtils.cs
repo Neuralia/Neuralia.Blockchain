@@ -2,16 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq;
 using System.Security.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Zio;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
 	public static class HashingUtils {
@@ -62,13 +64,13 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		/// </summary>
 		/// <param name="sliceHashNodeList"></param>
 		/// <returns></returns>
-		public static long XxHashFile(string filename, IFileSystem fileSystem) {
+		public static long XxHashFile(string filename, FileSystemWrapper fileSystem) {
 			using(xxHasher64 XxHasher64 = new xxHasher64()) {
 
 				long hash = 0;
 				ByteArray buffer = ByteArray.Create(4096);
 
-				using(Stream fs = fileSystem.File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
+				using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 					using(BufferedStream bs = new BufferedStream(fs)) {
 						long bytesLeft = bs.Length;
 

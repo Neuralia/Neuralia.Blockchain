@@ -98,7 +98,7 @@ namespace Neuralia.Blockchains.Core.Types {
 			NodeAddressInfoList result = new NodeAddressInfoList();
 
 			// ensure randomness
-			var sourceNodes = nodes.Shuffle().ToList();
+			nodes = nodes.Shuffle().ToList();
 
 			// we may want a certain limited amount
 			var nodesFiltered = new List<NodeAddressInfo>();

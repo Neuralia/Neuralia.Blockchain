@@ -22,16 +22,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 		public override sealed void Rehydrate(IDehydratedBlockchainMessage dehydratedMessage, IMessageRehydrationFactory rehydrationFactory) {
 
-			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(dehydratedMessage.Contents)) {
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(dehydratedMessage.Contents);
 
-				var rehydratedVersion = rehydrator.Rehydrate<ComponentVersion<BlockchainMessageType>>();
-				this.Version.EnsureEqual(rehydratedVersion);
+			var rehydratedVersion = rehydrator.Rehydrate<ComponentVersion<BlockchainMessageType>>();
+			this.Version.EnsureEqual(rehydratedVersion);
 
-				this.Uuid = rehydrator.ReadGuid();
-				this.Timestamp.Rehydrate(rehydrator);
+			this.Uuid = rehydrator.ReadGuid();
+			this.Timestamp.Rehydrate(rehydrator);
 
-				this.RehydrateContents(rehydrator, rehydrationFactory);
-			}
+			this.RehydrateContents(rehydrator, rehydrationFactory);
+
 		}
 
 		public override sealed IDehydratedBlockchainMessage Dehydrate(BlockChannelUtils.BlockChannelTypes activeChannels) {

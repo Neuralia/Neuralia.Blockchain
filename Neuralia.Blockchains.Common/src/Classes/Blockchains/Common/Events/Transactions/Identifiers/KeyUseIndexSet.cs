@@ -89,7 +89,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public byte Ordinal { get; set; }
 
-		public bool IsSet => (this.KeyUseSequenceId.Value != 0) || ((this.KeyUseIndex.Value != 0) && (this.Ordinal != 0));
+		public bool IsSet => this.KeyUseSequenceId.Value != 0 || this.KeyUseIndex.Value != 0 && this.Ordinal != 0;
 
 		public virtual bool IsNull => !this.IsSet;
 
@@ -159,7 +159,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		protected bool Equals(KeyUseIndexSet other) {
-			return Equals(this.KeyUseSequenceId, other.KeyUseSequenceId) && Equals(this.KeyUseIndex, other.KeyUseIndex) && (this.Ordinal == other.Ordinal);
+			return Equals(this.KeyUseSequenceId, other.KeyUseSequenceId) && Equals(this.KeyUseIndex, other.KeyUseIndex) && this.Ordinal == other.Ordinal;
 		}
 
 		public override string ToString() {
@@ -197,7 +197,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				return false;
 			}
 
-			return (c1.KeyUseSequenceId.Value == c2.keyUseSequenceId) && (c1.KeyUseIndex.Value == c2.keyUseIndex) && (c1.Ordinal == c2.ordinal);
+			return c1.KeyUseSequenceId.Value == c2.keyUseSequenceId && c1.KeyUseIndex.Value == c2.keyUseIndex && c1.Ordinal == c2.ordinal;
 		}
 
 		public static bool operator !=(KeyUseIndexSet c1, (int keyUseSequenceId, int keyUseIndexx, byte ordinal) c2) {
@@ -209,7 +209,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				return false;
 			}
 
-			return (c1.KeyUseSequenceId.Value == c2.keyUseSequenceId) && (c1.KeyUseIndex.Value == c2.keyUseIndex) && (c1.Ordinal == c2.ordinal);
+			return c1.KeyUseSequenceId.Value == c2.keyUseSequenceId && c1.KeyUseIndex.Value == c2.keyUseIndex && c1.Ordinal == c2.ordinal;
 		}
 
 		public static bool operator !=(KeyUseIndexSet c1, (long keyUseSequenceId, long keyUseIndex, byte ordinal) c2) {
@@ -248,7 +248,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			}
 
 			// -1 key indices are basically ignored and are thus equal.
-			if((a.KeyUseIndex.Value == -1) || (b.KeyUseIndex.Value == -1)) {
+			if(a.KeyUseIndex.Value == -1 || b.KeyUseIndex.Value == -1) {
 				return false;
 			}
 
@@ -260,7 +260,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public static bool operator <=(KeyUseIndexSet a, KeyUseIndexSet b) {
-			return (a == b) || (a < b);
+			return a == b || a < b;
 		}
 
 		public static bool operator >(KeyUseIndexSet a, KeyUseIndexSet b) {
@@ -277,7 +277,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			}
 
 			// -1 key indices are basically ignored and are thus equal.
-			if((a.KeyUseIndex.Value == -1) || (b.KeyUseIndex.Value == -1)) {
+			if(a.KeyUseIndex.Value == -1 || b.KeyUseIndex.Value == -1) {
 				return false;
 			}
 
@@ -289,7 +289,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public static bool operator >=(KeyUseIndexSet a, KeyUseIndexSet b) {
-			return (a == b) || (a > b);
+			return a == b || a > b;
 		}
 	}
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
@@ -24,19 +25,21 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	
 	public interface IGossipMessageDispatcher {
-		void DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext);
+		Task DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext);
 	}
 
 	
 	public interface IChainNetworkingProvider : IGossipMessageDispatcher, IDisposableExtended, IChainProvider {
 
-		event Action<int> PeerConnectionsCountUpdated;
-		event Action IpAddressChanged;
+		event Func<int, LockContext, Task> PeerConnectionsCountUpdated;
+		event Func<LockContext, Task> IpAddressChanged;
 		
 		bool IsPaused { get; }
 		ulong MyClientIdNonce { get; }
@@ -71,7 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		BlockchainNetworkingService.MiningRegistrationParameters RegisterMiningRegistrationParameters();
 		void UnRegisterMiningRegistrationParameters();
 
-		void ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
+		Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
 
 		void ReceiveConnectionsManagerTask(ISimpleTask task);
 		void ReceiveConnectionsManagerTask(IColoredTask task);
@@ -81,10 +84,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void RemoveConnection(PeerConnection connection);
 		
-		void DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext);
-		void DispatchLocalTransactionAsync(TransactionId transactionId, CorrelationContext correlationContext);
+		Task DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, LockContext lockContext);
+		Task DispatchLocalTransactionAsync(TransactionId transactionId, CorrelationContext correlationContext, LockContext lockContext);
 
-		bool DispatchElectionMessages(List<IElectionCandidacyMessage> messages);
+		Task<bool> DispatchElectionMessages(List<IElectionCandidacyMessage> messages, LockContext lockContext);
 	}
 
 	public interface IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainNetworkingProvider
@@ -98,14 +101,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	/// <typeparam name="CHAIN_STATE_DAL"></typeparam>
 	/// <typeparam name="CHAIN_STATE_CONTEXT"></typeparam>
 	/// <typeparam name="CHAIN_STATE_ENTRY"></typeparam>
-	public abstract class ChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public abstract class ChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainProvider, IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 		protected readonly CENTRAL_COORDINATOR centralCoordinator;
 
 		public IBlockchainNetworkingService networkingService;
-		public event Action<int> PeerConnectionsCountUpdated;
-		public event Action IpAddressChanged;
+		public event Func<int, LockContext, Task> PeerConnectionsCountUpdated;
+		public event Func<LockContext, Task> IpAddressChanged;
 
 		public ChainNetworkingProvider(IBlockchainNetworkingService networkingService, CENTRAL_COORDINATOR centralCoordinator) {
 			this.networkingService = networkingService;
@@ -122,12 +125,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					this.centralCoordinator.PostSystemEvent(SystemEventGenerator.ConnectableChanged(connectable));
 				};
 
-				this.networkingService.ConnectionStore.PeerConnectionsCountUpdated += (c) => this.PeerConnectionsCountUpdated?.Invoke(c);
+				this.networkingService.ConnectionStore.PeerConnectionsCountUpdated += async (c) => {
+
+					if(this.PeerConnectionsCountUpdated != null) {
+						LockContext lockContext = null;
+						await PeerConnectionsCountUpdated(c, lockContext).ConfigureAwait(false);
+					}
+		
+				};
+
 			}
 		}
 
-		private void NetworkingServiceOnIpAddressChanged() {
-			this.IpAddressChanged?.Invoke();
+		private async Task NetworkingServiceOnIpAddressChanged(LockContext lockContext) {
+			if(this.IpAddressChanged != null) {
+				await this.IpAddressChanged(lockContext).ConfigureAwait(false);
+			}
 		}
 
 		protected BlockchainType ChainId => this.centralCoordinator.ChainId;
@@ -216,8 +229,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public BlockchainNetworkingService.MiningRegistrationParameters MiningRegistrationParameters => this.networkingService.ChainMiningRegistrationParameters.ContainsKey(this.ChainId) ? this.networkingService.ChainMiningRegistrationParameters[this.ChainId] : null;
 
-		public void ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
-			this.networkingService.ForwardValidGossipMessage(gossipMessageSet, connection);
+		public Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
+			return this.networkingService.ForwardValidGossipMessage(gossipMessageSet, connection);
 		}
 
 		public void ReceiveConnectionsManagerTask(ISimpleTask task) {
@@ -251,9 +264,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			/// <summary>
 		///     Publish an unpublished transaction on the network
 		/// </summary>
-		public void DispatchLocalTransactionAsync(TransactionId transactionId, CorrelationContext correlationContext) {
+		public async Task DispatchLocalTransactionAsync(TransactionId transactionId, CorrelationContext correlationContext, LockContext lockContext) {
 
-			IWalletTransactionCache results = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionId);
+			IWalletTransactionCache results = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionId, lockContext).ConfigureAwait(false);
 
 			if(results == null) {
 				throw new ApplicationException("Impossible to dispatch a transaction, failed to find cached entry.");
@@ -272,16 +285,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				throw;
 			}
 
-			this.DispatchLocalTransactionAsync(transactionEnvelope, correlationContext);
+			await this.DispatchLocalTransactionAsync(transactionEnvelope, correlationContext, lockContext).ConfigureAwait(false);
 		}
 
 		/// <summary>
 		///     Publish an unpublished transaction on the network
 		/// </summary>
 		/// <param name="transactionEnvelope"></param>
-		public void DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext) {
+		public async Task DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, LockContext lockContext) {
 
-			IWalletTransactionCache entry = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid);
+			IWalletTransactionCache entry = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid, lockContext).ConfigureAwait(false);
 
 			if(entry.Status != (byte) WalletTransactionCache.TransactionStatuses.New) {
 				throw new ApplicationException("Impossible to dispatch a transaction that has already been sent");
@@ -301,7 +314,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(useWeb) {
 				try {
-					this.PerformWebTransactionRegistration(transactionEnvelope, correlationContext);
+					await this.PerformWebTransactionRegistration(transactionEnvelope, correlationContext, lockContext).ConfigureAwait(false);
 					sent = true;
 				} catch(Exception ex) {
 					Log.Error(ex, "Failed to register transaction through web");
@@ -316,16 +329,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipTransactionMessageSet(transactionEnvelope);
 
-					Repeater.Repeat(() => {
-						this.SendGossipTransaction(gossipMessageSet);
+					await Repeater.RepeatAsync(async () => {
+						await  this.SendGossipTransaction(gossipMessageSet).ConfigureAwait(false);
 						sent = true;
-					});
+					}).ConfigureAwait(false);
 
 					if(!sent) {
 						throw new ApplicationException("Failed to send transaction");
 					}
 
-					this.ConfirmTransactionSent(transactionEnvelope, correlationContext, gossipMessageSet.BaseHeader.Hash);
+					await this.ConfirmTransactionSent(transactionEnvelope, correlationContext, gossipMessageSet.BaseHeader.Hash, lockContext).ConfigureAwait(false);
 
 				} else {
 					throw new ApplicationException("Failed to send transaction. Not enough peers available to send a gossip transactions.");
@@ -340,12 +353,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     try to register through the public webapi interface
 		/// </summary>
-		protected void PerformWebTransactionRegistration(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext) {
+		protected async Task PerformWebTransactionRegistration(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, LockContext lockContext) {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 			var chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			try {
-				Repeater.Repeat(() => {
+				await Repeater.RepeatAsync(async () => {
 
 					Dictionary<string, object> parameters = new Dictionary<string, object>();
 
@@ -356,57 +369,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					string url = transactionEnvelope.IsPresentation?chainConfiguration.WebPresentationRegistrationUrl:chainConfiguration.WebTransactionRegistrationUrl;
 					string action = transactionEnvelope.IsPresentation?"presentation/register":"transactions/register";
 
-					var result = restUtility.Put(url, action, parameters);
-					result.Wait();
+					var result = await restUtility.Put(url, action, parameters).ConfigureAwait(false);
+					
+					// ok, check the result
+					if(result.StatusCode == HttpStatusCode.OK) {
+						// ok, all good
 
-					if(!result.IsFaulted) {
-
-						// ok, check the result
-						if(result.Result.StatusCode == HttpStatusCode.OK) {
-							// ok, all good
-
-							return;
-						}
+						return;
 					}
-
+					
 					throw new ApplicationException("Failed to register transaction through web");
-				});
+				}).ConfigureAwait(false);
 
-				this.ConfirmTransactionSent(transactionEnvelope, correlationContext, 0);
+				await this.ConfirmTransactionSent(transactionEnvelope, correlationContext, 0, lockContext).ConfigureAwait(false);
 
 			} catch {
 				throw;
 			}
 		}
 
-		protected void ConfirmTransactionSent(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, long messageHash) {
+		protected Task ConfirmTransactionSent(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, long messageHash, LockContext lockContext) {
 			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionSent(transactionEnvelope.Contents.Uuid), correlationContext);
 
-			IndependentActionRunner.Run(() => {
-				Repeater.Repeat(() => {
-					this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid, WalletTransactionCache.TransactionStatuses.Dispatched, messageHash);
-				});
-
-			}, () => {
-
+			return IndependentActionRunner.RunAsync(lockContext, (lc) => {
+				return Repeater.RepeatAsync(() => centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid, WalletTransactionCache.TransactionStatuses.Dispatched, messageHash, lc));
+			}, (lc) => {
 				ITransaction transaction = transactionEnvelope.Contents.RehydratedTransaction;
 
-				Repeater.Repeat(() => {
-
-					this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionEnvelope.Contents.Uuid, WalletTransactionHistory.TransactionStatuses.Dispatched);
-				});
+				return Repeater.RepeatAsync(async () => centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transactionEnvelope.Contents.Uuid, WalletTransactionHistory.TransactionStatuses.Dispatched, lc));
 			});
 		}
 		
 		/// <summary>
 		///     try to register through the public webapi interface
 		/// </summary>
-		protected void PerformWebMessageRegistration(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
+		protected async Task PerformWebMessageRegistration(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 			var chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			try {
-				Repeater.Repeat(() => {
+				await Repeater.RepeatAsync(async () => {
 
 					Dictionary<string, object> parameters = new Dictionary<string, object>();
 
@@ -417,21 +419,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					string url = chainConfiguration.WebMessageRegistrationUrl;
 					string action = "messages/register";
 
-					var result = restUtility.Put(url, action, parameters);
-					result.Wait();
+					var result = await restUtility.Put(url, action, parameters).ConfigureAwait(false);
 
-					if(!result.IsFaulted) {
+					// ok, check the result
+					if(result.StatusCode == HttpStatusCode.OK) {
+						// ok, all good
 
-						// ok, check the result
-						if(result.Result.StatusCode == HttpStatusCode.OK) {
-							// ok, all good
-
-							return;
-						}
+						return;
 					}
-
+					
 					throw new ApplicationException("Failed to register message through web");
-				});
+				}).ConfigureAwait(false);
 
 			} catch {
 				throw;
@@ -458,7 +456,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return gossipMessageSet;
 		}
 
-		protected void SendGossipTransaction(IBlockchainGossipMessageSet gossipMessageSet) {
+		protected async Task SendGossipTransaction(IBlockchainGossipMessageSet gossipMessageSet) {
 			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.NoPeerConnections) {
@@ -473,7 +471,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 		
-		public void DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
+		public async Task DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
 
 			var chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
@@ -484,7 +482,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(useWeb) {
 				try {
 
-					this.PerformWebMessageRegistration(messageEnvelope, correlationContext);
+					await this.PerformWebMessageRegistration(messageEnvelope, correlationContext).ConfigureAwait(false);
 					sent = true;
 				} catch(Exception ex) {
 					Log.Error(ex, "Failed to register message through web");
@@ -499,11 +497,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipBlockchainMessageMessageSet(messageEnvelope);
 
-					Repeater.Repeat(() => {
+					await Repeater.RepeatAsync(async () => {
 						// ok, we are ready. lets send it out to the world!!  :)
-						this.SendGossipTransaction(gossipMessageSet);
+						await this.SendGossipTransaction(gossipMessageSet).ConfigureAwait(false);
 						sent = true;
-					});
+					}).ConfigureAwait(false);
 
 					if(!sent) {
 						throw new ApplicationException("Failed to send message");
@@ -519,24 +517,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 		
-		public bool DispatchElectionMessages(List<IElectionCandidacyMessage> messages) {
-			if((messages != null) && messages.Any()) {
+		public async Task<bool> DispatchElectionMessages(List<IElectionCandidacyMessage> messages, LockContext lockContext) {
+			if(messages != null && messages.Any()) {
 
 				// well, seems we have messages!  lets send them out. first, prepare the envelopes
 
-				var results = this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PrepareElectionMessageEnvelopes(messages);
+				var results = await this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PrepareElectionMessageEnvelopes(messages, lockContext).ConfigureAwait(false);
 
 				var sentMessages = new HashSet<Guid>();
 
-				Repeater.Repeat(() => {
+				await Repeater.RepeatAsync(async () => {
 					foreach(IMessageEnvelope envelope in results) {
 						// if we repeat, lets not send the successful ones more than once.
 						if(!sentMessages.Contains(envelope.ID)) {
-							this.DispatchNewMessage(envelope, new CorrelationContext());
+							await this.DispatchNewMessage(envelope, new CorrelationContext()).ConfigureAwait(false);
 							sentMessages.Add(envelope.ID);
 						}
 					}
-				});
+				}).ConfigureAwait(false);
 			}
 
 			return true;

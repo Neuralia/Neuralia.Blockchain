@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		public long AccountId { get; set; }
 		public long InceptionBlockId { get; set; }
 		public byte TrustLevel { get; set; }
-		public long? CorrelationId { get; set; }
+		public bool Correlated { get; set; }
 		public ImmutableList<IAccountAttribute> AppliedAttributesBase => this.AppliedAttributes.Cast<IAccountAttribute>().ToImmutableList();
 		public List<ACCOUNT_ATTRIBUTE> AppliedAttributes { get; } = new List<ACCOUNT_ATTRIBUTE>();
 
@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 			TypedCollectionExposureUtil<IAccountAttribute>.CreateNewCollectionEntry(this.AppliedAttributes, out result);
 		}
 
-		public void AddCollectionEntry(IAccountAttribute entry) {
+		public virtual void AddCollectionEntry(IAccountAttribute entry) {
 			TypedCollectionExposureUtil<IAccountAttribute>.AddCollectionEntry(entry, this.AppliedAttributes);
 		}
 

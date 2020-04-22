@@ -72,7 +72,10 @@ namespace Neuralia.Blockchains.Core.Tools {
 				try {
 					if(peerConnection.IsDisposed) {
 						peerConnection.connection.Dispose();
-						this.invalidConnectionCallback?.Invoke(peerConnection);
+
+						if(this.invalidConnectionCallback != null) {
+							this.invalidConnectionCallback(peerConnection);
+						}
 						
 						return false;
 					}
@@ -123,7 +126,10 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			if(peerConnection.IsDisposed) {
 				peerConnection.connection.Dispose();
-				this.invalidConnectionCallback?.Invoke(peerConnection);
+
+				if(this.invalidConnectionCallback != null) {
+					this.invalidConnectionCallback(peerConnection);
+				}
 				
 				return false;
 			}

@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Core.Services {
 	public interface IHttpService {
@@ -95,8 +96,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				using(HttpClient httpClient = new HttpClient(httpClientHandler, true)) {
 
-					using(HttpResponseMessage response = httpClient.GetAsync(requestUri).Result) {
-						using(Stream stream = response.Content.ReadAsStreamAsync().Result) {
+					using(HttpResponseMessage response = httpClient.GetAsync(requestUri).WaitAndUnwrapException()) {
+						using(Stream stream = response.Content.ReadAsStreamAsync().WaitAndUnwrapException()) {
 							stream.CopyTo(outputStream);
 							stream.Flush();
 						}

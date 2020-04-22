@@ -243,21 +243,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 				// master transactions have their own independent rehydrator array which contains only the header (body)
 				using SafeArrayHandle keyedBytes = rehydratorHeader.ReadNonNullableArray();
 
-				using(IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes)) {
+				using IDataRehydrator keyedRehydrator = DataSerializationFactory.CreateRehydrator(keyedBytes);
 
-					DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
-					dehydratedTransaction.Rehydrate(keyedRehydrator);
+				DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
+				dehydratedTransaction.Rehydrate(keyedRehydrator);
 
-					IMasterTransaction masterTransaction = rehydrationFactory.CreateMasterTransaction(dehydratedTransaction);
-					masterTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
+				IMasterTransaction masterTransaction = rehydrationFactory.CreateMasterTransaction(dehydratedTransaction);
+				masterTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
 
-					int nextOffset = rehydratorHeader.Offset;
+				int nextOffset = rehydratorHeader.Offset;
 
-					// and give it its address
-					this.MasterOffsets?.Add((offset, nextOffset - offset));
+				// and give it its address
+				this.MasterOffsets?.Add((offset, nextOffset - offset));
 
-					this.ConfirmedMasterTransactions.Add(masterTransaction);
-				}
+				this.ConfirmedMasterTransactions.Add(masterTransaction);
+
 			}
 
 			this.Rehydrate(channelRehydrators, timestampBaseline, rehydrationFactory);

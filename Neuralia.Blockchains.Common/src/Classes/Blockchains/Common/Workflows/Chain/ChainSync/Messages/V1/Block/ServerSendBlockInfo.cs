@@ -4,6 +4,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializatio
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Tags;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
@@ -33,7 +34,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Id.Dehydrate(dehydrator);
 
 			this.ChainBlockHeight.Dehydrate(dehydrator);
-			this.PublicBlockHeight.Dehydrate(dehydrator);
+
+			AdaptiveLong1_9 delta = new AdaptiveLong1_9();
+			delta.Value = this.PublicBlockHeight - this.ChainBlockHeight;
+			delta.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.HasBlockDetails);
 
@@ -72,7 +76,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Id.Rehydrate(rehydrator);
 
 			this.ChainBlockHeight.Rehydrate(rehydrator);
-			this.PublicBlockHeight.Rehydrate(rehydrator);
+			
+			AdaptiveLong1_9 delta = new AdaptiveLong1_9();
+			delta.Rehydrate(rehydrator);
+			this.PublicBlockHeight = this.ChainBlockHeight + delta.Value;
 
 			this.HasBlockDetails = rehydrator.ReadBool();
 

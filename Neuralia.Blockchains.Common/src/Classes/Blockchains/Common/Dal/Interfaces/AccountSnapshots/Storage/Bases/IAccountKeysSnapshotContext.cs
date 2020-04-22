@@ -8,7 +8,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 	public interface IAccountKeysSnapshotContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT> : IAccountKeysSnapshotContext
 		where STANDARD_ACCOUNT_KEYS_SNAPSHOT : class, IAccountKeysSnapshotEntry, new() {
 
-		DbSet<STANDARD_ACCOUNT_KEYS_SNAPSHOT> StandardAccountkeysSnapshots { get; set; }
+		DbSet<STANDARD_ACCOUNT_KEYS_SNAPSHOT> StandardAccountKeysSnapshots { get; set; }
 	}
 
 }

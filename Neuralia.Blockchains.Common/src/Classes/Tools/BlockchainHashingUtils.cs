@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Genesis;
@@ -76,16 +77,18 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		
 		public static SafeArrayHandle GenerateRejectedTransactionHash(RejectedTransaction transaction) {
 
-			using(HashNodeList structures = transaction.GetStructuresArray()) {
-				return HashingUtils.Hash3(structures);
-			}
+			using HashNodeList structures = transaction.GetStructuresArray();
+
+			return HashingUtils.Hash3(structures);
+
 		}
 		
 		public static SafeArrayHandle GenerateRejectedTransactionHash(RejectedTransaction transaction, Sha3SakuraTree hasher) {
 
-			using(HashNodeList structures = transaction.GetStructuresArray()) {
-				return HashingUtils.Hash3(structures, hasher);
-			}
+			using HashNodeList structures = transaction.GetStructuresArray();
+
+			return HashingUtils.Hash3(structures, hasher);
+
 		}
 		
 		public static HashNodeList GenerateRejectedTransactionSetNodeList(IEnumerable<RejectedTransaction> rejectedTransactions){
@@ -124,11 +127,12 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		
 		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope, ITransaction transaction, AccountId multiSizgAccountId) {
 
-			using(HashNodeList structures = transaction.GetStructuresArrayMultiSig(multiSizgAccountId)) {
-				structures.Add(envelope.GetTransactionHashingStructuresArray());
+			using HashNodeList structures = transaction.GetStructuresArrayMultiSig(multiSizgAccountId);
 
-				return HashingUtils.Hash3(structures);
-			}
+			structures.Add(envelope.GetTransactionHashingStructuresArray());
+
+			return HashingUtils.Hash3(structures);
+
 		}
 
 		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope) {
@@ -136,42 +140,45 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		}
 		
 		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope, ITransaction transaction) {
-			using(HashNodeList structures = transaction.GetStructuresArray()) {
-				structures.Add(envelope.GetTransactionHashingStructuresArray());
+			using HashNodeList structures = transaction.GetStructuresArray();
 
-				return HashingUtils.Hash3(structures);
-			}
+			structures.Add(envelope.GetTransactionHashingStructuresArray());
+
+			return HashingUtils.Hash3(structures);
+
 		}
 		
 		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope, Sha3SakuraTree hasher) {
-			using(HashNodeList structures = envelope.Contents.RehydratedTransaction.GetStructuresArray()) {
-				structures.Add(envelope.GetTransactionHashingStructuresArray());
+			using HashNodeList structures = envelope.Contents.RehydratedTransaction.GetStructuresArray();
 
-				return HashingUtils.Hash3(structures, hasher);
-			}
+			structures.Add(envelope.GetTransactionHashingStructuresArray());
+
+			return HashingUtils.Hash3(structures, hasher);
+
 		}
 		
 		public static SafeArrayHandle GenerateBlockTransactionHash( ITransaction transaction) {
 
-			using(HashNodeList structures = transaction.GetCompleteStructuresArray()) {
+			using HashNodeList structures = transaction.GetCompleteStructuresArray();
 
-				return HashingUtils.Hash3(structures);
-			}
+			return HashingUtils.Hash3(structures);
+
 		}
 		
 		public static SafeArrayHandle GenerateBlockTransactionHash(ITransaction transaction, Sha3SakuraTree hasher) {
-			using(HashNodeList structures = transaction.GetCompleteStructuresArray()) {
+			using HashNodeList structures = transaction.GetCompleteStructuresArray();
 
-				return HashingUtils.Hash3(structures, hasher);
-			}
+			return HashingUtils.Hash3(structures, hasher);
+
 		}
 		
 		public static SafeArrayHandle GenerateBlockHash(IBlock block, SafeArrayHandle previousBlockHash) {
 
 			if(block.BlockHashingMode == Enums.BlockHashingModes.Mode1) {
-				using(HashNodeList structures = block.GetStructuresArray(previousBlockHash)) {
-					return HashingUtils.Hash3(structures);
-				}
+				using HashNodeList structures = block.GetStructuresArray(previousBlockHash);
+
+				return HashingUtils.Hash3(structures);
+
 			}
 			
 			throw new ApplicationException("Unsopported block hashing mode");
@@ -180,9 +187,10 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		public static SafeArrayHandle GenerateGenesisBlockHash(IGenesisBlock genesisBlock) {
 
 			if(genesisBlock.BlockHashingMode == Enums.BlockHashingModes.Mode1) {
-				using(HashNodeList structures = genesisBlock.GetStructuresArray(GenesisBlockHash)) {
-					return HashingUtils.Hash3(structures);
-				}
+				using HashNodeList structures = genesisBlock.GetStructuresArray(GenesisBlockHash);
+
+				return HashingUtils.Hash3(structures);
+
 			}
 			
 			throw new ApplicationException("Unsopported block hashing mode");
@@ -211,12 +219,13 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 					try {
 						hasher = s.HasherPool.GetObject();
 
-						using(HashNodeList structures = new HashNodeList()) {
-							structures.Add(entry.Key);
-							structures.Add(entry.Value);
+						using HashNodeList structures = new HashNodeList();
 
-							return HashingUtils.Hash3(structures, hasher);
-						}
+						structures.Add(entry.Key);
+						structures.Add(entry.Value);
+
+						return HashingUtils.Hash3(structures, hasher);
+
 					} finally {
 						if(hasher != null) {
 							s.HasherPool.PutObject(hasher);
@@ -226,5 +235,19 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			}
 			return results;
 		}
+
+		
+		public static int BlockxxHash(IBlock block) {
+			return BlockxxHash(block.Hash);
+		}
+		
+		public static int BlockxxHash(BlockElectionDistillate blockDistillate) {
+			return BlockxxHash(blockDistillate.blockHash);
+		}
+		
+		public static int BlockxxHash(SafeArrayHandle blockHash) {
+			return HashingUtils.XxHash32(blockHash);
+		}
+		
 	}
 }

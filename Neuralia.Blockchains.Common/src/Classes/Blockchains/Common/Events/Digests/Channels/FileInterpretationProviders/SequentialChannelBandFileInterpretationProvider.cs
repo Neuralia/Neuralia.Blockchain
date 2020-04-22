@@ -1,7 +1,9 @@
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders {
 
@@ -16,13 +18,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public class SequentialChannelBandFileInterpretationProvider<NAMING_PROVIDER> : DigestChannelBandFileInterpretationProvider<SafeArrayHandle, NAMING_PROVIDER>, ISequentialChannelBandFileInterpretationProvider<NAMING_PROVIDER>
 		where NAMING_PROVIDER : DigestChannelBandFileNamingProvider {
 
-		public SequentialChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, IFileSystem fileSystem) : base(namingProvider, fileSystem) {
+		public SequentialChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, FileSystemWrapper fileSystem) : base(namingProvider, fileSystem) {
 
 		}
 
 		public SafeArrayHandle QueryCard(uint offset, uint length) {
 
-			if(offset > this.fileSystem.FileInfo.FromFileName(this.ActiveFullFilename).Length) {
+			if(offset > this.fileSystem.GetFileLength(this.ActiveFullFilename)) {
 				return null;
 			}
 

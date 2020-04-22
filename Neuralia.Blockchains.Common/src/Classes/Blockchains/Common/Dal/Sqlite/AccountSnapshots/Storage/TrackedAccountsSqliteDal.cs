@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
@@ -58,47 +59,47 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			throw new NotImplementedException();
 		}
 
-		public List<AccountId> GetTrackedAccounts(List<AccountId> accountIds) {
+		public async Task<List<AccountId>> GetTrackedAccounts(List<AccountId> accountIds) {
 			if(!accountIds.Any()) {
 				return new List<AccountId>();
 			}
 			
 			var longAccountIds = accountIds.Select(a => a.ToLongRepresentation()).ToList();
 
-			return this.QueryAll(db => {
+			return await this.QueryAllAsync(db => {
 
-				return db.TrackedAccounts.Where(a => longAccountIds.Contains(a.AccountId)).Select(a => a.AccountId.ToAccountId()).ToList();
-			}, accountIds.Select(a => a.SequenceId).ToList());
+				return db.TrackedAccounts.Where(a => longAccountIds.Contains(a.AccountId)).Select(a => a.AccountId.ToAccountId()).ToListAsync();
+			}, accountIds.Select(a => a.SequenceId).ToList()).ConfigureAwait(false);
 		}
 
-		public bool AnyAccountsTracked() {
+		public Task<bool> AnyAccountsTracked() {
 
-			return this.PerformOperation(db => db.TrackedAccounts.Any());
+			return this.PerformOperationAsync(db => db.TrackedAccounts.AnyAsync());
 		}
 
-		public bool AnyAccountsTracked(List<AccountId> accountIds) {
+		public async Task<bool> AnyAccountsTracked(List<AccountId> accountIds) {
 			if(!accountIds.Any()) {
 				return false;
 			}
 
 			var longAccountIds = accountIds.Select(a => a.ToLongRepresentation()).ToList();
 
-			return this.AnyAll(db => {
+			return await this.AnyAllAsync(db => {
 
-				return db.TrackedAccounts.Any(a => longAccountIds.Contains(a.AccountId));
-			}, accountIds.Select(a => a.SequenceId).ToList());
+				return db.TrackedAccounts.AnyAsync(a => longAccountIds.Contains(a.AccountId));
+			}, accountIds.Select(a => a.SequenceId).ToList()).ConfigureAwait(false);
 
 		}
 
-		public bool IsAccountTracked(AccountId accountId) {
+		public async Task<bool> IsAccountTracked(AccountId accountId) {
 			if(accountId == null) {
 				return false;
 			}
 
-			return this.PerformOperation(db => {
+			return await this.PerformOperationAsync(db => {
 
-				return db.TrackedAccounts.Any(a => a.AccountId == accountId.ToLongRepresentation());
-			}, this.GetKeyGroup(accountId.SequenceId));
+				return db.TrackedAccounts.AnyAsync(a => a.AccountId == accountId.ToLongRepresentation());
+			}, this.GetKeyGroup(accountId.SequenceId)).ConfigureAwait(false);
 		}
 
 		// public void PerformOperation(Action<TRACKED_ACCOUNT_CONTEXT> process, AccountId accountId) {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
@@ -26,26 +27,28 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			this.folderPath = folderPath;
 		}
 
-		public (DBCONTEXT db, IDbContextTransaction transaction) BeginHoldingTransaction() {
+		public async Task<(DBCONTEXT db, IDbContextTransaction transaction)> BeginHoldingTransaction() {
 
 			DBCONTEXT db = this.CreateContext();
 
-			IDbContextTransaction transaction = db.Database.BeginTransaction();
+			IDbContextTransaction transaction = await db.Database.BeginTransactionAsync().ConfigureAwait(false);
 
 			return (db, transaction);
 		}
 		
-		public virtual void Clear() {
-
-			string path = "";
-			using(DBCONTEXT ctx = this.CreateRawContext()) {
+		public virtual Task Clear() {
+			
+			return this.PerformInnerContextOperationAsync(ctx => {
+				
 				ctx.FolderPath = this.folderPath;
-				path = this.GetDbPath(ctx);
-			}
+				string path = this.GetDbPath(ctx);
 
-			if(File.Exists(path)) {
-				File.Delete(path);
-			}
+				if(File.Exists(path)) {
+					File.Delete(path);
+				}
+
+				return Task.CompletedTask;
+			});
 		}
 
 		protected virtual string GetDbPath(DBCONTEXT ctx) {
@@ -91,14 +94,13 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		/// in this case its easy, to clear the database, we delete the file and recreate it
 		/// </summary>
 		protected override void ClearDb() {
-			using(DBCONTEXT ctx = this.CreateContext()) {
-
+			this.PerformInnerContextOperation(ctx => {
 				string dbfile = ctx.GetDbPath();
 
 				if(File.Exists(dbfile)) {
 					File.Delete(dbfile);
 				}
-			}
+			});
 		}
 	}
 }

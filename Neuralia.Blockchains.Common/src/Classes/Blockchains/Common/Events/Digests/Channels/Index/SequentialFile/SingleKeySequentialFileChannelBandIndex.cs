@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile {
 
@@ -28,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected ISequentialChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>> L1IndexProvider;
 
-		public SingleKeySequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
+		public SingleKeySequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
 			this.groupSize = groupSize;
 		}
 
@@ -112,7 +114,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			uint index = (uint) (accountId / this.groupSize);
 
-			uint adjustedAccountId = (uint) (accountId - (index * this.groupSize));
+			uint adjustedAccountId = (uint) (accountId - index * this.groupSize);
 
 			// index is 1 based
 			return (adjustedAccountId, index + 1);
@@ -159,7 +161,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public class SingleKeySequentialFileChannelBandIndex<CHANEL_BANDS> : SingleKeySequentialFileChannelBandIndex<CHANEL_BANDS, long>
 		where CHANEL_BANDS : struct, Enum, IConvertible {
 
-		public SingleKeySequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
+		public SingleKeySequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
 		}
 
 		public override DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS> QueryCard(long keySet) {

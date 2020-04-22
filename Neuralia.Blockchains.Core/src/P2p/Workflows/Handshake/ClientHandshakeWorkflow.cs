@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Network;
@@ -13,6 +14,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Cryptography;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
@@ -39,9 +41,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 		public NetworkEndPoint Endpoint { get; }
 
-		protected override void PerformWork() {
+		protected override async Task PerformWork(LockContext lockContext) {
 			try {
-				if(!this.PerformConnection()) {
+				if(!await this.PerformConnection().ConfigureAwait(false)) {
 					this.CloseConnection();
 				}
 			} catch {
@@ -57,7 +59,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.serverConnection = null;
 		}
 
-		private bool PerformConnection() {
+		private async Task<bool> PerformConnection() {
 			this.CheckShouldCancel();
 
 			var handshakeTrigger = this.MessageFactory.CreateHandshakeWorkflowTriggerSet(this.CorrelationId);
@@ -173,7 +175,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				if(this.ProcessServerHandshakeConfirm(handshakeTrigger, serverHandshake.Message, serverResponse.Message, this.serverConnection)) {
 					// it is a confirmed connection, we are now friends
 
-					this.AddValidConnection(serverResponse.Message, this.serverConnection);
+					await this.AddValidConnection(serverResponse.Message, this.serverConnection).ConfigureAwait(false);
 
 					this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
 
@@ -206,7 +208,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return GlobalRandom.GetNextUInt();
 		}
 
-		protected virtual void AddValidConnection(ServerHandshakeConfirm<R> serverHandshakeConfirm, PeerConnection peerConnectionn) {
+		protected virtual Task AddValidConnection(ServerHandshakeConfirm<R> serverHandshakeConfirm, PeerConnection peerConnectionn) {
 			// take the peer nodes
 			peerConnectionn.SetPeerNodes(serverHandshakeConfirm.nodes);
 
@@ -215,6 +217,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.networkingService.ConnectionStore.FullyConfirmConnection(peerConnectionn);
 
 			Log.Verbose($"handshake with {peerConnectionn.ScoppedAdjustedIp} is now confirmed");
+
+			return Task.CompletedTask;
 		}
 
 		protected virtual TargettedMessageSet<ClientHandshakeConfirm<R>, R> ProcessServerHandshake(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, ServerHandshake<R> serverHandshake, PeerConnection peerConnectionn) {
@@ -292,7 +296,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				
 				// lets send the server our list of nodeAddressInfo IPs
 
-				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(serverHandshake.nodeInfo, serverHandshake.nodeInfo.GetSupportedBlockchains(), NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), 20));
+				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(serverHandshake.nodeInfo, serverHandshake.nodeInfo.GetSupportedBlockchains(), NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), false, 20));
 			} else {
 
 				if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.SkipHubCheck && !this.networkingService.ConnectionStore.IsNeuraliumHub(peerConnectionn)) {
@@ -304,7 +308,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(IPUtils.GuidToIP(serverHandshake.PerceivedIP), ConnectionStore.PublicIpSource.Hub);
 
 				// lets send the server our list of nodeAddressInfo IPs
-				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(NodeInfo.Hub, this.networkingService.SupportsChains, NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), 20));
+				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(NodeInfo.Hub, this.networkingService.SupportedChains, NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), false, 20));
 			}
 
 			// generate a random nonce and send it to the server

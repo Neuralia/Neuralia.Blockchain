@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
@@ -25,10 +26,10 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 		/// <summary>
 		///     remove all messages that are out of age from the database
 		/// </summary>
-		public void CleanMessageCache() {
+		public async Task CleanMessageCache() {
 
 			try {
-				this.PerformOperation(db => {
+				await this.PerformOperationAsync(async db => {
 					
 					foreach(MessageEntrySqlite staleMessage in db.MessageEntries.Include(me => me.Peers).Where(me => (me.Received.AddTicks(ExternalMessageLifetime.Ticks) < this.timeService.CurrentRealTime) && (me.Local == false))) {
 						foreach(MessagePeerSqlite peerEntry in staleMessage.Peers.ToArray()) {
@@ -46,19 +47,19 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 						db.MessageEntries.Remove(staleMessage);
 					}
 
-					db.SaveChanges();
-				});
+					await db.SaveChangesAsync().ConfigureAwait(false);
+				}).ConfigureAwait(false);
 			} catch(Exception ex) {
 				Log.Error(ex, "failed to clean message cache");
 			}
 		}
 
-		public void AddMessageToCache(long xxhash, bool isvalid, bool local) {
-			this.PerformOperation(db => {
+		public Task AddMessageToCache(long xxhash, bool isvalid, bool local) {
+			return this.PerformOperationAsync(async db => {
 				// 
 
 				// if we have the message in our cache, then we reject it, we got it already
-				MessageEntrySqlite messageEntrySqlite = db.MessageEntries.SingleOrDefault(me => me.Hash == xxhash);
+				MessageEntrySqlite messageEntrySqlite = await db.MessageEntries.SingleOrDefaultAsync(me => me.Hash == xxhash).ConfigureAwait(false);
 
 				if(messageEntrySqlite != null) {
 					throw new ApplicationException("A new gossip message we are sending is already in our cache. this should never happen");
@@ -73,19 +74,19 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 
 				db.MessageEntries.Add(messageEntrySqlite);
 
-				db.SaveChanges();
+				await db.SaveChangesAsync().ConfigureAwait(false);
 			});
 		}
 
-		public void ForwardValidGossipMessage(long xxhash, List<string> activeConnectionIds, Func<List<string>, List<string>> forwardMessageCallback) {
-			this.PerformOperation(db => {
+		public Task ForwardValidGossipMessage(long xxhash, List<string> activeConnectionIds, Func<List<string>, List<string>> forwardMessageCallback) {
+			return this.PerformOperationAsync(async db => {
 				//
 
 				var peerNotReceived = new List<string>();
 
 				// if we have the message in our cache, then we reject it, we got it already
 
-				MessageEntrySqlite messageEntrySqlite = db.MessageEntries.Include(me => me.Peers).SingleOrDefault(me => me.Hash == xxhash);
+				MessageEntrySqlite messageEntrySqlite = await db.MessageEntries.Include(me => me.Peers).SingleOrDefaultAsync(me => me.Hash == xxhash).ConfigureAwait(false);
 
 				if(messageEntrySqlite == null) {
 					throw new ApplicationException("Valid message being forwarded was not in the message cache.");
@@ -110,7 +111,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 					foreach(string peerKey in sentKeys.Distinct()) // thats it, now we add the outbound message to this peer
 					{
 
-						PeerSqlite peerSqlite = db.Peers.SingleOrDefault(p => p.PeerKey == peerKey);
+						PeerSqlite peerSqlite = await db.Peers.SingleOrDefaultAsync(p => p.PeerKey == peerKey).ConfigureAwait(false);
 
 						if(peerSqlite == null) {
 							// add the peer
@@ -135,23 +136,23 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 						}
 					}
 
-					db.SaveChanges();
+					await db.SaveChangesAsync().ConfigureAwait(false);
 				}
 
 			});
 		}
 
-		public (bool messageInCache, bool messageValid) CheckRecordMessageInCache<R>(long xxhash, MessagingManager<R>.MessageReceivedTask task, bool returnMessageToSender)
+		public async Task<(bool messageInCache, bool messageValid)> CheckRecordMessageInCache<R>(long xxhash, MessagingManager<R>.MessageReceivedTask task, bool returnMessageToSender)
 			where R : IRehydrationFactory {
 
 			bool messageInCache = false;
 			bool messageValid = false;
 
-			this.PerformOperation(db => {
+			await this.PerformOperationAsync(async db => {
 				//
 
 				// first we add the peer in case it was not already
-				PeerSqlite peerSqlite = db.Peers.Include(me => me.Messages).SingleOrDefault(p => p.PeerKey == task.Connection.ScoppedIp);
+				PeerSqlite peerSqlite = await db.Peers.Include(me => me.Messages).SingleOrDefaultAsync(p => p.PeerKey == task.Connection.ScoppedIp).ConfigureAwait(false);
 
 				if(peerSqlite == null) {
 					// add the peer
@@ -162,7 +163,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 				}
 
 				// if we have the message in our cache, then we reject it, we got it already
-				MessageEntrySqlite messageEntrySqlite = db.MessageEntries.Include(me => me.Peers).SingleOrDefault(me => me.Hash == xxhash);
+				MessageEntrySqlite messageEntrySqlite = await db.MessageEntries.Include(me => me.Peers).SingleOrDefaultAsync(me => me.Hash == xxhash).ConfigureAwait(false);
 
 				if(messageEntrySqlite == null) {
 					// ok, we had not received it, so its new. lets record it as received. we will add later if it was valid or invalid.
@@ -210,8 +211,8 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 
 				}
 
-				db.SaveChanges();
-			});
+				await db.SaveChangesAsync().ConfigureAwait(false);
+			}).ConfigureAwait(false);
 
 			return (messageInCache, messageValid);
 		}
@@ -221,9 +222,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 		/// </summary>
 		/// <param name="hashes"></param>
 		/// <returns></returns>
-		public List<bool> CheckMessagesReceived(List<long> xxHashes, PeerConnection peerConnectionn) {
+		public Task<List<bool>> CheckMessagesReceived(List<long> xxHashes, PeerConnection peerConnectionn) {
 
-			return this.PerformOperation(db => {
+			return this.PerformOperationAsync(async db => {
 
 				var replies = new List<bool>();
 
@@ -231,7 +232,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 					bool reply = true; // true, we want the message
 
 					// if we have the message in our cache, then we reject it, we got it already
-					MessageEntrySqlite messageEntrySqlite = db.MessageEntries.Include(me => me.Peers).SingleOrDefault(me => me.Hash == hash);
+					MessageEntrySqlite messageEntrySqlite = await db.MessageEntries.Include(me => me.Peers).SingleOrDefaultAsync(me => me.Hash == hash).ConfigureAwait(false);
 
 					if(messageEntrySqlite != null) {
 
@@ -240,7 +241,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 						// we record that this peer tried to send us a copy
 						messageEntrySqlite.Echos++;
 
-						PeerSqlite peerSqlite = db.Peers.Include(me => me.Messages).SingleOrDefault(p => p.PeerKey == peerConnectionn.ScoppedIp);
+						PeerSqlite peerSqlite = await db.Peers.Include(me => me.Messages).SingleOrDefaultAsync(p => p.PeerKey == peerConnectionn.ScoppedIp).ConfigureAwait(false);
 
 						if(peerSqlite == null) {
 							// add the peer
@@ -267,7 +268,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 
 					replies.Add(reply);
 
-					db.SaveChanges();
+					await db.SaveChangesAsync().ConfigureAwait(false);
 				}
 
 				return replies;
@@ -281,16 +282,16 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 		/// <param name="messagexxHash"></param>
 		/// <param name="validated"></param>
 		/// <returns></returns>
-		public bool CheckMessageInCache(long messagexxHash, bool validated) {
-			return this.PerformOperation(db => {
+		public Task<bool> CheckMessageInCache(long messagexxHash, bool validated) {
+			return this.PerformOperationAsync(async db => {
 
 				// if we have the message in our cache, then we reject it, we got it already
-				MessageEntrySqlite messageEntrySqlite = db.MessageEntries.SingleOrDefault(me => me.Hash == messagexxHash);
+				MessageEntrySqlite messageEntrySqlite = await db.MessageEntries.SingleOrDefaultAsync(me => me.Hash == messagexxHash).ConfigureAwait(false);
 
 				if(messageEntrySqlite != null) {
 					// update its validation status with what we have found
 					messageEntrySqlite.Valid = validated;
-					db.SaveChanges();
+					await db.SaveChangesAsync().ConfigureAwait(false);
 
 					return true;
 				}
@@ -299,17 +300,17 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 			});
 		}
 
-		public bool GetUnvalidatedBlockGossipMessageCached(long blockId) {
-			return this.PerformOperation(db => {
+		public Task<bool> GetUnvalidatedBlockGossipMessageCached(long blockId) {
+			return this.PerformOperationAsync(db => {
 				// if we have the message in our cache, then we reject it, we got it already
-				return db.UnvalidatedBlockGossipMessageCacheEntries.Any(e => e.BlockId == blockId);
+				return db.UnvalidatedBlockGossipMessageCacheEntries.AnyAsync(e => e.BlockId == blockId);
 			});
 		}
 
-		public bool CacheUnvalidatedBlockGossipMessage(long blockId, long xxHash) {
-			return this.PerformOperation(db => {
+		public Task<bool> CacheUnvalidatedBlockGossipMessage(long blockId, long xxHash) {
+			return this.PerformOperationAsync(async db => {
 				// if we have the message in our cache, then we reject it, we got it already
-				UnvalidatedBlockGossipMessageCacheEntrySqlite cachedEntry = db.UnvalidatedBlockGossipMessageCacheEntries.SingleOrDefault(e => (e.BlockId == blockId) && (e.Hash == xxHash));
+				UnvalidatedBlockGossipMessageCacheEntrySqlite cachedEntry = await db.UnvalidatedBlockGossipMessageCacheEntries.SingleOrDefaultAsync(e => (e.BlockId == blockId) && (e.Hash == xxHash)).ConfigureAwait(false);
 
 				if(cachedEntry == null) {
 
@@ -330,11 +331,11 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 			});
 		}
 
-		public List<long> GetCachedUnvalidatedBlockGossipMessage(long blockId) {
+		public Task<List<long>> GetCachedUnvalidatedBlockGossipMessage(long blockId) {
 
-			return this.PerformOperation(db => {
+			return this.PerformOperationAsync(db => {
 				// lets get all the hashes for this block id
-				return db.UnvalidatedBlockGossipMessageCacheEntries.Where(e => e.BlockId == blockId).Select(e => e.Hash).ToList();
+				return db.UnvalidatedBlockGossipMessageCacheEntries.Where(e => e.BlockId == blockId).Select(e => e.Hash).ToListAsync();
 			});
 		}
 
@@ -343,14 +344,14 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 		/// </summary>
 		/// <param name="blockIds"></param>
 		/// <returns></returns>
-		public List<(long blockId, long xxHash)> RemoveCachedUnvalidatedBlockGossipMessages(long blockId) {
+		public Task<List<(long blockId, long xxHash)>> RemoveCachedUnvalidatedBlockGossipMessages(long blockId) {
 
-			return this.PerformOperation(db => {
+			return this.PerformOperationAsync(async db => {
 				// lets get all the hashes for this block id
-				var deletedEntries = db.UnvalidatedBlockGossipMessageCacheEntries.Where(e => e.BlockId <= blockId).ToList();
+				var deletedEntries = await db.UnvalidatedBlockGossipMessageCacheEntries.Where(e => e.BlockId <= blockId).ToListAsync().ConfigureAwait(false);
 				db.UnvalidatedBlockGossipMessageCacheEntries.RemoveRange(deletedEntries);
 
-				db.SaveChanges();
+				await db.SaveChangesAsync().ConfigureAwait(false);
 
 				// return the deletd entries
 				return deletedEntries.ToList().Select(e => (e.BlockId, e.Hash)).ToList();

@@ -163,8 +163,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// </summary>
 		protected override TaskCreationOptions TaskCreationOptions => TaskCreationOptions.None;
 
-		protected override void TriggerError(Exception ex) {
-			base.TriggerError(ex);
+		protected override async Task TriggerError(Exception ex) {
+			await base.TriggerError(ex).ConfigureAwait(false);
 
 			this.LogWorkflowException(ex);
 		}

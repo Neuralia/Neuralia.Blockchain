@@ -14,6 +14,7 @@ using Neuralia.Blockchains.Core.Serialization.OffsetCalculators;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.BouncyCastle.extra;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1 {
 	public interface IFinalElectionResults : IElectionResult {
@@ -22,19 +23,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		Dictionary<AccountId, IElectedResults> ElectedCandidates { get; }
 		IElectedResults CreateElectedResult();
 		IDelegateResults CreateDelegateResult();
+
+		Dictionary<AccountId, IElectedResults> GetTierElectedCandidates(Enums.MiningTiers miningTier);
 		
-		Dictionary<AccountId, IElectedResults> FirstTierElectedCandidates { get; }
-		Dictionary<AccountId, IElectedResults> SecondTierElectedCandidates { get; }
-		Dictionary<AccountId, IElectedResults> ThirdTierElectedCandidates { get; }
 	}
 
 	public abstract class FinalElectionResults : ElectionResult, IFinalElectionResults {
 		public Dictionary<AccountId, IDelegateResults> DelegateAccounts { get; } = new Dictionary<AccountId, IDelegateResults>();
 		public Dictionary<AccountId, IElectedResults> ElectedCandidates { get; } = new Dictionary<AccountId, IElectedResults>();
-
-		public Dictionary<AccountId, IElectedResults> FirstTierElectedCandidates => this.ElectedCandidates.Where(e => e.Value.ElectedTier == Enums.MiningTiers.FirstTier).ToDictionary();
-		public Dictionary<AccountId, IElectedResults> SecondTierElectedCandidates => this.ElectedCandidates.Where(e => e.Value.ElectedTier == Enums.MiningTiers.SecondTier).ToDictionary();
-		public Dictionary<AccountId, IElectedResults> ThirdTierElectedCandidates => this.ElectedCandidates.Where(e => e.Value.ElectedTier == Enums.MiningTiers.ThirdTier).ToDictionary();
+		
+		public Dictionary<AccountId, IElectedResults> GetTierElectedCandidates(Enums.MiningTiers miningTier) {
+			return this.ElectedCandidates.Where(e => e.Value.ElectedTier == miningTier).ToDictionary();
+		}
 		
 		public override void Rehydrate(IDataRehydrator rehydrator, Dictionary<int, TransactionId> transactionIndexesTree) {
 			
@@ -49,10 +49,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 			adaptiveLong.Rehydrate(rehydrator);
-			uint count = (uint) adaptiveLong.Value;
+			int count = (int) adaptiveLong.Value;
 
-			SafeArrayHandle typeBytes = rehydrator.ReadArray((int) Math.Ceiling((double) (count * 2) / 8));
-			TwoBitArray electorTypesArray = new TwoBitArray(typeBytes, (int) count);
+			SafeArrayHandle typeBytes = rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, count));
+			using SpecialIntegerSizeArray electorTypesArray = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, typeBytes, count);
 
 			var sortedDelegateAccounts = this.DelegateAccounts.Keys.OrderBy(k => k).ToList();
 
@@ -122,28 +122,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				});
 			});
 
-			jsonDeserializer.SetArray("FirstTierElectedCandidates", this.FirstTierElectedCandidates, (js, e) => {
-				js.WriteObject((s) => {
-					s.SetProperty("AccountId", e.Key);
-					s.SetProperty("Results", e.Value);
+			foreach(var tier in ElectedCandidates.Select(e => e.Value.ElectedTier).Distinct()) {
+				jsonDeserializer.SetArray($"{tier}ElectedCandidates", this.GetTierElectedCandidates(tier), (js, e) => {
+					js.WriteObject((s) => {
+						s.SetProperty("AccountId", e.Key);
+						s.SetProperty("Results", e.Value);
+					});
 				});
-				
-			});
-			
-			jsonDeserializer.SetArray("SecondTierElectedCandidates", this.SecondTierElectedCandidates, (js, e) => {
-				js.WriteObject((s) => {
-					s.SetProperty("AccountId", e.Key);
-					s.SetProperty("Results", e.Value);
-				});
-			});
-			
-			jsonDeserializer.SetArray("ThirdTierElectedCandidates", this.ThirdTierElectedCandidates, (js, e) => {
-				js.WriteObject((s) => {
-					s.SetProperty("AccountId", e.Key);
-					s.SetProperty("Results", e.Value);
-				});
-				
-			});
+			}
 		}
 
 		public override HashNodeList GetStructuresArray() {

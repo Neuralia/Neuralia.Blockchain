@@ -27,10 +27,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		}
 
 		public static Enums.MiningTiers GetMiningTier(BlockChainConfigurations configuration, int digestId) {
-
 			
-			if(configuration.MiningTier.HasValue && configuration.MiningTier.Value == Enums.MiningTiers.ThirdTier) {
-				return Enums.MiningTiers.ThirdTier;
+			// if they force a tier, then we attempt to use it (first and second tier are special, so we ignore the explicit set)
+			if(configuration.MiningTier.HasValue && configuration.MiningTier.Value != Enums.MiningTiers.FirstTier && configuration.MiningTier.Value != Enums.MiningTiers.SecondTier) {
+				return configuration.MiningTier.Value;
 			}
 			
 			Enums.MiningTiers determinedMiningTier = Enums.MiningTiers.ThirdTier;
@@ -38,7 +38,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			var nodeShareType = configuration.NodeShareType();
 			
 			// 1st tier is everything (digest included) or if only blocks, only while there is no digest.
-			if(nodeShareType.HasDigestsAndBlocks || (nodeShareType.OnlyBlocks && digestId == 0)) {
+			if(nodeShareType.HasDigestsAndBlocks || nodeShareType.OnlyBlocks && digestId == 0) {
 				// first tier is for full sharers only
 				determinedMiningTier = Enums.MiningTiers.FirstTier;
 			}

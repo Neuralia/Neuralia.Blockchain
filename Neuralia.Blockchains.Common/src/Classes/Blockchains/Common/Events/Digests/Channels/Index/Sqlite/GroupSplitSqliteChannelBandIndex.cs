@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq.Expressions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite {
 
@@ -27,11 +29,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected readonly int groupSize;
 
-		public GroupSplitSqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(bandName, baseFolder, scopeFolder, enabledBands, fileSystem) {
+		public GroupSplitSqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(bandName, baseFolder, scopeFolder, enabledBands, fileSystem) {
 			this.groupSize = groupSize;
 		}
 
-		public GroupSplitSqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base(bandName, baseFolder, scopeFolder, enabledBands, fileSystem, keyDeclaration) {
+		public GroupSplitSqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base(bandName, baseFolder, scopeFolder, enabledBands, fileSystem, keyDeclaration) {
 			this.groupSize = groupSize;
 		}
 
@@ -41,7 +43,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			uint index = (uint) (accountId / this.groupSize);
 
-			uint adjustedAccountId = (uint) (accountId - (index * this.groupSize));
+			uint adjustedAccountId = (uint) (accountId - index * this.groupSize);
 
 			// index is 1 based
 			return (adjustedAccountId, index + 1);
@@ -97,7 +99,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where CHANEL_BANDS : struct, Enum, IConvertible
 		where CARD_TYPE : class, IChannelBandSqliteProviderEntry<long>, new() {
 
-		public GroupSplitSqliteChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, IFileSystem fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
+		public GroupSplitSqliteChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
 		}
 
 		public override DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> QueryCard(long key) {

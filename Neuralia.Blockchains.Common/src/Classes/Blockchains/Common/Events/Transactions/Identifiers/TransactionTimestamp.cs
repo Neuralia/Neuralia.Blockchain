@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Json.Converters;
@@ -32,7 +33,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		}
 
-		public TransactionTimestamp(string timestamp) : this(long.Parse(timestamp)) {
+		public TransactionTimestamp(string timestamp) : this(long.Parse(timestamp, CultureInfo.InvariantCulture)) {
 
 		}
 
@@ -44,6 +45,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public TransactionTimestamp Clone => new TransactionTimestamp(this);
 
 		public int CompareTo(TransactionTimestamp other) {
+			
+			if(other == null) {
+				return -1;
+			}
 			return this.Value.CompareTo(other.Value);
 		}
 
@@ -60,7 +65,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public override string ToString() {
-			return this.Value.ToString();
+			return this.Value.ToString(CultureInfo.InvariantCulture);
 		}
 
 		public static implicit operator TransactionTimestamp(int value) {
@@ -70,5 +75,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public static implicit operator TransactionTimestamp(long value) {
 			return new TransactionTimestamp(value);
 		}
-	}
+
+        public TransactionTimestamp ToTransactionTimestamp() {
+	        return this.Clone;
+        }
+    }
 }

@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 	public abstract class AccountKeysSnapshotSqliteContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT> : IndexedSqliteDbContext, IAccountKeysSnapshotSqliteContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT>
 		where STANDARD_ACCOUNT_KEYS_SNAPSHOT : class, IAccountKeysSnapshotSqliteEntry, new() {
 
-		public DbSet<STANDARD_ACCOUNT_KEYS_SNAPSHOT> StandardAccountkeysSnapshots { get; set; }
+		public DbSet<STANDARD_ACCOUNT_KEYS_SNAPSHOT> StandardAccountKeysSnapshots { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder) {
 

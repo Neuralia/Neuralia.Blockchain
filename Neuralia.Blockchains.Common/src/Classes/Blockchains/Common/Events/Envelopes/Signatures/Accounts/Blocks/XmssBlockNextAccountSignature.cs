@@ -11,7 +11,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		Enums.KeyHashBits HashBits { get; set; }
 		byte TreeHeight { get; set; }
-		byte TreeLayers { get; set; }
 		SafeArrayHandle PublicKey { get;  }
 	}
 
@@ -21,7 +20,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		public Enums.KeyHashBits HashBits { get; set; } = Enums.KeyHashBits.SHA3_256;
 		public byte TreeHeight { get; set; }
-		public byte TreeLayers { get; set; }
 		public SafeArrayHandle PublicKey { get;  } = SafeArrayHandle.Create();
 		
 		public override HashNodeList GetStructuresArray() {
@@ -32,7 +30,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			if(this.KeyChange) {
 				nodelist.Add((byte)this.HashBits);
 				nodelist.Add(this.TreeHeight);
-				nodelist.Add(this.TreeLayers);
 				nodelist.Add(this.PublicKey);
 			}
 
@@ -48,7 +45,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			if(this.KeyChange) {
 				dehydrator.Write((byte) this.HashBits);
 				dehydrator.Write(this.TreeHeight);
-				dehydrator.Write(this.TreeLayers);
 				dehydrator.Write(this.PublicKey);
 			}
 		}
@@ -62,7 +58,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			if(this.KeyChange) {
 				this.HashBits = (Enums.KeyHashBits)rehydrator.ReadByte();
 				this.TreeHeight = rehydrator.ReadByte();
-				this.TreeLayers = rehydrator.ReadByte();
 				this.PublicKey.Entry = rehydrator.ReadArray();
 			}
 		}
@@ -75,7 +70,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			if(this.KeyChange) {
 				jsonDeserializer.SetProperty("HashBits", this.HashBits.ToString());
 				jsonDeserializer.SetProperty("TreeHeight", this.TreeHeight);
-				jsonDeserializer.SetProperty("TreeLayers", this.TreeLayers);
 				jsonDeserializer.SetProperty("PublicKey", this.PublicKey);
 			}
 		}

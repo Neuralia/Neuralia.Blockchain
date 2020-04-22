@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage {
 	public interface IChainOptionsSnapshotDal : ISnapshotDal {
@@ -12,12 +14,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshotEntry, new() {
 
 		void EnsureEntryCreated(Action<CHAIN_OPTIONS_SNAPSHOT_CONTEXT> operation);
-		List<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshots(Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, List<CHAIN_OPTIONS_SNAPSHOT>> operation);
+		Task<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshot(Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, Task<CHAIN_OPTIONS_SNAPSHOT>> operation);
 
-		void Clear();
-		void UpdateSnapshotDigestFromDigest(Action<CHAIN_OPTIONS_SNAPSHOT_CONTEXT> operation);
+		Task Clear();
+		Task UpdateSnapshotDigestFromDigest(Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, Task> operation);
 
-		List<(CHAIN_OPTIONS_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> PerformProcessingSet(Dictionary<long, List<Action<CHAIN_OPTIONS_SNAPSHOT_CONTEXT>>> actions);
+		Task<List<(CHAIN_OPTIONS_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext, Task>>> actions);
 	}
 
 }

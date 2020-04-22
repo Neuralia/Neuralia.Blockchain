@@ -21,11 +21,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		bool EventPoolEnabled { get; }
 		bool SaveTransactionEnvelopes { get; }
 
-		void InsertTransaction(ITransactionEnvelope transactionEnvelope);
+		Task InsertTransaction(ITransactionEnvelope transactionEnvelope);
 		Task<List<(ITransactionEnvelope envelope, TransactionId transactionId)>> GetTransactions();
-		List<TransactionId> GetTransactionIds();
-		void DeleteTransactions(List<TransactionId> transactionIds);
-		void DeleteExpiredTransactions();
+		Task<List<TransactionId>> GetTransactionIds();
+		Task DeleteTransactions(List<TransactionId> transactionIds);
+		Task DeleteExpiredTransactions();
 	}
 
 	public interface IEventPoolProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_POOL_DAL, CHAIN_POOL_CONTEXT, CHAIN_POOL_PUBLIC_TRANSACTIONS> : IEventPoolProvider
@@ -44,7 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	/// <typeparam name="CHAIN_POOL_DAL"></typeparam>
 	/// <typeparam name="CHAIN_POOL_CONTEXT"></typeparam>
 	/// <typeparam name="CHAIN_POOL_ENTRY"></typeparam>
-	public abstract class BlockchainEventPoolProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_POOL_DAL, CHAIN_POOL_CONTEXT, CHAIN_POOL_PUBLIC_TRANSACTIONS> : IEventPoolProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_POOL_DAL, CHAIN_POOL_CONTEXT, CHAIN_POOL_PUBLIC_TRANSACTIONS>
+	public abstract class BlockchainEventPoolProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_POOL_DAL, CHAIN_POOL_CONTEXT, CHAIN_POOL_PUBLIC_TRANSACTIONS> : ChainProvider, IEventPoolProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_POOL_DAL, CHAIN_POOL_CONTEXT, CHAIN_POOL_PUBLIC_TRANSACTIONS>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_POOL_DAL : class, IChainPoolDal<CHAIN_POOL_PUBLIC_TRANSACTIONS>
@@ -81,12 +81,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public virtual void InsertTransaction(ITransactionEnvelope transactionEnvelope) {
+		public virtual async Task InsertTransaction(ITransactionEnvelope transactionEnvelope) {
 			if(this.EventPoolEnabled) {
-				this.ChainPoolDal.InsertTransactionEntry(transactionEnvelope, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
+				await this.ChainPoolDal.InsertTransactionEntry(transactionEnvelope, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception).ConfigureAwait(false);
 
 				if(this.SaveTransactionEnvelopes) {
-					SafeArrayHandle envelope = transactionEnvelope.DehydrateEnvelope();
+					using SafeArrayHandle envelope = transactionEnvelope.DehydrateEnvelope();
 
 					string publicPath = this.GetPublicPath();
 
@@ -101,21 +101,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public virtual List<TransactionId> GetTransactionIds() {
+		public virtual Task<List<TransactionId>> GetTransactionIds() {
 			if(!this.EventPoolEnabled) {
-				return new List<TransactionId>(); // if disabled, we return nothing
+				return Task.FromResult(new List<TransactionId>()); // if disabled, we return nothing
 			}
 
 			return this.ChainPoolDal.GetTransactions();
 		}
 
-		public virtual Task<List<(ITransactionEnvelope envelope, TransactionId transactionId)>> GetTransactions() {
+		public virtual async Task<List<(ITransactionEnvelope envelope, TransactionId transactionId)>> GetTransactions() {
 
 			if(!this.EventPoolEnabled) {
-				return Task.FromResult(new List<(ITransactionEnvelope envelope, TransactionId transactionId)>()); // if disabled, we return nothing
+				return new List<(ITransactionEnvelope envelope, TransactionId transactionId)>(); // if disabled, we return nothing
 			}
 
-			var poolTransactions = this.GetTransactionIds();
+			var poolTransactions = await this.GetTransactionIds().ConfigureAwait(false);
 
 			var results = new ConcurrentBag<(ITransactionEnvelope envelope, TransactionId transactionId)>();
 			string publicPath = this.GetPublicPath();
@@ -141,18 +141,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				results.Add((envelope, trx));
 			});
 
-			return Task.FromResult(results.ToList());
+			return results.ToList();
 		}
 
-		public virtual void DeleteExpiredTransactions() {
+		public virtual async Task DeleteExpiredTransactions() {
 			if(this.EventPoolEnabled) {
-				this.ChainPoolDal.ClearExpiredTransactions();
+				await this.ChainPoolDal.ClearExpiredTransactions().ConfigureAwait(false);
 			}
 		}
 
-		public virtual void DeleteTransactions(List<TransactionId> transactionIds) {
+		public virtual async Task DeleteTransactions(List<TransactionId> transactionIds) {
 			if(this.EventPoolEnabled) {
-				this.ChainPoolDal.RemoveTransactionEntries(transactionIds);
+				await this.ChainPoolDal.RemoveTransactionEntries(transactionIds).ConfigureAwait(false);
 
 				this.DeleteTransactionEnvelopes(transactionIds);
 			}
@@ -165,14 +165,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="isMining"></param>
 		/// <returns></returns>
-		public bool EventPoolEnabled => (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull) || (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysMetadata) || (this.miningStatusProvider.MiningEnabled && ((this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningMetadata) || (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull)));
+		public bool EventPoolEnabled => this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull || this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysMetadata || this.miningStatusProvider.MiningEnabled && (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningMetadata || this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull);
 
 		/// <summary>
 		///     Do we save entire envelope bodies on disk?
 		/// </summary>
 		/// <param name="isMining"></param>
 		/// <returns></returns>
-		public bool SaveTransactionEnvelopes => (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull) || (this.miningStatusProvider.MiningEnabled && (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull));
+		public bool SaveTransactionEnvelopes => this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull || this.miningStatusProvider.MiningEnabled && this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull;
 
 		protected string GetEventPoolPath() {
 			return Path.Combine(this.WalletDirectoryPath, EVENT_POOL_PATH);

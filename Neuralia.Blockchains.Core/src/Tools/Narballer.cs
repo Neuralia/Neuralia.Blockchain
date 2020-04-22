@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Abstractions;
+
 using System.Linq;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -13,6 +13,7 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
+using Zio;
 
 namespace Neuralia.Blockchains.Core.Tools {
 	
@@ -29,9 +30,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		private readonly string basepath;
 		private readonly List<string> files = new List<string>();
-		private readonly IFileSystem fileSystem;
+		private readonly FileSystemWrapper fileSystem;
 
-		public Narballer(string basepath, IFileSystem fileSystem) {
+		public Narballer(string basepath, FileSystemWrapper fileSystem) {
 			this.basepath = Path.GetFullPath(basepath);
 			this.fileSystem = fileSystem;
 		}
@@ -50,7 +51,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 				string filepath = this.MakeFullPath(file);
 
-				if(!this.fileSystem.File.Exists(filepath)) {
+				if(!this.fileSystem.FileExists(filepath)) {
 					continue;
 				}
 
@@ -72,7 +73,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			// now write the body
 			long offset = 0;
 
-			using(Stream fs = this.fileSystem.File.OpenWrite(bodyFilePath)) {
+			using(Stream fs = this.fileSystem.OpenFile(bodyFilePath ,FileMode.Open, FileAccess.Write, FileShare.Write)) {
 
 				fs.Seek(fullSize - 1, SeekOrigin.Begin);
 				fs.WriteByte(0);
@@ -107,20 +108,20 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			(string headerFilePath, string bodyFilePath) = GetPackageFiles(sourcepath);
 			
-			if(!this.fileSystem.Directory.Exists(sourcepath)) {
+			if(!this.fileSystem.DirectoryExists(sourcepath)) {
 				throw new ApplicationException($"Package directory {sourcepath} did not exist.");
 			}
 
-			if(!this.fileSystem.File.Exists(headerFilePath)) {
+			if(!this.fileSystem.FileExists(headerFilePath)) {
 				throw new ApplicationException($"Package header file {headerFilePath} was not found. invalid package.");
 			}
 
-			if(!this.fileSystem.File.Exists(bodyFilePath)) {
+			if(!this.fileSystem.FileExists(bodyFilePath)) {
 				throw new ApplicationException($"Package body file {bodyFilePath} was not found. invalid package.");
 			}
 
-			if(clearSource && this.fileSystem.Directory.Exists(outpath)) {
-				this.fileSystem.Directory.Delete(outpath, true);
+			if(clearSource && this.fileSystem.DirectoryExists(outpath)) {
+				this.fileSystem.DeleteDirectory(outpath, true);
 			}
 
 			FileExtensions.EnsureDirectoryStructure(outpath, this.fileSystem);
@@ -136,7 +137,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				throw new ApplicationException("No files found in the header.");
 			}
 
-			using(BinaryReader br = new BinaryReader(this.fileSystem.File.Open(bodyFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))) {
+			using(BinaryReader br = new BinaryReader(this.fileSystem.OpenFile(bodyFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))) {
 
 				var actions = new List<Action>();
 				foreach(NarballHeader.NarballHeaderEntry file in header.Files) {
@@ -155,8 +156,8 @@ namespace Neuralia.Blockchains.Core.Tools {
 								string fullname = Path.Combine(outpath, file.Name);
 
 								try {
-									if(this.fileSystem.File.Exists(fullname)) {
-										this.fileSystem.File.Delete(fullname);
+									if(this.fileSystem.FileExists(fullname)) {
+										this.fileSystem.DeleteFile(fullname);
 									}
 								} catch {
 									// give it a try, but continue if it fails just in case
@@ -179,23 +180,23 @@ namespace Neuralia.Blockchains.Core.Tools {
 		}
 
 		public void Clear(string packagePath) {
-			if(this.fileSystem.Directory.Exists(packagePath)) {
-				this.fileSystem.Directory.Delete(packagePath, true);
+			if(this.fileSystem.DirectoryExists(packagePath)) {
+				this.fileSystem.DeleteDirectory(packagePath, true);
 			}
 		}
 
-		public static bool PackageFilesValid(string packagePath, IFileSystem fileSystem) {
+		public static bool PackageFilesValid(string packagePath, FileSystemWrapper fileSystem) {
 			(string headerFilePath, string bodyFilePath) = GetPackageFiles(packagePath);
 			
-			if(!fileSystem.Directory.Exists(packagePath)) {
+			if(!fileSystem.DirectoryExists(packagePath)) {
 				return false;
 			}
 
-			if(!fileSystem.File.Exists(headerFilePath)) {
+			if(!fileSystem.FileExists(headerFilePath)) {
 				return false;
 			}
 
-			if(!fileSystem.File.Exists(bodyFilePath)) {
+			if(!fileSystem.FileExists(bodyFilePath)) {
 				return false;
 			}
 

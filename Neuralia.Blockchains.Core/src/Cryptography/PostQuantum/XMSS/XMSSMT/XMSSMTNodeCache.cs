@@ -50,6 +50,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 		}
 
+		public void Clear() {
+			this.CachesTree.Clear();
+		}
 		public void Dehydrate(IDataDehydrator dehydrator) {
 
 			dehydrator.Write(this.Major);
@@ -74,11 +77,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				adaptiveLong.Value = layerGroup.Count();
 				adaptiveLong.Dehydrate(dehydrator);
 
-				foreach(var entry in layerGroup) {
-					adaptiveLong.Value = entry.Key.Tree;
+				foreach((XMSSMTreeId key, XMSSNodeCache value) in layerGroup) {
+					adaptiveLong.Value = key.Tree;
 					adaptiveLong.Dehydrate(dehydrator);
 
-					entry.Value.Dehydrate(dehydrator);
+					value.Dehydrate(dehydrator);
 				}
 			}
 		}

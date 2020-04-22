@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using MoreLinq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
@@ -25,8 +26,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return (TransactionSelectionMethodTypes.Instance.Random, 1, 0);
 		}
 
-		public override List<TransactionId> PerformTransactionSelection(IEventPoolProvider chainEventPoolProvider, List<TransactionId> existingTransactions) {
-			var poolTransactions = chainEventPoolProvider.GetTransactionIds();
+		public override async Task<List<TransactionId>> PerformTransactionSelection(IEventPoolProvider chainEventPoolProvider, List<TransactionId> existingTransactions) {
+			var poolTransactions = await chainEventPoolProvider.GetTransactionIds().ConfigureAwait(false);
 
 			// exclude the transactions that should not be selected
 			var availableTransactions = poolTransactions.Where(p => !existingTransactions.Contains(p)).Shuffle().ToList();

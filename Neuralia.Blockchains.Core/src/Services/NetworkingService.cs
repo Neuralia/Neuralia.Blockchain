@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -19,6 +20,8 @@ using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
+using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Services {
@@ -40,21 +43,21 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		Dictionary<BlockchainType, ChainSettings> ChainSettings { get; }
 
-		List<BlockchainType> SupportsChains { get; }
+		List<BlockchainType> SupportedChains { get; }
 
-		void Start();
+		Task Start();
 
-		void Stop();
+		Task Stop();
 		
 		void Pause(bool cutConnections = false);
 
 		void Resume();
 
-		void Initialize();
+		Task Initialize();
 
 		void PostNetworkMessage(SafeArrayHandle data, PeerConnection connection);
 
-		void ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
+		Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
 
 		void PostNewGossipMessage(IGossipMessageSet gossipMessageSet);
 
@@ -66,7 +69,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		event Action Started;
 
-		event Action IpAddressChanged;
+		event Func<LockContext, Task> IpAddressChanged;
 	}
 
 	public interface INetworkingService<R> : INetworkingService
@@ -124,7 +127,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.ServiceSet = this.CreateServiceSet();
 		}
 
-		public event Action IpAddressChanged;
+		public event Func<LockContext, Task> IpAddressChanged;
 		public event Action Started;
 		public event Action<int> PeerConnectionsCountUpdated;
 
@@ -141,7 +144,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		public int CurrentPeerCount => this.IsStarted ? this.ConnectionStore.ActiveConnectionsCount : 0;
 
-		public virtual void Initialize() {
+		public virtual async Task Initialize() {
 			if(GlobalSettings.Instance.NetworkId == 0) {
 				throw new InvalidOperationException("The network Id is not set.");
 			}
@@ -151,7 +154,11 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.connectionStore.DataReceived += this.HandleDataReceivedEvent<WorkflowTriggerMessage<R>>;
 
 			this.connectionStore.PeerConnectionsCountUpdated += count => {
-				this.PeerConnectionsCountUpdated?.Invoke(count);
+				if(this.PeerConnectionsCountUpdated != null) {
+					this.PeerConnectionsCountUpdated(count);
+				}
+
+				return Task.CompletedTask;
 			};
 
 			this.connectionListener.NewConnectionReceived += this.ConnectionListenerOnNewConnectionReceived;
@@ -173,7 +180,9 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <param name="sender"></param>
 		/// <param name="e"></param>
 		private void NetworkChangeOnNetworkAddressChanged(object sender, EventArgs e) {
-			this.IpAddressChanged?.Invoke();
+			if(this.IpAddressChanged != null) {
+				this.IpAddressChanged(null).WaitAndUnwrapException();
+			}
 		}
 
 		protected virtual void PrepareGeneralSettings() {
@@ -191,27 +200,29 @@ namespace Neuralia.Blockchains.Core.Services {
 		
 		public bool IsStarted { get; private set; }
 
-		public void Start() {
+		public async Task Start() {
 			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
 				this.connectionListener.Start();
 
-				this.StartWorkers();
+				await this.StartWorkers().ConfigureAwait(false);
 
 				// ensure we know when our IP changes
 				NetworkChange.NetworkAddressChanged += this.NetworkChangeOnNetworkAddressChanged;
 				
 				this.IsStarted = true;
 
-				this.Started?.Invoke();
+				if(this.Started != null) {
+					this.Started();
+				}
 			} else {
 
 				Log.Information("Peer to peer network disabled");
 			}
 		}
 
-		public void Stop() {
+		public async Task Stop() {
 			try {
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Stoped;
 				
@@ -260,10 +271,12 @@ namespace Neuralia.Blockchains.Core.Services {
 		///     here we ensure a gossip message will be forwarded to our peers who may want it
 		/// </summary>
 		/// <param name="gossipMessageSet"></param>
-		public void ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
+		public Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
 			// redirect the received message into the message manager worker, who will know what to do with it in its own time
 			MessagingManager<R>.ForwardGossipMessageTask forwardTask = new MessagingManager<R>.ForwardGossipMessageTask(gossipMessageSet, connection);
 			this.messagingManager.ReceiveTask(forwardTask);
+			
+			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -309,7 +322,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			return this.supportedChains.ContainsKey(blockchainType);
 		}
 
-		public List<BlockchainType> SupportsChains => this.supportedChains.Keys.ToList();
+		public List<BlockchainType> SupportedChains => this.supportedChains.Keys.ToList();
 
 		public bool IsChainVersionValid(BlockchainType blockchainType, SoftwareVersion version) {
 			if(!this.SupportsChain(blockchainType)) {
@@ -323,7 +336,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			return new ServiceSet<R>(BlockchainTypes.Instance.None);
 		}
 
-		protected virtual void ConnectionListenerOnNewConnectionReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer) {
+		protected virtual async Task ConnectionListenerOnNewConnectionReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer) {
 
 			try {
 				if((buffer == null) || buffer.IsEmpty) {
@@ -338,7 +351,7 @@ namespace Neuralia.Blockchains.Core.Services {
 					this.HandleIpValidatorRequest(buffer, connection);
 				} else {
 					PeerConnection peerConnection = this.connectionStore.AddNewIncomingConnection(connection);
-					this.HandleDataReceivedEvent<HandshakeTrigger<R>>(buffer, peerConnection);
+					await this.HandleDataReceivedEvent<HandshakeTrigger<R>>(buffer, peerConnection).ConfigureAwait(false);
 				}
 
 			} catch(Exception exception) {
@@ -360,12 +373,12 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.messageFactory = new MainMessageFactory<R>(this.ServiceSet);
 		}
 
-		protected virtual void StartWorkers() {
+		protected virtual async Task StartWorkers() {
 			//TODO: perhaps we should attempt a restart if it fails
 
 			this.ConnectionsManager = this.instantiationService.GetInstantiationFactory(this.ServiceSet).CreateConnectionsManager(this.ServiceSet);
 			this.InitializeConnectionsManager();
-			this.ConnectionsManager.Start();
+			await this.ConnectionsManager.Start().ConfigureAwait(false);
 
 			this.ConnectionsManager.Error2 += (sender, exception) => {
 				if(sender.Task.Status == TaskStatus.Faulted) {
@@ -377,11 +390,13 @@ namespace Neuralia.Blockchains.Core.Services {
 
 					throw exception;
 				}
+
+				return Task.CompletedTask;
 			};
 
 			this.messagingManager = this.instantiationService.GetInstantiationFactory(this.ServiceSet).CreateMessagingManager(this.ServiceSet);
 			this.InitializeMessagingManager();
-			this.messagingManager.Start();
+			await this.messagingManager.Start().ConfigureAwait(false);
 
 			this.messagingManager.Error2 += (sender, exception) => {
 				if(sender.Task.Status == TaskStatus.Faulted) {
@@ -393,6 +408,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 					throw exception;
 				}
+
+				return Task.CompletedTask;
 			};
 		}
 
@@ -423,7 +440,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		/// <param name="data"></param>
 		/// <param name="connection"></param>
-		public void HandleDataReceivedEvent<TRIGGER>(SafeArrayHandle data, PeerConnection connection, IEnumerable<Type> acceptedTriggers = null) {
+		public Task HandleDataReceivedEvent<TRIGGER>(SafeArrayHandle data, PeerConnection connection, IEnumerable<Type> acceptedTriggers = null) {
 
 			// redirect the received message into the message manager worker, who will know what to do with it in its own time
 			var acceptedTriggerTypes = acceptedTriggers != null ? acceptedTriggers.ToList() : new List<Type>();
@@ -432,7 +449,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			MessagingManager<R>.MessageReceivedTask messageTask = new MessagingManager<R>.MessageReceivedTask(data, connection, acceptedTriggerTypes);
 			this.PostNetworkMessage(messageTask);
-
+			
+			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -450,9 +468,10 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <summary>
 		///     here we ensure to route a message to the proper registered chain
 		/// </summary>
+		/// <param name="gossipMessageSet"></param>
+		/// <param name="connection"></param>
 		/// <param name="header"></param>
 		/// <param name="data"></param>
-		/// <param name="connection"></param>
 		public void RouteNetworkGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection) {
 			if(!this.SupportsChain(gossipMessageSet.BaseHeader.ChainId)) {
 				throw new ApplicationException("A message was received that targets a transactionchain that we do not support.");
@@ -527,7 +546,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			
 				
 				try {
-					this.Stop();
+					this.Stop().WaitAndUnwrapException();
 				} catch(Exception ex) {
 					Log.Error(ex, "Failed to stop");
 				}

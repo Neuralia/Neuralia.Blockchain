@@ -1,6 +1,8 @@
+using System;
 using System.Linq;
 using System.Numerics;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
+using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -24,27 +26,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public override SafeArrayHandle PerformBallot(SafeArrayHandle candidature, BlockElectionDistillate blockElectionDistillate, Enums.MiningTiers miningTier, AccountId miningAccount) {
+			
+			if(!this.MiningTierDifficulties.ContainsKey(miningTier)) {
+				throw new ArgumentOutOfRangeException(nameof(miningTier));
+			}
+			
+			long difficulty = this.MiningTierDifficulties[miningTier];
 
-			long difficulty = 0;
-
-			string tierName = "";
-			if(miningTier.HasFlag(Enums.MiningTiers.FirstTier)) {
-				difficulty = this.FirstTierDifficulty;
-				tierName = "first";
-			}
-			else if(miningTier.HasFlag(Enums.MiningTiers.SecondTier)) {
-				difficulty = this.SecondTierDifficulty;
-				tierName = "second";
-			}
-			else{
-				difficulty = this.ThirdTierDifficulty;
-				tierName = "third";
-			}
-		
 			BigInteger hashTarget = HashDifficultyUtils.GetHash512TargetByIncrementalDifficulty(difficulty);
 			BigInteger currentBallotHash = HashDifficultyUtils.GetBigInteger(candidature);
 
-			Log.Verbose($"Comparing our candidacy ballot {currentBallotHash} with the {tierName} tier election target {hashTarget}");
+			Log.Verbose($"Comparing our candidacy ballot {currentBallotHash} in the {miningTier} tier with difficulty {difficulty} to election target {hashTarget}");
 
 			if(currentBallotHash < hashTarget) {
 				// wow, we got in! :D

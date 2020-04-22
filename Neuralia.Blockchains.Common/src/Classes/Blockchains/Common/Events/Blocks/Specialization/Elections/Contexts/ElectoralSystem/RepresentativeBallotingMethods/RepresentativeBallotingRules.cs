@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
@@ -10,9 +12,9 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.RepresentativeBallotingMethods {
 	public interface IRepresentativeBallotingRules : IVersionableSerializable {
-		ushort FirstTierTotal { get; set; }
-		ushort SecondTierTotal { get; set; }
-		ushort ThirdTierTotal { get; set; }
+		
+		Dictionary<Enums.MiningTiers, ushort> MiningTierTotals { get; }
+		
 		ushort GetTotal(Enums.MiningTiers tier);
 		void SetTotal(Enums.MiningTiers tier, ushort value);
 	}
@@ -28,59 +30,41 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	public abstract class RepresentativeBallotingRules<T> : Versionable<T>, IRepresentativeBallotingRules<T>
 		where T : SimpleUShort<T>, new() {
 
+		public Dictionary<Enums.MiningTiers, ushort> MiningTierTotals { get; } = new Dictionary<Enums.MiningTiers, ushort>();
+
 		public RepresentativeBallotingRules() {
-
+			MiningTierUtils.FillMiningTierSet(this.MiningTierTotals, (ushort)0);
 		}
 
-		public RepresentativeBallotingRules(ushort firstTierTotal, ushort secondTierTotal, ushort thirdTierTotal) {
-			this.FirstTierTotal = firstTierTotal;
-			this.SecondTierTotal = secondTierTotal;
-			this.ThirdTierTotal = thirdTierTotal;
+		public RepresentativeBallotingRules(Dictionary<Enums.MiningTiers, ushort> miningTierTotals) {
+			foreach(var entry in miningTierTotals) {
+				this.SetTotal(entry.Key, entry.Value);
+			}
 		}
 
-		public ushort FirstTierTotal { get; set; } = 10;
-		public ushort SecondTierTotal { get; set; } = 10;
-		public ushort ThirdTierTotal { get; set; } = 10;
 
 		public ushort GetTotal(Enums.MiningTiers tier) {
 
-			if(tier == Enums.MiningTiers.FirstTier) {
-				return this.FirstTierTotal;
+			if(MiningTierTotals.ContainsKey(tier)) {
+				return MiningTierTotals[tier];
 			}
-
-			if(tier == Enums.MiningTiers.SecondTier) {
-				return this.SecondTierTotal;
-			}
-
-			if(tier == Enums.MiningTiers.ThirdTier) {
-				return this.ThirdTierTotal;
-			}
-
+			
 			throw new ArgumentException();
 		}
 
 		public void SetTotal(Enums.MiningTiers tier, ushort value) {
 
-			if(tier == Enums.MiningTiers.FirstTier) {
-				this.FirstTierTotal = value;
+			if(!MiningTierTotals.ContainsKey(tier)) {
+				MiningTierTotals.Add(tier, value);
+			} else {
+				MiningTierTotals[tier] = value;
 			}
-
-			if(tier == Enums.MiningTiers.SecondTier) {
-				this.SecondTierTotal = value;
-			}
-
-			if(tier == Enums.MiningTiers.ThirdTier) {
-				this.ThirdTierTotal = value;
-			}
-
 		}
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
 
-			nodeList.Add(this.FirstTierTotal);
-			nodeList.Add(this.SecondTierTotal);
-			nodeList.Add(this.ThirdTierTotal);
+			MiningTierUtils.AddStructuresArray(nodeList, this.MiningTierTotals);
 
 			return nodeList;
 		}
@@ -88,17 +72,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
-			AdaptiveShort1_2 entry = new AdaptiveShort1_2();
-			entry.Rehydrate(rehydrator);
-			this.FirstTierTotal = entry.Value;
-
-			entry = new AdaptiveShort1_2();
-			entry.Rehydrate(rehydrator);
-			this.SecondTierTotal = entry.Value;
-
-			entry = new AdaptiveShort1_2();
-			entry.Rehydrate(rehydrator);
-			this.ThirdTierTotal = entry.Value;
+			MiningTierUtils.RehydrateMiningSet<ushort, AdaptiveShort1_2>(this.MiningTierTotals, 0, rehydrator, (v) => (ushort)v);
 		}
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -108,9 +82,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
 
-			jsonDeserializer.SetProperty("FirstTierTotal", this.FirstTierTotal);
-			jsonDeserializer.SetProperty("SecondTierTotal", this.SecondTierTotal);
-			jsonDeserializer.SetProperty("ThirdTierTotal", this.ThirdTierTotal);
+			jsonDeserializer.SetProperty("Mining Tiers Count", this.MiningTierTotals.Count);
+			
+			foreach(var entry in this.MiningTierTotals) {
+				jsonDeserializer.SetProperty($"{entry.Key.ToString()}Total", entry.Value);
+			}
 		}
 
 		public IBinarySerializable BaseVersion => this.Version;

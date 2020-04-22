@@ -86,171 +86,171 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		public override ITargettedMessageSet<IBlockchainEventsRehydrationFactory> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
-			using(IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data)) {
-				SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
-				NetworkMessageSet.ResetAfterHeader(dr);
+			using IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-				using(IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes)) {
+			SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+			NetworkMessageSet.ResetAfterHeader(dr);
 
-					ITargettedMessageSet<IBlockchainEventsRehydrationFactory> messageSet = null;
+			using IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
 
-					try {
-						if(data?.Length == 0) {
-							throw new ApplicationException("null message");
-						}
+			ITargettedMessageSet<IBlockchainEventsRehydrationFactory> messageSet = null;
 
-						short workflowType = 0;
-						ComponentVersion<SimpleUShort> version = null;
+			try {
+				if(data?.Length == 0) {
+					throw new ApplicationException("null message");
+				}
 
-						messageRehydrator.Peek(rehydrator => {
-							workflowType = rehydrator.ReadShort();
+				short workflowType = 0;
+				ComponentVersion<SimpleUShort> version = null;
 
-							if(workflowType != WorkflowIDs.CHAIN_SYNC) {
-								throw new ApplicationException("Invalid workflow type");
-							}
+				messageRehydrator.Peek(rehydrator => {
+					workflowType = rehydrator.ReadShort();
 
-							version = rehydrator.Rehydrate<ComponentVersion<SimpleUShort>>();
-						});
-
-						switch(version.Type.Value) {
-							case ChainSyncMessageFactoryIds.TRIGGER_ID:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowTriggerSet(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.SERVER_TRIGGER_REPLY:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowTriggerServerReplySet(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.FINISH_SYNC:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowFinishSyncSet(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.REQUEST_BLOCK:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowRequestBlock(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.SEND_BLOCK:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateServerSendBlock(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.REQUEST_BLOCK_INFO:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowRequestBlockInfo(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.SEND_BLOCK_INFO:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateServerSendBlockInfo(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.REQUEST_BLOCK_SLICE_HASHES:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowRequestBlockSliceHashes(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.SEND_BLOCK_SLICE_HASHES:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateServerSendBlockSliceHashes(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.REQUEST_DIGEST:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowRequestDigest(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.SEND_DIGEST:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateServerSendDigest(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.REQUEST_DIGEST_FILE:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowRequestDigestFile(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.SEND_DIGEST_FILE:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateServerSendDigestFile(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.REQUEST_DIGEST_INFO:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateSyncWorkflowRequestDigestInfo(header);
-								}
-
-								break;
-
-							case ChainSyncMessageFactoryIds.SEND_DIGEST_INFO:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateServerSendDigestInfo(header);
-								}
-
-								break;
-
-							default:
-
-								throw new ApplicationException("invalid message type");
-						}
-
-						if(messageSet?.BaseMessage == null) {
-							throw new ApplicationException("Invalid message type or major");
-						}
-
-						messageSet.Header = header; // set the header explicitely
-						messageSet.RehydrateRest(dr, rehydrationFactory);
-					} catch(Exception ex) {
-						Log.Error(ex, "Invalid data sent");
+					if(workflowType != WorkflowIDs.CHAIN_SYNC) {
+						throw new ApplicationException("Invalid workflow type");
 					}
 
-					return messageSet;
+					version = rehydrator.Rehydrate<ComponentVersion<SimpleUShort>>();
+				});
+
+				switch(version.Type.Value) {
+					case ChainSyncMessageFactoryIds.TRIGGER_ID:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowTriggerSet(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.SERVER_TRIGGER_REPLY:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowTriggerServerReplySet(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.FINISH_SYNC:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowFinishSyncSet(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.REQUEST_BLOCK:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowRequestBlock(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.SEND_BLOCK:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateServerSendBlock(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.REQUEST_BLOCK_INFO:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowRequestBlockInfo(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.SEND_BLOCK_INFO:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateServerSendBlockInfo(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.REQUEST_BLOCK_SLICE_HASHES:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowRequestBlockSliceHashes(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.SEND_BLOCK_SLICE_HASHES:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateServerSendBlockSliceHashes(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.REQUEST_DIGEST:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowRequestDigest(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.SEND_DIGEST:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateServerSendDigest(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.REQUEST_DIGEST_FILE:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowRequestDigestFile(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.SEND_DIGEST_FILE:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateServerSendDigestFile(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.REQUEST_DIGEST_INFO:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateSyncWorkflowRequestDigestInfo(header);
+						}
+
+						break;
+
+					case ChainSyncMessageFactoryIds.SEND_DIGEST_INFO:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateServerSendDigestInfo(header);
+						}
+
+						break;
+
+					default:
+
+						throw new ApplicationException("invalid message type");
 				}
+
+				if(messageSet?.BaseMessage == null) {
+					throw new ApplicationException("Invalid message type or major");
+				}
+
+				messageSet.Header = header; // set the header explicitely
+				messageSet.RehydrateRest(dr, rehydrationFactory);
+			} catch(Exception ex) {
+				Log.Error(ex, "Invalid data sent");
 			}
+
+			return messageSet;
+
 		}
 
 	#region Explicit Creation methods

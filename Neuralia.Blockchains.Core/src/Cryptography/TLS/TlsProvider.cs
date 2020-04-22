@@ -1,7 +1,7 @@
 ﻿using System;
+using System.IO;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.BouncyCastle.extra.security;
@@ -79,6 +79,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 			}
 		}
 
+		public static X509Certificate2 LoadCertificate(string certificate, string key) {
+			var x509 = new X509Certificate2(File.ReadAllBytes(certificate));
+
+			if(!string.IsNullOrWhiteSpace(key)) {
+				x509 = x509.CopyWithPrivateKey(DotNetUtilitiesExtensions.LoadParameters(key));
+			}
+
+			return x509;
+		}
+		
 		public (X509Certificate2 rootCertificate, X509Certificate2 localCertificate) Build() {
 
 			AsymmetricKeyParameter myCAprivateKey = null;

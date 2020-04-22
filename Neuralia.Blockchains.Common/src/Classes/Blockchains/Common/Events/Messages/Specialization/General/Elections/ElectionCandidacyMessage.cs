@@ -1,5 +1,6 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -14,6 +15,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		AdaptiveLong1_9 FirstTierAnswer { get; set; }
 
 		AccountId AccountId { get; set; }
+		
+		Enums.MiningTiers MiningTier { get; set; }
 	}
 
 	public abstract class ElectionCandidacyMessage : BlockchainMessage, IElectionCandidacyMessage {
@@ -24,6 +27,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		public AdaptiveLong1_9 FirstTierAnswer { get; set; }
 		public AccountId AccountId { get; set; } = new AccountId();
 
+		public Enums.MiningTiers MiningTier { get; set; }
+		
 		/// <summary>
 		///     the hash of the block at maturity time
 		/// </summary>
@@ -35,6 +40,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			this.BlockId.Rehydrate(rehydrator);
 			this.MaturityBlockHash = rehydrator.ReadInt();
 			this.AccountId.Rehydrate(rehydrator);
+
+			this.MiningTier = (Enums.MiningTiers)rehydrator.ReadByte();
 
 			this.SecondTierAnswer = null;
 			bool hasValue = rehydrator.ReadBool();
@@ -68,6 +75,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			dehydrator.Write(this.MaturityBlockHash);
 			this.AccountId.Dehydrate(dehydrator);
 
+			dehydrator.Write((byte)this.MiningTier);
 			dehydrator.Write(this.SecondTierAnswer != null);
 
 			if(this.SecondTierAnswer != null) {

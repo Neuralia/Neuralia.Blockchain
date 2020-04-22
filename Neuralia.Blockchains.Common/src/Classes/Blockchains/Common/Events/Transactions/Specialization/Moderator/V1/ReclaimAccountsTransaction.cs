@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		List<ReclaimAccountsTransaction.AccountReset> Accounts { get; }
 	}
 
-	public class ReclaimAccountsTransaction : ModerationTransaction, IReclaimAccountsTransaction {
+	public abstract class ReclaimAccountsTransaction : ModerationTransaction, IReclaimAccountsTransaction {
 
 		public List<AccountReset> Accounts { get; } = new List<AccountReset>();
 

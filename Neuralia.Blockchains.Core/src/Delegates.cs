@@ -2,6 +2,7 @@ using System;
 using System.Security;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core {
@@ -22,12 +23,12 @@ namespace Neuralia.Blockchains.Core {
 		public delegate void RehydrationDelegate<T>(IDataRehydrator rehydrator, ref T entry)
 			where T : IBinaryRehydratable;
 
-		public delegate void RequestCopyKeyFileDelegate(CorrelationContext correlationContext, Guid accountUUid, string keyName, int attempt);
+		public delegate Task RequestCopyKeyFileDelegate(CorrelationContext correlationContext, Guid accountUUid, string keyName, int attempt, LockContext lockContext);
 
-		public delegate void RequestCopyWalletFileDelegate(CorrelationContext correlationContext, int attempt);
+		public delegate Task RequestCopyWalletFileDelegate(CorrelationContext correlationContext, int attempt, LockContext lockContext);
 
-		public delegate SecureString RequestKeyPassphraseDelegate(CorrelationContext correlationContext, Guid accountUUid, string keyName, int attempt);
+		public delegate Task<SecureString> RequestKeyPassphraseDelegate(CorrelationContext correlationContext, Guid accountUUid, string keyName, int attempt, LockContext lockContext);
 
-		public delegate SecureString RequestPassphraseDelegate(CorrelationContext correlationContext, int attempt);
+		public delegate Task<(SecureString passphrase, bool keysToo)> RequestPassphraseDelegate(CorrelationContext correlationContext, int attempt, LockContext lockContext);
 	}
 }

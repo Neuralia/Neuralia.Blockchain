@@ -1,6 +1,6 @@
 //using System;
 //using System.Collections.Generic;
-//using System.IO.Abstractions;
+//
 //using Neuralia.Blockchains.Common.Classes.Neuralia.Blockchains.Common.Events.Digests.Channels.Index;
 //using Neuralia.Blockchains.Common.Classes.Neuralia.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 //
@@ -28,7 +28,7 @@
 //
 //		protected override void BuildBandsIndices() {
 //
-//			this.channelBandIndexSet.AddIndex(1, new GroupSplitSqliteChannelBandIndex<Sqlite1KeyDigestChannel.Sqlite1KeyDigestChannelBands, ACCREDITATION_CARD>(ACCOUNTS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, Sqlite1KeyDigestChannel.Sqlite1KeyDigestChannelBands.Accounts, new FileSystem()));
+//			this.channelBandIndexSet.AddIndex(1, new GroupSplitSqliteChannelBandIndex<Sqlite1KeyDigestChannel.Sqlite1KeyDigestChannelBands, ACCREDITATION_CARD>(ACCOUNTS_BAND_NAME, this.baseFolder, this.scopeFolder, this.groupSize, Sqlite1KeyDigestChannel.Sqlite1KeyDigestChannelBands.Accounts, FileSystemWrapper.CreatePhysical()));
 //		}
 //
 //		protected override void SetIdentity() {

@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
+using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
-	public interface IChainComponentProvider {
+	public interface IChainComponentProvider: IDisposableExtended {
 		IWalletProviderProxy WalletProviderBase { get; }
 		IChainStateProvider ChainStateProviderBase { get; }
 		IChainConfigurationProvider ChainConfigurationProviderBase { get; }
@@ -16,6 +19,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		ICardUtils CardUtils { get; }
 
 		List<IChainProvider> Providers { get; }
+
+		Task Initialize(LockContext lockContext);
 	}
 	public interface IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainComponentProvider
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -179,5 +184,53 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public abstract ICardUtils CardUtils { get; }
 		public List<IChainProvider> Providers { get; } = new List<IChainProvider>();
+		
+		public async Task Initialize(LockContext lockContext){
+			
+			foreach(var provider in this.Providers) {
+				await provider.Initialize(lockContext).ConfigureAwait(false);
+			}
+			
+			foreach(var provider in this.Providers) {
+				await provider.PostInitialize().ConfigureAwait(false);
+			}
+		}
+
+		#region disposable
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+			
+			if(disposing && !this.IsDisposed) {
+				this.DisposeAll();
+			}
+
+			this.IsDisposed = true;
+		}
+
+		protected virtual void DisposeAll() {
+			foreach(var provider in this.Providers) {
+				try {
+					if(provider is IDisposable disposable) {
+						disposable.Dispose();
+					}
+				} catch {
+					
+				}
+			}
+		}
+
+		~ChainComponentProvider() {
+			this.Dispose(false);
+		}
+
+		#endregion
 	}
+	
 }

@@ -1,10 +1,12 @@
 using System;
-using System.IO.Abstractions;
+
 using System.Linq.Expressions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite {
 
@@ -18,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected readonly Expression<Func<CARD_TYPE, object>> keyDeclaration;
 
-		public SqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, IFileSystem fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base("", baseFolder, scopeFolder, enabledBands, fileSystem) {
+		public SqliteChannelBandIndex(string bandName, string baseFolder, string scopeFolder, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem, Expression<Func<CARD_TYPE, object>> keyDeclaration = null) : base("", baseFolder, scopeFolder, enabledBands, fileSystem) {
 			this.BandType = enabledBands;
 			this.keyDeclaration = keyDeclaration;
 			this.bandName = bandName.ToLower();

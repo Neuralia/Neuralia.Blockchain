@@ -2,6 +2,7 @@
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.AccreditationCertificates;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
@@ -13,6 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		SafeArrayHandle EncryptedMessage { get; }
 		AccountId AccountId { get; set; }
 		AccountId DelegateAccountId { get; set; }
+		Enums.MiningTiers MiningTier { get; set; }
 
 		List<AccreditationCertificateMetadata> Certificates { get; }
 	}
@@ -35,6 +37,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		///     If we are delegating our winnings to another account (such as a mining pool), we indicate it here
 		/// </summary>
 		public AccountId DelegateAccountId { get; set; }
+		
+		/// <summary>
+		/// requested mining tier
+		/// </summary>
+		public Enums.MiningTiers MiningTier { get; set; }
 
 		public List<AccreditationCertificateMetadata> Certificates { get; private set; }
 
@@ -46,6 +53,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			this.DelegateAccountId = rehydrator.ReadRehydratable<AccountId>();
 
+			this.MiningTier = (Enums.MiningTiers)rehydrator.ReadByte();
+			
 			bool any = rehydrator.ReadBool();
 
 			if(any) {
@@ -73,6 +82,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			dehydrator.Write(this.DelegateAccountId);
 
+			dehydrator.Write((byte)this.MiningTier);
+
 			bool any = this.Certificates?.Any() ?? false;
 			dehydrator.Write(any);
 
@@ -81,14 +92,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 				foreach(AccreditationCertificateMetadata entry in this.Certificates) {
 
-					using(IDataDehydrator subDh = DataSerializationFactory.CreateDehydrator()) {
-						entry.Dehydrate(subDh);
+					using IDataDehydrator subDh = DataSerializationFactory.CreateDehydrator();
 
-						SafeArrayHandle data = subDh.ToArray();
+					entry.Dehydrate(subDh);
 
-						dehydrator.WriteNonNullable(data);
-						data.Return();
-					}
+					SafeArrayHandle data = subDh.ToArray();
+
+					dehydrator.WriteNonNullable(data);
+					data.Return();
+
 				}
 			}
 

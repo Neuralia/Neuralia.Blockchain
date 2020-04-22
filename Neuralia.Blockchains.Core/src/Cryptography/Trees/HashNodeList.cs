@@ -442,7 +442,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList AddNull() {
-			this.Add(ByteArray.Create());
+			this.Add(ByteArray.Empty());
 
 			return this;
 		}
@@ -460,7 +460,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		public HashNodeList Add<T, U>(IDictionary<T, U> nodes)
 			where T : ITreeHashable {
 
-			this.Add(nodes.Count());
+			this.Add(nodes.Count);
 
 			foreach(var entry in nodes) {
 				this.Add(entry);

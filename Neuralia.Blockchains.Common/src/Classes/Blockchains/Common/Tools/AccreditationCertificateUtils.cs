@@ -34,26 +34,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		public static void CheckValidity(IAccreditationCertificateSnapshot certificate, Action valid, Action Invalid) {
 			if(certificate != null) {
 				if(certificate.CertificateState == Enums.CertificateStates.Revoked) {
-					Invalid?.Invoke();
+if(					Invalid != null){					Invalid();}
 
 					return;
 				}
 
 				if(certificate.EmissionDate > DateTime.UtcNow) {
-					Invalid?.Invoke();
+if(					Invalid != null){					Invalid();}
 
 					return;
 				}
 
 				if(certificate.ValidUntil < DateTime.UtcNow) {
-					Invalid?.Invoke();
+if(					Invalid != null){					Invalid();}
 
 					return;
 				}
 
-				valid?.Invoke();
+if(				valid != null){				valid();}
 			} else {
-				Invalid?.Invoke();
+if(				Invalid != null){				Invalid();}
 			}
 		}
 	}

@@ -121,7 +121,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				}
 
 				// alert we are running an iteration
-				iteration?.Invoke(nonce, hashTargetDifficulty);
+if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 
 				var results = this.FindBestPatternHash(out int collisions, hash, scratchpad, nThreads, nonce);
 
@@ -237,14 +237,14 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			dataHash.Return();
 
-			collisions = searchResults.Count();
+			collisions = searchResults.Count;
 
 			SafeArrayHandle result = ByteArray.Create(sizeof(long) + sizeof(uint));
 
 			Span<byte> startLocBytes = stackalloc byte[sizeof(long)];
 			Span<byte> finalCalculationBytes = stackalloc byte[sizeof(uint)];
 
-			for(int i = 0; i < searchResults.Count(); i++) {
+			for(int i = 0; i < searchResults.Count; i++) {
 				long startLocation = searchResults[i].Item1;
 				uint finalCalculation = searchResults[i].Item2;
 
@@ -315,6 +315,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			Task.WaitAll(aesTasks.Cast<Task>().ToArray());
 
 			foreach(var task in aesTasks) {
+				// ReSharper disable once AsyncConverter.AsyncWait
 				results.AddRange(task.Result);
 			}
 

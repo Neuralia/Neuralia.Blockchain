@@ -15,6 +15,20 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 			return source.Local.Any(predicate);
 		}
 		
+		public static async Task<bool> AddIfNotExists<T_SOURCE>(this DbSet<T_SOURCE> dbSet, Func<T_SOURCE> prepare, Expression<Func<T_SOURCE, bool>> predicate = null) where T_SOURCE : class, new()
+		{
+			if(prepare != null && predicate != null) {
+				if(await dbSet.AnyAsync(predicate).ConfigureAwait(false)){
+					return false;
+				}
+				
+				T_SOURCE entity = prepare();
+				dbSet.Add(entity);
+			}
+
+			return true;
+		}
+		
 		/// <summary>
 		///     Query both the database and local version at the same time.
 		/// </summary>
@@ -102,7 +116,7 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 		public static async Task<List<T_KEY>> DeleteById<T_SOURCE, T_KEY>(this DbSet<T_SOURCE> dbSet, DbContext dbContext, Expression<Func<T_SOURCE, T_KEY>> keysSelector, Expression<Func<T_SOURCE, bool>> selector, Func<T_KEY, T_SOURCE> factory)
 			where T_SOURCE : class {
 
-			var deleteIds = await dbSet.AsNoTracking().Where(selector).Select(keysSelector).ToListAsync();
+			var deleteIds = await dbSet.AsNoTracking().Where(selector).Select(keysSelector).ToListAsync().ConfigureAwait(false);
 
 			if(deleteIds.Any()) {
 				try {

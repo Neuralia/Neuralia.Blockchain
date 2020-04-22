@@ -119,7 +119,8 @@ namespace Neuralia.Blockchains.Core {
 
 		public readonly BlockchainSystemEventType WalletSyncStarted;
 		public readonly BlockchainSystemEventType WalletSyncUpdate;
-
+		
+		public readonly BlockchainSystemEventType TransactionHistoryUpdated;
 		static BlockchainSystemEventTypes() {
 		}
 
@@ -201,6 +202,8 @@ namespace Neuralia.Blockchains.Core {
 			this.RequireNodeUpdate = this.CreateBaseConstant();
 
 			this.ImportantWalletUpdate = this.CreateBaseConstant();
+
+			this.TransactionHistoryUpdated = this.CreateBaseConstant();
 		}
 
 		public static BlockchainSystemEventTypes Instance { get; } = new BlockchainSystemEventTypes();

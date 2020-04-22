@@ -290,13 +290,13 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		}
 
-		public async Task<QueryResult> QueryAddress() {
-			return await this.QueryAddressAsync();
+		public Task<QueryResult> QueryAddress(){
+			return this.QueryAddressAsync();
 		}
 
 		public Task<QueryResult> QueryAddressAsync(Action<QueryResult> callback = null) {
 
-			var task = Task<QueryResult>.Factory.StartNew(() => {
+			var task = Task.Run(() => {
 				QueryResult result = new QueryResult();
 
 				foreach((string server, int port) server in servers) {
@@ -311,7 +311,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					if(queryResult.QueryError == STUNQueryError.Success) {
 						result.SuccessResults = queryResult;
 
-						callback?.Invoke(result);
+if(						callback != null){					callback(result);}
 
 						break;
 					}

@@ -1,6 +1,8 @@
 using System;
-using System.IO.Abstractions;
+
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
+using Neuralia.Blockchains.Core.Tools;
+using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils {
 	public class BlockChannelUtils {
@@ -32,7 +34,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public static readonly BlockChannelTypes[] AllIndividualTypes = {BlockChannelTypes.HighHeader, BlockChannelTypes.LowHeader, BlockChannelTypes.Contents, BlockChannelTypes.LargeContents, BlockChannelTypes.Erasables, BlockChannelTypes.Slots, BlockChannelTypes.Keys};
 		public static readonly BlockChannelTypes[] MainIndexChannels = {BlockChannelTypes.HighHeader, BlockChannelTypes.LowHeader, BlockChannelTypes.Contents, BlockChannelTypes.LargeContents, BlockChannelTypes.Slots, BlockChannelTypes.Keys};
 
-		public static Func<ChannelProvider> GetProviderFactory(BlockChannelTypes type, string folderPath, IFileSystem fileSystem) {
+		public static Func<ChannelProvider> GetProviderFactory(BlockChannelTypes type, string folderPath, FileSystemWrapper fileSystem) {
 			switch(type) {
 				case BlockChannelTypes.HighHeader:
 

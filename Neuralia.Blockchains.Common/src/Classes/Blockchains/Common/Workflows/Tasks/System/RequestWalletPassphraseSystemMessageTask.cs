@@ -19,7 +19,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		}
 
 		public SecureString Passphrase { get; set; }
-
+		public bool KeysToo { get; set; }
+		
 		public void Completed() {
 			this.action();
 		}

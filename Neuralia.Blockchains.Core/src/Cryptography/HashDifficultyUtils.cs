@@ -81,8 +81,13 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		}
 
 		public static BigInteger GetHash512TargetByIncrementalDifficulty(long difficulty) {
-			
-			return MaxHash512 / new BigInteger(difficulty/Default512Difficulty);
+
+			var diff = new BigInteger(difficulty / Default512Difficulty);
+
+			if(diff == 0) {
+				diff = 1;
+			}
+			return MaxHash512 / diff;
 		}
 
 

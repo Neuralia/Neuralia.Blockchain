@@ -20,10 +20,28 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		/// <param name="action"></param>
 		/// <param name="logError"></param>
 		public static void RunUnconditionalDbUpdate(Action action, string logError) {
-
 			
 			try {
 				Repeater.Repeat(action, 2);
+			} 
+			catch(DbUpdateConcurrencyException bdcex) {
+				LogError(bdcex, logError);
+			}
+			catch(SynchronizationLockException syncEx) {
+				LogError(syncEx, logError);
+			}
+			catch(DbUpdateException syncEx) {
+				LogError(syncEx, logError);
+			}
+			catch(Exception ex) {
+				LogError(ex, logError);
+			}
+		}
+		
+		public static async Task RunUnconditionalDbUpdateAsync(Func<Task> action, string logError) {
+			
+			try {
+				await Repeater.RepeatAsync(action, 2).ConfigureAwait(false);
 			} 
 			catch(DbUpdateConcurrencyException bdcex) {
 				LogError(bdcex, logError);
@@ -57,10 +75,10 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 		}
 		
-		public static Task RunDbUpdateConcurrentAsync(Func<Task> action, string logError = null) {
+		public static async Task RunDbUpdateConcurrentAsync(Func<Task> action, string logError = null) {
 			
 			try {
-				return Repeater.RepeatAsync(action, 2);
+				await Repeater.RepeatAsync(action, 2).ConfigureAwait(false);
 			} 
 			catch(DbUpdateConcurrencyException bdcex) {
 				LogError(bdcex, logError);
@@ -68,8 +86,6 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			catch(SynchronizationLockException syncEx) {
 				LogError(syncEx, logError);
 			}
-
-			return Task.CompletedTask;
 		}
 	}
 }

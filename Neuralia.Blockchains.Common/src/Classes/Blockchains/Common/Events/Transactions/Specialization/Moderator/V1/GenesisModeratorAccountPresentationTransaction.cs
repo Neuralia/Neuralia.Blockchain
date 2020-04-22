@@ -17,11 +17,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		AccountId ModeratorAccountId { get; set; }
 
 		NtruCryptographicKey CommunicationsCryptographicKey { get; }
-		XmssmtCryptographicKey BlocksXmssMTCryptographicKey { get; }
+		XmssCryptographicKey BlocksXmssCryptographicKey { get; }
 		SecretPentaCryptographicKey BlocksChangeCryptographicKey { get; }
-		XmssmtCryptographicKey DigestBlocksCryptographicKey { get; }
+		XmssCryptographicKey DigestBlocksCryptographicKey { get; }
 		SecretPentaCryptographicKey DigestBlocksChangeCryptographicKey { get; }
-		XmssmtCryptographicKey BinaryCryptographicKey { get; }
+		XmssCryptographicKey BinaryCryptographicKey { get; }
 		SecretPentaCryptographicKey SuperChangeCryptographicKey { get; }
 		SecretPentaCryptographicKey PtahCryptographicKey { get; }
 
@@ -42,19 +42,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.Keyset.Add<NtruCryptographicKey>(GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID);
 
 			// Blocks Key
-			this.Keyset.Add<XmssmtCryptographicKey>(GlobalsService.MODERATOR_BLOCKS_KEY_XMSSMT_ID);
+			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID);
 
 			// Blocks change key
 			this.Keyset.Add<SecretPentaCryptographicKey>(GlobalsService.MODERATOR_BLOCKS_CHANGE_KEY_ID);
 
 			// DigestBlocksKey
-			this.Keyset.Add<XmssmtCryptographicKey>(GlobalsService.MODERATOR_DIGEST_BLOCKS_KEY_ID);
+			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_DIGEST_BLOCKS_KEY_ID);
 
 			// DigestBlocks change key
 			this.Keyset.Add<SecretPentaCryptographicKey>(GlobalsService.MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID);
 
 			// binaryKey
-			this.Keyset.Add<XmssmtCryptographicKey>(GlobalsService.MODERATOR_BINARY_KEY_ID);
+			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_BINARY_KEY_ID);
 
 			//  super change key
 			this.Keyset.Add<SecretPentaCryptographicKey>(GlobalsService.MODERATOR_SUPER_CHANGE_KEY_ID);
@@ -63,20 +63,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.Keyset.Add<SecretPentaCryptographicKey>(GlobalsService.MODERATOR_PTAH_KEY_ID);
 		}
 
-		public bool IsBlocksXmssMTKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_BLOCKS_KEY_XMSSMT_ID);
+		public bool IsBlocksXmssMTKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID);
 
 		public AccountId ModeratorAccountId { get; set; } = new AccountId();
 
 		public NtruCryptographicKey CommunicationsCryptographicKey => (NtruCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID];
 
-		public XmssmtCryptographicKey BlocksXmssMTCryptographicKey => (XmssmtCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BLOCKS_KEY_XMSSMT_ID];
+		public XmssCryptographicKey BlocksXmssCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID];
 
 		public SecretPentaCryptographicKey BlocksChangeCryptographicKey => (SecretPentaCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BLOCKS_CHANGE_KEY_ID];
 
-		public XmssmtCryptographicKey DigestBlocksCryptographicKey => (XmssmtCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_DIGEST_BLOCKS_KEY_ID];
+		public XmssCryptographicKey DigestBlocksCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_DIGEST_BLOCKS_KEY_ID];
 		public SecretPentaCryptographicKey DigestBlocksChangeCryptographicKey => (SecretPentaCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID];
 
-		public XmssmtCryptographicKey BinaryCryptographicKey => (XmssmtCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BINARY_KEY_ID];
+		public XmssCryptographicKey BinaryCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BINARY_KEY_ID];
 
 		public SecretPentaCryptographicKey SuperChangeCryptographicKey => (SecretPentaCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_SUPER_CHANGE_KEY_ID];
 		public SecretPentaCryptographicKey PtahCryptographicKey => (SecretPentaCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_PTAH_KEY_ID];

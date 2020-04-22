@@ -98,7 +98,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public virtual void Copy(IAccountSnapshot source, IAccountSnapshot destination) {
 			destination.AccountId = source.AccountId;
 			destination.InceptionBlockId = source.InceptionBlockId;
-			destination.CorrelationId = source.CorrelationId;
+			destination.Correlated = source.Correlated;
 			destination.TrustLevel = source.TrustLevel;
 
 			this.CopyArray(source, destination);

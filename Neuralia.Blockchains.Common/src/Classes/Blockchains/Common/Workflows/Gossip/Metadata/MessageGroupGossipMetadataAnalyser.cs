@@ -32,7 +32,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 				long currentBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
 				int blockGossipCacheProximityLevel = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
 
-				return (blockGossipMessageMetadataDetails.BlockId > currentBlockHeight) && (blockGossipMessageMetadataDetails.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel));
+				var accept =  blockGossipMessageMetadataDetails.BlockId > currentBlockHeight && blockGossipMessageMetadataDetails.BlockId <= currentBlockHeight + blockGossipCacheProximityLevel;
+
+				if (accept){
+					// ok, here we decide to accept the block. because we dont want the sync to ALSO download the block, we will give it some time to complete by gossip.
+					// here we attempt to acquire a lock, but we still accept it, because even if we have it, we want to propagate the message
+					this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.AttemptLockBlockDownload(blockGossipMessageMetadataDetails.BlockId);
+				}
+				return accept;
 			}
 			else if(gossipGroupMessageInfo.GossipMessageMetadata?.GossipMessageMetadataDetails is TransactionGossipMessageMetadataDetails transactionGossipMessageMetadataDetails) {
 

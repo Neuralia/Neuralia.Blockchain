@@ -40,20 +40,21 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		public int Tree { get; }
 		public int Layer { get; }
 
-		public static implicit operator XMSSMTLeafId((int index, int tree, int layer) d) {
-			return new XMSSMTLeafId(d.index, d.tree, d.layer);
+		public static implicit operator XMSSMTLeafId((long index, int tree, int layer) d) {
+			(long index, int tree, int layer) = d;
+
+			return new XMSSMTLeafId(index, tree, layer);
 		}
 
 		public static implicit operator XMSSMTreeId(XMSSMTLeafId d) {
 			return new XMSSMTreeId(d.Tree, d.Layer);
 		}
-
-		public static implicit operator XMSSMTLeafId((int index, XMSSMTreeId id) d) {
-			return new XMSSMTLeafId(d.index, d.id.Tree, d.id.Layer);
-		}
+		
 
 		public static implicit operator XMSSMTLeafId((long index, XMSSMTreeId id) d) {
-			return new XMSSMTLeafId(d.index, d.id.Tree, d.id.Layer);
+			(long index, XMSSMTreeId id) = d;
+
+			return new XMSSMTLeafId(index, id.Tree, id.Layer);
 		}
 	}
 }

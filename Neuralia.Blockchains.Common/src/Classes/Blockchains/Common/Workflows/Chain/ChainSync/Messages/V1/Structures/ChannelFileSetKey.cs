@@ -80,7 +80,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return false;
 				}
 
-				return (this.ChannelId == other.ChannelId) && (this.IndexId == other.IndexId) && (this.FileId == other.FileId) && (this.FilePart == other.FilePart);
+				return this.ChannelId == other.ChannelId && this.IndexId == other.IndexId && this.FileId == other.FileId && this.FilePart == other.FilePart;
 			}
 
 			return base.Equals(obj);

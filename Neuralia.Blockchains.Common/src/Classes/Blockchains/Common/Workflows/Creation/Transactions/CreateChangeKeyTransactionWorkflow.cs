@@ -1,4 +1,5 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
+﻿using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
@@ -6,6 +7,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Transactions {
 
@@ -40,9 +42,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			}
 		}
 
-		protected override void CheckSyncStatus() {
+		protected override Task CheckSyncStatus(LockContext lockContext) {
 
 			// for this transaction type, we dont care about the sync status. we launch it when we have to.
+			return Task.CompletedTask;
 		}
 
 		protected override ValidationResult ValidateContents(ITransactionEnvelope envelope) {
@@ -59,49 +62,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			return new ValidationResult(ValidationResult.ValidationResults.Valid);
 		}
 
-		protected override void PreProcess() {
-			base.PreProcess();
+		protected override async Task PreProcess(LockContext lockContext) {
+			await base.PreProcess(lockContext).ConfigureAwait(false);
 
-			// first thing, lets mark the key as changing status
+			IWalletAccount account = await centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
 
-			// now we publish our keys
-			IWalletAccount account = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();
+			using IWalletKey key = await centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey(account.AccountUuid, keyChangeName, lockContext).ConfigureAwait(false);
 
-			using(IWalletKey key = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey(account.AccountUuid, this.keyChangeName)) {
-
-				if(key.Status == Enums.KeyStatus.Changing) {
-					throw new EventGenerationException("The key is already in the process of changing. we can not do it again.");
-				}
-
-				key.Status = Enums.KeyStatus.Changing;
-				key.KeyChangeTimeout = this.GetTransactionExpiration();
-
-				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
+			// we can not update again, if it is still happening
+			if(key.Status == Enums.KeyStatus.Changing) {
+				throw new EventGenerationException("The key is already in the process of changing. we can not do it again.");
 			}
 		}
 		
-		protected override void PostProcess() {
-			base.PreProcess();
+		protected override async Task PostProcess(LockContext lockContext) {
+			await base.PreProcess(lockContext).ConfigureAwait(false);
 
 			// first thing, lets mark the key as changing status
 
 			// now we publish our keys
-			IWalletAccount account = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount();
+			IWalletAccount account = await centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
 
-			using(IWalletKey key = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey(account.AccountUuid, this.keyChangeName)) {
+			using IWalletKey key = await centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey(account.AccountUuid, keyChangeName, lockContext).ConfigureAwait(false);
 
-				if(key.Status != Enums.KeyStatus.Changing) {
-					throw new EventGenerationException("The key is is not in the process of changing. An error occured.");
-				}
+			key.Status           = Enums.KeyStatus.Changing;
+			key.KeyChangeTimeout = this.GetTransactionExpiration();
+			key.ChangeTransactionId = this.transactionId;
 
-				key.ChangeTransactionId = this.transactionId;
+			await centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lockContext).ConfigureAwait(false);
 
-				this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key);
-			}
 		}
 
-		protected override ITransactionEnvelope AssembleEvent() {
-			var envelope = this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateKeyChangeTransaction(this.changingKeyOrdinal, this.keyChangeName, this.correlationContext, this.expiration);
+		protected override async Task<ITransactionEnvelope> AssembleEvent(LockContext lockContext) {
+			var envelope = await this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateKeyChangeTransaction(this.changingKeyOrdinal, this.keyChangeName, this.correlationContext, lockContext, this.expiration).ConfigureAwait(false);
 
 			this.transactionId = envelope.Contents.Uuid;
 			

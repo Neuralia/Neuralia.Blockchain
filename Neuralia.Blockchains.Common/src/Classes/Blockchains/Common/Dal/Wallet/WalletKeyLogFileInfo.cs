@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using LiteDB;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
@@ -9,6 +10,7 @@ using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public class WalletKeyLogFileInfo : SingleEntryWalletFileInfo<WalletAccountKeyLog> {
@@ -24,24 +26,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     Insert the new empty wallet
 		/// </summary>
 		/// <param name="wallet"></param>
-		protected override void InsertNewDbData(WalletAccountKeyLog keyLog) {
+		protected override Task InsertNewDbData(WalletAccountKeyLog keyLog, LockContext lockContext) {
 
-			this.RunDbOperation(litedbDal => {
+			return this.RunDbOperation((litedbDal, lc) => {
 				litedbDal.Insert(keyLog, c => c.Id);
-			});
+
+				return Task.CompletedTask;
+			}, lockContext);
 
 		}
 
-		protected override void CreateDbFile(LiteDBDAL litedbDal) {
+		protected override Task CreateDbFile(LiteDBDAL litedbDal, LockContext lockContext) {
 			litedbDal.CreateDbFile<WalletAccountKeyLog, ObjectId>(i => i.Id);
+
+			return Task.CompletedTask;
 		}
 
-		protected override void PrepareEncryptionInfo() {
-			this.CreateSecurityDetails();
+		protected override Task PrepareEncryptionInfo(LockContext lockContext) {
+			return this.CreateSecurityDetails(lockContext);
 		}
 
-		protected override void CreateSecurityDetails() {
-			lock(this.locker) {
+		protected override async Task CreateSecurityDetails(LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
@@ -50,20 +56,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(this.EncryptionInfo.Encrypt) {
 
 						this.EncryptionInfo.EncryptionParameters = this.account.KeyLogFileEncryptionParameters;
-						this.EncryptionInfo.Secret = () => this.account.KeyLogFileSecret;
+						this.EncryptionInfo.Secret               = () => this.account.KeyLogFileSecret;
 					}
 				}
 			}
 		}
 
-		protected override void UpdateDbEntry() {
+		protected override Task UpdateDbEntry(LockContext lockContext) {
 			// do nothing, we dont udpate
 
+			return Task.CompletedTask;
 		}
 
-		public void InsertKeyLogEntry(WalletAccountKeyLog walletAccountKeyLog) {
-			lock(this.locker) {
-				this.RunDbOperation(litedbDal => {
+		public async Task InsertKeyLogEntry(WalletAccountKeyLog walletAccountKeyLog, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await RunDbOperation((litedbDal, lc) => {
 					// lets check the last one inserted, make sure it was a lower key height than ours now
 
 					// -1 is for keys without an index. otherwise we check it
@@ -83,97 +90,100 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					}
 
 					litedbDal.Insert(walletAccountKeyLog, k => k.Id);
-				});
 
-				this.Save();
+					return Task.CompletedTask;
+				}, handle).ConfigureAwait(false);
+
+				await Save(handle).ConfigureAwait(false);
 			}
 		}
 
-		public bool ConfirmKeyLogBlockEntry(long confirmationBlockId) {
-			return this.ConfirmKeyLogEntry(confirmationBlockId.ToString(), Enums.BlockchainEventTypes.Block, confirmationBlockId, null);
+		public Task<bool> ConfirmKeyLogBlockEntry(long confirmationBlockId, LockContext lockContext) {
+			return this.ConfirmKeyLogEntry(confirmationBlockId.ToString(), Enums.BlockchainEventTypes.Block, confirmationBlockId, null, lockContext);
 		}
 
-		public bool ConfirmKeyLogTransactionEntry(TransactionId transactionId, KeyUseIndexSet keyUseIndexSet, long confirmationBlockId) {
-			return this.ConfirmKeyLogEntry(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction, confirmationBlockId, keyUseIndexSet);
+		public Task<bool> ConfirmKeyLogTransactionEntry(TransactionId transactionId, KeyUseIndexSet keyUseIndexSet, long confirmationBlockId, LockContext lockContext) {
+			return this.ConfirmKeyLogEntry(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction, confirmationBlockId, keyUseIndexSet, lockContext);
 		}
 
-		public bool ConfirmKeyLogEntry(string eventId, Enums.BlockchainEventTypes eventType, long confirmationBlockId, KeyUseIndexSet keyUseIndexSet) {
-			lock(this.locker) {
-				bool result = this.RunDbOperation(litedbDal => {
+		public async Task<bool> ConfirmKeyLogEntry(string eventId, Enums.BlockchainEventTypes eventType, long confirmationBlockId, KeyUseIndexSet keyUseIndexSet, LockContext lockContext) {
+			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				bool result = await RunDbOperation((litedbDal, lc) => {
 					// lets check the last one inserted, make sure it was a lower key height than ours now
 					WalletAccountKeyLog entry = null;
 
 					if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
 						byte eventTypeCasted = (byte) eventType;
-						entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted)).FirstOrDefault();
+						entry = litedbDal.Get<WalletAccountKeyLog>(k => k.EventId == eventId && k.EventType == eventTypeCasted).FirstOrDefault();
 					}
 
 					if(entry == null) {
-						return false;
+						return Task.FromResult(false);
 					}
 
-					if((keyUseIndexSet != null) && (entry.KeyUseIndex != keyUseIndexSet)) {
+					if(keyUseIndexSet != null && entry.KeyUseIndex != keyUseIndexSet) {
 						throw new ApplicationException($"Failed to confirm keylog entry for event '{eventId}'. Expected key use index to be '{keyUseIndexSet}' but found '{entry.KeyUseIndex}' instead.");
 					}
 
 					entry.ConfirmationBlockId = confirmationBlockId;
 
-					return litedbDal.Update(entry);
-				});
+					return Task.FromResult(litedbDal.Update(entry));
+				}, handle).ConfigureAwait(false);
 
 				if(result) {
-					this.Save();
+					await Save(handle).ConfigureAwait(false);
 				}
 
 				return result;
 			}
 		}
 
-		public bool KeyLogBlockExists(BlockId blockId) {
+		public Task<bool> KeyLogBlockExists(BlockId blockId, LockContext lockContext) {
 
-			return this.KeyLogEntryExists(blockId.ToString(), Enums.BlockchainEventTypes.Block);
+			return this.KeyLogEntryExists(blockId.ToString(), Enums.BlockchainEventTypes.Block, lockContext);
 		}
 
-		public bool KeyLogTransactionExists(TransactionId transactionId) {
+		public Task<bool> KeyLogTransactionExists(TransactionId transactionId, LockContext lockContext) {
 
-			return this.KeyLogEntryExists(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction);
+			return this.KeyLogEntryExists(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction, lockContext);
 		}
 
-		public bool KeyLogEntryExists(string eventId, Enums.BlockchainEventTypes eventType) {
+		public Task<bool> KeyLogEntryExists(string eventId, Enums.BlockchainEventTypes eventType, LockContext lockContext) {
 
-			return this.RunQueryDbOperation(litedbDal => {
+			return this.RunQueryDbOperation((litedbDal, lc) => {
 				if(!litedbDal.CollectionExists<WalletAccountKeyLog>()) {
-					return false;
+					return Task.FromResult(false);
 				}
 
 				byte eventTypeCasted = (byte) eventType;
-				return litedbDal.Exists<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted));
-			});
+
+				return Task.FromResult(litedbDal.Exists<WalletAccountKeyLog>(k => k.EventId == eventId && k.EventType == eventTypeCasted));
+			}, lockContext);
 		}
 
-		public bool KeyLogBlockIsConfirmed(BlockId blockId) {
+		public Task<bool> KeyLogBlockIsConfirmed(BlockId blockId, LockContext lockContext) {
 
-			return this.KeyLogEntryIsConfirmed(blockId.ToString(), Enums.BlockchainEventTypes.Block);
+			return this.KeyLogEntryIsConfirmed(blockId.ToString(), Enums.BlockchainEventTypes.Block, lockContext);
 		}
 
-		public bool KeyLogTransactionIsConfirmed(TransactionId transactionId) {
+		public Task<bool> KeyLogTransactionIsConfirmed(TransactionId transactionId, LockContext lockContext) {
 
-			return this.KeyLogEntryIsConfirmed(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction);
+			return this.KeyLogEntryIsConfirmed(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction, lockContext);
 		}
 
-		public bool KeyLogEntryIsConfirmed(string eventId, Enums.BlockchainEventTypes eventType) {
+		public Task<bool> KeyLogEntryIsConfirmed(string eventId, Enums.BlockchainEventTypes eventType, LockContext lockContext) {
 
-			return this.RunQueryDbOperation(litedbDal => {
+			return this.RunQueryDbOperation((litedbDal, lc) => {
 				WalletAccountKeyLog entry = null;
 
 				if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
-					
+
 					byte eventTypeCasted = (byte) eventType;
-					entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted)).FirstOrDefault();
+					entry = litedbDal.Get<WalletAccountKeyLog>(k => k.EventId == eventId && k.EventType == eventTypeCasted).FirstOrDefault();
 				}
 
-				return entry?.ConfirmationBlockId != null;
-			});
+				return Task.FromResult(entry?.ConfirmationBlockId != null);
+			}, lockContext);
 		}
 	}
 }

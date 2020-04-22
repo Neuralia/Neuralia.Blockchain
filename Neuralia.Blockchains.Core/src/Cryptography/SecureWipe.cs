@@ -1,8 +1,9 @@
 ﻿using System;
 using System.IO;
-using System.IO.Abstractions;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Security;
+using Zio;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
 	public static class SecureWipe {
@@ -12,21 +13,21 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		/// </summary>
 		/// <param name="filename">Full path of the file to be deleted</param>
 		/// <param name="timesToWrite">Specifies the number of times the file should be overwritten</param>
-		public static void WipeFile(string filename, int timesToWrite, IFileSystem fileSystem) {
+		public static void WipeFile(string filename, int timesToWrite, FileSystemWrapper fileSystem) {
 			try {
-				if(fileSystem.File.Exists(filename)) {
+				if(fileSystem.FileExists(filename)) {
 					// Calculate the total number of sectors in the file.
-					decimal sectors = Math.Ceiling(fileSystem.FileInfo.FromFileName(filename).Length / 512M);
+					decimal sectors = Math.Ceiling(fileSystem.GetFileLength(filename) / 512M);
 
 					// Set the files attributes to normal in case it's read-only.
-					fileSystem.File.SetAttributes(filename, FileAttributes.Normal);
+					fileSystem.SetAttributes(filename, FileAttributes.Normal);
 
 					// Buffer the size of a sector.
 					var buffer = new byte[1024];
 
 					SecureRandom random = new BetterSecureRandom();
 
-					Stream inputStream = fileSystem.FileStream.Create(filename, FileMode.Open);
+					using Stream inputStream = fileSystem.CreateFile(filename);
 
 					for(int currentPass = 0; currentPass < timesToWrite; currentPass++) {
 
@@ -50,16 +51,12 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 					// change the dates of the file. original dates will be hidden if there are attempts to recover the file.
 					DateTime dt = new DateTime(2037, 1, 1, 0, 0, 0);
-					fileSystem.File.SetCreationTime(filename, dt);
-					fileSystem.File.SetLastAccessTime(filename, dt);
-					fileSystem.File.SetLastWriteTime(filename, dt);
-
-					fileSystem.File.SetCreationTimeUtc(filename, dt);
-					fileSystem.File.SetLastAccessTimeUtc(filename, dt);
-					fileSystem.File.SetLastWriteTimeUtc(filename, dt);
+					fileSystem.SetCreationTime(filename, dt);
+					fileSystem.SetLastAccessTime(filename, dt);
+					fileSystem.SetLastWriteTime(filename, dt);
 
 					// delete the file
-					fileSystem.File.Delete(filename);
+					fileSystem.DeleteFile(filename);
 
 				}
 			} catch(Exception e) {
