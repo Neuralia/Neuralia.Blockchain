@@ -6,7 +6,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public static class EnvelopeSignatureFactory {
 		public static IEnvelopeSignature Rehydrate(IDataRehydrator rehydrator) {
 
-			var version = rehydrator.RehydrateRewind<ComponentVersion<EnvelopeSignatureType>>();
+			ComponentVersion<EnvelopeSignatureType> version = rehydrator.RehydrateRewind<ComponentVersion<EnvelopeSignatureType>>();
 
 			IEnvelopeSignature envelopeSignature = null;
 

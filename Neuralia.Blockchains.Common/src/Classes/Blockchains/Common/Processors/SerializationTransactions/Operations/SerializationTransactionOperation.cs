@@ -1,12 +1,10 @@
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations {
 	public abstract class SerializationTransactionOperation : IBinarySerializable {
 		protected readonly IChainDataWriteProvider chainDataWriteProvider;
-
 
 		public SerializationTransactionOperation(IChainDataWriteProvider chainDataWriteProvider) {
 			this.SetType();

@@ -138,15 +138,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		}
 
 		public ISecretDoubleCryptographicKey ConvertToSecretKey() {
-			if((this.NextAccountSignatureType == BlockSignatureTypes.Genesis || this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature secretBlockNextAccountSignature) {
+			if(((this.NextAccountSignatureType == BlockSignatureTypes.Genesis) || (this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential)) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature secretBlockNextAccountSignature) {
 				return SignatureUtils.ConvertToSecretKey(secretBlockNextAccountSignature, this.NextModeratorKey);
 			}
 
 			throw new ApplicationException("Not a secret key");
 		}
-		
+
 		public IXmssCryptographicKey ConvertToXmssKey() {
-			if(this.NextAccountSignatureType == BlockSignatureTypes.Xmss && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature xmssBlockNextAccountSignature) {
+			if((this.NextAccountSignatureType == BlockSignatureTypes.Xmss) && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature xmssBlockNextAccountSignature) {
 				return SignatureUtils.ConvertToXmssMTKey(xmssBlockNextAccountSignature, this.NextModeratorKey);
 			}
 
@@ -155,12 +155,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		public SafeArrayHandle ConvertToDehydratedKey() {
 
-			if((this.NextAccountSignatureType == BlockSignatureTypes.Genesis || this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature) {
-				var key = this.ConvertToSecretKey();
+			if(((this.NextAccountSignatureType == BlockSignatureTypes.Genesis) || (this.NextAccountSignatureType == BlockSignatureTypes.SecretSequential)) && this.NextBlockAccountSignature is ISecretBlockNextAccountSignature) {
+				ISecretDoubleCryptographicKey key = this.ConvertToSecretKey();
+
 				return SignatureUtils.ConvertToDehydratedKey(key);
 			}
-			else if(this.NextAccountSignatureType == BlockSignatureTypes.Xmss && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature) {
-				var key = this.ConvertToXmssKey();
+
+			if((this.NextAccountSignatureType == BlockSignatureTypes.Xmss) && this.NextBlockAccountSignature is IXmssBlockNextAccountSignature) {
+				IXmssCryptographicKey key = this.ConvertToXmssKey();
+
 				return SignatureUtils.ConvertToDehydratedKey(key);
 			}
 

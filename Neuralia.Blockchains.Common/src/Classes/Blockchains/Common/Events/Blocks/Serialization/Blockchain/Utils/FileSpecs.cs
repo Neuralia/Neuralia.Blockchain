@@ -1,9 +1,7 @@
 using System;
-
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils {
 	public class FileSpecs {

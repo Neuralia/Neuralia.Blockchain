@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
@@ -36,16 +37,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 			fixed(byte* cFirst = first.Span) {
 				fixed(byte* cSecond = second.Span) {
 					fixed(byte* cResult = result.Span) {
-						
-						long* cFirstL = (long*)cFirst;
-						long* cSecondL = (long*)cSecond;
-						long* cResultL = (long*)cResult;
-						
+
+						long* cFirstL = (long*) cFirst;
+						long* cSecondL = (long*) cSecond;
+						long* cResultL = (long*) cResult;
+
 						for(int i = 0; i < len; i += 4) {
-							*(cResultL+(i + 0)) = *(cFirstL+(i + 0)) ^ *(cSecondL+(i + 0));
-							*(cResultL+(i + 1)) = *(cFirstL+(i + 1)) ^ *(cSecondL+(i + 1));
-							*(cResultL+(i + 2)) = *(cFirstL+(i + 2)) ^ *(cSecondL+(i + 2));
-							*(cResultL+(i + 3)) = *(cFirstL+(i + 3)) ^ *(cSecondL+(i + 3));
+							*(cResultL + (i + 0)) = *(cFirstL + (i + 0)) ^ *(cSecondL + (i + 0));
+							*(cResultL + (i + 1)) = *(cFirstL + (i + 1)) ^ *(cSecondL + (i + 1));
+							*(cResultL + (i + 2)) = *(cFirstL + (i + 2)) ^ *(cSecondL + (i + 2));
+							*(cResultL + (i + 3)) = *(cFirstL + (i + 3)) ^ *(cSecondL + (i + 3));
 						}
 					}
 				}
@@ -132,7 +133,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 
 				digest.BlockUpdate(buffer.Bytes, buffer.Offset, buffer.Length);
 
-				digestBase.DoFinalReturn(out  hash);
+				digestBase.DoFinalReturn(out hash);
 			}
 
 			xmssExecutionContext.DigestPool.PutObject(digest);
@@ -241,7 +242,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		/// <summary>
-		/// 
 		/// </summary>
 		/// <param name="a"></param>
 		/// <param name="b"></param>
@@ -261,25 +261,27 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 				void ThrowMustBeMultiple4Exception() {
 					throw new ArgumentException("Arrays size must be a multiple of 4.");
 				}
+
 				ThrowMustBeMultiple4Exception();
 			}
 
 			long difference = 0;
-			
+
 			fixed(byte* cFirst = a.Span) {
 				fixed(byte* cSecond = b.Span) {
-					
-					var cFirstL = (long*)cFirst;
-					var cSecondL = (long*)cSecond;
-					
+
+					long* cFirstL = (long*) cFirst;
+					long* cSecondL = (long*) cSecond;
+
 					for(; len != 0; len -= 4) {
-						difference |= *(cFirstL+(len - 1)) ^ *(cSecondL+(len - 1));
-						difference |= *(cFirstL+(len - 2)) ^ *(cSecondL+(len - 2));
-						difference |= *(cFirstL+(len - 3)) ^ *(cSecondL+(len - 3));
-						difference |= *(cFirstL+(len - 4)) ^ *(cSecondL+(len - 4));
+						difference |= *(cFirstL + (len - 1)) ^ *(cSecondL + (len - 1));
+						difference |= *(cFirstL + (len - 2)) ^ *(cSecondL + (len - 2));
+						difference |= *(cFirstL + (len - 3)) ^ *(cSecondL + (len - 3));
+						difference |= *(cFirstL + (len - 4)) ^ *(cSecondL + (len - 4));
 					}
 				}
 			}
+
 			return difference == 0;
 		}
 
@@ -341,7 +343,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 				pool[i] = buffer;
 			}
 
-			var entries = pool.ToList();
+			List<ByteArray> entries = pool.ToList();
 
 			entries.Shuffle(xmssExecutionContext.Random);
 

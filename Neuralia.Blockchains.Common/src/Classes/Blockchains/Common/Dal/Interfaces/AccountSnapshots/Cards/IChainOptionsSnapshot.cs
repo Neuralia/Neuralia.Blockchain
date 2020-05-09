@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		///     The average amount of time in seconds between each block. Allows to help determine how often to check for syncing.
 		/// </summary>
 		int MaxBlockInterval { get; set; }
-		
-		bool AllowGossipPresentations  { get; set; }
+
+		bool AllowGossipPresentations { get; set; }
 	}
 }

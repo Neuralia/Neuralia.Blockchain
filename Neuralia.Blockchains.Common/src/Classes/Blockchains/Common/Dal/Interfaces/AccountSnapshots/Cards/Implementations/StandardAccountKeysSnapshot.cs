@@ -1,7 +1,6 @@
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations {
 	public class StandardAccountKeysSnapshot : IStandardAccountKeysSnapshot {
 
-		
 		public string CompositeKey { get; set; }
 		public byte OrdinalId { get; set; }
 		public long AccountId { get; set; }

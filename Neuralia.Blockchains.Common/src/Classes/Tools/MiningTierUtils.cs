@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
 using Neuralia.Blockchains.Core;
-using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Specialized;
@@ -12,13 +10,12 @@ using Neuralia.Blockchains.Core.Serialization.OffsetCalculators;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.General.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Org.BouncyCastle.Crypto.Prng;
 
 namespace Neuralia.Blockchains.Common.Classes.Tools {
 	public static class MiningTierUtils {
 
 		public const byte MininingTierCount = 4;
-		
+
 		public static Enums.MiningTiers Convert(int value) {
 			if(value > MininingTierCount) {
 				throw new ArgumentException("Invalid mining tier", nameof(value));
@@ -30,7 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		public static bool HasTier(IList<Enums.MiningTiers> set, Enums.MiningTiers miningTier) {
 			return set.Contains(miningTier);
 		}
-		
+
 		public static bool HasTier<T>(Dictionary<Enums.MiningTiers, T> set, Enums.MiningTiers miningTier) {
 			return set.ContainsKey(miningTier);
 		}
@@ -56,7 +53,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		}
 
 		public static bool IsSecondTier(Enums.MiningTiers miningTier) {
-			return IsFirstTier(miningTier) || miningTier == Enums.MiningTiers.SecondTier;
+			return IsFirstTier(miningTier) || (miningTier == Enums.MiningTiers.SecondTier);
 		}
 
 		public static bool IsFirstTier(Enums.MiningTiers miningTier) {
@@ -78,7 +75,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		}
 
 		public static Dictionary<Enums.MiningTiers, T> FillMiningTierSet<T>(int miningTierTotal, T defaultValue) {
-			var set = new Dictionary<Enums.MiningTiers, T>();
+			Dictionary<Enums.MiningTiers, T> set = new Dictionary<Enums.MiningTiers, T>();
 
 			FillMiningTierSet(set, miningTierTotal, defaultValue);
 
@@ -86,15 +83,32 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		}
 
 		public static Dictionary<Enums.MiningTiers, T> FillMiningTierSet<T>(IList<Enums.MiningTiers> list, T defaultValue) {
-			var set = new Dictionary<Enums.MiningTiers, T>();
+			Dictionary<Enums.MiningTiers, T> set = new Dictionary<Enums.MiningTiers, T>();
 
 			FillMiningTierSet(set, list, defaultValue);
 
 			return set;
 		}
+
+		public static void SetTierValue<T>(this Dictionary<Enums.MiningTiers, T> set,Enums.MiningTiers tier, T value) {
+			if(!set.ContainsKey(tier)) {
+				set.Add(tier, value);
+			} else {
+				set[tier] = value;
+			}
+		}
 		
+		public static T GetTierValue<T>(this Dictionary<Enums.MiningTiers, T> set,Enums.MiningTiers tier) {
+			if(set.ContainsKey(tier)) {
+				return set[tier];
+			}
+
+			return default;
+		}
+		
+
 		/// <summary>
-		/// Ensure a full set
+		///     Ensure a full set
 		/// </summary>
 		/// <param name="set"></param>
 		/// <param name="miningTierTotal"></param>
@@ -104,9 +118,10 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 			FillMiningTierSet(set, GetAllMiningTiers(miningTierTotal), defaultValue, reset);
 		}
+
 		public static void FillMiningTierSet<T>(Dictionary<Enums.MiningTiers, T> set, IList<Enums.MiningTiers> list, T defaultValue, bool reset = true) {
 
-			FillMiningTierSet<T>(set, list, (t) => defaultValue, reset);
+			FillMiningTierSet(set, list, t => defaultValue, reset);
 		}
 
 		public static void FillMiningTierSet<T>(Dictionary<Enums.MiningTiers, T> set, int miningTierTotal, Func<Enums.MiningTiers, T> defaultValueCreator, bool reset = true) {
@@ -119,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 				set.Clear();
 			}
 
-			foreach(var tier in list) {
+			foreach(Enums.MiningTiers tier in list) {
 
 				if(!set.ContainsKey(tier)) {
 					set.Add(tier, defaultValueCreator(tier));
@@ -131,13 +146,13 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			where R : IBinarySerializable, new() {
 
 			RehydrateTierList(set, defaultValue, rehydrator);
-			
+
 			DualByte dualByte = new DualByte();
 
 			dualByte.Rehydrate(rehydrator);
-			
+
 			int activeTierCount = dualByte.High;
-			int amountCounts = dualByte.Low+1;
+			int amountCounts = dualByte.Low + 1;
 
 			if(activeTierCount != 0) {
 
@@ -181,11 +196,11 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 		public static ImmutableList<Enums.MiningTiers> FlagsToTiers(ushort flags) {
 
-			var miningTiers = new List<Enums.MiningTiers>();
-			
+			List<Enums.MiningTiers> miningTiers = new List<Enums.MiningTiers>();
+
 			for(int i = 0; i <= 0xF; i++) {
 				if((flags & (ushort) (1 << i)) != 0) {
-					if(Enum.IsDefined(typeof(Enums.MiningTiers), (byte)(i + 1))) {
+					if(Enum.IsDefined(typeof(Enums.MiningTiers), (byte) (i + 1))) {
 						miningTiers.Add((Enums.MiningTiers) (i + 1));
 					}
 				}
@@ -197,24 +212,24 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		public static ushort TiersToFlags(ImmutableList<Enums.MiningTiers> miningTiers) {
 			ushort flags = 0;
 
-			foreach(var tier in miningTiers) {
-				flags |= (ushort)(1 << (((int)tier)-1));
+			foreach(Enums.MiningTiers tier in miningTiers) {
+				flags |= (ushort) (1 << ((int) tier - 1));
 			}
 
 			return flags;
 		}
-		
+
 		public static void DehydrateTierList<T>(Dictionary<Enums.MiningTiers, T> miningTiers, IDataDehydrator dehydrator) {
 
 			DehydrateTierList(miningTiers.Keys.ToImmutableList(), dehydrator);
 		}
-		
+
 		public static void DehydrateTierList(ImmutableList<Enums.MiningTiers> miningTiers, IDataDehydrator dehydrator) {
-			
+
 			AdaptiveLong1_9 serializationTool = new AdaptiveLong1_9(TiersToFlags(miningTiers));
 			serializationTool.Dehydrate(dehydrator);
 		}
-		
+
 		public static Dictionary<Enums.MiningTiers, T> RehydrateTierList<T>(T defaultValue, IDataRehydrator rehydrator) {
 
 			return RehydrateTierList(rehydrator).ToDictionary(t => t, t => defaultValue);
@@ -222,27 +237,28 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 		public static void RehydrateTierList<T>(Dictionary<Enums.MiningTiers, T> set, T defaultValue, IDataRehydrator rehydrator) {
 
-			var result = RehydrateTierList(defaultValue, rehydrator);
-			
+			Dictionary<Enums.MiningTiers, T> result = RehydrateTierList(defaultValue, rehydrator);
+
 			set.Clear();
 
-			foreach(var entry in result) {
+			foreach(KeyValuePair<Enums.MiningTiers, T> entry in result) {
 				set.Add(entry.Key, entry.Value);
 			}
 		}
 
 		public static ImmutableList<Enums.MiningTiers> RehydrateTierList(IDataRehydrator rehydrator) {
-			
+
 			AdaptiveLong1_9 serializationTool = new AdaptiveLong1_9();
 			serializationTool.Rehydrate(rehydrator);
-			return FlagsToTiers((ushort)serializationTool.Value);
+
+			return FlagsToTiers((ushort) serializationTool.Value);
 		}
 
 		public static IEnumerable<Enums.MiningTiers> Order(this IEnumerable<Enums.MiningTiers> miningTiers) {
 
 			return miningTiers.OrderBy(t => (int) t);
 		}
-		
+
 		public static IEnumerable<KeyValuePair<Enums.MiningTiers, T>> Order<T>(this Dictionary<Enums.MiningTiers, T> miningTiers) {
 
 			return miningTiers.OrderBy(t => (int) t.Key);
@@ -251,8 +267,8 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		public static void AddStructuresArray<T>(HashNodeList hashNodeList, Dictionary<Enums.MiningTiers, T> miningTiers) {
 			hashNodeList.Add(miningTiers.Count);
 
-			foreach(var entry in miningTiers.Order()) {
-				hashNodeList.Add((byte)entry.Key);
+			foreach(KeyValuePair<Enums.MiningTiers, T> entry in miningTiers.Order()) {
+				hashNodeList.Add((byte) entry.Key);
 				hashNodeList.Add(entry.Value);
 			}
 		}
@@ -262,14 +278,16 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			if(miningTier == Enums.MiningTiers.FirstTier) {
 				return "1st";
 			}
+
 			if(miningTier == Enums.MiningTiers.SecondTier) {
 				return "2nd";
 			}
+
 			if(miningTier == Enums.MiningTiers.ThirdTier) {
 				return "3rd";
 			}
 
-			return $"{(int)miningTier}th";
+			return $"{(int) miningTier}th";
 		}
 	}
 }

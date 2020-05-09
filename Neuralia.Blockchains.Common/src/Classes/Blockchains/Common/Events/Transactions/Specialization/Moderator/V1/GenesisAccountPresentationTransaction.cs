@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
+﻿using System.Collections.Immutable;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
@@ -36,6 +34,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("AssignedAccountId", this.AssignedAccountId);
 		}
 
+		public override ImmutableList<AccountId> TargetAccounts => new[] {this.AssignedAccountId}.ToImmutableList();
+
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 
@@ -47,7 +47,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			this.AssignedAccountId.Dehydrate(dehydrator);
 		}
-		
-		public override ImmutableList<AccountId> TargetAccounts => new [] {this.AssignedAccountId}.ToImmutableList();
 	}
 }

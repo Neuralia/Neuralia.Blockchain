@@ -7,7 +7,8 @@ using Neuralia.Blockchains.Core.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.RepresentativeBallotingMethods.Passive {
 
 	public interface IPassiveRepresentativeBallotingSelector : IJsonSerializable {
-		Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> SelectRepresentatives<U>(Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> electedTiers) where U : IPassiveElectedChoice;
+		Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> SelectRepresentatives<U>(Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> electedTiers)
+			where U : IPassiveElectedChoice;
 	}
 
 	public abstract class PassiveRepresentativeBallotingSelector<T> : IPassiveRepresentativeBallotingSelector
@@ -19,7 +20,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.RepresentativeBallotingRules = representativeBallotingRules;
 		}
 
-		public abstract Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> SelectRepresentatives<U>(Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> electedTiers) where U : IPassiveElectedChoice;
+		public abstract Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> SelectRepresentatives<U>(Dictionary<Enums.MiningTiers, Dictionary<AccountId, U>> electedTiers)
+			where U : IPassiveElectedChoice;
 
 		public virtual void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 		}

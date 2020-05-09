@@ -1,5 +1,3 @@
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
-using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -26,20 +24,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 			return nodeList;
 		}
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
-			
+
 			dehydrator.Write(this.SecondKey == null);
 
-			if(this.SecondKey !=  null) {
+			if(this.SecondKey != null) {
 				this.SecondKey.Dehydrate(dehydrator);
 			}
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-			
+
 			bool isNull = rehydrator.ReadBool();
 
 			if(isNull == false) {
@@ -49,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 				this.SecondKey.Rehydrate(rehydrator);
 			}
 		}
-		
+
 		protected abstract WalletKeyHelper CreateWalletKeyHelper();
 	}
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Sockets;
 using System.Threading;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
@@ -15,11 +16,11 @@ namespace Neuralia.Blockchains.Core.Tools {
 	/// </summary>
 	public class DataDispatcher {
 
+		private readonly Action<PeerConnection> invalidConnectionCallback;
+
 		private readonly object locker = new object();
 		private readonly ITimeService timeService;
 
-		private readonly Action<PeerConnection> invalidConnectionCallback;
-		
 		public DataDispatcher(ITimeService timeService, Action<PeerConnection> invalidConnectionCallback) {
 			this.timeService = timeService;
 			this.invalidConnectionCallback = invalidConnectionCallback;
@@ -52,7 +53,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				try {
 					return this.SendBytesToPeer(peerConnection, data);
 				} catch(Exception e) {
-					Log.Verbose("error occured", e);
+					NLog.Default.Verbose("error occured", e);
 
 					return false;
 				} finally {
@@ -76,7 +77,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 						if(this.invalidConnectionCallback != null) {
 							this.invalidConnectionCallback(peerConnection);
 						}
-						
+
 						return false;
 					}
 
@@ -113,7 +114,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 					peerConnection.connection.SendBytes(data);
 				} catch(Exception ex) {
-					Log.Verbose(ex, "Failed to send bytes to peer.");
+					NLog.Default.Verbose(ex, "Failed to send bytes to peer.");
 
 					return false;
 				}
@@ -130,7 +131,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				if(this.invalidConnectionCallback != null) {
 					this.invalidConnectionCallback(peerConnection);
 				}
-				
+
 				return false;
 			}
 
@@ -194,10 +195,10 @@ namespace Neuralia.Blockchains.Core.Tools {
 						if(p2pEx.InnerException is SocketException socketException) {
 
 						} else {
-							Log.Verbose(tcpEx, "Failed to send bytes to peer.");
+							NLog.Default.Verbose(tcpEx, "Failed to send bytes to peer.");
 						}
 					} else {
-						Log.Verbose(tcpEx, "Failed to send bytes to peer.");
+						NLog.Default.Verbose(tcpEx, "Failed to send bytes to peer.");
 					}
 
 					return false;
@@ -205,17 +206,17 @@ namespace Neuralia.Blockchains.Core.Tools {
 					if(p2pEx.InnerException is SocketException socketException) {
 						if((socketException.SocketErrorCode == SocketError.TimedOut) || (socketException.SocketErrorCode == SocketError.Shutdown)) {
 							// thats it, we time out, let's report it simply
-							Log.Verbose("Failed to send bytes to peer. socket connection was unavailable");
+							NLog.Default.Verbose("Failed to send bytes to peer. socket connection was unavailable");
 						} else {
-							Log.Verbose(p2pEx, "Failed to send bytes to peer.");
+							NLog.Default.Verbose(p2pEx, "Failed to send bytes to peer.");
 						}
 					} else {
-						Log.Verbose(p2pEx, "Failed to send bytes to peer.");
+						NLog.Default.Verbose(p2pEx, "Failed to send bytes to peer.");
 					}
 
 					return false;
 				} catch(Exception ex) {
-					Log.Verbose(ex, "Failed to send bytes to peer.");
+					NLog.Default.Verbose(ex, "Failed to send bytes to peer.");
 
 					return false;
 				}
@@ -251,7 +252,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 					}
 				} while(true);
 			} catch(Exception ex) {
-				Log.Verbose(ex, "Failed to send bytes to peer.");
+				NLog.Default.Verbose(ex, "Failed to send bytes to peer.");
 			}
 
 			return false;

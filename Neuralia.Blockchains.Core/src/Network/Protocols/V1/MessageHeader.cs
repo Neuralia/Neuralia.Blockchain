@@ -169,6 +169,5 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 				throw new MessageTooLargeException($"Message size of type {this.MessageType.ToString()} cannot exceed {this.MaxiumMessageSize} bytes.");
 			}
 		}
-
 	}
 }

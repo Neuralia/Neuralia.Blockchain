@@ -4,15 +4,14 @@ using System.Collections.Immutable;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
-using Org.BouncyCastle.Crypto.Prng;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions {
 
@@ -25,13 +24,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	}
 
 	public interface ITransaction : IBlockchainEvent<IDehydratedTransaction, ITransactionRehydrationFactory, TransactionType>, ITransactionEssential, IComparable<ITransaction> {
+		ImmutableList<AccountId> TargetAccounts { get; }
+		string TargetAccountsSerialized { get; }
 
 		HashNodeList GetStructuresArrayMultiSig(AccountId accountId);
 		HashNodeList GetCompleteStructuresArray();
 		void RehydrateForBlock(IDehydratedTransaction dehydratedTransaction, ITransactionRehydrationFactory rehydrationFactory, AccountId accountId, TransactionTimestamp timestamp);
 		IDehydratedTransaction DehydrateForBlock(BlockChannelUtils.BlockChannelTypes activeChannels);
-		ImmutableList<AccountId> TargetAccounts { get; }
-		string TargetAccountsSerialized { get; }
 	}
 
 	public abstract class Transaction : BlockchainEvent<IDehydratedTransaction, DehydratedTransaction, ITransactionRehydrationFactory, TransactionType>, ITransaction, IComparable<Transaction> {
@@ -42,11 +41,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public List<int> AccreditationCertificates { get; } = new List<int>();
 
-		// run any sanitations here
-		protected virtual void Sanitize() {
-			
-		}
-		
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
 
@@ -57,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public TransactionId TransactionId { get; set; } = new TransactionId();
-		public KeyUseIndexSet KeyUseIndex { get; set; } = null;
+		public KeyUseIndexSet KeyUseIndex { get; set; }
 		public Dictionary<AccountId, KeyUseIndexSet> MultiSigKeyUseIndices { get; } = new Dictionary<AccountId, KeyUseIndexSet>();
 
 		public HashNodeList GetStructuresArrayMultiSig(AccountId accountId) {
@@ -75,14 +69,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			nodeList.Add(this.MultiSigKeyUseIndices.Count);
 
-			foreach(var entry in this.MultiSigKeyUseIndices) {
+			foreach(KeyValuePair<AccountId, KeyUseIndexSet> entry in this.MultiSigKeyUseIndices) {
 				nodeList.Add(entry.Key);
 				nodeList.Add(entry.Value);
 			}
 
 			return nodeList;
 		}
-		
+
 		public override HashNodeList GetStructuresArray() {
 
 			HashNodeList nodeList = base.GetStructuresArray();
@@ -102,6 +96,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public int CompareTo(ITransaction other) {
 			return this.TransactionId.CompareTo(other.TransactionId);
+		}
+
+		// run any sanitations here
+		protected virtual void Sanitize() {
+
 		}
 
 		protected bool Equals(ITransaction other) {
@@ -157,9 +156,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public static ComponentVersion<TransactionType> RehydrateTopHeader(IDataRehydrator rehydrator, TransactionId transactionId, AccountId accountId, TransactionTimestamp timestamp) {
-			var rehydratedVersion = rehydrator.Rehydrate<ComponentVersion<TransactionType>>();
+			ComponentVersion<TransactionType> rehydratedVersion = rehydrator.Rehydrate<ComponentVersion<TransactionType>>();
 
-			if(accountId == null && timestamp == null) {
+			if((accountId == default(AccountId)) && (timestamp == null)) {
 				transactionId.Rehydrate(rehydrator);
 			} else {
 				transactionId.RehydrateRelative(rehydrator);
@@ -174,14 +173,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(dehydratedTransaction.Header)) {
 
 				// the header
-				var rehydratedVersion = RehydrateTopHeader(rehydrator, this.TransactionId, accountId, timestamp);
+				ComponentVersion<TransactionType> rehydratedVersion = RehydrateTopHeader(rehydrator, this.TransactionId, accountId, timestamp);
 				this.Version.EnsureEqual(rehydratedVersion);
 
 				// the rest in the header
 				this.RehydrateHeader(rehydrator);
 
 				// and the rest
-				var channels = dehydratedTransaction.DataChannels.ConvertAll(DataSerializationFactory.CreateRehydrator, BlockChannelUtils.BlockChannelTypes.Headers);
+				ChannelsEntries<IDataRehydrator> channels = dehydratedTransaction.DataChannels.ConvertAll(DataSerializationFactory.CreateRehydrator, BlockChannelUtils.BlockChannelTypes.Headers);
 				this.RehydrateContents(channels, rehydrationFactory);
 			}
 
@@ -204,7 +203,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// </summary>
 		/// <param name="rehydrator"></param>
 		protected virtual void RehydrateHeader(IDataRehydrator rehydrator) {
-			
+
 			bool any = rehydrator.ReadBool();
 
 			if(any) {
@@ -214,19 +213,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			this.MultiSigKeyUseIndices.Clear();
 			any = rehydrator.ReadBool();
+
 			if(any) {
-				var rparameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
+				AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> rparameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
 				rparameters.RehydrateExtraData = (entry, offset, index, rh) => {
 
-					var keyUseIndexSet = new KeyUseIndexSet();
+					KeyUseIndexSet keyUseIndexSet = new KeyUseIndexSet();
 					keyUseIndexSet.Rehydrate(rh);
 					this.MultiSigKeyUseIndices.Add(entry, keyUseIndexSet);
 				};
 
-				var results = AccountIdGroupSerializer.Rehydrate(rehydrator, true, rparameters);
+				List<AccountId> results = AccountIdGroupSerializer.Rehydrate(rehydrator, true, rparameters);
 			}
-			
+
 			this.AccreditationCertificates.Clear();
 			any = rehydrator.ReadBool();
 
@@ -259,7 +259,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public virtual string TargetAccountsSerialized {
 			get {
-				var targetAccounts = this.TargetAccounts;
+				ImmutableList<AccountId> targetAccounts = this.TargetAccounts;
 
 				string result = "";
 
@@ -272,16 +272,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public override IDehydratedTransaction Dehydrate(BlockChannelUtils.BlockChannelTypes activeChannels) {
-			
+
 			return this.DehydrateFullTransaction(activeChannels, false);
 
 		}
 
 		protected virtual IDehydratedTransaction DehydrateFullTransaction(BlockChannelUtils.BlockChannelTypes activeChannels, bool forBlocks) {
-			
+
 			this.Sanitize();
 
-			var dataChannelDehydrators = new ChannelsEntries<IDataDehydrator>(activeChannels, types => DataSerializationFactory.CreateDehydrator());
+			ChannelsEntries<IDataDehydrator> dataChannelDehydrators = new ChannelsEntries<IDataDehydrator>(activeChannels, types => DataSerializationFactory.CreateDehydrator());
 
 			// transactions are simple, we ALWAYS write to the low header. the high header is not used for transactions.
 
@@ -330,27 +330,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// </summary>
 		/// <param name="dehydrator"></param>
 		protected virtual void DehydrateHeader(IDataDehydrator dehydrator) {
-			
+
 			bool any = this.KeyUseIndex != null;
 
 			dehydrator.Write(any);
+
 			if(any) {
 				this.KeyUseIndex.Dehydrate(dehydrator);
 			}
 
 			any = this.MultiSigKeyUseIndices.Any();
 			dehydrator.Write(any);
+
 			if(any) {
-				var dparameters = new AccountIdGroupSerializer.AccountIdGroupSerializerDehydrateParameters<AccountId, AccountId>();
+				AccountIdGroupSerializer.AccountIdGroupSerializerDehydrateParameters<AccountId, AccountId> dparameters = new AccountIdGroupSerializer.AccountIdGroupSerializerDehydrateParameters<AccountId, AccountId>();
 
 				dparameters.DehydrateExtraData = (entry, accountId, offset, index, dh) => {
 
 					this.MultiSigKeyUseIndices[accountId].Dehydrate(dehydrator);
 				};
-				
+
 				AccountIdGroupSerializer.Dehydrate(this.MultiSigKeyUseIndices.Keys.ToList(), dehydrator, true, dparameters);
 			}
-			
+
 			any = this.AccreditationCertificates.Any();
 			dehydrator.Write(any);
 

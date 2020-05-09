@@ -1,7 +1,6 @@
 using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
@@ -14,38 +13,24 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 		private const int KECCAK_LANE_SIZE_IN_BITS = 8 << 3;
 
 		private static readonly ulong[] RoundConstants = {0x0000000000000001UL, 0x0000000000008082UL, 0x800000000000808aUL, 0x8000000080008000UL, 0x000000000000808bUL, 0x0000000080000001UL, 0x8000000080008081UL, 0x8000000000008009UL, 0x000000000000008aUL, 0x0000000000000088UL, 0x0000000080008009UL, 0x000000008000000aUL, 0x000000008000808bUL, 0x800000000000008bUL, 0x8000000000008089UL, 0x8000000000008003UL, 0x8000000000008002UL, 0x8000000000000080UL, 0x000000000000800aUL, 0x800000008000000aUL, 0x8000000080008081UL, 0x8000000000008080UL, 0x0000000080000001UL, 0x8000000080008008UL};
+		private readonly int chunk;
+
+		internal readonly int keccakCode;
 
 		private ByteArray buffer;
 
 		private int bufferLength;
 		private int buffLength;
-		private byte[] obligatoryHashResult;
-		private ByteArray state;
-
-
-		internal readonly int keccakCode;
-
-		public override int HashSize { get; }
-
-		protected int SizeInBytes => this.keccakCode >> 3;
-
-		protected int HashByteLength => this.HashSize >> 3;
-
-		/// <summary>
-		///     the results of the last hashing.
-		/// </summary>
-		/// <remarks>We do NOT clear this memory. the caller owns it and is responsible for clearing it. not thread safe!</remarks>
-		public ByteArray LastResult { get; private set; }
-
-		private ulong* statePtr;
-		private MemoryHandle stateMemHandle;
 
 		private ByteArray chunkBuffer;
-		private ulong* chunkBufferPtr;
 		private MemoryHandle chunkBufferMemHandle;
-		private readonly int chunk;
+		private ulong* chunkBufferPtr;
+		private byte[] obligatoryHashResult;
+		private ByteArray state;
+		private MemoryHandle stateMemHandle;
 
-		
+		private ulong* statePtr;
+
 		internal SHA3Managed(int hashBitLength) {
 
 			this.HashSize = hashBitLength;
@@ -65,38 +50,49 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			}
 
 			this.chunk = this.SizeInBytes >> 3;
-			
+
 			this.Initialize();
 		}
 
+		public override int HashSize { get; }
+
+		protected int SizeInBytes => this.keccakCode >> 3;
+
+		protected int HashByteLength => this.HashSize >> 3;
+
+		/// <summary>
+		///     the results of the last hashing.
+		/// </summary>
+		/// <remarks>We do NOT clear this memory. the caller owns it and is responsible for clearing it. not thread safe!</remarks>
+		public ByteArray LastResult { get; private set; }
+
 		public override void Initialize() {
-			
+
 			if(this.buffer?.Length != this.SizeInBytes) {
 				this.buffer = null;
 			}
 
-			if(this.buffer?.IsNull??true) {
+			if(this.buffer?.IsNull ?? true) {
 				this.buffer = ByteArray.Create(this.SizeInBytes);
 			}
 
-			
 			this.bufferLength = this.SizeInBytes;
 			this.buffLength = 0;
 
-			if(this.state?.IsEmpty??true) {
+			if(this.state?.IsEmpty ?? true) {
 				this.state = ByteArray.Create<ulong>(5 * 5);
-				
+
 				this.stateMemHandle = this.state.Memory.Pin();
-				this.statePtr = (ulong*)this.stateMemHandle .Pointer;
+				this.statePtr = (ulong*) this.stateMemHandle.Pointer;
 			} else {
 				this.state.Clear();
 			}
 
-			if(this.chunkBuffer?.IsEmpty??true) {
+			if(this.chunkBuffer?.IsEmpty ?? true) {
 				this.chunkBuffer = ByteArray.Create<ulong>(this.chunk);
-				
+
 				this.chunkBufferMemHandle = this.chunkBuffer.Memory.Pin();
-				this.chunkBufferPtr = (ulong*)this.chunkBufferMemHandle.Pointer;
+				this.chunkBufferPtr = (ulong*) this.chunkBufferMemHandle.Pointer;
 			} else {
 				this.chunkBuffer.Clear();
 			}
@@ -106,13 +102,28 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			base.Dispose(disposing);
 
 			if(disposing && !this.IsDisposed) {
-				try { this.buffer.Dispose(); } catch { }
-				try { this.state.Dispose(); } catch { }
-				
-				try { this.stateMemHandle.Dispose(); } catch { }
+				try {
+					this.buffer.Dispose();
+				} catch {
+				}
+
+				try {
+					this.state.Dispose();
+				} catch {
+				}
+
+				try {
+					this.stateMemHandle.Dispose();
+				} catch {
+				}
+
 				this.statePtr = null;
-				
-				try { this.chunkBufferMemHandle.Dispose(); } catch { }
+
+				try {
+					this.chunkBufferMemHandle.Dispose();
+				} catch {
+				}
+
 				this.chunkBufferPtr = null;
 			}
 
@@ -149,10 +160,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			this.CustomHashFinal();
 			this.Initialize();
 
-			var result = this.LastResult;
+			ByteArray result = this.LastResult;
 
 			this.LastResult = null;
-			
+
 			return result;
 		}
 
@@ -203,7 +214,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 
 			this.buffer[this.SizeInBytes - 1] |= 0x80;
 
-
 			// result will be return and cleared by the callers. we are not responsible for it
 			this.LastResult = ByteArray.Create(this.HashByteLength);
 
@@ -211,7 +221,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			this.Keccak(this.chunkBufferPtr, this.chunk);
 			this.state.CopyTo(this.LastResult, 0, 0, this.HashByteLength);
 		}
-		
+
 		protected override byte[] HashFinal() {
 
 			this.CustomHashFinal();
@@ -228,14 +238,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private ulong ROL(ulong *a, int offset) {
+		private ulong ROL(ulong* a, int offset) {
 			return (*a << (offset % KECCAK_LANE_SIZE_IN_BITS)) ^ (*a >> (KECCAK_LANE_SIZE_IN_BITS - (offset % KECCAK_LANE_SIZE_IN_BITS)));
 		}
 
 		private void Keccak(ulong* inb, int laneCount) {
 
 			while(--laneCount >= 0) {
-				*(this.statePtr+laneCount) ^= *(inb+laneCount);
+				*(this.statePtr + laneCount) ^= *(inb + laneCount);
 			}
 
 			ulong* Aba, Abe, Abi, Abo, Abu;
@@ -253,30 +263,30 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 			int round = laneCount;
 
 			Aba = this.statePtr;
-			Abe = this.statePtr+1;
-			Abi = this.statePtr+2;
-			Abo = this.statePtr+3;
-			Abu = this.statePtr+4;
-			Aga = this.statePtr+5;
-			Age = this.statePtr+6;
-			Agi = this.statePtr+7;
-			Ago = this.statePtr+8;
-			Agu = this.statePtr+9;
-			Aka = this.statePtr+10;
-			Ake = this.statePtr+11;
-			Aki = this.statePtr+12;
-			Ako = this.statePtr+13;
-			Aku = this.statePtr+14;
-			Ama = this.statePtr+15;
-			Ame = this.statePtr+16;
-			Ami = this.statePtr+17;
-			Amo = this.statePtr+18;
-			Amu = this.statePtr+19;
-			Asa = this.statePtr+20;
-			Ase = this.statePtr+21;
-			Asi = this.statePtr+22;
-			Aso = this.statePtr+23;
-			Asu = this.statePtr+24;
+			Abe = this.statePtr + 1;
+			Abi = this.statePtr + 2;
+			Abo = this.statePtr + 3;
+			Abu = this.statePtr + 4;
+			Aga = this.statePtr + 5;
+			Age = this.statePtr + 6;
+			Agi = this.statePtr + 7;
+			Ago = this.statePtr + 8;
+			Agu = this.statePtr + 9;
+			Aka = this.statePtr + 10;
+			Ake = this.statePtr + 11;
+			Aki = this.statePtr + 12;
+			Ako = this.statePtr + 13;
+			Aku = this.statePtr + 14;
+			Ama = this.statePtr + 15;
+			Ame = this.statePtr + 16;
+			Ami = this.statePtr + 17;
+			Amo = this.statePtr + 18;
+			Amu = this.statePtr + 19;
+			Asa = this.statePtr + 20;
+			Ase = this.statePtr + 21;
+			Asi = this.statePtr + 22;
+			Aso = this.statePtr + 23;
+			Asu = this.statePtr + 24;
 
 			for(round = 0; round < KECCAK_NUMBER_OF_ROUNDS; round += 2) {
 				BCa = *Aba ^ *Aga ^ *Aka ^ *Ama ^ *Asa;
@@ -465,7 +475,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 				*Aso = BCo ^ (~BCu & BCa);
 				*Asu = BCu ^ (~BCa & BCe);
 			}
-			
 
 		}
 	}

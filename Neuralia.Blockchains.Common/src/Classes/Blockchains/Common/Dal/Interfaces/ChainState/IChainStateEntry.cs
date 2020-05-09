@@ -108,7 +108,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		public int MaxBlockInterval { get; set; }
 
 		/// <summary>
-		/// are presentations allowed to pass on gossip
+		///     are presentations allowed to pass on gossip
 		/// </summary>
 		public bool AllowGossipPresentations { get; set; }
 

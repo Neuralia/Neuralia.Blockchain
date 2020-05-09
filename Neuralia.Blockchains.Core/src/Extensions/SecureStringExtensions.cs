@@ -5,7 +5,6 @@ using System.Security;
 using System.Text;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using SafeArrayHandle = Neuralia.Blockchains.Tools.Data.SafeArrayHandle;
 
 namespace Neuralia.Blockchains.Core.Extensions {
 	public static class SecureStringExtensions {
@@ -86,7 +85,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		}
 
 		public static void Clear(this MemoryStream source) {
-			var buffer = source.GetBuffer();
+			byte[] buffer = source.GetBuffer();
 			Array.Clear(buffer, 0, (int) source.Length);
 			source.Position = 0;
 			source.SetLength(0);

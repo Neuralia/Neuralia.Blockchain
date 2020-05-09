@@ -61,11 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("t", this.T);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.MCELIECE;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
+		public override void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is IMcElieceWalletKey mcElieceWalletKey) {
@@ -74,6 +70,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				this.M = mcElieceWalletKey.M;
 				this.T = mcElieceWalletKey.T;
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.MCELIECE;
 		}
 	}
 }

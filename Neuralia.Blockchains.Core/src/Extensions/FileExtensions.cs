@@ -1,11 +1,9 @@
 ﻿using System;
 using System.IO;
-
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using Zio;
 
 namespace Neuralia.Blockchains.Core.Extensions {
 
@@ -27,7 +25,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 				fileStream.Write(bytes.Bytes, bytes.Offset, bytes.Length);
 			}
 		}
-		
+
 		public static async Task OpenWriteAsync(string filename, SafeArrayHandle bytes) {
 			await using(Stream fileStream = File.Open(filename, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) {
 				await fileStream.WriteAsync(bytes.Bytes, bytes.Offset, bytes.Length).ConfigureAwait(false);
@@ -40,7 +38,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 				fileStream.Write(bytes.Bytes, bytes.Offset, length);
 			}
 		}
-		
+
 		public static async Task OpenWriteAsync(string filename, SafeArrayHandle bytes, long offset, int length, FileSystemWrapper fileSystem) {
 			await using(Stream fileStream = fileSystem.OpenFile(filename, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) {
 				fileStream.Seek(offset, SeekOrigin.Begin);
@@ -51,7 +49,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		public static void OpenWrite(string filename, SafeArrayHandle bytes, FileSystemWrapper fileSystem) {
 			OpenWrite(filename, bytes, 0, bytes.Length, fileSystem);
 		}
-		
+
 		public static Task OpenWriteAsync(string filename, SafeArrayHandle bytes, FileSystemWrapper fileSystem) {
 			return OpenWriteAsync(filename, bytes, 0, bytes.Length, fileSystem);
 		}
@@ -59,7 +57,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		public static void OpenWrite(string filename, SafeArrayHandle bytes, long offset, FileSystemWrapper fileSystem) {
 			OpenWrite(filename, bytes, offset, bytes.Length, fileSystem);
 		}
-		
+
 		public static Task OpenWriteAsync(string filename, SafeArrayHandle bytes, long offset, FileSystemWrapper fileSystem) {
 			return OpenWriteAsync(filename, bytes, offset, bytes.Length, fileSystem);
 		}
@@ -67,7 +65,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		public static void OpenWrite(string filename, string text, FileSystemWrapper fileSystem) {
 			fileSystem.WriteAllText(filename, text);
 		}
-		
+
 		public static Task OpenWriteAsync(string filename, string text, FileSystemWrapper fileSystem) {
 			return fileSystem.WriteAllTextAsync(filename, text);
 		}
@@ -104,7 +102,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		}
 
 		public static void WriteAllBytes(string filename, SafeArrayHandle data) {
-			using var fileSystem = FileSystemWrapper.CreatePhysical();
+			using FileSystemWrapper fileSystem = FileSystemWrapper.CreatePhysical();
 			WriteAllBytes(filename, data, fileSystem);
 		}
 
@@ -117,12 +115,12 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 			fileSystem.WriteAllBytes(filename, data.ToArray());
 		}
-		
+
 		public static Task WriteAllBytesAsync(string filename, in Span<byte> data, FileSystemWrapper fileSystem) {
 
 			//TODO: make this truly async
 			fileSystem.WriteAllBytes(filename, data.ToArray());
-			
+
 			return Task.CompletedTask;
 		}
 
@@ -158,12 +156,12 @@ namespace Neuralia.Blockchains.Core.Extensions {
 				return ByteArray.WrapAndOwn(br.ReadBytes(count));
 			}
 		}
-		
+
 		public static async Task<SafeArrayHandle> ReadBytesAsync(string filename, long start, int count, FileSystemWrapper fileSystem) {
-			await using(var stream = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
+			await using(Stream stream = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 				stream.Seek(start, SeekOrigin.Begin);
 
-				var bytes = ByteArray.Create(count);
+				ByteArray bytes = ByteArray.Create(count);
 				await stream.ReadAsync(bytes.Memory).ConfigureAwait(false);
 
 				return bytes;
@@ -173,9 +171,9 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		public static SafeArrayHandle ReadAllBytes(string filename, FileSystemWrapper fileSystem) {
 			return ByteArray.WrapAndOwn(fileSystem.ReadAllBytes(filename));
 		}
-		
+
 		/// <summary>
-		/// fastest known implementation of the activity
+		///     fastest known implementation of the activity
 		/// </summary>
 		/// <param name="filename"></param>
 		/// <param name="fileSystem"></param>
@@ -184,16 +182,18 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			await using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 				await using(BufferedStream bs = new BufferedStream(fs)) {
 
-					ByteArray buffer = ByteArray.Create((int)bs.Length);
+					ByteArray buffer = ByteArray.Create((int) bs.Length);
 					long bytesLeft = buffer.Length;
 					int offset = 0;
+
 					while(bytesLeft > 0) {
 						// Read may return anything from 0 to numBytesToRead.
-						int bytesRead = await bs.ReadAsync(buffer.Bytes, buffer.Offset+offset, 4096).ConfigureAwait(false);
+						int bytesRead = await bs.ReadAsync(buffer.Bytes, buffer.Offset + offset, 4096).ConfigureAwait(false);
 
 						// The end of the file is reached.
-						if(bytesRead == 0)
+						if(bytesRead == 0) {
 							break;
+						}
 
 						offset += bytesRead;
 						bytesLeft -= bytesRead;
@@ -203,21 +203,23 @@ namespace Neuralia.Blockchains.Core.Extensions {
 				}
 			}
 		}
-		
+
 		public static async Task<SafeArrayHandle> ReadAllBytesFastAsync(string filename, FileSystemWrapper fileSystem) {
 			await using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 				await using(BufferedStream bs = new BufferedStream(fs)) {
 
-					ByteArray buffer = ByteArray.Create((int)bs.Length);
+					ByteArray buffer = ByteArray.Create((int) bs.Length);
 					long bytesLeft = buffer.Length;
 					int offset = 0;
+
 					while(bytesLeft > 0) {
 						// Read may return anything from 0 to numBytesToRead.
-						int bytesRead = await bs.ReadAsync(buffer.Bytes, buffer.Offset+offset, 4096).ConfigureAwait(false);
+						int bytesRead = await bs.ReadAsync(buffer.Bytes, buffer.Offset + offset, 4096).ConfigureAwait(false);
 
 						// The end of the file is reached.
-						if(bytesRead == 0)
+						if(bytesRead == 0) {
 							break;
+						}
 
 						offset += bytesRead;
 						bytesLeft -= bytesRead;
@@ -232,9 +234,26 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			return fileSystem.ReadAllText(filename);
 		}
 
+		public static async Task CopyAsync(string source, string destination)
+		{
+			const FileOptions fileOptions = FileOptions.Asynchronous | FileOptions.SequentialScan;
+			const int bufferSize = 4096;
+
+			await using Stream sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, fileOptions);
+			await using Stream destinationStream = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize, fileOptions);
+
+			await sourceStream.CopyToAsync(destinationStream).ConfigureAwait(false);
+		}
+		
+		public static async Task MoveAsync(string source, string destination) {
+			await CopyAsync(source, destination).ConfigureAwait(false);
+			
+			File.Delete(source);
+		}
+		
 		public static void EnsureDirectoryStructure(string directoryName) {
 
-			using var fileSystem = FileSystemWrapper.CreatePhysical();
+			using FileSystemWrapper fileSystem = FileSystemWrapper.CreatePhysical();
 			EnsureDirectoryStructure(directoryName, fileSystem);
 		}
 
@@ -247,19 +266,17 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 		public static void EnsureFileExists(string filename) {
 
-			using var fileSystem = FileSystemWrapper.CreatePhysical();
+			using FileSystemWrapper fileSystem = FileSystemWrapper.CreatePhysical();
 			EnsureFileExists(filename, fileSystem);
 		}
-		
+
 		public static void EnsureFileExists(string filename, FileSystemWrapper fileSystem) {
 			string directory = Path.GetDirectoryName(filename);
 
 			EnsureDirectoryStructure(directory, fileSystem);
 
 			if(!fileSystem.FileExists(filename)) {
-				using(fileSystem.CreateFile(filename)) {
-					// nothing to do
-				}
+				fileSystem.CreateEmptyFile(filename);
 			}
 		}
 	}

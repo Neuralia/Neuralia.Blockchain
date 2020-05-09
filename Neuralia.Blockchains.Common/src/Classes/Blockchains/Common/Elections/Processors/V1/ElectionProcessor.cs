@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.CandidatureMethods;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.CandidatureMethods.V1;
@@ -12,16 +13,20 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Speci
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.TransactionSelectionMethods;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
+using RestSharp;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Processors.V1 {
@@ -56,20 +61,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			}
 
 			// we only work if this is an active election
-			if(miningAccount == null || miningAccount.Equals(new AccountId())) {
+			if((miningAccount == default(AccountId)) || miningAccount.Equals(new AccountId())) {
 				throw new ApplicationException("Impossible to mine with a null accountID");
 			}
 
-			Log.Information("We are beginning an election...");
+			NLog.Default.Information("We are beginning an election...");
 			SafeArrayHandle electionBallot = this.DetermineIfElected(matureBlockElectionDistillate, currentBlockElectionDistillate, miningAccount, miningTier);
 
 			if(electionBallot == null) {
-				Log.Information("We are not elected.");
+				NLog.Default.Information("We are not elected.");
 
 				return null; // thats it, we are not elected
 			}
 
-			Log.Information($"We are elected in the {MiningTierUtils.GetOrdinalName(miningTier)} tier!.");
+			NLog.Default.Information($"We are elected in the {MiningTierUtils.GetOrdinalName(miningTier)} tier!.");
 
 			// well, we were elected!  wow. lets go ahead and prepare our ticket so we can select transactions and move forward
 			ElectedCandidateResultDistillate electedCandidateResultDistillate = this.CreateElectedCandidateResult();
@@ -81,25 +86,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			if(electedCandidateResultDistillate.MaturityBlockId != currentBlockElectionDistillate.electionBockId) {
 				throw new ApplicationException($"Invalid maturity block Id. expected block Id {electedCandidateResultDistillate.MaturityBlockId} but found current block Id {currentBlockElectionDistillate.electionBockId}");
 			}
+
 			electedCandidateResultDistillate.MaturityBlockHash = currentBlockElectionDistillate.blockxxHash;
 			electedCandidateResultDistillate.MiningTier = miningTier;
-			
+
 			return electedCandidateResultDistillate;
 
 		}
 
 		public Dictionary<string, object> PrepareActiveElectionWebConfirmation(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, long password) {
 			if(matureBlockElectionDistillate.ElectionContext is IActiveElectionContext activeElectionContext) {
-				
+
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
+
 				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
 
 				parameters.Add("matureBlockId", electedCandidateResultDistillate.BlockId);
 				parameters.Add("miningAccountId", matureBlockElectionDistillate.MiningAccountId.ToLongRepresentation());
 				parameters.Add("maturityBlockHash", electedCandidateResultDistillate.MaturityBlockHash);
-				parameters.Add("miningTier", (int)electedCandidateResultDistillate.MiningTier);
+				parameters.Add("miningTier", (int) electedCandidateResultDistillate.MiningTier);
 				parameters.Add("password", password);
-				
+
 				if(MiningTierUtils.IsFirstOrSecondTier(electedCandidateResultDistillate.MiningTier) && electedCandidateResultDistillate.secondTierAnswer.HasValue) {
 					parameters.Add("secondTierAnswer", electedCandidateResultDistillate.secondTierAnswer.Value);
 				}
@@ -107,16 +114,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				if(MiningTierUtils.IsFirstOrSecondTier(electedCandidateResultDistillate.MiningTier) && electedCandidateResultDistillate.digestAnswer.HasValue) {
 					parameters.Add("digestAnswer", electedCandidateResultDistillate.digestAnswer.Value);
 				}
-				
+
 				if(MiningTierUtils.IsFirstTier(electedCandidateResultDistillate.MiningTier) && electedCandidateResultDistillate.firstTierAnswer.HasValue) {
 					parameters.Add("firstTierAnswer", electedCandidateResultDistillate.firstTierAnswer.Value);
 				}
 
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
-					
-					using var dehydrator = DataSerializationFactory.CreateDehydrator();
 
-					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
+					using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+
+					List<TransactionId> transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 
 					dehydrator.Write(transactionsIds);
 
@@ -127,12 +134,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				}
 
 				// now make sure that we apply correctly to any representative selection process.
-				var ballotingApplications = this.PrepareRepresentativesApplication(activeElectionContext.RepresentativeBallotingRules);
+				List<IActiveRepresentativeBallotingApplication> ballotingApplications = this.PrepareRepresentativesApplication(activeElectionContext.RepresentativeBallotingRules);
 
 				if(ballotingApplications.Any()) {
-					
-					using var dehydrator = DataSerializationFactory.CreateDehydrator();
-					
+
+					using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+
 					dehydrator.Write(ballotingApplications);
 
 					using SafeArrayHandle data = dehydrator.ToArray();
@@ -140,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 					parameters.Add("representativeBallotingApplications", data.Entry.ToBase64());
 
 				}
-				
+
 				return parameters;
 			}
 
@@ -149,35 +156,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 		public Dictionary<string, object> PreparePassiveElectionWebConfirmation(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, long password) {
 			if(matureBlockElectionDistillate.ElectionContext is IPassiveElectionContext passiveElectionContext) {
-				Log.Information("We are elected in a passive election!...");
+				NLog.Default.Information("We are elected in a passive election!...");
 
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
-				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
 
+				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
 
 				parameters.Add("matureBlockId", electedCandidateResultDistillate.BlockId);
 				parameters.Add("miningAccountId", matureBlockElectionDistillate.MiningAccountId.ToLongRepresentation());
 				parameters.Add("maturityBlockHash", electedCandidateResultDistillate.MaturityBlockHash);
 				parameters.Add("password", password);
 
-				if(electedCandidateResultDistillate.secondTierAnswer.HasValue && electedCandidateResultDistillate.secondTierAnswer != 0) {
+				if(electedCandidateResultDistillate.secondTierAnswer.HasValue && (electedCandidateResultDistillate.secondTierAnswer != 0)) {
 					parameters.Add("secondTierAnswer", electedCandidateResultDistillate.secondTierAnswer);
 				}
-				
-				if(electedCandidateResultDistillate.digestAnswer.HasValue && electedCandidateResultDistillate.digestAnswer != 0) {
+
+				if(electedCandidateResultDistillate.digestAnswer.HasValue && (electedCandidateResultDistillate.digestAnswer != 0)) {
 					parameters.Add("digestAnswer", electedCandidateResultDistillate.digestAnswer);
 				}
 
-				if(electedCandidateResultDistillate.firstTierAnswer.HasValue && electedCandidateResultDistillate.firstTierAnswer != 0) {
+				if(electedCandidateResultDistillate.firstTierAnswer.HasValue && (electedCandidateResultDistillate.firstTierAnswer != 0)) {
 					parameters.Add("firstTierAnswer", electedCandidateResultDistillate.firstTierAnswer);
 				}
-				
+
 				// note:  we send a message even if we have no transactions. we may not get transaction fees, but the bounty is still applicable for being present and elected.
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
-					
-					using var dehydrator = DataSerializationFactory.CreateDehydrator();
 
-					var transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
+					using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+
+					List<TransactionId> transactionsIds = electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)).ToList();
 
 					dehydrator.Write(transactionsIds);
 
@@ -193,7 +200,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			throw new ApplicationException("Must be a passive election!");
 		}
 
-		
 		public virtual IElectionCandidacyMessage PrepareActiveElectionConfirmationMessage(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
 
 			if(matureBlockElectionDistillate.ElectionContext is IActiveElectionContext activeElectionContext) {
@@ -208,7 +214,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				message.SecondTierAnswer = electedCandidateResultDistillate.secondTierAnswer;
 				message.DigestAnswer = electedCandidateResultDistillate.digestAnswer;
 				message.FirstTierAnswer = electedCandidateResultDistillate.firstTierAnswer;
-				
+
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
 					message.SelectedTransactions.AddRange(electedCandidateResultDistillate.SelectedTransactionIds.Select(t => new TransactionId(t)));
 				}
@@ -231,7 +237,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		public IElectionCandidacyMessage PreparePassiveElectionConfirmationMessage(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate) {
 
 			if(matureBlockElectionDistillate.ElectionContext is IPassiveElectionContext passiveElectionContext) {
-				Log.Information("We are elected in a passive election!...");
+				NLog.Default.Information("We are elected in a passive election!...");
 
 				// well, we were elected!  wow. lets go ahead and choose our transactions and build our reply
 
@@ -241,7 +247,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				message.AccountId = matureBlockElectionDistillate.MiningAccountId;
 				message.MaturityBlockHash = electedCandidateResultDistillate.MaturityBlockHash;
 				message.MiningTier = electedCandidateResultDistillate.MiningTier;
-				
+
 				message.SecondTierAnswer = electedCandidateResultDistillate.secondTierAnswer;
 				message.FirstTierAnswer = electedCandidateResultDistillate.firstTierAnswer;
 
@@ -289,12 +295,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			ITransactionSelectionMethod transactionSelectionMethod = transactionSelectionMethodFactory.CreateTransactionSelectionMethod(this.GetTransactionSelectionMethodType(), blockId, blockElectionDistillate, this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase, this.centralCoordinator.ChainComponentProvider.WalletProviderBase, this.centralCoordinator.BlockchainServiceSet);
 
 			// get the transactions we already selected in previous mining, so we dont send them again
-			IWalletAccount account = await centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
-			var existingTransactions = await centralCoordinator.ChainComponentProvider.WalletProviderBase.GetElectionCacheTransactions(account, lockContext).ConfigureAwait(false);
+			IWalletAccount account = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
+			List<TransactionId> existingTransactions = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetElectionCacheTransactions(account, lockContext).ConfigureAwait(false);
 
-			var selectedTransactions = await transactionSelectionMethod.PerformTransactionSelection(this.chainEventPoolProvider, existingTransactions).ConfigureAwait(false);
+			List<WebTransactionPoolResult> webTransactions = new List<WebTransactionPoolResult>();
+			var chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			if(chainConfiguration.UseWebTransactionPool) {
+				
+				webTransactions = await centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.QueryWebTransactionPool(lockContext).ConfigureAwait(false);
+			}
 
-			await centralCoordinator.ChainComponentProvider.WalletProviderBase.InsertElectionCacheTransactions(selectedTransactions, blockId, account, lockContext).ConfigureAwait(false);
+			List<TransactionId> selectedTransactions = await transactionSelectionMethod.PerformTransactionSelection(this.chainEventPoolProvider, existingTransactions, webTransactions).ConfigureAwait(false);
+
+			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.InsertElectionCacheTransactions(selectedTransactions, blockId, account, lockContext).ConfigureAwait(false);
 
 			// ok, lets use them
 			return selectedTransactions;
@@ -309,7 +322,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		/// <returns></returns>
 		protected List<IActiveRepresentativeBallotingApplication> PrepareRepresentativesApplication(List<IRepresentativeBallotingRules> representativeBallotingRules) {
 
-			var results = new List<IActiveRepresentativeBallotingApplication>();
+			List<IActiveRepresentativeBallotingApplication> results = new List<IActiveRepresentativeBallotingApplication>();
 
 			foreach(IRepresentativeBallotingRules entry in representativeBallotingRules) {
 				if(entry is IActiveRepresentativeBallotingRules activeRepresentativeBallotingRules) {
@@ -351,10 +364,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 		/// <param name="miningAccount"></param>
 		/// <returns></returns>
 		public SafeArrayHandle DetermineCandidacy(BlockElectionDistillate matureBlockElectionDistillate, BlockElectionDistillate currentBlockElectionDistillate, AccountId miningAccount) {
-			
+
 			return this.DetermineCandidacy(matureBlockElectionDistillate, currentBlockElectionDistillate.blockHash, miningAccount); // we are simply not a candidate
 		}
-		
+
 		public SafeArrayHandle DetermineCandidacy(BlockElectionDistillate matureBlockElectionDistillate, SafeArrayHandle currentBlockHash, AccountId miningAccount) {
 
 			if(matureBlockElectionDistillate.ElectionContext.CandidatureMethod.Version.Type == CandidatureMethodTypes.Instance.SimpleHash) {
@@ -378,7 +391,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 			resultingBallot = blockElectionDistillate.ElectionContext.PrimariesBallotingMethod.PerformBallot(resultingBallot, blockElectionDistillate, miningTier, miningAccount);
 
-			return resultingBallot; 
+			return resultingBallot;
 		}
 	}
 }

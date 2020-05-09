@@ -6,7 +6,6 @@ using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -92,10 +91,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				bool isEmpty = rehydrator.ReadBool();
 
 				ByteArray buffer = null;
+
 				if(!isEmpty) {
 					buffer = rehydrator.ReadArray(this.DigestSize);
 				} else {
-					buffer = ByteArray.Create(0);
+					buffer = ByteArray.Create();
 				}
 
 				this.nodes.AddSafe((index, height), buffer);

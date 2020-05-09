@@ -1,16 +1,13 @@
 using System;
-using System.Collections.Immutable;
-using System.Linq;
+using Neuralia.Blockchains.Core.General.Types;
 
 namespace Neuralia.Blockchains.Core {
 	public static class Enums {
 
-		public enum BlockHashingModes:byte { Mode1 = 1}
-		
-
 		public enum AccountTypes : byte {
 			Standard = 1,
-			Joint = 2
+			Joint = 2,
+			Presentation = AccountId.MAX_ACCOUNT_TYPE
 		}
 
 		public enum BlockchainEventTypes : byte {
@@ -18,6 +15,10 @@ namespace Neuralia.Blockchains.Core {
 			Message = 2,
 			Block = 3,
 			Digest = 4
+		}
+
+		public enum BlockHashingModes : byte {
+			Mode1 = 1
 		}
 
 		[Flags]
@@ -42,22 +43,32 @@ namespace Neuralia.Blockchains.Core {
 
 		}
 
+		public enum ChainSharingTypes : byte {
+			None = 0,
+			BlockOnly = 1,
+			DigestThenBlocks = 2,
+			DigestAndBlocks = 3,
+			Full = DigestAndBlocks
+		}
+
 		public enum ChainSyncState {
 			Synchronized,
 			LikelyDesynchronized,
 			Desynchronized
 		}
 
-		public const byte SHA2 = 0x0;
-		public const byte SHA3 = 0x10;
-		public const byte BLAKE2 = 0x20;
-		
-		public const byte HASH512 = 0x80;
-		
+		public enum GossipSupportTypes : byte {
+			None = 0,
+			Basic = 1,
+
+			//Basic = 2,
+			Full = 3
+		}
+
 		[Flags]
 		public enum KeyHashBits : byte {
 			SHA3_256 = SHA3,
-			SHA3_512 = SHA3 | HASH512 ,
+			SHA3_512 = SHA3 | HASH512,
 			SHA2_256 = SHA2,
 			SHA2_512 = SHA2 | HASH512,
 			BLAKE2_256 = BLAKE2,
@@ -79,14 +90,31 @@ namespace Neuralia.Blockchains.Core {
 			QTESLA = 5,
 			ECDSA = 6,
 			RSA = 7,
+
 			// more?
-			
+
 			Secret = 15,
 			SecretCombo = 16,
 			SecretDouble = 17,
 			SecretPenta = 18,
-			MCELIECE = 19,
+			MCELIECE = 19
 
+		}
+
+		public enum MiningStatus : byte {
+			Unknown = 0,
+			Mining = 1,
+			IpUsed = 2,
+			NotMining = byte.MaxValue
+		}
+
+		public enum MiningTiers : byte {
+
+			FirstTier = 1,
+			SecondTier = 2,
+			ThirdTier = 3,
+			FourthTier = 4,
+			Other = byte.MaxValue
 		}
 
 		public enum PeerTypes : byte {
@@ -96,44 +124,12 @@ namespace Neuralia.Blockchains.Core {
 			Sdk = 3,
 			Hub = 4
 		}
-		
-		public enum GossipSupportTypes : byte {
-			None = 0,
-			Basic = 1,
-			//Basic = 2,
-			Full = 3
-		}
 
-		public enum ChainSharingTypes : byte {
-			None = 0,
-			BlockOnly = 1,
-			DigestThenBlocks = 2,
-			DigestAndBlocks = 3,
-			Full = DigestAndBlocks
-		}
-		
-		public enum MiningTiers : byte {
-			
-			FirstTier = 1,
-			SecondTier = 2,
-			ThirdTier = 3,
-			FourthTier = 4,
-			Other = Byte.MaxValue
-		}
-		
-		
 		public enum PublicationStatus : byte {
 			New = 1,
 			Dispatched = 2,
 			Published = 3,
 			Rejected = 4
-		}
-		
-		public enum MiningStatus:byte {
-			Unknown = 0,
-			Mining = 1,
-			IpUsed = 2,
-			NotMining = byte.MaxValue
 		}
 
 		public enum ServiceExecutionTypes {
@@ -149,6 +145,12 @@ namespace Neuralia.Blockchains.Core {
 			ThreeQuarter,
 			Full
 		}
+
+		public const byte SHA2 = 0x0;
+		public const byte SHA3 = 0x10;
+		public const byte BLAKE2 = 0x20;
+
+		public const byte HASH512 = 0x80;
 
 		public const string INTERFACE = "interface";
 		public const string BLOCKCHAIN_SERVICE = "blockchain";

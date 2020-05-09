@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.Tools;
 using Serilog;
@@ -22,14 +23,14 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 		protected object locker = new object();
 		protected object transferredQueueLocker = new object();
 
-		public event Action MessageReceived;
-		
 		public NetworkMessageReceiver(ServiceSet serviceSet) {
 
 		}
 
 		public bool HasMessage => this.messageQueue.Any();
-	
+
+		public event Action MessageReceived;
+
 		/// <summary>
 		///     Check for messsages received in our queue. First, we take them out of the thread safe queue, then we run
 		///     validation callbacks to see if we take them
@@ -41,7 +42,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 			List<KeyValuePair<int, T>> results = null;
 
 			// transfer messages
-			foreach(var messageSet in this.messageQueue.ToArray()) {
+			foreach(KeyValuePair<int, T> messageSet in this.messageQueue.ToArray()) {
 				this.messageQueue.RemoveSafe(messageSet.Key);
 
 				lock(this.transferredQueueLocker) {
@@ -51,13 +52,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 				}
 			}
 
-			KeyValuePair<int, T>[] transferedQueue = null;
+			KeyValuePair<int, T>[] transferredQueue = null;
 
 			lock(this.transferredQueueLocker) {
-				transferedQueue = this.transferredQueue.ToArray();
+				transferredQueue = this.transferredQueue.ToArray();
 			}
 
-			foreach(var messageSet in transferedQueue) {
+			foreach(KeyValuePair<int, T> messageSet in transferredQueue) {
 				if(results == null) {
 					results = new List<KeyValuePair<int, T>>();
 				}
@@ -68,13 +69,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 			}
 
 			if((results != null) && results.Any()) {
-				var messageResult = results.Select(v => v.Value).ToList();
+				List<T> messageResult = results.Select(v => v.Value).ToList();
 
 				// now check the entire collection to see if it passes the group test
 				if(((ProcessBatch != null) && ProcessBatch(messageResult)) || results.Any()) {
 
 					// ok, we accepted the messages. lets remove them from the pending queue and return them
-					foreach(var messageSet in results) {
+					foreach(KeyValuePair<int, T> messageSet in results) {
 						lock(this.transferredQueueLocker) {
 							this.transferredQueue.Remove(messageSet.Key);
 						}
@@ -96,7 +97,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network {
 					this.MessageReceived();
 				}
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to post network message");
+				NLog.Default.Error(ex, "Failed to post network message");
 			}
 		}
 	}

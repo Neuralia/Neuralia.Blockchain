@@ -36,23 +36,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.JsonDehydrate(jsonDeserializer);
 
 			jsonDeserializer.SetArray("Accounts", this.Accounts, (ds, e) => {
-				ds.WriteObject((s) => {
+				ds.WriteObject(s => {
 					s.SetProperty("Account", e.Account);
 					s.SetProperty("Reason", e.Reason);
 				});
-				
+
 			});
 		}
+
+		public override ImmutableList<AccountId> TargetAccounts => this.Accounts.Select(r => r.Account).ToImmutableList();
 
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 
-			var parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
+			AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
-			var accounts = AccountIdGroupSerializer.Rehydrate(rehydrator, true, parameters);
+			List<AccountId> accounts = AccountIdGroupSerializer.Rehydrate(rehydrator, true, parameters);
 
 			int count = accounts.Count;
-			var orderedAccounts = accounts.OrderBy(s => s).ToList();
+			List<AccountId> orderedAccounts = accounts.OrderBy(s => s).ToList();
 
 			TwoBitArray twoBitArray = new TwoBitArray(rehydrator.ReadArray(TwoBitArray.GetCorrespondingByteSize(count)), count);
 
@@ -69,11 +71,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override void DehydrateHeader(IDataDehydrator dehydrator) {
 			base.DehydrateHeader(dehydrator);
 
-			var parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerDehydrateParameters<AccountReset, AccountId>();
+			AccountIdGroupSerializer.AccountIdGroupSerializerDehydrateParameters<AccountReset, AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerDehydrateParameters<AccountReset, AccountId>();
 
 			AccountIdGroupSerializer.Dehydrate(this.Accounts.ToDictionary(a => a.Account), dehydrator, true, parameters);
 
-			var orderedAccounts = this.Accounts.OrderBy(s => s.Account);
+			IOrderedEnumerable<AccountReset> orderedAccounts = this.Accounts.OrderBy(s => s.Account);
 
 			TwoBitArray twoBitArray = new TwoBitArray(this.Accounts.Count);
 			int accountIndex = 0;
@@ -94,7 +96,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			public AccountId Account { get; set; }
 			public byte Reason { get; set; }
 		}
-
-		public override ImmutableList<AccountId> TargetAccounts => this.Accounts.Select(r => r.Account).ToImmutableList();
 	}
 }

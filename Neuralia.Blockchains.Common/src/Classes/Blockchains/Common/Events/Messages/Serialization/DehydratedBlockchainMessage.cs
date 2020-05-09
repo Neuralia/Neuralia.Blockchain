@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			return nodeList;
 		}
-		
+
 	#region Disposable
 
 		public void Dispose() {
@@ -72,19 +72,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			if(this.IsDisposed) {
 				return;
 			}
-			
+
 			if(disposing) {
 				this.Contents?.Dispose();
 			}
+
 			this.IsDisposed = true;
 		}
 
 		~DehydratedBlockchainMessage() {
 			this.Dispose(false);
 		}
-		
+
 		public bool IsDisposed { get; private set; }
 
 	#endregion
+
 	}
 }

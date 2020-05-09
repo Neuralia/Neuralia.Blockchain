@@ -29,14 +29,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			return application;
 		}
-		
+
 		protected Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> PerformEncryptedSecretRepresentativeSelection(Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> electedTiers, IActiveRepresentativeBallotingProof proof) {
 
-			var representativesTiers = new Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>>();
+			Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> representativesTiers = new Dictionary<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>>();
 
 			// this will give us the X lowest hashes among X elected
-			foreach(var tier in electedTiers) {
-				var primeRepresentatives = tier.Value.Select(r => (r.Key, hash: new BigInteger(r.Value.ElectionHash.ToExactByteArrayCopy()))).OrderBy(v => v.hash).Take(this.RepresentativeBallotingRules.GetTotal(tier.Key)).Select(r => r.Key);
+			foreach(KeyValuePair<Enums.MiningTiers, Dictionary<AccountId, IActiveElectedChoice>> tier in electedTiers) {
+				IEnumerable<AccountId> primeRepresentatives = tier.Value.Select(r => (r.Key, hash: new BigInteger(r.Value.ElectionHash.ToExactByteArrayCopy()))).OrderBy(v => v.hash).Take(this.RepresentativeBallotingRules.GetTotal(tier.Key)).Select(r => r.Key);
 
 				// let's select our up to X prime elected
 				representativesTiers.Add(tier.Key, tier.Value.Where(r => primeRepresentatives.Contains(r.Key)).ToDictionary());

@@ -19,11 +19,11 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			return VerifyDigestHash(digest, hashes.sha2, hashes.sha3);
 		}
 
-		public static  (SafeArrayHandle sha2, SafeArrayHandle sha3) GetCombinedHash(IGenesisBlock genesis, SafeArrayHandle sha2, SafeArrayHandle sha3) {
+		public static (SafeArrayHandle sha2, SafeArrayHandle sha3) GetCombinedHash(IGenesisBlock genesis, SafeArrayHandle sha2, SafeArrayHandle sha3) {
 
 			return HashingUtils.GetCombinedHash(genesis.Hash, sha2, sha3);
 		}
-		
+
 		public static bool VerifyGenesisHash(IGenesisBlock genesis, SafeArrayHandle sha2, SafeArrayHandle sha3) {
 
 			return HashingUtils.VerifyCombinedHash(genesis.Hash, sha2, sha3);
@@ -33,7 +33,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 			return HashingUtils.VerifyCombinedHash(genesis.Hash, sha2, sha3, genesisSha2, genesisSha3);
 		}
-		
+
 		public static bool VerifyDigestHash(IBlockchainDigest digest, SafeArrayHandle sha2, SafeArrayHandle sha3) {
 
 			return HashingUtils.VerifyCombinedHash(digest.Hash, sha2, sha3);

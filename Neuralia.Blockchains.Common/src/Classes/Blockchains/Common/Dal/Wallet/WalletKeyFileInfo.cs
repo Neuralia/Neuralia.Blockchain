@@ -1,8 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
@@ -17,30 +17,40 @@ using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public class WalletKeyFileInfo : SingleEntryWalletFileInfo<IWalletKey> {
+		protected const string NEXT_KEY_SUFFIX = "NEXT";
 
-		private readonly   IWalletAccount           account;
+		private readonly IWalletAccount account;
 		protected readonly AccountPassphraseDetails accountPassphraseDetails;
-		private readonly   KeyInfo                  keyInfo;
-		private readonly   Type                     keyType;
+		private readonly KeyInfo keyInfo;
+		private readonly Type keyType;
+
+		private bool hasChanged;
 
 		private IWalletKey key;
 
 		public WalletKeyFileInfo(IWalletAccount account, string keyName, byte ordinalId, Type keyType, string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, AccountPassphraseDetails accountPassphraseDetails, WalletPassphraseDetails walletSecurityDetails) : base(filename, chainConfiguration, serviceSet, serialisationFal, walletSecurityDetails) {
 
-			this.account                  = account;
-			this.KeyName                  = keyName;
-			this.OrdinalId                = ordinalId;
-			this.keyType                  = keyType;
+			this.account = account;
+			this.KeyName = keyName;
+			this.OrdinalId = ordinalId;
+			this.keyType = keyType;
 			this.accountPassphraseDetails = accountPassphraseDetails;
 		}
 
+		protected string KeyTypeName => this.keyType.Name;
+		protected string KeyTypeNextName => $"{this.KeyTypeName}{NEXT_KEY_SUFFIX}";
+
+		public string KeyName { get; }
+
+		public byte OrdinalId { get; }
+
 		public async Task<IWalletKey> Key(LockContext lockContext) {
 
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.key == null) {
 					//KeyData keyData = new KeyData(this.account.AccountUuid, this.KeyName);
 
-					this.key = await LoadKey<IWalletKey>(account.AccountUuid, KeyName, handle).ConfigureAwait(false);
+					this.key = await this.LoadKey<IWalletKey>(this.account.AccountUuid, this.KeyName, handle).ConfigureAwait(false);
 
 					//this.key = this.RunQueryDbOperation(((litedbDal, lc) => litedbDal.Any<IWalletKey>() ? litedbDal.GetSingle<IWalletKey>() : null, keyData);
 				}
@@ -57,15 +67,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			this.hasChanged = false;
 		}
 
-		private         bool   hasChanged      = false;
-		protected const string NEXT_KEY_SUFFIX = "NEXT";
-		protected       string KeyTypeName     => this.keyType.Name;
-		protected       string KeyTypeNextName => $"{this.KeyTypeName}{NEXT_KEY_SUFFIX}";
-
-		public string KeyName { get; }
-
-		public byte OrdinalId { get; }
-
 		public async Task CreateEmptyFile(IWalletKey entry, IWalletKey nextKey, LockContext lockContext) {
 			// ensure the key is of the expected type
 			if(!this.keyType.IsInstanceOfType(entry)) {
@@ -75,14 +76,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			await base.CreateEmptyFile(entry, lockContext).ConfigureAwait(false);
 
 			if(nextKey != null) {
-				await SetNextKey(nextKey, lockContext).ConfigureAwait(false);
+				await this.SetNextKey(nextKey, lockContext).ConfigureAwait(false);
 			}
 
 			this.hasChanged = true;
 		}
 
+		protected override IWalletKey CreateEntryType() {
+			// we will never call this directly
+			throw new NotImplementedException();
+		}
+
+		public override Task CreateEmptyFile(LockContext lockContext, object data = null) {
+			// with keys, we do nothing here. the explicit overload will be called explicitely
+			return Task.CompletedTask;
+		}
+
 		public override async Task CreateEmptyFile(IWalletKey entry, LockContext lockContext) {
-			await CreateEmptyFile(entry, lockContext).ConfigureAwait(false);
+			await this.CreateEmptyFile(entry, lockContext).ConfigureAwait(false);
 
 			this.hasChanged = true;
 		}
@@ -92,13 +103,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// </summary>
 		/// <param name="wallet"></param>
 		protected override async Task InsertNewDbData(IWalletKey key, LockContext lockContext) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.key = key;
 
 				KeyData keyData = new KeyData(key.AccountUuid, key.Name);
 
-				await RunDbOperation((litedbDal, lc) => {
-					litedbDal.Insert(key, KeyTypeName, c => c.Id);
+				await this.RunDbOperation((litedbDal, lc) => {
+					litedbDal.Insert(key, this.KeyTypeName, c => c.Id);
 
 					return Task.CompletedTask;
 				}, handle, keyData).ConfigureAwait(false);
@@ -116,13 +127,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		protected override async Task PrepareEncryptionInfo(LockContext lockContext) {
-			await CreateSecurityDetails(lockContext).ConfigureAwait(false);
+			await this.CreateSecurityDetails(lockContext).ConfigureAwait(false);
 
 			this.hasChanged = true;
 		}
 
 		protected override async Task CreateSecurityDetails(LockContext lockContext) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
@@ -212,7 +223,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			where T : class
 			where K : IWalletKey {
 
-			return this.LoadKey<K, T>(selector, accountUuid, name, false, lockContext);
+			return this.LoadKey(selector, accountUuid, name, false, lockContext);
 		}
 
 		public Task<T> LoadKey<T>(Guid accountUuid, string name, LockContext lockContext)
@@ -239,13 +250,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				if(!litedbDal.CollectionExists<K>(keyName)) {
 					// ok, we did not find it. lets see if it has another name, and the type is assignable
-					var collectionNames = litedbDal.GetCollectionNames();
+					List<string> collectionNames = litedbDal.GetCollectionNames();
 
 					if(!collectionNames.Any()) {
 						return null;
 					}
 
-					Type basicType  = typeof(K);
+					Type basicType = typeof(K);
 					bool foundMatch = false;
 
 					if(nextKey) {
@@ -260,8 +271,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						Type resultType = Assembly.GetAssembly(basicType).GetType($"{basicType.Namespace}.{collection}");
 
 						// if the two are assignable, than we have a super class and we can assign it
-						if(resultType != null && basicType.IsAssignableFrom(resultType)) {
-							keyName    = collection;
+						if((resultType != null) && basicType.IsAssignableFrom(resultType)) {
+							keyName = collection;
 							foundMatch = true;
 
 							break;
@@ -273,7 +284,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					}
 				}
 
-				K loadedKey = litedbDal.GetOne<K>(k => k.AccountUuid == accountUuid && k.Name == name, keyName);
+				K loadedKey = litedbDal.GetOne<K>(k => (k.AccountUuid == accountUuid) && (k.Name == name), keyName);
 
 				if(loadedKey == null) {
 					throw new ApplicationException("Failed to load wallet key from file");
@@ -297,10 +308,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		public async Task UpdateKey(IWalletKey key, LockContext lockContext) {
 			KeyData keyData = new KeyData(key.AccountUuid, key.Name);
 
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				await RunDbOperation((litedbDal, lc) => {
-					if(litedbDal.CollectionExists<IWalletKey>(KeyTypeName)) {
-						litedbDal.Update(key, KeyTypeName);
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await this.RunDbOperation((litedbDal, lc) => {
+					if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
+						litedbDal.Update(key, this.KeyTypeName);
 					}
 
 					return Task.CompletedTask;
@@ -311,20 +322,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		public async Task<bool> IsNextKeySet(LockContext lockContext) {
-			var key = await Key(lockContext).ConfigureAwait(false);
+			IWalletKey key = await this.Key(lockContext).ConfigureAwait(false);
 
-			return (await this.LoadNextKey<IWalletKey>(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false)) != null;
+			return await this.LoadNextKey<IWalletKey>(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false) != null;
 		}
 
 		public async Task SetNextKey(IWalletKey nextKey, LockContext lockContext) {
 
 			KeyData keyData = new KeyData(nextKey.AccountUuid, nextKey.Name);
 
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				await RunDbOperation((litedbDal, lc) => {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await this.RunDbOperation((litedbDal, lc) => {
 
-					if(litedbDal.CollectionExists<IWalletKey>(KeyTypeName)) {
-						using IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => k.AccountUuid == nextKey.AccountUuid && k.KeyAddress.OrdinalId == nextKey.KeyAddress.OrdinalId, KeyTypeName);
+					if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
+						using IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && (k.KeyAddress.OrdinalId == nextKey.KeyAddress.OrdinalId), this.KeyTypeName);
 
 						// increment the sequence
 						nextKey.KeySequenceId = currentKey.KeySequenceId + 1;
@@ -333,13 +344,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						throw new ArgumentException("key does not exist");
 					}
 
-					if(litedbDal.CollectionExists<IWalletKey>(KeyTypeNextName)) {
-						if(litedbDal.Exists<IWalletKey>(k => k.AccountUuid == nextKey.AccountUuid && k.KeyAddress.OrdinalId == nextKey.KeyAddress.OrdinalId, KeyTypeNextName)) {
+					if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeNextName)) {
+						if(litedbDal.Exists<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && (k.KeyAddress.OrdinalId == nextKey.KeyAddress.OrdinalId), this.KeyTypeNextName)) {
 							throw new ApplicationException("A key is already set to be our next key. Since it may already be promised, we can not overwrite it.");
 						}
 					}
 
-					litedbDal.Insert(nextKey, KeyTypeNextName, k => k.Id);
+					litedbDal.Insert(nextKey, this.KeyTypeNextName, k => k.Id);
 
 					return Task.CompletedTask;
 				}, handle, keyData).ConfigureAwait(false);
@@ -352,11 +363,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 			KeyData keyData = new KeyData(nextKey.AccountUuid, keyInfo.Name);
 
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				await RunDbOperation((litedbDal, lc) => {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await this.RunDbOperation((litedbDal, lc) => {
 
-					if(litedbDal.CollectionExists<IWalletKey>(KeyTypeName)) {
-						using IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => k.AccountUuid == nextKey.AccountUuid && k.KeyAddress.OrdinalId == keyInfo.Ordinal, KeyTypeName);
+					if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
+						using IWalletKey currentKey = litedbDal.GetOne<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && (k.KeyAddress.OrdinalId == keyInfo.Ordinal), this.KeyTypeName);
 
 						// increment the sequence
 						nextKey.KeySequenceId = currentKey.KeySequenceId + 1;
@@ -367,10 +378,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					bool insert = false;
 
-					if(litedbDal.CollectionExists<IWalletKey>(KeyTypeNextName)) {
-						if(litedbDal.Exists<IWalletKey>(k => k.AccountUuid == nextKey.AccountUuid && k.KeyAddress.OrdinalId == keyInfo.Ordinal, KeyTypeNextName)) {
+					if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeNextName)) {
+						if(litedbDal.Exists<IWalletKey>(k => (k.AccountUuid == nextKey.AccountUuid) && (k.KeyAddress.OrdinalId == keyInfo.Ordinal), this.KeyTypeNextName)) {
 
-							litedbDal.Update(nextKey, KeyTypeNextName);
+							litedbDal.Update(nextKey, this.KeyTypeNextName);
 						} else {
 							insert = true;
 						}
@@ -379,7 +390,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					}
 
 					if(insert) {
-						litedbDal.Insert(nextKey, KeyTypeNextName, k => k.Id);
+						litedbDal.Insert(nextKey, this.KeyTypeNextName, k => k.Id);
 					}
 
 					return Task.CompletedTask;
@@ -392,19 +403,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		public async Task SwapNextKey(KeyInfo keyInfo, Guid accountUuid, LockContext lockContext) {
 			KeyData keyData = new KeyData(accountUuid, keyInfo.Name);
 
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				await RunDbOperation((litedbDal, lc) => {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await this.RunDbOperation((litedbDal, lc) => {
 
-					if(litedbDal.CollectionExists<IWalletKey>(KeyTypeName)) {
-						litedbDal.Remove<IWalletKey>(k => k.AccountUuid == accountUuid && k.Name == keyInfo.Name, KeyTypeName);
+					if(litedbDal.CollectionExists<IWalletKey>(this.KeyTypeName)) {
+						litedbDal.Remove<IWalletKey>(k => (k.AccountUuid == accountUuid) && (k.Name == keyInfo.Name), this.KeyTypeName);
 					}
 
-					using(IWalletKey nextKey = litedbDal.GetOne<IWalletKey>(k => k.AccountUuid == accountUuid && k.KeyAddress.OrdinalId == keyInfo.Ordinal, KeyTypeNextName)) {
+					using(IWalletKey nextKey = litedbDal.GetOne<IWalletKey>(k => (k.AccountUuid == accountUuid) && (k.KeyAddress.OrdinalId == keyInfo.Ordinal), this.KeyTypeNextName)) {
 
-						litedbDal.Insert(nextKey, KeyTypeName, k => k.Id);
+						litedbDal.Insert(nextKey, this.KeyTypeName, k => k.Id);
 					}
 
-					litedbDal.Remove<IWalletKey>(k => k.AccountUuid == accountUuid && k.Name == keyInfo.Name, KeyTypeNextName);
+					litedbDal.Remove<IWalletKey>(k => (k.AccountUuid == accountUuid) && (k.Name == keyInfo.Name), this.KeyTypeNextName);
 
 					return Task.CompletedTask;
 				}, handle, keyData).ConfigureAwait(false);
@@ -412,14 +423,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				this.hasChanged = true;
 			}
 		}
+		
+		public override async Task Reset(LockContext lockContext) {
+			await base.Reset(lockContext).ConfigureAwait(false);
+
+			this.ClearCached(lockContext);
+		}
+		
+		public override void ClearCached(LockContext lockContext) {
+			base.ClearCached(lockContext);
+			
+			this.key = null;
+		}
 
 		protected class KeyData {
-			public          Guid   AccountUuid;
 			public readonly string Name;
+			public Guid AccountUuid;
 
 			public KeyData(Guid accountUuid, string name) {
 				this.AccountUuid = accountUuid;
-				this.Name        = name;
+				this.Name = name;
 			}
 		}
 	}

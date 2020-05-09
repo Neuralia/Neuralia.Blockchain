@@ -10,10 +10,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public interface IChannelBandSqliteProviderDal<ENTRY, KEY> : ISqliteDal<IChannelBandSqliteProviderContext<ENTRY, KEY>>
 		where ENTRY : class, IChannelBandSqliteProviderEntry<KEY>
 		where KEY : struct {
+		Action<ModelBuilder> ModelBuilder { get; set; }
 
 		void PerformOperation(Action<IChannelBandSqliteProviderContext<ENTRY, KEY>> process);
 		T PerformOperation<T>(Func<IChannelBandSqliteProviderContext<ENTRY, KEY>, T> process);
-		Action<ModelBuilder> ModelBuilder { get; set; }
 	}
 
 	public class ChannelBandSqliteProviderDal<ENTRY, KEY> : SqliteDal<ChannelBandSqliteProviderContext<ENTRY, KEY>>, IChannelBandSqliteProviderDal<ENTRY, KEY>
@@ -38,9 +38,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected override void PerformCustomMappings(ChannelBandSqliteProviderContext<ENTRY, KEY> db) {
 			base.PerformCustomMappings(db);
-			
-			db.ModelBuilders.Add((modelBuilder) => {
-if(				this.ModelBuilder != null){	this.ModelBuilder(modelBuilder);}
+
+			db.ModelBuilders.Add(modelBuilder => {
+				if(this.ModelBuilder != null) {
+					this.ModelBuilder(modelBuilder);
+				}
 			});
 		}
 	}

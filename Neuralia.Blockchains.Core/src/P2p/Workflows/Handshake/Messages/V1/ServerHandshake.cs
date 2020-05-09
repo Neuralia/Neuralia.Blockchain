@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -24,7 +22,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			AlreadyConnected = 6,
 			AlreadyConnecting = 7,
 			InvalidPeer = 8,
-
+			
 			/// <summary>
 			///     we already have too many connections
 			/// </summary>
@@ -32,18 +30,18 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 		}
 
 		public readonly SoftwareVersion clientSoftwareVersion = new SoftwareVersion();
-		
+
+		public bool? Connectable;
+
+		public GeneralSettings generalSettings = new GeneralSettings();
+
 		public DateTime localTime;
+
+		public NodeInfo nodeInfo = new NodeInfo();
 
 		public long nonce;
 
-		public NodeInfo nodeInfo = new NodeInfo();
-		
-		public GeneralSettings generalSettings = new GeneralSettings();
-
 		public Guid PerceivedIP;
-
-		public bool? Connectable;
 
 		public HandshakeStatuses Status;
 
@@ -57,7 +55,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			this.generalSettings.Dehydrate(dehydrator);
 			dehydrator.Write(this.PerceivedIP);
 			dehydrator.Write(this.Connectable);
-			
+
 			this.clientSoftwareVersion.Dehydrate(dehydrator);
 		}
 
@@ -85,6 +83,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			nodesList.Add(this.nodeInfo);
 			nodesList.Add(this.generalSettings);
 			nodesList.Add(this.Connectable);
+
 			return nodesList;
 		}
 

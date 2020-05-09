@@ -9,20 +9,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	}
 
 	public abstract class SetAccountCorrelationTransaction : Transaction, ISetAccountCorrelationTransaction {
-		
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = base.GetStructuresArray();
-			
+
 			return hashNodeList;
 		}
-		
+
+		public override ImmutableList<AccountId> TargetAccounts => new[] {this.TransactionId.Account}.ToImmutableList();
 
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.SET_ACCOUNT_CORRELATION, 1, 0);
 		}
-		
-		public override ImmutableList<AccountId> TargetAccounts => new [] {this.TransactionId.Account}.ToImmutableList();
-
 	}
 }

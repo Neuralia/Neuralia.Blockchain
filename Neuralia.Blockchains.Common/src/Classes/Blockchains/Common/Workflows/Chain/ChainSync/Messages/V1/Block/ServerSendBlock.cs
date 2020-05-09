@@ -1,8 +1,8 @@
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Tags;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Simple;
@@ -26,6 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		///     The last block we have in our chain. we send it every time, as this number changes as we sync locally
 		/// </summary>
 		public BlockId ChainBlockHeight { get; set; } = new BlockId();
+
 		public BlockId PublicBlockHeight { get; set; } = new BlockId();
 
 		public SafeArrayHandle NextBlockHash { get; } = SafeArrayHandle.Create();
@@ -50,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Slices.Dehydrate(dehydrator);
 
 			this.ChainBlockHeight.Dehydrate(dehydrator);
-			
+
 			AdaptiveLong1_9 delta = new AdaptiveLong1_9();
 			delta.Value = this.PublicBlockHeight - this.ChainBlockHeight;
 			delta.Dehydrate(dehydrator);
@@ -96,7 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Slices.Rehydrate(rehydrator);
 
 			this.ChainBlockHeight.Rehydrate(rehydrator);
-			
+
 			AdaptiveLong1_9 delta = new AdaptiveLong1_9();
 			delta.Rehydrate(rehydrator);
 			this.PublicBlockHeight = this.ChainBlockHeight + delta.Value;
@@ -117,6 +118,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected override short SetWorkflowType() {
 			return WorkflowIDs.CHAIN_SYNC;
 		}
-		
 	}
 }

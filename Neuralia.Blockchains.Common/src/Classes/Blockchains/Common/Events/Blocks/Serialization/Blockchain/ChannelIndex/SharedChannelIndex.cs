@@ -1,19 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 using System.Linq;
 using MoreLinq.Extensions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Blockchains.Tools.Serialization.V1;
 using Serilog;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelIndex {
 	public class SharedChannelIndex : ChannelIndex<MainIndexedConcatenatedChannelProvider> {
@@ -68,8 +67,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.blockchainEnabledMainIndexChannels = this.blockchainEnabledMainIndexChannels.Distinct().ToList();
 
 			// determine the size of an entry
-			this.L1_ENTRY_SIZE = SIZE_L1_L3FILE_POINTER_ENTRY + SIZE_L1_CHANNEL_POINTER_ENTRY * this.blockchainEnabledMainIndexChannels.Count;
-			this.L2_ENTRY_SIZE = SIZE_L2_L3_INCREMENT_POINTER_ENTRY + SIZE_L2_L1_INCREMENT_CHANNEL_POINTER_ENTRY * this.blockchainEnabledMainIndexChannels.Count;
+			this.L1_ENTRY_SIZE = SIZE_L1_L3FILE_POINTER_ENTRY + (SIZE_L1_CHANNEL_POINTER_ENTRY * this.blockchainEnabledMainIndexChannels.Count);
+			this.L2_ENTRY_SIZE = SIZE_L2_L3_INCREMENT_POINTER_ENTRY + (SIZE_L2_L1_INCREMENT_CHANNEL_POINTER_ENTRY * this.blockchainEnabledMainIndexChannels.Count);
 		}
 
 		public List<BlockChannelUtils.BlockChannelTypes> EssentialChannelTypes => this.ChannelTypes.Where(p => !p.HasFlag(BlockChannelUtils.BlockChannelTypes.Keys)).ToList();
@@ -111,7 +110,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				if(L1FileSpecs.FileSize != 0) {
 					SafeArrayHandle blockIdData = FileExtensions.ReadBytes(L1FileSpecs.FilePath, 0, BLOCK_INDEX_INTRO, this.fileSystem);
 
-					if(blockIdData != null && blockIdData.HasData) {
+					if((blockIdData != null) && blockIdData.HasData) {
 						TypeSerializer.Deserialize(blockIdData.Span, out ushort indexType);
 						this.IndexType = indexType;
 
@@ -151,7 +150,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			WriteHistory L2WriteHistory = new WriteHistory();
 			WriteHistory L3WriteHistory = new WriteHistory();
 
-			var blockChannelHistory = new Dictionary<BlockChannelUtils.BlockChannelTypes, WriteHistory>();
+			Dictionary<BlockChannelUtils.BlockChannelTypes, WriteHistory> blockChannelHistory = new Dictionary<BlockChannelUtils.BlockChannelTypes, WriteHistory>();
 
 			try {
 				uint adjustedBlockId = this.adjustedBlockId.Value;
@@ -189,7 +188,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				(int l1Index, long _, int l2Index) = this.GetBlockIdSpecs(adjustedBlockId);
 
 				// are we on a write entry for L1
-				bool writeL1 = !isFirst && adjustedBlockId % this.L1Interval == 0;
+				bool writeL1 = !isFirst && ((adjustedBlockId % this.L1Interval) == 0);
 
 				Dictionary<BlockChannelUtils.BlockChannelTypes, uint> l1RelativeDataSizes = null;
 
@@ -227,7 +226,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 					L1WriteHistory.written = true;
 
 				} else if(l1Index != 0) {
-					var entry = this.ReadL1Entry(l1Index);
+					(ushort l3relativeSize, ChannelsEntries<uint> l1relativeSizes)? entry = this.ReadL1Entry(l1Index);
 
 					if(!entry.HasValue) {
 						// we reached the end of the filep
@@ -241,7 +240,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				//L2 level
 
 				//are we on a write entry for l2
-				bool writeL2 = l2Index != 0 && adjustedBlockId % this.L2Interval == 0;
+				bool writeL2 = (l2Index != 0) && ((adjustedBlockId % this.L2Interval) == 0);
 
 				// now get the L2 pointer into the block file
 				Dictionary<BlockChannelUtils.BlockChannelTypes, uint> l2RelativeDataSizes = null;
@@ -280,7 +279,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 				} else if(l2Index != 0) {
 
-					var entry = this.ReadL2Entry(l1Index, l2Index);
+					(ushort l3relativeSize2, ChannelsEntries<uint> l2relativeSizes)? entry = this.ReadL2Entry(l1Index, l2Index);
 
 					if(!entry.HasValue) {
 						// we reached the end of the file and this should never happen
@@ -318,7 +317,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 					SafeArrayHandle data = blockData[channel];
 
 					// write only if we have data
-					if(data != null && data.HasData) {
+					if((data != null) && data.HasData) {
 						WriteHistory channelWriteHistory = new WriteHistory {initialLength = this.Providers[channel].DataFile.FileSize, file = this.Providers[channel].DataFile};
 						blockChannelHistory.Add(channel, channelWriteHistory);
 						this.Providers[channel].DataFile.Append(data);
@@ -327,25 +326,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				});
 			} catch(Exception ex) {
 
-				Log.Fatal(ex, "Failed to write to the blockchain files. changes will be undone...");
+				NLog.Default.Fatal(ex, "Failed to write to the blockchain files. changes will be undone...");
 
 				// ok, something went wrong. we need to restore all our files like they were.
 
-				var histories = blockChannelHistory.Values.ToList();
+				List<WriteHistory> histories = blockChannelHistory.Values.ToList();
 				histories.Add(L1WriteHistory);
 				histories.Add(L2WriteHistory);
 				histories.Add(L3WriteHistory);
 
-				var failedFiles = this.UndoFileModifications(histories);
+				List<string> failedFiles = this.UndoFileModifications(histories);
 
 				if(failedFiles.Any()) {
 					// ok, some files could not be restored, this si very serious, our blockchain is potentially in an invalid state.
-					Log.Fatal($"Failed to undo blockchain file modifications in files: [{string.Join(",", failedFiles)}]. Blockchain could remain in an invalid state.");
+					NLog.Default.Fatal($"Failed to undo blockchain file modifications in files: [{string.Join(",", failedFiles)}]. Blockchain could remain in an invalid state.");
 
 					throw new ApplicationException($"Failed to undo blockchain file modifications in files: [{string.Join(",", failedFiles)}]. Blockchain could remain in an invalid state.", ex);
 				}
 
-				Log.Warning(ex, "Blockchain write failed but file restore was successful");
+				NLog.Default.Warning(ex, "Blockchain write failed but file restore was successful");
 
 				// at least the undo was successful
 				throw new ApplicationException("Blockchain write failed but file restore was successful.");
@@ -357,7 +356,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// </summary>
 		private List<string> UndoFileModifications(List<WriteHistory> writeHistories) {
 
-			var failedFiles = new List<string>();
+			List<string> failedFiles = new List<string>();
 
 			foreach(WriteHistory entry in writeHistories.Where(e => e.written)) {
 				try {
@@ -379,18 +378,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <returns></returns>
 		protected (ushort l3relativeSize, ChannelsEntries<uint> l1relativeSizes)? ReadL1Entry(int l1Index) {
 
-			var l1relativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
+			ChannelsEntries<uint> l1relativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
 
 			SafeArrayHandle bytes = null;
 
-			int offset = BLOCK_INDEX_INTRO + (l1Index - 1) * this.L1_ENTRY_SIZE;
+			int offset = BLOCK_INDEX_INTRO + ((l1Index - 1) * this.L1_ENTRY_SIZE);
 
 			//TODO: here we load all values even if we only need a few. This could be optimized to load only what we need.
 
 			int dataLength = this.L1_ENTRY_SIZE;
 
 			// check that we are within bounds
-			if(offset > this.L1_FileSpec.FileSize || offset + dataLength > this.L1_FileSpec.FileSize) {
+			if((offset > this.L1_FileSpec.FileSize) || ((offset + dataLength) > this.L1_FileSpec.FileSize)) {
 				return null;
 			}
 
@@ -402,7 +401,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				return null;
 			}
 
-			if(bytes == null || !bytes.HasData) {
+			if((bytes == null) || !bytes.HasData) {
 				return null;
 			}
 
@@ -429,17 +428,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <returns></returns>
 		protected (ushort l3relativeSize2, ChannelsEntries<uint> l2relativeSizes)? ReadL2Entry(int l1Index, int l2Index) {
 
-			var l2relativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
+			ChannelsEntries<uint> l2relativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
 			SafeArrayHandle bytes = null;
 
-			int offset = l1Index * (this.L1Interval / this.L2Interval - 1) * this.L2_ENTRY_SIZE + (l2Index - 1) * this.L2_ENTRY_SIZE;
+			int offset = (l1Index * ((this.L1Interval / this.L2Interval) - 1) * this.L2_ENTRY_SIZE) + ((l2Index - 1) * this.L2_ENTRY_SIZE);
 
 			//TODO: here we load all values even if we only need a few. This could be optimized to load only what we need.
 
 			int dataLength = this.L2_ENTRY_SIZE;
 
 			// check that we are within bounds
-			if(offset > this.L2_FileSpec.FileSize || offset + dataLength > this.L2_FileSpec.FileSize) {
+			if((offset > this.L2_FileSpec.FileSize) || ((offset + dataLength) > this.L2_FileSpec.FileSize)) {
 				return null;
 			}
 
@@ -449,7 +448,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				return null;
 			}
 
-			if(bytes == null || !bytes.HasData) {
+			if((bytes == null) || !bytes.HasData) {
 				return null;
 			}
 
@@ -479,7 +478,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				if(this.ActiveChannelTypes.Contains(type)) {
 					activeAction(startOffset, channelLength, type);
 				} else {
-if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type);}
+					if(inactiveAction != null) {
+						inactiveAction(startOffset, channelLength, type);
+					}
 				}
 
 				startOffset += channelLength;
@@ -498,7 +499,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 		protected (ChannelsEntries<uint> l1RelativeSizes, ushort l3relativeSize, long startingId)? GetL3SectionOffsets(long id) {
 			// the L1 pointer into the block file
 
-			var l1RelativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
+			ChannelsEntries<uint> l1RelativeSizes = new ChannelsEntries<uint>(this.ActiveChannelTypes);
 
 			this.RunForEachChannelType(channel => {
 				l1RelativeSizes[channel] = 0;
@@ -513,7 +514,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 			//L1 level
 			// w2 dont write the 0 entry since we already know the offset at the beginning ;)
 			if(specs.l1Index != 0) {
-				var entry = this.ReadL1Entry(specs.l1Index);
+				(ushort l3relativeSize, ChannelsEntries<uint> l1relativeSizes)? entry = this.ReadL1Entry(specs.l1Index);
 
 				if(!entry.HasValue) {
 					// we reached the end of the file, it does not exist
@@ -522,7 +523,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 
 				l3RelativeSize = entry.Value.l3relativeSize;
 
-				foreach(var relativeSizeEntry in entry.Value.l1relativeSizes.Entries) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, uint> relativeSizeEntry in entry.Value.l1relativeSizes.Entries) {
 					l1RelativeSizes[relativeSizeEntry.Key] = relativeSizeEntry.Value;
 				}
 			}
@@ -530,7 +531,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 			//L2 level
 			if(specs.l2Index != 0) {
 
-				var entry = this.ReadL2Entry(specs.l1Index, specs.l2Index);
+				(ushort l3relativeSize2, ChannelsEntries<uint> l2relativeSizes)? entry = this.ReadL2Entry(specs.l1Index, specs.l2Index);
 
 				if(!entry.HasValue) {
 					// we reached the end of the file, it does not exist
@@ -539,20 +540,20 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 
 				l3RelativeSize += entry.Value.l3relativeSize2;
 
-				foreach(var relativeSizeEntry in entry.Value.l2relativeSizes.Entries) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, uint> relativeSizeEntry in entry.Value.l2relativeSizes.Entries) {
 					l1RelativeSizes[relativeSizeEntry.Key] += relativeSizeEntry.Value;
 				}
 			}
 
-			return (l1RelativeSizes, l3RelativeSize, specs.l1Index * this.L1Interval + specs.l2Index * this.L2Interval);
+			return (l1RelativeSizes, l3RelativeSize, (specs.l1Index * this.L1Interval) + (specs.l2Index * this.L2Interval));
 		}
 
 		public override ChannelsEntries<(long start, int end)> QueryIndex(uint adjustedBlockId) {
 
-			var results = new ChannelsEntries<(long start, int end)>(this.ChannelTypes);
+			ChannelsEntries<(long start, int end)> results = new ChannelsEntries<(long start, int end)>(this.ChannelTypes);
 
 			// now we get the info for our section.
-			var sectionOffset = this.GetL3SectionOffsets(adjustedBlockId);
+			(ChannelsEntries<uint> l1RelativeSizes, ushort l3relativeSize, long startingId)? sectionOffset = this.GetL3SectionOffsets(adjustedBlockId);
 
 			if(sectionOffset == null) {
 				return null; // it was not found
@@ -562,13 +563,13 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 
 			// first, lets artificially generate an id that would fall in the next section
 			// ok, here we must get the next l2 index, so we will artificially find an id that will fall into it
-			uint nextSectionId = (uint) (specs.l1Index * this.L1Interval + (specs.l2Index + 1) * this.L2Interval);
+			uint nextSectionId = (uint) ((specs.l1Index * this.L1Interval) + ((specs.l2Index + 1) * this.L2Interval));
 
 			// ok, we have the section start. but sadly, we dont have the length. we attempt to read the next one.  it's start is this one's end.
-			var nextSectionOffset = this.GetL3SectionOffsets(nextSectionId);
+			(ChannelsEntries<uint> l1RelativeSizes, ushort l3relativeSize, long startingId)? nextSectionOffset = this.GetL3SectionOffsets(nextSectionId);
 
 			if(nextSectionOffset == null) {
-				var newL3OffsetEntries = new ChannelsEntries<uint>(this.ChannelTypes);
+				ChannelsEntries<uint> newL3OffsetEntries = new ChannelsEntries<uint>(this.ChannelTypes);
 
 				newL3OffsetEntries.Entries.ToArray().ForEach(entry => {
 					newL3OffsetEntries[entry.Key] = this.Providers[entry.Key].DataFile.FileSize;
@@ -579,7 +580,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 			}
 
 			// now we sum the sizes of the previous entries in the section. this will give us the offset relative to L2 of the block position in the file
-			var sum = this.SumL3SectionEntries(sectionOffset.Value.l3relativeSize, (ushort) (nextSectionOffset.Value.l3relativeSize - sectionOffset.Value.l3relativeSize), (int) (adjustedBlockId - sectionOffset.Value.startingId));
+			ChannelsEntries<(long blockOffset, int blockLength)> sum = this.SumL3SectionEntries(sectionOffset.Value.l3relativeSize, (ushort) (nextSectionOffset.Value.l3relativeSize - sectionOffset.Value.l3relativeSize), (int) (adjustedBlockId - sectionOffset.Value.startingId));
 
 			if(sum == null) {
 				return null; // it was not found or something went wrong
@@ -605,7 +606,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 		/// <returns></returns>
 		protected ChannelsEntries<(long blockOffset, int blockLength)> SumL3SectionEntries(ushort l3RelativeSize, ushort l3Length, int count) {
 
-			var entries = new ChannelsEntries<(long blockOffset, int blockLength)>(this.ChannelTypes);
+			ChannelsEntries<(long blockOffset, int blockLength)> entries = new ChannelsEntries<(long blockOffset, int blockLength)>(this.ChannelTypes);
 
 			int index = 0;
 
@@ -619,11 +620,11 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 				}
 
 				// check that we are within bounds
-				if(this.L3_FileSpec.FileSize == 0 || l3RelativeSize > this.L3_FileSpec.FileSize) {
+				if((this.L3_FileSpec.FileSize == 0) || (l3RelativeSize > this.L3_FileSpec.FileSize)) {
 					return null;
 				}
 
-				if(l3RelativeSize + l3Length > this.L3_FileSpec.FileSize) {
+				if((l3RelativeSize + l3Length) > this.L3_FileSpec.FileSize) {
 
 					// ok, we asked for a full section but we have less in file. we will take it to the end of the file and give it a try
 					l3Length = (ushort) (this.L3_FileSpec.FileSize - l3RelativeSize);
@@ -637,12 +638,12 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 
 				bytes = this.L3_FileSpec.ReadBytes(l3RelativeSize, l3Length);
 
-				if(bytes != null && bytes.HasData) {
+				if((bytes != null) && bytes.HasData) {
 					IDataRehydrator rehydrator = new DataRehydratorV1(bytes, false);
 
 					AdaptiveInteger2_5 value = new AdaptiveInteger2_5();
 
-					while(!rehydrator.IsEnd && index <= count) {
+					while(!rehydrator.IsEnd && (index <= count)) {
 
 						this.ForEachBlockchainEnabledMainIndexChannels(0, 0, (dataOffset, length, type) => {
 							value.Rehydrate(rehydrator);
@@ -666,7 +667,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 						index++;
 					}
 
-					if(rehydrator.IsEnd && index <= count) {
+					if(rehydrator.IsEnd && (index <= count)) {
 						// we have less than was asked for. we fail here just in case.
 						return null;
 					}
@@ -678,37 +679,35 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 
 		public override ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId) {
 
-			var results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
+			ChannelsEntries<SafeArrayHandle> results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
 
-			var indices = this.QueryIndex(adjustedBlockId);
+			ChannelsEntries<(long start, int end)> indices = this.QueryIndex(adjustedBlockId);
 
 			if(indices != null) {
-				foreach(var provider in this.EssentialProviders) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, MainIndexedConcatenatedChannelProvider> provider in this.EssentialProviders) {
 					(long start, int end) index = indices[provider.Key];
 					results[provider.Key] = provider.Value.DataFile.ReadBytes(index.start, index.end);
 				}
-			}
-			else {
-				//throw new BlockLoadException("Failed to load indicies from disk.");
 			}
 
 			return results;
 		}
 
 		public override ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
-			var indices = this.QueryIndex(adjustedBlockId);
+			ChannelsEntries<(long start, int end)> indices = this.QueryIndex(adjustedBlockId);
 
 			if(indices == null) {
 				//throw new BlockLoadException("Failed to load indicies from disk.");
 				return null;
 			}
-			var results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
 
-			foreach(var provider in this.EssentialProviders) {
+			ChannelsEntries<SafeArrayHandle> results = new ChannelsEntries<SafeArrayHandle>(this.EssentialChannelTypes);
+
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, MainIndexedConcatenatedChannelProvider> provider in this.EssentialProviders) {
 				(long start, int end) index = indices[provider.Key];
 				(int offset, int length) subIndex = offsets[provider.Key];
 
-				if(subIndex.length > index.end - subIndex.offset) {
+				if(subIndex.length > (index.end - subIndex.offset)) {
 					subIndex.length = index.end - subIndex.offset;
 				}
 
@@ -719,13 +718,13 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 		}
 
 		public override SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int masterTransactionIndex) {
-			var indices = this.QueryIndex(adjustedBlockId);
+			ChannelsEntries<(long start, int end)> indices = this.QueryIndex(adjustedBlockId);
 
 			if(indices == null) {
 				//throw new BlockLoadException("Failed to load indicies from disk.");
 				return null;
 			}
-			
+
 			if(!indices.Entries.Any()) {
 				return null;
 			}
@@ -737,9 +736,9 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 
 		public override ChannelsEntries<long> QueryProviderFileSizes() {
 
-			var results = new ChannelsEntries<long>(this.EssentialChannelTypes);
+			ChannelsEntries<long> results = new ChannelsEntries<long>(this.EssentialChannelTypes);
 
-			foreach(var provider in this.EssentialProviders) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, MainIndexedConcatenatedChannelProvider> provider in this.EssentialProviders) {
 
 				results[provider.Key] = provider.Value.DataFile.FileSize;
 			}
@@ -754,7 +753,7 @@ if(					inactiveAction != null){inactiveAction(startOffset, channelLength, type)
 		/// <returns></returns>
 		protected (int l1Index, long adjustedL2Id, int l2Index) GetBlockIdSpecs(long id) {
 			int l1Index = (int) (id / this.L1Interval);
-			long adjustedL2Id = id - l1Index * this.L1Interval;
+			long adjustedL2Id = id - (l1Index * this.L1Interval);
 			int l2Index = (int) (adjustedL2Id / this.L2Interval);
 
 			return (l1Index, adjustedL2Id, l2Index);

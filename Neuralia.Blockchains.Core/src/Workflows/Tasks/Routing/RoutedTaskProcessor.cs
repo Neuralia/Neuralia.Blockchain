@@ -83,11 +83,11 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 								// ok, we are in a wallet transaction. we must pass on the active thread Id to this one
 								//TODO: what to do here?
 								throw new ApplicationException();
-							} else {
-								// this is a regular call
-								LockContext lc = null;
-								await task.TriggerBaseAction(currentService, lc).ConfigureAwait(false);
 							}
+
+							// this is a regular call
+							LockContext lc = null;
+							await task.TriggerBaseAction(currentService, lc).ConfigureAwait(false);
 
 						} catch(NotReadyForProcessingException nrex) {
 							throw;

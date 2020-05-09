@@ -1,7 +1,6 @@
 using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core;
-using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -42,7 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			dehydrator.Write(this.DiskBlockHeight);
 			dehydrator.Write(this.EarliestBlockHeight);
 			dehydrator.Write(this.DigestHeight);
-			dehydrator.Write((byte) this.ShareType);
+			dehydrator.Write(this.ShareType);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator, IBlockchainEventsRehydrationFactory rehydrationFactory) {

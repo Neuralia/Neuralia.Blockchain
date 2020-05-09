@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
+using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1 {
@@ -50,8 +52,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		/// <param name="keys"></param>
 		/// <param name="lockContext"></param>
 		public async Task<(List<KEY> recovered, List<KEY> missing)> EnsureSnapshots(List<KEY> keys, LockContext lockContext) {
-			var missing = new List<KEY>();
-			var recovered = new List<KEY>();
+			List<KEY> missing = new List<KEY>();
+			List<KEY> recovered = new List<KEY>();
 
 			foreach(KEY key in keys) {
 				if(!this.snapshotCache.ContainsKey(key)) {
@@ -59,8 +61,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				}
 			}
 
-			if(missing.Any() && this.RequestSnapshots != null) {
-				var recoveredEntries = await this.RequestSnapshots(missing, lockContext).ConfigureAwait(false);
+			if(missing.Any() && (this.RequestSnapshots != null)) {
+				Dictionary<KEY, T> recoveredEntries = await this.RequestSnapshots(missing, lockContext).ConfigureAwait(false);
 
 				foreach((KEY key, T value) in recoveredEntries) {
 					this.snapshotCache[key] = new LinkedList<EntryDetails>();
@@ -69,7 +71,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 				recovered.AddRange(recoveredEntries.Keys);
 
-				var tempMissing = missing.Where(m => !recovered.Contains(m)).ToList();
+				List<KEY> tempMissing = missing.Where(m => !recovered.Contains(m)).ToList();
 				missing.Clear();
 				missing.AddRange(tempMissing);
 			}
@@ -85,6 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				if(!this.snapshotCache[key].Any()) {
 					return null;
 				}
+
 				EntryDetails entry = this.snapshotCache[key].Last();
 
 				if(entry.status == SnapshotCache.EntryStatus.Deleted) {
@@ -100,7 +103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		public async Task<bool> CheckEntryExists(KEY key, LockContext lockContext) {
 			Dictionary<KEY, T> recoveredEntries = null;
-			
+
 			if(this.RequestSnapshots != null) {
 				recoveredEntries = await this.RequestSnapshots(new[] {key}.ToList(), lockContext).ConfigureAwait(false);
 			}
@@ -110,7 +113,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		public async Task<T> GetEntryModify(KEY key, LockContext lockContext) {
 
-			var results = await this.EnsureSnapshots(new[] {key}.ToList(), lockContext).ConfigureAwait(false);
+			(List<KEY> recovered, List<KEY> missing) results = await this.EnsureSnapshots(new[] {key}.ToList(), lockContext).ConfigureAwait(false);
 
 			if(this.snapshotCache.ContainsKey(key)) {
 				EntryDetails entry = this.snapshotCache[key].Last();
@@ -130,7 +133,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				}
 
 				// if we are in a transaction and the previous was not, then we also create a new entry
-				if(this.isTransaction && entry.TransactionState == TransactionState.Committed) {
+				if(this.isTransaction && (entry.TransactionState == TransactionState.Committed)) {
 					// ok, gotta make a new entry
 					T newEntry = (T) this.cardUtils.Clone(entry.entry);
 
@@ -162,22 +165,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		/// <summary>
-		/// Get the last entry IF it was a new entry, so we can keep adding to it
+		///     Get the last entry IF it was a new entry, so we can keep adding to it
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public T LastNew(KEY key) {
-			
+
 			if(!this.snapshotCache.ContainsKey(key)) {
 				return null;
 			}
-			
+
 			if(!this.snapshotCache[key].Any()) {
 				return null;
 			}
 
-			var entry = this.snapshotCache[key].Last.Value;
-			
+			EntryDetails entry = this.snapshotCache[key].Last.Value;
+
 			if(entry.status == SnapshotCache.EntryStatus.New) {
 				return entry.entry;
 			}
@@ -249,8 +252,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			if(this.isTransaction) {
 				this.isTransaction = false;
 
-				foreach(var entry in this.transactionEntries) {
-					if(entry.Previous != null && entry.Value.status == SnapshotCache.EntryStatus.Modified && entry.Previous.Value.status == SnapshotCache.EntryStatus.Modified && entry.Previous.Value.TransactionState == TransactionState.Committed) {
+				foreach(LinkedListNode<EntryDetails> entry in this.transactionEntries) {
+					if((entry.Previous != null) && (entry.Value.status == SnapshotCache.EntryStatus.Modified) && (entry.Previous.Value.status == SnapshotCache.EntryStatus.Modified) && (entry.Previous.Value.TransactionState == TransactionState.Committed)) {
 						// ok, we can merge them together by deleting the previous one
 						entry.List.Remove(entry.Previous);
 					}
@@ -266,7 +269,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			if(this.isTransaction) {
 				this.isTransaction = false;
 
-				foreach(var entry in this.transactionEntries) {
+				foreach(LinkedListNode<EntryDetails> entry in this.transactionEntries) {
 					this.snapshotCache[entry.Value.key].Remove(entry);
 				}
 
@@ -282,10 +285,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		private void CreateEntry(KEY key, KEY subKey, T entry, SnapshotCache.EntryStatus status, LinkedList<EntryDetails> list) {
 			EntryDetails entryDetail = new EntryDetails {
 				key = key, subKey = subKey, entry = entry, status = status,
-				timestamp = DateTime.UtcNow, TransactionState = this.isTransaction ? TransactionState.InProgress : TransactionState.Committed
+				timestamp = DateTimeEx.CurrentTime, TransactionState = this.isTransaction ? TransactionState.InProgress : TransactionState.Committed
 			};
 
-			var node = list.AddLast(entryDetail);
+			LinkedListNode<EntryDetails> node = list.AddLast(entryDetail);
 
 			if(this.isTransaction) {
 				this.transactionEntries.Add(node);

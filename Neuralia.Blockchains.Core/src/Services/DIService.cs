@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.DependencyInjection;
+using Neuralia.Blockchains.Core.Logging;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Services {
@@ -26,10 +27,6 @@ namespace Neuralia.Blockchains.Core.Services {
 		private DIService() {
 		}
 
-		public static void Reset() {
-			instance = null;
-		}
-		
 		public static IDIService Instance {
 			get {
 				if(instance == null) {
@@ -71,7 +68,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				return null;
 			} catch {
-				Log.Warning($"Failed to find service {typeof(T).FullName} for chain {chainType}");
+				NLog.Default.Warning($"Failed to find service {typeof(T).FullName} for chain {chainType}");
 			}
 
 			return null;
@@ -91,6 +88,10 @@ namespace Neuralia.Blockchains.Core.Services {
 			}
 
 			return this.chainProviders[BlockchainTypes.Instance.None];
+		}
+
+		public static void Reset() {
+			instance = null;
 		}
 	}
 }

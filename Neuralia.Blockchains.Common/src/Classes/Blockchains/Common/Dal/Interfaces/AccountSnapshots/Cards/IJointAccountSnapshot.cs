@@ -6,7 +6,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 
 	public interface IJointAccountSnapshot : IAccountSnapshot, ITypedCollectionExposure<IJointMemberAccount> {
 		int RequiredSignatures { get; set; }
-		
+
 		ImmutableList<IJointMemberAccount> MemberAccountsBase { get; }
 	}
 

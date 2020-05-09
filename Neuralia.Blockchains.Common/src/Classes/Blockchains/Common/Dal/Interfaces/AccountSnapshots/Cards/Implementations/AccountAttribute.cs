@@ -4,7 +4,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Type
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations {
 
 	public class AccountAttribute : IAccountAttribute {
-		
+
 		public AccountAttributeType AttributeType { get; set; }
 		public uint CorrelationId { get; set; }
 

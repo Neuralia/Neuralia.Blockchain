@@ -1,6 +1,5 @@
-
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
-	
+
 	public class ElectionContextAPI {
 		public int Type { get; set; }
 		public byte[] ContextBytes { get; set; }

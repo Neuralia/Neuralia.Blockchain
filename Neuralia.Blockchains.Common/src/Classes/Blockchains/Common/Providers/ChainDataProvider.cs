@@ -2,16 +2,14 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
-using Serilog;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
@@ -23,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 	}
 
-	public interface IChainDataProvider: IChainProvider {
+	public interface IChainDataProvider : IChainProvider {
 
 		string GetDigestSyncManifestFileName();
 
@@ -116,13 +114,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.fileSystem = centralCoordinator.FileSystem;
 		}
 
-		public override async Task PostInitialize(){
-			await base.PostInitialize().ConfigureAwait(false);
-
-			this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
-			this.BlockchainEventSerializationFal.TestFastKeysPath();
-		}
-
 		protected IBlockchainEventSerializationFalReadonly BlockchainEventSerializationFal {
 			get {
 				if(this.blockchainEventSerializationFal == null) {
@@ -201,6 +192,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				return this.messageGroupingConfig.Value;
 			}
+		}
+
+		public override async Task PostInitialize() {
+			await base.PostInitialize().ConfigureAwait(false);
+
+			this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
+			this.BlockchainEventSerializationFal.TestFastKeysPath();
 		}
 
 		protected struct BlockGroupingConfigs {

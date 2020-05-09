@@ -2,7 +2,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 	public interface IAccountKeysSnapshot : ISnapshot {
 
 		string CompositeKey { get; set; }
-		
+
 		byte OrdinalId { get; set; }
 		long AccountId { get; set; }
 

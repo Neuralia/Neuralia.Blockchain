@@ -5,7 +5,6 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using LiteDB;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Dal {
@@ -62,7 +61,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 				return process(db);
 			}
 		}
-		
+
 		public Task<T> OpenAsync<T>(Func<LiteDatabase, Task<T>> process) {
 			using(LiteDatabase db = this.GetDatabase()) {
 				return process(db);
@@ -84,7 +83,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		}
 
 		public bool CollectionExists<T>(string tablename, LiteDatabase db = null) {
-			bool Action(LiteDatabase dbx) => dbx.CollectionExists(tablename);
+			bool Action(LiteDatabase dbx) {
+				return dbx.CollectionExists(tablename);
+			}
 
 			return db != null ? Action(db) : this.Open(Action);
 		}
@@ -95,7 +96,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public void CreateDbFile<T, K>(string tablename, Expression<Func<T, K>> index) {
 			this.Open(db => {
-				var col = this.EnsureCollectionExists<T>(db, tablename);
+				ILiteCollection<T> col = this.EnsureCollectionExists<T>(db, tablename);
 
 				// just an empty file
 				col.EnsureIndex(index, true);
@@ -108,7 +109,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public int Count<T>(string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -124,7 +125,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public int Count<T>(Expression<Func<T, bool>> predicate, string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -141,7 +142,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		public bool Any<T>(string tablename, LiteDatabase ldb = null) {
 
 			bool Action(LiteDatabase dbx) {
-				var col = this.GetExistingCollection<T>(dbx, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(dbx, tablename);
 
 				if(col == null) {
 					return default;
@@ -159,7 +160,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public bool Any<T>(Expression<Func<T, bool>> predicate, string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -175,7 +176,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public T GetSingle<T>(string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -192,11 +193,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		public bool Exists<T>(Expression<Func<T, bool>> predicate, string tablename, LiteDatabase ldb = null) {
 
 			bool Action(LiteDatabase dbx) {
-				var col = this.GetExistingCollection<T>(dbx, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(dbx, tablename);
 
 				return col?.Exists(predicate) ?? default;
 
 			}
+
 			return ldb != null ? Action(ldb) : this.Open(Action);
 		}
 
@@ -206,7 +208,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public T GetSingle<T, K>(Expression<Func<T, bool>> predicate, string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -222,7 +224,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public List<T> GetAll<T>(string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -237,12 +239,15 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		}
 
 		public IEnumerable<T> All<T>(string tablename, LiteDatabase ldb = null) {
-			
-			IEnumerable<T> Action(LiteDatabase dbx){
-				var col = this.GetExistingCollection<T>(dbx, tablename);
+
+			IEnumerable<T> Action(LiteDatabase dbx) {
+				ILiteCollection<T> col = this.GetExistingCollection<T>(dbx, tablename);
 
 				return col?.FindAll();
-			};
+			}
+
+			;
+
 			return ldb != null ? Action(ldb) : this.Open(Action);
 		}
 
@@ -252,7 +257,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public List<T> Get<T>(Expression<Func<T, bool>> predicate, string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -268,7 +273,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public List<K> Get<T, K>(Expression<Func<T, bool>> predicate, Func<T, K> selector, string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -283,9 +288,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		}
 
 		public void Insert<T, K>(T item, string tablename, Expression<Func<T, K>> index, LiteDatabase ldb = null) {
-			
-			void Action(LiteDatabase dbx){
-				var col = this.EnsureCollectionExists<T>(dbx, tablename);
+
+			void Action(LiteDatabase dbx) {
+				ILiteCollection<T> col = this.EnsureCollectionExists<T>(dbx, tablename);
 
 				col.EnsureIndex(index, true);
 
@@ -305,7 +310,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public void Insert<T, K>(List<T> items, string tablename, Expression<Func<T, K>> index) {
 			this.Open(db => {
-				var col = this.EnsureCollectionExists<T>(db, tablename);
+				ILiteCollection<T> col = this.EnsureCollectionExists<T>(db, tablename);
 
 				col.EnsureIndex(index, true);
 
@@ -318,9 +323,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		}
 
 		public bool Update<T>(T item, string tablename, LiteDatabase ldb = null) {
-			
-			bool Action(LiteDatabase dbx){
-				var col = this.GetExistingCollection<T>(dbx, tablename);
+
+			bool Action(LiteDatabase dbx) {
+				ILiteCollection<T> col = this.GetExistingCollection<T>(dbx, tablename);
 
 				return col?.Update(item) ?? default;
 
@@ -335,7 +340,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public void Updates<T>(List<T> items, string tablename) {
 			this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return;
@@ -351,16 +356,24 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 			return this.Remove(predicate, typeof(T).Name);
 		}
 
+		public int Remove<T>(Expression<Func<T, bool>> predicate, LiteDatabase ldb) {
+			return this.Remove(predicate, typeof(T).Name, ldb);
+		}
+		
 		public int Remove<T>(Expression<Func<T, bool>> predicate, string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
-
-				if(col == null) {
-					return default;
-				}
-
-				return col.DeleteMany(predicate);
+				return this.Remove(predicate, tablename, db);
 			});
+		}
+		
+		public int Remove<T>(Expression<Func<T, bool>> predicate, string tablename, LiteDatabase ldb ) {
+			ILiteCollection<T> col = this.GetExistingCollection<T>(ldb, tablename);
+
+			if(col == null) {
+				return default;
+			}
+
+			return col.DeleteMany(predicate);
 		}
 
 		public T GetOne<T>(Expression<Func<T, bool>> predicate, LiteDatabase ldb = null) {
@@ -368,9 +381,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		}
 
 		public T GetOne<T>(Expression<Func<T, bool>> predicate, string tablename, LiteDatabase ldb = null) {
-			
-			T Action(LiteDatabase dbx){
-				var col = this.GetExistingCollection<T>(dbx, tablename);
+
+			T Action(LiteDatabase dbx) {
+				ILiteCollection<T> col = this.GetExistingCollection<T>(dbx, tablename);
 
 				return col == null ? default : col.FindOne(predicate);
 
@@ -385,7 +398,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 
 		public K GetOne<T, K>(Expression<Func<T, bool>> predicate, Func<T, K> selector, string tablename) {
 			return this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return default;
@@ -416,18 +429,18 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		public void Trim<T, TKey>(int keep, Func<T, TKey> getKey, Func<IEnumerable<T>, IEnumerable<T>> sort, string tablename)
 			where TKey : IEquatable<TKey> {
 			this.Open(db => {
-				var col = this.GetExistingCollection<T>(db, tablename);
+				ILiteCollection<T> col = this.GetExistingCollection<T>(db, tablename);
 
 				if(col == null) {
 					return;
 				}
 
-				var all = col.FindAll();
+				IEnumerable<T> all = col.FindAll();
 
 				if(sort != null) {
 					all = sort(all);
 				}
-				
+
 				foreach(T overflow in all.Skip(keep)) {
 					col.DeleteMany(e => getKey(e).Equals(getKey(overflow)));
 				}

@@ -8,7 +8,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
-using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -16,7 +16,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
-	public class AesSearchPow  {
+	public class AesSearchPow {
 
 		private const int AES_BLOCK_SIZE = 16;
 
@@ -87,15 +87,15 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			BigInteger hash = HashDifficultyUtils.GetBigInteger(rootHash);
 
 			BigInteger hashTarget = HashDifficultyUtils.GetHash256TargetByIncrementalDifficulty(hashTargetDifficulty);
-			Log.Verbose("Difficulty: {0}", hashTargetDifficulty);
-			Log.Verbose("target: {0}", hashTarget);
+			NLog.Default.Verbose("Difficulty: {0}", hashTargetDifficulty);
+			NLog.Default.Verbose("target: {0}", hashTarget);
 
 			int nThreads = this.GetNumThreads(Enums.ThreadMode.Quarter);
 			SafeArrayHandle scratchpad = ByteArray.Create(MAIN_BUFFER_DATA_SIZEX2);
 
 			int nonce = 1;
 
-			var solutions = new List<int>();
+			List<int> solutions = new List<int>();
 
 			Stopwatch outerStopwatch = null;
 
@@ -113,7 +113,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			xxHasher32 hasher = new xxHasher32();
 
 			while(true) {
-				Log.Verbose("Performing proof of work for Nonce {0}", nonce);
+				NLog.Default.Verbose("Performing proof of work for Nonce {0}", nonce);
 
 				if(this.enableMicroDiagnostics) {
 					innerStopwatch?.Reset();
@@ -121,20 +121,22 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				}
 
 				// alert we are running an iteration
-if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
+				if(iteration != null) {
+					iteration(nonce, hashTargetDifficulty);
+				}
 
-				var results = this.FindBestPatternHash(out int collisions, hash, scratchpad, nThreads, nonce);
+				List<BigInteger> results = this.FindBestPatternHash(out int collisions, hash, scratchpad, nThreads, nonce);
 
 				if(this.enableMicroDiagnostics) {
 					innerStopwatch?.Stop();
-					Log.Verbose("Single nonce search took {0}", innerStopwatch?.Elapsed);
+					NLog.Default.Verbose("Single nonce search took {0}", innerStopwatch?.Elapsed);
 				}
 
 				int count = 0;
 
 				foreach(BigInteger result in results) {
 					if(result < hashTarget) {
-						Log.Verbose("Found pre hash result: {0}", result);
+						NLog.Default.Verbose("Found pre hash result: {0}", result);
 						solutions.Add(hasher.Hash(result.ToByteArray()));
 						count++;
 
@@ -149,6 +151,7 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 				}
 
 				nonce += 1;
+
 				// play nice with other threads
 				Thread.Sleep(5);
 			}
@@ -157,10 +160,10 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 
 			if(this.enableMacroDiagnostics) {
 				outerStopwatch.Stop();
-				Log.Verbose("Entire proof of work took {0}", outerStopwatch.Elapsed);
+				NLog.Default.Verbose("Entire proof of work took {0}", outerStopwatch.Elapsed);
 			}
 
-			Log.Verbose("Found {0} solutions!", solutions.Count);
+			NLog.Default.Verbose("Found {0} solutions!", solutions.Count);
 
 			return (solutions.Take(NUM_SOLUTIONS_TO_RETURN).ToList(), nonce);
 		}
@@ -181,19 +184,19 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 			rootHash.Return();
 
 			BigInteger hashTarget = HashDifficultyUtils.GetHash256TargetByIncrementalDifficulty(hashTargetDifficulty);
-			Log.Verbose("target: {0}", hashTarget);
+			NLog.Default.Verbose("target: {0}", hashTarget);
 
-			Log.Verbose("Difficulty: {0}", hashTargetDifficulty);
+			NLog.Default.Verbose("Difficulty: {0}", hashTargetDifficulty);
 
 			int nThreads = this.GetNumThreads(threadMode);
 
 			SafeArrayHandle scratchpad = ByteArray.Create(MAIN_BUFFER_DATA_SIZEX2);
 
-			var currentSolutions = new List<int>();
+			List<int> currentSolutions = new List<int>();
 
-			Log.Verbose("Performing proof of work verification for Nonce {0}", nonce);
+			NLog.Default.Verbose("Performing proof of work verification for Nonce {0}", nonce);
 
-			var results = this.FindBestPatternHash(out int collisions, hash, scratchpad, nThreads, nonce);
+			List<BigInteger> results = this.FindBestPatternHash(out int collisions, hash, scratchpad, nThreads, nonce);
 
 			xxHasher32 hasher = new xxHasher32();
 
@@ -225,15 +228,15 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 		}
 
 		private List<BigInteger> FindBestPatternHash(out int collisions, BigInteger hash, SafeArrayHandle scratchpad, int nThreads, int nonce) {
-			var results = new List<BigInteger>();
+			List<BigInteger> results = new List<BigInteger>();
 
 			collisions = 0;
 
 			// hash the transaction header
 			SafeArrayHandle dataHash = this.GetHash(hash, nonce);
-			Log.Verbose("current hash {0}", dataHash.Entry.ToBase58());
+			NLog.Default.Verbose("current hash {0}", dataHash.Entry.ToBase58());
 
-			var searchResults = this.pattern_search(nonce, dataHash, scratchpad, nThreads);
+			List<(long, uint)> searchResults = this.pattern_search(nonce, dataHash, scratchpad, nThreads);
 
 			dataHash.Return();
 
@@ -270,9 +273,9 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 
 		private List<(long, uint)> pattern_search(int nonce, SafeArrayHandle hash, SafeArrayHandle mainBuffer, int totalThreads) {
 			// create many threads
-			var results = new List<(long, uint)>();
+			List<(long, uint)> results = new List<(long, uint)>();
 
-			var tasks = new Task[totalThreads];
+			Task[] tasks = new Task[totalThreads];
 
 			mainBuffer.Entry.Clear();
 
@@ -303,18 +306,17 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 
 			hashWorkSpace.Return();
 
-			var aesTasks = new Task<List<(long, uint)>>[totalThreads];
+			Task<List<(long, uint)>>[] aesTasks = new Task<List<(long, uint)>>[totalThreads];
 
 			for(int i = 0; i < totalThreads; i++) {
 				int index = i;
 
 				aesTasks[i] = Task.Run(() => this.AesSearch(mainBuffer, index, totalThreads));
 			}
-			
 
 			Task.WaitAll(aesTasks.Cast<Task>().ToArray());
 
-			foreach(var task in aesTasks) {
+			foreach(Task<List<(long, uint)>> task in aesTasks) {
 				// ReSharper disable once AsyncConverter.AsyncWait
 				results.AddRange(task.Result);
 			}
@@ -323,7 +325,7 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 		}
 
 		private List<(long, uint)> AesSearch(SafeArrayHandle mainBuffer, int threadNumber, int totalThreads) {
-			var results = new List<(long, uint)>();
+			List<(long, uint)> results = new List<(long, uint)>();
 
 			SafeArrayHandle cache = ByteArray.Create(CACHE_MEMORY_SIZE);
 			SafeArrayHandle encrypted = ByteArray.Create(CACHE_MEMORY_SIZE);
@@ -405,7 +407,7 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 				using(ICryptoTransform encryptor = aesAlg.CreateEncryptor(aesAlg.Key, aesAlg.IV)) {
 
 					// Create the streams used for encryption. 
-					
+
 					using(MemoryStream msEncrypt = MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("AES256")) {
 						using(CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write)) {
 							csEncrypt.Write(message.Bytes, message.Offset, message.Length);
@@ -459,7 +461,7 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 		private SafeArrayHandle Sha512(SafeArrayHandle message) {
 
 			using(SHA512 sha512 = new SHA512Managed()) {
-				var hash = sha512.ComputeHash(message.ToExactByteArray());
+				byte[] hash = sha512.ComputeHash(message.ToExactByteArray());
 
 				return ByteArray.Wrap(hash);
 			}
@@ -488,8 +490,8 @@ if(				iteration != null){	iteration(nonce, hashTargetDifficulty);}
 		}
 
 		private SafeArrayHandle GetHash(BigInteger hash, int nonce) {
-			
-			int        byteCount = hash.GetByteCount();
+
+			int byteCount = hash.GetByteCount();
 			SafeArrayHandle hashbytes = ByteArray.Create(byteCount);
 			hash.TryWriteBytes(hashbytes.Span, out int bytesWritten);
 

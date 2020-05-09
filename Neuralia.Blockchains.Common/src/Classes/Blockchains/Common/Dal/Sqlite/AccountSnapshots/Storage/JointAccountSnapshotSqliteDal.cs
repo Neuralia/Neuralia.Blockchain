@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -38,9 +37,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 		public Task<List<JOINT_ACCOUNT_SNAPSHOT>> LoadAccounts(List<AccountId> accountIds) {
 
-			var longAccountIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).Select(a => a.ToLongRepresentation()).ToList();
-			var sequenceIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).Select(a => a.SequenceId).ToList();
-			
+			List<long> longAccountIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).Select(a => a.ToLongRepresentation()).ToList();
+			List<long> sequenceIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).Select(a => a.SequenceId).ToList();
+
 			return this.QueryAllAsync(db => {
 
 				return db.JointAccountSnapshots.Where(s => longAccountIds.Contains(s.AccountId)).ToListAsync();

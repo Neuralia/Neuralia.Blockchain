@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results {

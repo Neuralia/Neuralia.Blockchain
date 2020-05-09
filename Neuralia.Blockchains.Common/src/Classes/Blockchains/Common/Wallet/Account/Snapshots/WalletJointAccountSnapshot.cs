@@ -28,7 +28,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.
 		void ITypedCollectionExposure<IJointMemberAccount>.ClearCollection() {
 			this.MemberAccounts.Clear();
 		}
-		
+
 		public void CreateNewCollectionEntry(out IJointMemberAccount result) {
 			TypedCollectionExposureUtil<IJointMemberAccount>.CreateNewCollectionEntry(this.MemberAccounts, out result);
 		}

@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security;
@@ -17,13 +16,11 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Transact
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI.Wallet;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
@@ -32,13 +29,15 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snapshots;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Transactions;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Components.Blocks;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
-using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers;
 using Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla;
@@ -47,6 +46,7 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
@@ -57,9 +57,7 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
-using Nito.AsyncEx.Synchronous;
 using Serilog;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
@@ -116,8 +114,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<IXmssWalletKey> CreateXmssKey(string name, float warningLevel, float changeLevel, Func<int, Task> progressCallback = null);
 		Task<IXmssWalletKey> CreateXmssKey(string name, int treeHeight, int hashBits, WalletProvider.HashTypes HashType, float warningLevel, float changeLevel, Func<int, Task> progressCallback = null);
 		Task<IXmssWalletKey> CreateXmssKey(string name, Func<int, Task> progressCallback = null);
-		Task<IXmssMTWalletKey> CreateXmssmtKey(string name, float warningLevel, float changeLevel, Func<int, int, int, Task> progressCallback = null);
-		Task<IXmssMTWalletKey> CreateXmssmtKey(string name, int treeHeight, int treeLayers, Enums.KeyHashBits hashBits, float warningLevel, float changeLevel, Func<int, int, int, Task> progressCallback = null);
+		Task<IXmssMTWalletKey> CreateXmssmtKey(string name, float warningLevel, float changeLevel, Func<int, long, int, Task> progressCallback = null);
+		Task<IXmssMTWalletKey> CreateXmssmtKey(string name, int treeHeight, int treeLayers, Enums.KeyHashBits hashBits, float warningLevel, float changeLevel, Func<int, long, int, Task> progressCallback = null);
 		IQTeslaWalletKey CreatePresentationQTeslaKey(string name);
 		IQTeslaWalletKey CreateQTeslaKey(string name, QTESLASecurityCategory.SecurityCategories securityCategory);
 
@@ -172,6 +170,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	public interface IWalletProviderWrite : IChainProvider {
 
+		Task UpdateMiningStatistics(AccountId accountId, Enums.MiningTiers miningTiers, Action<WalletElectionsMiningSessionStatistics> sessionCallback, Action<WalletElectionsMiningAggregateStatistics> totalCallback, LockContext lockContext, bool resetSession = false);
+		Task StopSessionMiningStatistics(AccountId accountId, LockContext lockContext);
+		
+		Task<(MiningStatisticSessionAPI session, MiningStatisticAggregateAPI aggregate)> QueryMiningStatistics(AccountId miningAccountId, Enums.MiningTiers miningTiers, LockContext lockContext);
+		
 		Task<Dictionary<AccountId, int>> ClearTimedOutTransactions(LockContext lockContext);
 		Task<bool> ResetTimedOutWalletEntries(LockContext lockContext, List<(Guid accountUuid, string name)> forcedKeys = null);
 		Task<bool> ResetAllTimedOut(LockContext lockContext, List<(Guid accountUuid, string name)> forcedKeys = null);
@@ -223,11 +226,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<long> GetChainStateHeight(Guid accountUuid, LockContext lockContext);
 		Task<KeyUseIndexSet> GetChainStateLastSyncedKeyHeight(IWalletKey key, LockContext lockContext);
 		Task UpdateLocalChainStateKeyHeight(IWalletKey key, LockContext lockContext);
-		Task<IWalletElectionsHistory> InsertElectionsHistoryEntry(SynthesizedBlock.SynthesizedElectionResult electionResult, AccountId electedAccountId, LockContext lockContext);
+		Task<IWalletElectionsHistory> InsertElectionsHistoryEntry(SynthesizedBlock.SynthesizedElectionResult electionResult, SynthesizedBlock synthesizedBlock, AccountId electedAccountId, LockContext lockContext);
 		Task InsertLocalTransactionCacheEntry(ITransactionEnvelope transactionEnvelope, LockContext lockContext);
-		Task<List<IWalletTransactionHistory>> InsertTransactionHistoryEntry(ITransaction transaction, string note, LockContext lockContext);
+		Task<List<IWalletTransactionHistory>> InsertTransactionHistoryEntry(ITransaction transaction, string note, BlockId blockId, LockContext lockContext);
 		Task UpdateLocalTransactionCacheEntry(TransactionId transactionId, WalletTransactionCache.TransactionStatuses status, long gossipMessageHash, LockContext lockContext);
-		Task<IWalletTransactionHistoryFileInfo> UpdateLocalTransactionHistoryEntry(TransactionId transactionId, WalletTransactionHistory.TransactionStatuses status, LockContext lockContext);
+		Task<IWalletTransactionHistoryFileInfo> UpdateLocalTransactionHistoryEntry(ITransaction transaction, TransactionId transactionId, WalletTransactionHistory.TransactionStatuses status, BlockId blockId, LockContext lockContext);
 		Task<IWalletTransactionCache> GetLocalTransactionCacheEntry(TransactionId transactionId, LockContext lockContext);
 		Task RemoveLocalTransactionCacheEntry(TransactionId transactionId, LockContext lockContext);
 		Task CreateElectionCacheWalletFile(IWalletAccount account, LockContext lockContext);
@@ -314,14 +317,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IWalletProvider : IWalletProviderWrite, IReadonlyWalletProvider, IUtilityWalletProvider {
 
 		public bool TransactionInProgress(LockContext lockContext);
-
 	}
 
 	public interface IWalletProviderInternal : IWalletProvider {
 
 		public IUserWalletFileInfo WalletFileInfo { get; }
-		public Task<IUserWallet> WalletBase(LockContext lockContext);
 		public IWalletSerialisationFal SerialisationFal { get; }
+		public Task<IUserWallet> WalletBase(LockContext lockContext);
 
 		Task<K> PerformWalletTransaction<K>(Func<IWalletProvider, CancellationToken, LockContext, Task<K>> transactionAction, CancellationToken token, LockContext lockContext, Func<IWalletProvider, Func<IWalletProvider, CancellationToken, LockContext, Task>, CancellationToken, LockContext, Task> commitWrapper = null, Func<IWalletProvider, Func<IWalletProvider, CancellationToken, LockContext, Task>, CancellationToken, LockContext, Task> rollbackWrapper = null);
 		Task WaitTransactionCompleted();
@@ -344,7 +346,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task EnsureWalletFileIsPresent(LockContext lockContext);
 		Task EnsureWalletPassphrase(LockContext lockContext, string passphrase = null);
-
 	}
 
 	public abstract class WalletProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainProvider, IWalletProviderInternal
@@ -365,7 +366,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public const string PID_LOCK_FILE = ".lock";
 
-		public event Func<Task> WalletIsLoaded;
+		/// <summary>
+		/// minimum length of a passphrase
+		/// </summary>
+		public const int MINIMUM_KEY_PASSPHRASE_LENGTH = 6;
 
 		protected readonly CENTRAL_COORDINATOR centralCoordinator;
 
@@ -380,18 +384,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected readonly BlockchainServiceSet serviceSet;
 
 		/// <summary>
-		/// if paused, it is not safe to run wallet operations and transactions
-		/// </summary>
-		private bool paused = false;
-
-		/// <summary>
 		///     the synthetized blocks to know which transactions concern us
 		/// </summary>
 		private readonly ConcurrentDictionary<long, SynthesizedBlock> syncBlockCache = new ConcurrentDictionary<long, SynthesizedBlock>();
 
 		protected IWalletSerializationTransactionExtension currentTransaction;
 
-		protected bool shutdownRequest = false;
+		/// <summary>
+		///     if paused, it is not safe to run wallet operations and transactions
+		/// </summary>
+		private bool paused;
+
+		protected bool shutdownRequest;
 
 		public WalletProvider(string chainPath, CENTRAL_COORDINATOR centralCoordinator) {
 			this.chainPath = chainPath;
@@ -407,7 +411,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected abstract ICardUtils CardUtils { get; }
 
-		public Task<IUserWallet> WalletBase(LockContext lockContext) => this.WalletFileInfo.WalletBase(lockContext);
+		public Task<IUserWallet> WalletBase(LockContext lockContext) {
+			return this.WalletFileInfo.WalletBase(lockContext);
+		}
 
 		public IWalletSerialisationFal SerialisationFal { get; private set; }
 
@@ -415,11 +421,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public bool IsWalletLoaded => this.WalletFileInfo?.IsLoaded ?? false;
 
-		public Task<bool> IsWalletEncrypted(LockContext lockContext) => Task.FromResult(this.WalletFileInfo.WalletSecurityDetails.EncryptWallet);
+		public Task<bool> IsWalletEncrypted(LockContext lockContext) {
+			return Task.FromResult(this.WalletFileInfo.WalletSecurityDetails.EncryptWallet);
+		}
 
-		public async Task<bool> IsWalletAccountLoaded(LockContext lockContext) => this.IsWalletLoaded && (await this.WalletBase(lockContext).ConfigureAwait(false)).GetActiveAccount() != null;
+		public async Task<bool> IsWalletAccountLoaded(LockContext lockContext) {
+			return this.IsWalletLoaded && ((await this.WalletBase(lockContext).ConfigureAwait(false)).GetActiveAccount() != null);
+		}
 
-		public Task<bool> WalletFileExists(LockContext lockContext) => Task.FromResult(this.WalletFileInfo.FileExists);
+		public Task<bool> WalletFileExists(LockContext lockContext) {
+			return Task.FromResult(this.WalletFileInfo.FileExists);
+		}
 
 		public bool TransactionInProgress(LockContext lockContext) {
 
@@ -429,7 +441,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		/// <summary>
-		/// Wait for any transaction in progress to complete if any is underway. it will return ONLY when the transaction is completed safely
+		///     Wait for any transaction in progress to complete if any is underway. it will return ONLY when the transaction is
+		///     completed safely
 		/// </summary>
 		public Task WaitTransactionCompleted() {
 			LockContext innerLockContext = null;
@@ -450,13 +463,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return Task.CompletedTask;
 		}
 
-		private void CentralCoordinatorOnShutdownRequested(ConcurrentBag<Task> beacons) {
-			this.shutdownRequest = true;
-
-			// ok, if this happens while we are syncing, we ask for a grace period until we are ready to clean exit
-			beacons.Add(this.WaitTransactionCompleted());
-		}
-
 		public async Task<K> PerformWalletTransaction<K>(Func<IWalletProvider, CancellationToken, LockContext, Task<K>> transactionAction, CancellationToken token, LockContext lockContext, Func<IWalletProvider, Func<IWalletProvider, CancellationToken, LockContext, Task>, CancellationToken, LockContext, Task> commitWrapper = null, Func<IWalletProvider, Func<IWalletProvider, CancellationToken, LockContext, Task>, CancellationToken, LockContext, Task> rollbackWrapper = null) {
 
 			if(transactionAction == null) {
@@ -472,7 +478,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			try {
 				LockContext innerLockContext = null;
 
-				using(var handleLocker = this.locker.Lock(innerLockContext)) {
+				using(LockHandle handleLocker = await this.locker.LockAsync(innerLockContext).ConfigureAwait(false)) {
 					if(this.TransactionInProgress(handleLocker.Context)) {
 						throw new NotReadyForProcessingException();
 					}
@@ -481,17 +487,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						throw new NotReadyForProcessingException();
 					}
 
-					this.currentTransaction = this.SerialisationFal.BeginTransaction();
+					this.currentTransaction = await this.SerialisationFal.BeginTransaction().ConfigureAwait(false);
 				}
 
 				// let's make sure we catch implicit disposes that we did not call for through disposing
 				this.currentTransaction.Disposed += async sessionId => {
-					if(this.currentTransaction != null && this.currentTransaction.SessionId == sessionId) {
+					if((this.currentTransaction != null) && (this.currentTransaction.SessionId == sessionId)) {
 						// ok, thats us, our session is now disposed.
 
-						using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+						using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 							this.currentTransaction = null;
-
+							
 							// reset the files, since the underlying files have probably changed
 							await Repeater.RepeatAsync(() => {
 								return this.WalletFileInfo.ReloadFileBytes(handle);
@@ -510,7 +516,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				async Task Commit() {
 					await this.SaveWallet(lockContext).ConfigureAwait(false);
 
-					this.currentTransaction.CommitTransaction();
+					await this.currentTransaction.CommitTransaction().ConfigureAwait(false);
 				}
 
 				if(commitWrapper != null) {
@@ -532,7 +538,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// just end here
 				throw;
 			} finally {
-				using(this.locker.Lock()) {
+				using(await this.locker.LockAsync().ConfigureAwait(false)) {
+					if(this.currentTransaction?.IsInTransaction??false) {
+						string message = "A transaction could not be completed or rolled back. This is serious, leaving as is.";
+						NLog.Default.Fatal(message);
+						throw new ApplicationException(message);
+					}
 					this.currentTransaction = null;
 				}
 			}
@@ -557,7 +568,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public async Task<bool?> Synced(LockContext lockContext) {
 
-			var lowestAccountBlockSyncHeight = await this.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
+			long? lowestAccountBlockSyncHeight = await this.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
 
 			if(!lowestAccountBlockSyncHeight.HasValue) {
 				return null;
@@ -623,12 +634,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public async Task<List<IWalletAccount>> GetWalletSyncableAccounts(long blockId, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var keys = (await this.WalletFileInfo.Accounts.WhereAsync(async a => {
+			List<Guid> keys = (await this.WalletFileInfo.Accounts.WhereAsync(async a => {
 
-					           var chainState = (await a.Value.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false));
+					                  WalletAccountChainState chainState = await a.Value.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
-					           return chainState.LastBlockSynced;
-				           }, e => e == blockId - 1).ConfigureAwait(false)).Select(a => a.Key).ToList();
+					                  return chainState;
+				                  }, e => (e.LastBlockSynced == (blockId - 1)) || (e.LastBlockSynced == blockId && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced)).ConfigureAwait(false)).Select(a => a.Key).ToList();
 
 			return (await this.GetAccounts(lockContext).ConfigureAwait(false)).Where(a => keys.Contains(a.AccountUuid)).ToList();
 
@@ -659,16 +670,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public async Task<AccountId> GetPublicAccountId(LockContext lockContext) {
-			var account = (await this.GetActiveAccount(lockContext).ConfigureAwait(false));
+			IWalletAccount account = await this.GetActiveAccount(lockContext).ConfigureAwait(false);
 
 			return await this.GetPublicAccountId(account.AccountUuid, lockContext).ConfigureAwait(false);
 		}
 
 		public async Task<AccountId> GetPublicAccountId(Guid accountUuid, LockContext lockContext) {
 
-			var account = await this.GetWalletAccount(accountUuid, lockContext).ConfigureAwait(false);
+			IWalletAccount account = await this.GetWalletAccount(accountUuid, lockContext).ConfigureAwait(false);
 
-			if(account == null || !(await this.IsAccountPublished(account.AccountUuid, lockContext).ConfigureAwait(false))) {
+			if((account == null) || !await this.IsAccountPublished(account.AccountUuid, lockContext).ConfigureAwait(false)) {
 				return null;
 			}
 
@@ -679,12 +690,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (await this.GetActiveAccount(lockContext).ConfigureAwait(false)).AccountUuidHash;
 		}
 
-		public async Task<bool> IsDefaultAccountPublished(LockContext lockContext) => (await this.GetActiveAccount(lockContext).ConfigureAwait(false)).Status == Enums.PublicationStatus.Published;
+		public async Task<bool> IsDefaultAccountPublished(LockContext lockContext) {
+			return (await this.GetActiveAccount(lockContext).ConfigureAwait(false)).Status == Enums.PublicationStatus.Published;
+		}
 
 		public async Task<bool> IsAccountPublished(Guid accountUuid, LockContext lockContext) {
-			var account = await this.GetWalletAccount(accountUuid, lockContext).ConfigureAwait(false);
+			IWalletAccount account = await this.GetWalletAccount(accountUuid, lockContext).ConfigureAwait(false);
 
-			return account != null && account.Status == Enums.PublicationStatus.Published;
+			return (account != null) && (account.Status == Enums.PublicationStatus.Published);
 		}
 
 		/// <summary>
@@ -742,11 +755,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public async Task<IWalletStandardAccountSnapshot> GetStandardAccountSnapshot(AccountId accountId, LockContext lockContext) {
-			return (await this.GetAccountSnapshot(accountId, lockContext).ConfigureAwait(false)) as IWalletStandardAccountSnapshot;
+			return await this.GetAccountSnapshot(accountId, lockContext).ConfigureAwait(false) as IWalletStandardAccountSnapshot;
 		}
 
 		public async Task<IWalletJointAccountSnapshot> GetJointAccountSnapshot(AccountId accountId, LockContext lockContext) {
-			return (await this.GetAccountSnapshot(accountId, lockContext).ConfigureAwait(false)) as IWalletJointAccountSnapshot;
+			return await this.GetAccountSnapshot(accountId, lockContext).ConfigureAwait(false) as IWalletJointAccountSnapshot;
 		}
 
 		public async Task UpdateWalletSnapshot(IAccountSnapshot accountSnapshot, LockContext lockContext) {
@@ -769,7 +782,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				walletAccountInfo = this.WalletFileInfo.Accounts[AccountUuid];
 			}
 
-			var snapshot = await (walletAccountInfo?.WalletSnapshotInfo.WalletAccountSnapshot(lockContext)).ConfigureAwait(false);
+			IWalletAccountSnapshot snapshot = await (walletAccountInfo?.WalletSnapshotInfo.WalletAccountSnapshot(lockContext)).ConfigureAwait(false);
 
 			if(snapshot == null) {
 				throw new ApplicationException("Account snapshot does not exist");
@@ -783,11 +796,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public Task UpdateWalletSnapshotFromDigest(IAccountSnapshotDigestChannelCard accountCard, LockContext lockContext) {
 			if(accountCard is IStandardAccountSnapshotDigestChannelCard simpleAccountSnapshot) {
 				return this.UpdateWalletSnapshotFromDigest(simpleAccountSnapshot, lockContext);
-			} else if(accountCard is IJointAccountSnapshotDigestChannelCard jointAccountSnapshot) {
-				return this.UpdateWalletSnapshotFromDigest(jointAccountSnapshot, lockContext);
-			} else {
-				throw new InvalidCastException();
 			}
+
+			if(accountCard is IJointAccountSnapshotDigestChannelCard jointAccountSnapshot) {
+				return this.UpdateWalletSnapshotFromDigest(jointAccountSnapshot, lockContext);
+			}
+
+			throw new InvalidCastException();
 		}
 
 		/// <summary>
@@ -811,7 +826,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			walletAccountInfo = this.WalletFileInfo.Accounts[localAccount.AccountUuid];
 
-			var snapshot = await (walletAccountInfo?.WalletSnapshotInfo.WalletAccountSnapshot(lockContext)).ConfigureAwait(false);
+			IWalletAccountSnapshot snapshot = await (walletAccountInfo?.WalletSnapshotInfo.WalletAccountSnapshot(lockContext)).ConfigureAwait(false);
 
 			if(snapshot == null) {
 				throw new ApplicationException("Account snapshot does not exist");
@@ -843,7 +858,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			walletAccountInfo = this.WalletFileInfo.Accounts[localAccount.AccountUuid];
 
-			var snapshot = await (walletAccountInfo?.WalletSnapshotInfo.WalletAccountSnapshot(lockContext)).ConfigureAwait(false);
+			IWalletAccountSnapshot snapshot = await (walletAccountInfo?.WalletSnapshotInfo.WalletAccountSnapshot(lockContext)).ConfigureAwait(false);
 
 			if(snapshot == null) {
 				throw new ApplicationException("Account snapshot does not exist");
@@ -857,7 +872,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public async Task UpdateWalletChainStateSyncStatus(Guid accountUuid, long BlockId, WalletAccountChainState.BlockSyncStatuses blockSyncStatus, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var chainState = await this.WalletFileInfo.Accounts[accountUuid].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+			WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[accountUuid].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 			chainState.LastBlockSynced = BlockId;
 			chainState.BlockSyncStatus = (int) blockSyncStatus;
 		}
@@ -868,7 +883,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				SystemEventGenerator.WalletCreationStepSet walletCreationStepSet = new SystemEventGenerator.WalletCreationStepSet();
 
 				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationStartedEvent(), correlationContext);
-				Log.Information("Creating a new wallet");
+				NLog.Default.Information("Creating a new wallet");
 
 				string walletPassphrase = null;
 
@@ -882,37 +897,43 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				await this.SaveWallet(lockContext).ConfigureAwait(false);
 
-				Log.Information("WalletBase successfully created and loaded");
+				NLog.Default.Information("WalletBase successfully created and loaded");
 				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationEndedEvent(), correlationContext);
 
 				await this.centralCoordinator.RequestWalletSync().ConfigureAwait(false);
 
 				return true;
 			} catch(Exception ex) {
+
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationErrorEvent("Failed to generate wallet", ex.ToString()), correlationContext);
+
 				try {
 					// delete the folder
 					if(Directory.Exists(this.WalletFileInfo.WalletPath)) {
 						Directory.Delete(this.WalletFileInfo.WalletPath, true);
 					}
 				} catch(Exception ex2) {
-					Log.Error("Failed to delete faulty wallet files.");
+					NLog.Default.Error(ex2, "Failed to delete faulty wallet files.");
 				}
 
-				throw new ApplicationException($"Failed to create wallet", ex);
+				throw new ApplicationException("Failed to create wallet", ex);
 			}
-
 		}
 
 		public virtual async Task<bool> CreateNewCompleteAccount(CorrelationContext correlationContext, string accountName, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, LockContext lockContext, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, Action<IWalletAccount> accountCreatedCallback = null) {
 
 			try {
+
+				if(encryptKeys && passphrases.Values.Any(p => string.IsNullOrWhiteSpace(p) || p.Length < MINIMUM_KEY_PASSPHRASE_LENGTH)) {
+					throw new InvalidOperationException("Key passphrase is too small");
+				}
 				SystemEventGenerator.AccountCreationStepSet accountCreationStepSet = new SystemEventGenerator.AccountCreationStepSet();
 				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AccountCreationStartedEvent(), correlationContext);
 				this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.AccountCreationStartedStep, correlationContext);
 
 				IWalletAccount account = await this.CreateNewAccount(accountName, encryptKeys, encryptKeysIndividually, correlationContext, walletCreationStepSet, accountCreationStepSet, lockContext, true).ConfigureAwait(false);
 
-				Log.Information($"Your new default account Uuid is '{account.AccountUuid}'");
+				NLog.Default.Information($"Your new default account Uuid is '{account.AccountUuid}'");
 
 				if(accountCreatedCallback != null) {
 					accountCreatedCallback(account);
@@ -926,7 +947,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				return true;
 			} catch(Exception ex) {
-				throw new ApplicationException($"Failed to create account.", ex);
+				throw new ApplicationException("Failed to create account.", ex);
 			}
 		}
 
@@ -952,7 +973,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.WalletFileInfo.WalletSecurityDetails.EncryptWallet = encryptWallet;
 
 			if(encryptWallet) {
-				if(string.IsNullOrWhiteSpace(passphrase)) {
+				if(string.IsNullOrWhiteSpace(passphrase) || passphrase.Length < MINIMUM_KEY_PASSPHRASE_LENGTH) {
 					throw new InvalidOperationException();
 				}
 
@@ -995,26 +1016,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		public async Task<bool> LoadWallet(CorrelationContext correlationContext, LockContext lockContext, string passphrase = null) {
 			if(this.IsWalletLoaded) {
-				Log.Warning("Wallet already loaded");
+				NLog.Default.Warning("Wallet already loaded");
 
 				return false;
 			}
 
-			Log.Warning("Ensuring PID protection");
+			NLog.Default.Warning("Ensuring PID protection");
 
 			await this.EnsurePIDLock().ConfigureAwait(false);
 
-			Log.Warning("Loading wallet");
+			NLog.Default.Warning("Loading wallet");
 
 			if(!this.WalletFileInfo.FileExists) {
-				Log.Warning("Failed to load wallet, no wallet file exists");
+				NLog.Default.Warning("Failed to load wallet, no wallet file exists");
 
 				return false;
 			}
 
 			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingStartedEvent(), correlationContext);
 
-			await WalletFileInfo.LoadFileSecurityDetails(lockContext).ConfigureAwait(false);
+			await this.WalletFileInfo.LoadFileSecurityDetails(lockContext).ConfigureAwait(false);
 
 			try {
 
@@ -1023,7 +1044,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				await this.WalletFileInfo.Load(lockContext).ConfigureAwait(false);
 
-				var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+				IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
 
 				if(walletbase == null) {
 					throw new ApplicationException("The wallet is corrupt. please recreate or fix.");
@@ -1042,7 +1063,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// now restore the skeleton of the unloaded file infos for each accounts
 				foreach(IWalletAccount account in walletbase.GetAccounts()) {
 
-					this.WalletFileInfo.Accounts.Add(account.AccountUuid, this.CreateNewAccountFileInfo(account, lockContext));
+					this.WalletFileInfo.Accounts.Add(account.AccountUuid, await CreateNewAccountFileInfo(account, lockContext).ConfigureAwait(false));
 				}
 
 			} catch(FileNotFoundException e) {
@@ -1050,7 +1071,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				await this.WalletFileInfo.Reset(lockContext).ConfigureAwait(false);
 				this.WalletFileInfo = this.SerialisationFal.CreateWalletFileInfo();
 
-				Log.Warning("Failed to load wallet, no wallet file exists");
+				NLog.Default.Warning("Failed to load wallet, no wallet file exists");
 
 				// for a missing file, we simply return false, so we can create it
 				return false;
@@ -1059,12 +1080,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				await this.WalletFileInfo.Reset(lockContext).ConfigureAwait(false);
 				this.WalletFileInfo = this.SerialisationFal.CreateWalletFileInfo();
 
-				Log.Error(e, "Failed to load wallet");
+				NLog.Default.Error(e, "Failed to load wallet");
 
 				throw;
 			}
 
-			Log.Warning("Wallet successfully loaded");
+			NLog.Default.Warning("Wallet successfully loaded");
 
 			if(this.WalletIsLoaded != null) {
 				await this.WalletIsLoaded().ConfigureAwait(false);
@@ -1108,7 +1129,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					await this.EnsureWalletPassphrase(lockContext).ConfigureAwait(false);
 				}
 
-				var chaningAccounts = new List<IWalletAccount>();
+				List<IWalletAccount> chaningAccounts = new List<IWalletAccount>();
 
 				foreach(IWalletAccount account in (await this.WalletBase(lockContext).ConfigureAwait(false)).Accounts.Values) {
 
@@ -1127,7 +1148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				if(!walletEncryptionChange && !chaningAccounts.Any()) {
-					Log.Information("No encryption changes for the wallet. Nothing to do.");
+					NLog.Default.Information("No encryption changes for the wallet. Nothing to do.");
 
 					return;
 				}
@@ -1175,7 +1196,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				await this.WalletFileInfo.ChangeKeysEncryption(lockContext).ConfigureAwait(false);
 
 			} catch(Exception e) {
-				Log.Verbose("error occured", e);
+				NLog.Default.Verbose("error occured", e);
 
 				//TODO: what to do here?
 				throw;
@@ -1197,8 +1218,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public virtual async Task<IWalletAccount> CreateNewAccount(string name, bool encryptKeys, bool encryptKeysIndividually, CorrelationContext correlationContext, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, SystemEventGenerator.AccountCreationStepSet accountCreationStepSet, LockContext lockContext, bool setactive = false) {
 
 			this.EnsureWalletIsLoaded();
-
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
 
 			if(walletbase.GetAccount(name) != null) {
 				throw new ApplicationException("Account with name already exists");
@@ -1225,14 +1246,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// make it active
 
-			if(setactive || walletbase.Accounts.Count == 0) {
+			if(setactive || (walletbase.Accounts.Count == 0)) {
 				walletbase.ActiveAccount = account.AccountUuid;
 			}
 
 			walletbase.Accounts.Add(account.AccountUuid, account);
 
 			// ensure the key holder is created
-			IAccountFileInfo accountFileInfo = this.CreateNewAccountFileInfo(account, lockContext);
+			IAccountFileInfo accountFileInfo = await this.CreateNewAccountFileInfo(account, lockContext).ConfigureAwait(false);
 
 			// now create the file connection entry to map the new account
 			this.WalletFileInfo.Accounts.Add(account.AccountUuid, accountFileInfo);
@@ -1268,7 +1289,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public async Task<IWalletStandardAccountSnapshot> CreateNewWalletStandardAccountSnapshot(IWalletAccount account, IWalletStandardAccountSnapshot accountSnapshot, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
 
 			if(!walletbase.Accounts.ContainsKey(account.AccountUuid)) {
 				//TODO: what to do here?
@@ -1292,7 +1313,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public async Task<IWalletJointAccountSnapshot> CreateNewWalletJointAccountSnapshot(IWalletAccount account, IWalletJointAccountSnapshot accountSnapshot, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
 
 			if(!walletbase.Accounts.ContainsKey(account.AccountUuid)) {
 				//TODO: what to do here?
@@ -1326,7 +1347,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().UseKeyLog) {
 				WalletAccountKeyLog walletAccountKeyLog = this.CreateNewWalletAccountKeyLogEntry(lockContext);
 
-				walletAccountKeyLog.Timestamp = DateTime.UtcNow;
+				walletAccountKeyLog.Timestamp = DateTimeEx.CurrentTime;
 				walletAccountKeyLog.EventId = eventId;
 				walletAccountKeyLog.EventType = (byte) eventType;
 				walletAccountKeyLog.KeyOrdinalId = keyOrdinalId;
@@ -1376,7 +1397,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			key.Id = Guid.NewGuid();
 			key.Name = name;
-			key.CreatedTime = DateTime.UtcNow.Ticks;
+			key.CreatedTime = DateTimeEx.CurrentTime.Ticks;
 
 			return key;
 
@@ -1432,21 +1453,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.EnsureWalletIsLoaded();
 
 			// all accounts have been synced for previous block and if any at current, they have been set for this block
-			return !(await this.GetWalletSyncableAccounts(previousBlockId, lockContext).ConfigureAwait(false)).Any() && (!(await this.GetWalletSyncableAccounts(block.BlockId, lockContext).ConfigureAwait(false)).Any() || (await AllAccountsHaveSyncStatus(block, WalletAccountChainState.BlockSyncStatuses.BlockHeightUpdated, lockContext).ConfigureAwait(false)));
+			return !(await this.GetWalletSyncableAccounts(previousBlockId, lockContext).ConfigureAwait(false)).Any() && (!(await this.GetWalletSyncableAccounts(block.BlockId, lockContext).ConfigureAwait(false)).Any() || await this.AllAccountsHaveSyncStatus(block, WalletAccountChainState.BlockSyncStatuses.BlockHeightUpdated, lockContext).ConfigureAwait(false));
 
 		}
 
 		public async Task<bool> AllAccountsHaveSyncStatus(SynthesizedBlock block, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var syncableAccounts = await this.GetWalletSyncableAccounts(block.BlockId, lockContext).ConfigureAwait(false);
+			List<IWalletAccount> syncableAccounts = await this.GetWalletSyncableAccounts(block.BlockId, lockContext).ConfigureAwait(false);
 
 			if(!syncableAccounts.Any()) {
 				return false;
 			}
 
-			foreach(var a in syncableAccounts) {
-				var chainState = await this.WalletFileInfo.Accounts[a.AccountUuid].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+			foreach(IWalletAccount a in syncableAccounts) {
+				WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[a.AccountUuid].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
 				if(!((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(status)) {
 					return false;
@@ -1463,15 +1484,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public virtual async Task UpdateWalletBlock(SynthesizedBlock synthesizedBlock, long previousSyncedBlockId, Func<SynthesizedBlock, LockContext, Task> callback, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			Log.Verbose($"updating wallet blocks for block {synthesizedBlock.BlockId}...");
+			NLog.Default.Verbose($"updating wallet blocks for block {synthesizedBlock.BlockId}...");
 
-			// this is where the wallet update happens...  any previous account that is fully synced can be upgraded no
-			var availableAccounts = (await (await this.GetWalletSyncableAccounts(previousSyncedBlockId + 1, lockContext).ConfigureAwait(false)).WhereAsync(async a => {
+			// this is where the wallet update happens...  any previous account that is fully synced can be upgraded to.
+			List <IWalletAccount> availableAccounts = (await (await this.GetWalletSyncableAccounts(previousSyncedBlockId + 1, lockContext).ConfigureAwait(false)).WhereAsync(async a => {
 
-					                        var chainState = (await this.WalletFileInfo.Accounts[a.AccountUuid].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false));
+					                                         WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[a.AccountUuid].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
-					                        return new {chainState.BlockSyncStatus, chainState.LastBlockSynced};
-				                        }, e => e.BlockSyncStatus == (int) WalletAccountChainState.BlockSyncStatuses.FullySynced).ConfigureAwait(false)).ToList();
+					                                         return new {chainState.BlockSyncStatus, chainState.LastBlockSynced};
+				                                         }, e => (e.BlockSyncStatus == (int) WalletAccountChainState.BlockSyncStatuses.FullySynced) || (e.LastBlockSynced == 0)).ConfigureAwait(false)).ToList();
+
+			if (!availableAccounts.Any())
+			{
+				long? lowestAccountBlockSyncHeight = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
+				if (lowestAccountBlockSyncHeight.HasValue && lowestAccountBlockSyncHeight.Value != previousSyncedBlockId)
+					throw new WalletSyncException(synthesizedBlock.BlockId, "We have no syncable account and are trying to sync a block that would skip important block(s), this should not happen.");
+			}
+			
 
 			Dictionary<Guid, WalletAccountChainState> chainStates = new Dictionary<Guid, WalletAccountChainState>();
 
@@ -1480,6 +1509,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				AccountId publicAccountId = account.GetAccountId();
 				IAccountFileInfo accountFileInfo = this.WalletFileInfo.Accounts[account.AccountUuid];
 				WalletAccountChainState chainState = await accountFileInfo.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+
+				// we start the new workflow
+				chainState.LastBlockSynced = synthesizedBlock.BlockId;
 				chainState.BlockSyncStatus = (int) WalletAccountChainState.BlockSyncStatuses.Blank;
 
 				chainStates.Add(account.AccountUuid, chainState);
@@ -1487,9 +1519,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(synthesizedBlock.AccountScopped.ContainsKey(publicAccountId)) {
 					// get the highest key use in the block for this account
 
-					var transactionIds = synthesizedBlock.AccountScopped[publicAccountId].ConfirmedLocalTransactions.Where(t => t.Value.KeyUseIndex != null).ToList();
+					List<KeyValuePair<TransactionId, ITransaction>> transactionIds = synthesizedBlock.AccountScopped[publicAccountId].ConfirmedLocalTransactions.Where(t => t.Value.KeyUseIndex != null).ToList();
 
-					foreach(var group in transactionIds.GroupBy(t => t.Value.KeyUseIndex.Ordinal)) {
+					foreach(IGrouping<byte, KeyValuePair<TransactionId, ITransaction>> group in transactionIds.GroupBy(t => t.Value.KeyUseIndex.Ordinal)) {
 						KeyUseIndexSet highestKeyUse = null;
 
 						if(group.Any()) {
@@ -1526,16 +1558,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public async Task ChangeAccountsCorrelation(ImmutableList<AccountId> enableAccounts, ImmutableList<AccountId> disableAccounts, LockContext lockContext) {
 
-			foreach(var account in enableAccounts) {
-				var walletAccount = await this.GetWalletAccount(account, lockContext).ConfigureAwait(false);
+			foreach(AccountId account in enableAccounts) {
+				IWalletAccount walletAccount = await this.GetWalletAccount(account, lockContext).ConfigureAwait(false);
 
 				if(walletAccount != null) {
 					walletAccount.Correlated = true;
 				}
 			}
 
-			foreach(var account in disableAccounts) {
-				var walletAccount = await this.GetWalletAccount(account, lockContext).ConfigureAwait(false);
+			foreach(AccountId account in disableAccounts) {
+				IWalletAccount walletAccount = await this.GetWalletAccount(account, lockContext).ConfigureAwait(false);
 
 				if(walletAccount != null) {
 					walletAccount.Correlated = false;
@@ -1552,10 +1584,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public async Task CleanSynthesizedBlockCache(LockContext lockContext) {
-			
-			var lowestBlockId = await this.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
-			
-			foreach(long entry in this.syncBlockCache.Keys.ToArray().Where(b => b < lowestBlockId - 3)) {
+
+			long? lowestBlockId = await this.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
+
+			foreach(long entry in this.syncBlockCache.Keys.ToArray().Where(b => b < (lowestBlockId - 3))) {
 				this.syncBlockCache.RemoveSafe(entry);
 			}
 		}
@@ -1614,13 +1646,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return await walletAccountInfo.WalletSnapshotInfo.WalletAccountSnapshot(lockContext).ConfigureAwait(false);
 		}
 
+		public Task Pause() {
+			using(this.locker.Lock()) {
+				this.paused = true;
+			}
+
+			return this.WaitTransactionCompleted();
+		}
+
+		public Task Resume() {
+			using(this.locker.Lock()) {
+				this.paused = false;
+			}
+
+			return Task.CompletedTask;
+		}
+
+		public event Func<Task> WalletIsLoaded;
+
+		private void CentralCoordinatorOnShutdownRequested(ConcurrentBag<Task> beacons) {
+			this.shutdownRequest = true;
+
+			// ok, if this happens while we are syncing, we ask for a grace period until we are ready to clean exit
+			beacons.Add(this.WaitTransactionCompleted());
+		}
+
 		public string GetPIDFilePath() {
 			return Path.Combine(this.GetChainDirectoryPath(), PID_LOCK_FILE);
 		}
 
 		protected virtual async Task EnsurePIDLock() {
 
-			if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SerializationType == AppSettingsBase.SerializationTypes.Feeder || GlobalSettings.ApplicationSettings.MobileMode) {
+			if((this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SerializationType == AppSettingsBase.SerializationTypes.Feeder) || GlobalSettings.ApplicationSettings.MobileMode) {
 				// feeders and mobiles dont need to worry about this
 				return;
 			}
@@ -1650,7 +1707,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					try {
 						Process process = Process.GetProcesses().SingleOrDefault(p => p.Id == lockPid);
 
-						if(process?.Id != 0 && !(process?.HasExited ?? true)) {
+						if((process?.Id != 0) && !(process?.HasExited ?? true)) {
 							// ok, this other process has the lock, we fail here
 							throw new ApplicationException("The wallet is already reserved by another tunning process. we allow only one process at a time.");
 
@@ -1668,7 +1725,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.fileSystem.DeleteFile(pidfile);
 			}
 
-			var bytes = new byte[sizeof(int)];
+			byte[] bytes = new byte[sizeof(int)];
 			TypeSerializer.Serialize(currentPid, bytes);
 
 			FileExtensions.WriteAllBytes(pidfile, ByteArray.WrapAndOwn(bytes), this.fileSystem);
@@ -1687,11 +1744,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// and the elections history
 			await accountFileInfo.WalletElectionsHistoryInfo.CreateEmptyFile(lockContext).ConfigureAwait(false);
+			
+			// and the elections history
+			await accountFileInfo.WalletElectionsStatisticsInfo.CreateEmptyFile(lockContext).ConfigureAwait(false);
 		}
 
 		public async Task<bool> CreateStandardAccountKeys(Guid accountUuid, ImmutableDictionary<int, string> passphrases, CorrelationContext correlationContext, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, SystemEventGenerator.AccountCreationStepSet accountCreationStepSet, LockContext lockContext) {
 
 			this.EnsureWalletIsLoaded();
+			
 
 			IWalletAccount account = await this.GetWalletAccount(accountUuid, lockContext).ConfigureAwait(false);
 
@@ -1716,7 +1777,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				int lastTenth = -1;
 
-				mainKey = await this.CreateXmssKey(GlobalsService.TRANSACTION_KEY_NAME, async (percentage) => {
+				mainKey = await this.CreateXmssKey(GlobalsService.TRANSACTION_KEY_NAME, async percentage => {
 					int tenth = percentage / 10;
 
 					bool info = false;
@@ -1724,14 +1785,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					if(lastTenth != tenth) {
 						lastTenth = tenth;
-						Log.Information(message);
+						NLog.Default.Information(message);
 						info = true;
 					}
 
 					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.TRANSACTION_KEY_NAME, percentage), correlationContext);
 
 					if(!info) {
-						Log.Verbose(message);
+						NLog.Default.Verbose(message);
 					}
 				}).ConfigureAwait(false);
 
@@ -1744,7 +1805,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				lastTenth = -1;
 
-				messageKey = await this.CreateXmssKey(GlobalsService.MESSAGE_KEY_NAME, async (percentage) => {
+				messageKey = await this.CreateXmssKey(GlobalsService.MESSAGE_KEY_NAME, async percentage => {
 					int tenth = percentage / 10;
 
 					bool info = false;
@@ -1752,14 +1813,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					if(lastTenth != tenth) {
 						lastTenth = tenth;
-						Log.Information(message);
+						NLog.Default.Information(message);
 						info = true;
 					}
 
 					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.MESSAGE_KEY_NAME, percentage), correlationContext);
 
 					if(!info) {
-						Log.Verbose(message);
+						NLog.Default.Verbose(message);
 					}
 				}).ConfigureAwait(false);
 
@@ -1773,7 +1834,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				lastTenth = -1;
 
-				changeKey = await this.CreateXmssKey(GlobalsService.CHANGE_KEY_NAME, async (percentage) => {
+				changeKey = await this.CreateXmssKey(GlobalsService.CHANGE_KEY_NAME, async percentage => {
 					int tenth = percentage / 10;
 
 					bool info = false;
@@ -1781,14 +1842,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					if(lastTenth != tenth) {
 						lastTenth = tenth;
-						Log.Information(message);
+						NLog.Default.Information(message);
 						info = true;
 					}
 
 					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.CHANGE_KEY_NAME, percentage), correlationContext);
 
 					if(!info) {
-						Log.Verbose(message);
+						NLog.Default.Verbose(message);
 					}
 				}).ConfigureAwait(false);
 
@@ -1818,25 +1879,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}).ConfigureAwait(false);
 
 				// let's verify and confirm the keys are there
-				using(var key = await this.LoadKey(GlobalsService.TRANSACTION_KEY_NAME, lockContext).ConfigureAwait(false)) {
+				using(IWalletKey key = await this.LoadKey(GlobalsService.TRANSACTION_KEY_NAME, lockContext).ConfigureAwait(false)) {
 					if(key == null) {
 						throw new ApplicationException($"Failed to generate and load key {GlobalsService.TRANSACTION_KEY_NAME}.");
 					}
 				}
 
-				using(var key = await this.LoadKey(GlobalsService.MESSAGE_KEY_NAME, lockContext).ConfigureAwait(false)) {
+				using(IWalletKey key = await this.LoadKey(GlobalsService.MESSAGE_KEY_NAME, lockContext).ConfigureAwait(false)) {
 					if(key == null) {
 						throw new ApplicationException($"Failed to generate and load key {GlobalsService.MESSAGE_KEY_NAME}.");
 					}
 				}
 
-				using(var key = await this.LoadKey(GlobalsService.CHANGE_KEY_NAME, lockContext).ConfigureAwait(false)) {
+				using(IWalletKey key = await this.LoadKey(GlobalsService.CHANGE_KEY_NAME, lockContext).ConfigureAwait(false)) {
 					if(key == null) {
 						throw new ApplicationException($"Failed to generate and load key {GlobalsService.CHANGE_KEY_NAME}.");
 					}
 				}
 
-				using(var key = await this.LoadKey(GlobalsService.SUPER_KEY_NAME, lockContext).ConfigureAwait(false)) {
+				using(IWalletKey key = await this.LoadKey(GlobalsService.SUPER_KEY_NAME, lockContext).ConfigureAwait(false)) {
 					if(key == null) {
 						throw new ApplicationException($"Failed to generate and load key {GlobalsService.SUPER_KEY_NAME}.");
 					}
@@ -1845,7 +1906,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				GC.Collect();
 
 			} catch(Exception ex) {
-				throw new ApplicationException($"Failed to generate wallet keys. this is serious and the wallet remains invalid.", ex);
+				throw new ApplicationException("Failed to generate wallet keys. this is serious and the wallet remains invalid.", ex);
 			} finally {
 				try {
 					mainKey?.Dispose();
@@ -1892,7 +1953,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			accountSnapshot.Correlated = account.Correlated;
 		}
 
-		protected virtual IAccountFileInfo CreateNewAccountFileInfo(IWalletAccount account, LockContext lockContext) {
+		protected virtual async Task<IAccountFileInfo> CreateNewAccountFileInfo(IWalletAccount account, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
 			IAccountFileInfo accountFileInfo = this.CreateNewAccountFileInfo(new AccountPassphraseDetails(account.KeysEncrypted, account.KeysEncryptedIndividually, this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.DefaultKeyPassphraseTimeout));
@@ -1904,7 +1965,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// and the snapshot
 			accountFileInfo.WalletSnapshotInfo = this.SerialisationFal.CreateWalletSnapshotFileInfo(account, this.WalletFileInfo.WalletSecurityDetails);
-
+			
 			return accountFileInfo;
 
 		}
@@ -1925,6 +1986,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// and now create the transaction history
 			accountFileInfo.WalletElectionsHistoryInfo = this.SerialisationFal.CreateWalletElectionsHistoryFileInfo(account, this.WalletFileInfo.WalletSecurityDetails);
+
+			// and now create the transaction history
+			accountFileInfo.WalletElectionsStatisticsInfo = this.SerialisationFal.CreateWalletElectionsStatisticsFileInfo(account, this.WalletFileInfo.WalletSecurityDetails);
 
 			// and now create the key history
 			accountFileInfo.WalletKeyHistoryInfo = this.SerialisationFal.CreateWalletKeyHistoryFileInfo(account, this.WalletFileInfo.WalletSecurityDetails);
@@ -1974,9 +2038,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected virtual async Task<bool> UpdateWalletKeyLog(IAccountFileInfo accountFile, IWalletAccount account, SynthesizedBlock synthesizedBlock, LockContext lockContext) {
 			bool changed = false;
 
-			Log.Verbose($"Update Wallet Key Logs for block {synthesizedBlock.BlockId} and accountId {account.AccountUuid}...");
+			NLog.Default.Verbose($"Update Wallet Key Logs for block {synthesizedBlock.BlockId} and accountId {account.AccountUuid}...");
 
-			var chainState = await accountFile.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+			WalletAccountChainState chainState = await accountFile.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 			bool keyLogSynced = ((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.KeyLogSynced);
 
 			if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().UseKeyLog && !keyLogSynced) {
@@ -1985,7 +2049,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(synthesizedBlock.AccountScopped.ContainsKey(accountId)) {
 					SynthesizedBlock.SynthesizedBlockAccountSet scoppedSynthesizedBlock = synthesizedBlock.AccountScopped[accountId];
 
-					foreach(var transactionId in scoppedSynthesizedBlock.ConfirmedLocalTransactions) {
+					foreach(KeyValuePair<TransactionId, ITransaction> transactionId in scoppedSynthesizedBlock.ConfirmedLocalTransactions) {
 
 						ITransaction transaction = transactionId.Value;
 
@@ -2049,7 +2113,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public async Task RequestCopyWallet(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
-			if(!await this.IsWalletEncrypted(lockContext).ConfigureAwait(false) && this.CopyWalletRequest != null) {
+			if(!await this.IsWalletEncrypted(lockContext).ConfigureAwait(false) && (this.CopyWalletRequest != null)) {
 				await this.CopyWalletRequest(correlationContext, attempt, lockContext).ConfigureAwait(false);
 			}
 
@@ -2084,7 +2148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					async Task SetKeysPassphraseCallback() {
 
 						try {
-							foreach(var account in await this.GetAccounts(lockContext).ConfigureAwait(false)) {
+							foreach(IWalletAccount account in await this.GetAccounts(lockContext).ConfigureAwait(false)) {
 								this.SetAllKeysPassphrase(account.AccountUuid, copyPassphrase, lockContext);
 							}
 						} finally {
@@ -2197,7 +2261,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				WalletKeyFileInfo walletKeyFileInfo = accountFileInfo.WalletKeysFileInfo[keyName];
 
 				// now the passphrase
-				return !accountFileInfo.AccountSecurityDetails.EncryptWalletKeys || accountFileInfo.AccountSecurityDetails.EncryptWalletKeys && accountFileInfo.AccountSecurityDetails.KeyPassphraseValid(accountUuid, keyName);
+				return !accountFileInfo.AccountSecurityDetails.EncryptWalletKeys || (accountFileInfo.AccountSecurityDetails.EncryptWalletKeys && accountFileInfo.AccountSecurityDetails.KeyPassphraseValid(accountUuid, keyName));
 			}
 
 			return true;
@@ -2220,7 +2284,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// first, ensure the key is physically present
 				if(!walletKeyFileInfo.FileExists) {
 					if(this.WalletCopyKeyFileRequest != null) {
-						await WalletCopyKeyFileRequest(correlationContext, accountUuid, keyName, attempt, lockContext).ConfigureAwait(false);
+						await this.WalletCopyKeyFileRequest(correlationContext, accountUuid, keyName, attempt, lockContext).ConfigureAwait(false);
 					}
 				}
 			}
@@ -2392,7 +2456,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			IWalletAccountChainState chainState = await walletChainStateInfo.ChainState(lockContext).ConfigureAwait(false);
 
-			await SetChainStateHeight(chainState, blockId, lockContext).ConfigureAwait(false);
+			await this.SetChainStateHeight(chainState, blockId, lockContext).ConfigureAwait(false);
 		}
 
 		public async Task SetChainStateHeight(IWalletAccountChainState chainState, long blockId, LockContext lockContext) {
@@ -2402,8 +2466,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				throw new ApplicationException("The new chain state height can not be lower than the existing value");
 			}
 
-			if(!GlobalSettings.ApplicationSettings.SynclessMode && blockId > chainState.LastBlockSynced + 1) {
-				Log.Warning($"The new chain state height ({blockId}) is higher than the next block id for current chain state height ({chainState.LastBlockSynced}).");
+			if(!GlobalSettings.ApplicationSettings.SynclessMode && (blockId > (chainState.LastBlockSynced + 1))) {
+				NLog.Default.Warning($"The new chain state height ({blockId}) is higher than the next block id for current chain state height ({chainState.LastBlockSynced}).");
 			}
 
 			chainState.LastBlockSynced = blockId;
@@ -2457,11 +2521,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(key is IXmssWalletKey xmssWalletKey) {
 
-				if(keyChainState.LocalKeyUse.IsSet && new KeyUseIndexSet(key.KeySequenceId, xmssWalletKey.KeyUseIndex, key.KeyAddress.OrdinalId) < keyChainState.LocalKeyUse) {
+				if(keyChainState.LocalKeyUse.IsSet && (new KeyUseIndexSet(key.KeySequenceId, xmssWalletKey.KeyUseIndex, key.KeyAddress.OrdinalId) < keyChainState.LocalKeyUse)) {
 					throw new ApplicationException("The key sequence is lower than the one we have in the chain state");
 				}
 
-				if(keyChainState.LatestBlockSyncKeyUse.IsSet && new KeyUseIndexSet(key.KeySequenceId, xmssWalletKey.KeyUseIndex, key.KeyAddress.OrdinalId) < keyChainState.LatestBlockSyncKeyUse) {
+				if(keyChainState.LatestBlockSyncKeyUse.IsSet && (new KeyUseIndexSet(key.KeySequenceId, xmssWalletKey.KeyUseIndex, key.KeyAddress.OrdinalId) < keyChainState.LatestBlockSyncKeyUse)) {
 					throw new ApplicationException("The key sequence is lower than the lasy synced block value");
 				}
 
@@ -2492,11 +2556,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			IWalletAccountChainStateKey keyChainState = chainState.Keys[highestKeyUse.Ordinal];
 
-			if(keyChainState.LatestBlockSyncKeyUse.IsSet && highestKeyUse < keyChainState.LatestBlockSyncKeyUse) {
+			if(keyChainState.LatestBlockSyncKeyUse.IsSet && (highestKeyUse < keyChainState.LatestBlockSyncKeyUse)) {
 				throw new ApplicationException("The last synced block transaction key sequence is lower than the value in our wallet. We may have a corrupt wallet and can not use it safely.");
 			}
 
-			if(keyChainState.LocalKeyUse.IsSet && highestKeyUse > keyChainState.LocalKeyUse) {
+			if(keyChainState.LocalKeyUse.IsSet && (highestKeyUse > keyChainState.LocalKeyUse)) {
 				throw new ApplicationException("The last synced block transaction key sequence is higher than the value in our wallet. We may have an out of date wallet and can not use it safely.");
 			}
 
@@ -2508,15 +2572,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#region Elections History
 
-		public virtual async Task<IWalletElectionsHistory> InsertElectionsHistoryEntry(SynthesizedBlock.SynthesizedElectionResult electionResult, AccountId electedAccountId, LockContext lockContext) {
+		public virtual async Task<IWalletElectionsHistory> InsertElectionsHistoryEntry(SynthesizedBlock.SynthesizedElectionResult electionResult, SynthesizedBlock synthesizedBlock, AccountId electedAccountId, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
-			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => a.PublicAccountId != null && a.PublicAccountId.Equals(electedAccountId));
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != default(AccountId)) && a.PublicAccountId.Equals(electedAccountId));
 
 			if(account == null) {
 				// try the hash, if its a presentation transaction
-				account = walletbase.Accounts.Values.SingleOrDefault(a => a.AccountUuidHash != null && a.AccountUuidHash.Equals(electedAccountId));
+				account = walletbase.Accounts.Values.SingleOrDefault(a => (a.AccountUuidHash != default(AccountId)) && a.AccountUuidHash.Equals(electedAccountId));
 
 				if(account == null) {
 					throw new ApplicationException("No account found for transaction");
@@ -2552,16 +2616,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			async Task<IWalletAccount> GetImpactedAccount(AccountId accountId) {
 
-				var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
-				IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => a.PublicAccountId != null && a.PublicAccountId.Equals(accountId));
+				IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+				IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != default(AccountId)) && a.PublicAccountId.Equals(accountId));
 
-				return account ?? walletbase.Accounts.Values.SingleOrDefault(a => a.AccountUuidHash != null && a.AccountUuidHash.Equals(accountId));
+				return account ?? walletbase.Accounts.Values.SingleOrDefault(a => (a.AccountUuidHash != default(AccountId)) && a.AccountUuidHash.Equals(accountId));
 			}
 
 			IWalletAccount sendingAccount = await GetImpactedAccount(transaction.TransactionId.Account).ConfigureAwait(false);
 			List<IWalletAccount> recipientAccounts = new List<IWalletAccount>();
 
-			foreach(var account in transaction.TargetAccounts) {
+			foreach(AccountId account in transaction.TargetAccounts) {
 				IWalletAccount recipient = await GetImpactedAccount(account).ConfigureAwait(false);
 
 				if(recipient != null) {
@@ -2572,10 +2636,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (sendingAccount, recipientAccounts);
 		}
 
-		public virtual async Task<List<IWalletTransactionHistory>> InsertTransactionHistoryEntry(ITransaction transaction, string note, LockContext lockContext) {
+		public virtual async Task<List<IWalletTransactionHistory>> InsertTransactionHistoryEntry(ITransaction transaction, string note, BlockId blockId, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			(IWalletAccount sendingAccount, var recipientAccounts) = await this.GetImpactedLocalAccounts(transaction, lockContext).ConfigureAwait(false);
+			(IWalletAccount sendingAccount, List<IWalletAccount> recipientAccounts) = await this.GetImpactedLocalAccounts(transaction, lockContext).ConfigureAwait(false);
 
 			List<(IWalletAccount account, bool sender)> accounts = recipientAccounts.Select(a => (a, false)).ToList();
 
@@ -2586,7 +2650,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			List<IWalletTransactionHistory> historyEntries = new List<IWalletTransactionHistory>();
 
 			// loop on all accounts unless the receiver is also the sender, where it is already covered by the sending account entry
-			foreach((IWalletAccount account, bool sender) in accounts.Where(e => e.sender || e.sender == false && e.account != sendingAccount)) {
+			foreach((IWalletAccount account, bool sender) in accounts.Where(e => e.sender || ((e.sender == false) && (e.account != sendingAccount)))) {
 
 				IWalletTransactionHistory walletAccountTransactionHistory = this.CreateNewWalletAccountTransactionHistoryEntry(lockContext);
 
@@ -2629,15 +2693,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return Task.CompletedTask;
 		}
 
-		public virtual async Task<IWalletTransactionHistoryFileInfo> UpdateLocalTransactionHistoryEntry(TransactionId transactionId, WalletTransactionHistory.TransactionStatuses status, LockContext lockContext) {
+		public virtual async Task<IWalletTransactionHistoryFileInfo> UpdateLocalTransactionHistoryEntry(ITransaction transaction, TransactionId transactionId, WalletTransactionHistory.TransactionStatuses status, BlockId blockId, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
-			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => a.PublicAccountId != null && a.PublicAccountId.Equals(transactionId.Account));
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != default(AccountId)) && a.PublicAccountId.Equals(transactionId.Account));
 
 			if(account == null) {
 				// try the hash, if its a presentation transaction
-				account = walletbase.Accounts.Values.SingleOrDefault(a => a.AccountUuidHash != null && a.AccountUuidHash.Equals(transactionId.Account));
+				account = walletbase.Accounts.Values.SingleOrDefault(a => (a.AccountUuidHash != default(AccountId)) && a.AccountUuidHash.Equals(transactionId.Account));
 
 				if(account == null) {
 					throw new ApplicationException("No account found for transaction");
@@ -2662,12 +2726,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.EnsureWalletIsLoaded();
 			TransactionId transactionId = transactionEnvelope.Contents.RehydratedTransaction.TransactionId;
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
-			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => a.PublicAccountId != null && a.PublicAccountId.Equals(transactionId.Account));
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != default(AccountId)) && a.PublicAccountId.Equals(transactionId.Account));
 
 			if(account == null) {
 				// try the hash, if its a presentation transaction
-				account = walletbase.Accounts.Values.SingleOrDefault(a => a.AccountUuidHash != null && a.AccountUuidHash.Equals(transactionId.Account));
+				account = walletbase.Accounts.Values.SingleOrDefault(a => (a.AccountUuidHash != default(AccountId)) && a.AccountUuidHash.Equals(transactionId.Account));
 
 				if(account == null) {
 					throw new ApplicationException("No account found for transaction");
@@ -2707,12 +2771,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public virtual async Task<IWalletTransactionCache> GetLocalTransactionCacheEntry(TransactionId transactionId, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
-			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => a.PublicAccountId != null && a.PublicAccountId.Equals(transactionId.Account));
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != default(AccountId)) && a.PublicAccountId.Equals(transactionId.Account));
 
 			if(account == null) {
 				// try the hash, if its a presentation transaction
-				account = walletbase.Accounts.Values.SingleOrDefault(a => a.AccountUuidHash != null && a.AccountUuidHash.Equals(transactionId.Account));
+				account = walletbase.Accounts.Values.SingleOrDefault(a => (a.AccountUuidHash != default(AccountId)) && a.AccountUuidHash.Equals(transactionId.Account));
 
 				if(account == null) {
 					throw new ApplicationException("No account found for transaction");
@@ -2726,12 +2790,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public virtual async Task UpdateLocalTransactionCacheEntry(TransactionId transactionId, WalletTransactionCache.TransactionStatuses status, long gossipMessageHash, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
-			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => a.PublicAccountId != null && a.PublicAccountId.Equals(transactionId.Account));
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != default(AccountId)) && a.PublicAccountId.Equals(transactionId.Account));
 
 			if(account == null) {
 				// try the hash, if its a presentation transaction
-				account = walletbase.Accounts.Values.SingleOrDefault(a => a.AccountUuidHash != null && a.AccountUuidHash.Equals(transactionId.Account));
+				account = walletbase.Accounts.Values.SingleOrDefault(a => (a.AccountUuidHash != default(AccountId)) && a.AccountUuidHash.Equals(transactionId.Account));
 
 				if(account == null) {
 					throw new ApplicationException("No account found for transaction");
@@ -2747,12 +2811,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public virtual async Task RemoveLocalTransactionCacheEntry(TransactionId transactionId, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
-			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => a.PublicAccountId != null && a.PublicAccountId.Equals(transactionId.Account));
+			IUserWallet walletbase = await this.WalletFileInfo.WalletBase(lockContext).ConfigureAwait(false);
+			IWalletAccount account = walletbase.Accounts.Values.SingleOrDefault(a => (a.PublicAccountId != default(AccountId)) && a.PublicAccountId.Equals(transactionId.Account));
 
 			if(account == null) {
 				// try the hash, if its a presentation transaction
-				account = walletbase.Accounts.Values.SingleOrDefault(a => a.AccountUuidHash != null && a.AccountUuidHash.Equals(transactionId.Account));
+				account = walletbase.Accounts.Values.SingleOrDefault(a => (a.AccountUuidHash != default(AccountId)) && a.AccountUuidHash.Equals(transactionId.Account));
 
 				if(account == null) {
 					throw new ApplicationException("No account found for transaction");
@@ -2802,7 +2866,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task InsertElectionCacheTransactions(List<TransactionId> transactionIds, long blockId, IWalletAccount account, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
-			var entries = new List<WalletElectionCache>();
+			List<WalletElectionCache> entries = new List<WalletElectionCache>();
 
 			foreach(TransactionId transactionId in transactionIds) {
 
@@ -2930,7 +2994,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateKey.LocalKeyUse = keyUseIndex;
 			chainStateKey.LatestBlockSyncKeyUse = new KeyUseIndexSet(0, 0, chainStateKey.Ordinal);
 
-			var chainState = await walletAccountFileInfo.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+			WalletAccountChainState chainState = await walletAccountFileInfo.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
 			if(chainState.Keys.ContainsKey(chainStateKey.Ordinal)) {
 				chainState.Keys.Remove(chainStateKey.Ordinal);
@@ -3023,7 +3087,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			nextKey.Status = Enums.KeyStatus.New;
 
-			(KeyInfo keyInfo, var _) = await this.GetKeyInfo(accountUuid, nextKey.Name, lockContext).ConfigureAwait(false);
+			(KeyInfo keyInfo, _) = await this.GetKeyInfo(accountUuid, nextKey.Name, lockContext).ConfigureAwait(false);
 
 			if(keyInfo == null) {
 				throw new ApplicationException("Key did not exist. nothing to swap");
@@ -3039,7 +3103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			nextKey.Status = Enums.KeyStatus.New;
 
-			(KeyInfo keyInfo, var _) = await this.GetKeyInfo(nextKey.AccountUuid, nextKey.Name, lockContext).ConfigureAwait(false);
+			(KeyInfo keyInfo, _) = await this.GetKeyInfo(nextKey.AccountUuid, nextKey.Name, lockContext).ConfigureAwait(false);
 
 			if(keyInfo == null) {
 				throw new ApplicationException("Key did not exist. nothing to swap");
@@ -3126,7 +3190,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.EnsureWalletIsLoaded();
 
-			(KeyInfo keyInfo, var _) = await this.GetKeyInfo(accountUuid, name, lockContext).ConfigureAwait(false);
+			(KeyInfo keyInfo, _) = await this.GetKeyInfo(accountUuid, name, lockContext).ConfigureAwait(false);
 
 			if(keyInfo == null) {
 				throw new ApplicationException("Key did not exist. nothing to swap");
@@ -3177,7 +3241,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			WalletKeyFileInfo walletKeyInfo = this.WalletFileInfo.Accounts[accountUuid].WalletKeysFileInfo[keyMeta.keyInfo.Name];
 
-			var key = await walletKeyInfo.LoadNextKey<T>(accountUuid, keyMeta.keyInfo.Name, lockContext).ConfigureAwait(false);
+			T key = await walletKeyInfo.LoadNextKey<T>(accountUuid, keyMeta.keyInfo.Name, lockContext).ConfigureAwait(false);
 
 			// this might not have been set
 			key.AccountUuid = accountUuid;
@@ -3187,7 +3251,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public virtual async Task UpdateKey(IWalletKey key, LockContext lockContext) {
 
-			if(key.PrivateKey == null || key.PrivateKey.Length == 0) {
+			if((key.PrivateKey == null) || (key.PrivateKey.Length == 0)) {
 				throw new ApplicationException("Private key is not set");
 			}
 
@@ -3237,7 +3301,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			await walletKeyInfo.SwapNextKey(keyMeta.keyInfo, key.AccountUuid, lockContext).ConfigureAwait(false);
 
-			using var newKey = await walletKeyInfo.LoadKey<IWalletKey>(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false);
+			using IWalletKey newKey = await walletKeyInfo.LoadKey<IWalletKey>(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false);
 
 			// we swapped our key, we must update the chain state
 			await this.UpdateLocalChainStateKeyHeight(newKey, lockContext).ConfigureAwait(false);
@@ -3246,7 +3310,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public virtual async Task SwapNextKey(Guid accountUUid, string keyName, LockContext lockContext, bool storeHistory = true) {
 
-			using var key = await this.LoadKey(accountUUid, keyName, lockContext).ConfigureAwait(false);
+			using IWalletKey key = await this.LoadKey(accountUUid, keyName, lockContext).ConfigureAwait(false);
 
 			await this.SwapNextKey(key, lockContext, storeHistory).ConfigureAwait(false);
 
@@ -3308,7 +3372,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task RequestKeysCopyFileByConsole(Guid accountUUid, string keyName, LockContext lockContext, int maxTryCount = 10) {
-			Log.Warning($"Wallet key file (account: {accountUUid}, key name: {keyName}) is not present. Please copy it.", maxTryCount);
+			NLog.Default.Warning($"Wallet key file (account: {accountUUid}, key name: {keyName}) is not present. Please copy it.", maxTryCount);
 
 			Console.ReadKey();
 
@@ -3316,7 +3380,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task RequestCopyWalletByConsole(LockContext lockContext) {
-			Log.Information("Please ensure the wallet file is in the wallets baseFolder");
+			NLog.Default.Information("Please ensure the wallet file is in the wallets baseFolder");
 			Console.ReadKey();
 
 			return Task.CompletedTask;
@@ -3336,30 +3400,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			do {
 				// we must request the passwords by console
-				Log.Verbose("");
-				Log.Verbose($"Enter your {passphraseType} passphrase (ESC to skip):");
+				NLog.Default.Verbose("");
+				NLog.Default.Verbose($"Enter your {passphraseType} passphrase (ESC to skip):");
 				SecureString temp = await this.RequestConsolePassphrase(lockContext).ConfigureAwait(false);
 
 				if(temp == null) {
-					Log.Verbose("Entry has been skipped.");
+					NLog.Default.Verbose("Entry has been skipped.");
 
 					return (null, false);
 				}
 
-				Log.Verbose($"Enter your {passphraseType} passphrase again:");
+				NLog.Default.Verbose($"Enter your {passphraseType} passphrase again:");
 				SecureString pass2 = await this.RequestConsolePassphrase(lockContext).ConfigureAwait(false);
 
 				valid = temp.SecureStringEqual(pass2);
 
 				if(!valid) {
-					Log.Verbose("Passphrases are different.");
+					NLog.Default.Verbose("Passphrases are different.");
 				} else {
 					// its valid!
 					pass = temp;
 				}
 
 				counter++;
-			} while(valid == false && counter < maxTryCount);
+			} while((valid == false) && (counter < maxTryCount));
 
 			return (pass, false);
 
@@ -3381,16 +3445,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				// Ignore any key out of range.
-				if((int) key.Key >= 65 && (int) key.Key <= 90) {
+				if(((int) key.Key >= 65) && ((int) key.Key <= 90)) {
 					// Append the character to the password.
 					securePwd.AppendChar(key.KeyChar);
 					Console.Write("*");
 				}
 
 				// Exit if Enter key is pressed.
-			} while(key.Key != ConsoleKey.Enter || securePwd.Length == 0);
+			} while((key.Key != ConsoleKey.Enter) || (securePwd.Length == 0));
 
-			Log.Verbose("");
+			NLog.Default.Verbose("");
 
 			return Task.FromResult(securePwd);
 
@@ -3511,17 +3575,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			Enums.KeyHashBits fullHashbits = Enums.KeyHashBits.SHA2_256;
 
-			if(HashType == WalletProvider.HashTypes.Sha2 && hashBits == 256) {
+			if((HashType == WalletProvider.HashTypes.Sha2) && (hashBits == 256)) {
 				fullHashbits = Enums.KeyHashBits.SHA2_256;
-			} else if(HashType == WalletProvider.HashTypes.Sha2 && hashBits == 512) {
+			} else if((HashType == WalletProvider.HashTypes.Sha2) && (hashBits == 512)) {
 				fullHashbits = Enums.KeyHashBits.SHA2_512;
-			} else if(HashType == WalletProvider.HashTypes.Sha3 && hashBits == 256) {
+			} else if((HashType == WalletProvider.HashTypes.Sha3) && (hashBits == 256)) {
 				fullHashbits = Enums.KeyHashBits.SHA3_256;
-			} else if(HashType == WalletProvider.HashTypes.Sha3 && hashBits == 512) {
+			} else if((HashType == WalletProvider.HashTypes.Sha3) && (hashBits == 512)) {
 				fullHashbits = Enums.KeyHashBits.SHA3_512;
-			} else if(HashType == WalletProvider.HashTypes.Blake2 && hashBits == 256) {
+			} else if((HashType == WalletProvider.HashTypes.Blake2) && (hashBits == 256)) {
 				fullHashbits = Enums.KeyHashBits.BLAKE2_256;
-			} else if(HashType == WalletProvider.HashTypes.Blake2 && hashBits == 512) {
+			} else if((HashType == WalletProvider.HashTypes.Blake2) && (hashBits == 512)) {
 				fullHashbits = Enums.KeyHashBits.BLAKE2_512;
 			}
 
@@ -3529,7 +3593,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				provider.Initialize();
 
-				Log.Information($"Creating a new XMSS key named '{name}' with tree height {treeHeight} and hashBits {provider.HashBits} and good for {provider.MaximumHeight} signatures.");
+				NLog.Default.Information($"Creating a new XMSS key named '{name}' with tree height {treeHeight} and hashBits {provider.HashBits} and good for {provider.MaximumHeight} signatures.");
 
 				(ByteArray privateKey, ByteArray publicKey) = await provider.GenerateKeys(progressCallback).ConfigureAwait(false);
 
@@ -3550,22 +3614,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.HashKey(key);
 
-			Log.Information($"XMSS Key '{name}' created");
+			NLog.Default.Information($"XMSS Key '{name}' created");
 
 			return key;
 		}
 
-		public Task<IXmssMTWalletKey> CreateXmssmtKey(string name, float warningLevel, float changeLevel, Func<int, int, int, Task> progressCallback = null) {
+		public Task<IXmssMTWalletKey> CreateXmssmtKey(string name, float warningLevel, float changeLevel, Func<int, long, int, Task> progressCallback = null) {
 			return this.CreateXmssmtKey(name, XMSSMTProvider.DEFAULT_XMSSMT_TREE_HEIGHT, XMSSMTProvider.DEFAULT_XMSSMT_TREE_LAYERS, XMSSProvider.DEFAULT_HASH_BITS, warningLevel, changeLevel, progressCallback);
 		}
 
-		public async Task<IXmssMTWalletKey> CreateXmssmtKey(string name, int treeHeight, int treeLayers, Enums.KeyHashBits hashBits, float warningLevel, float changeLevel, Func<int, int, int, Task> progressCallback = null) {
+		public async Task<IXmssMTWalletKey> CreateXmssmtKey(string name, int treeHeight, int treeLayers, Enums.KeyHashBits hashBits, float warningLevel, float changeLevel, Func<int, long, int, Task> progressCallback = null) {
 			IXmssMTWalletKey key = this.CreateBasicKey<IXmssMTWalletKey>(name, Enums.KeyTypes.XMSSMT);
 
-			using(XMSSMTProvider provider = new XMSSMTProvider(hashBits, treeHeight, treeLayers, Enums.ThreadMode.Half)) {
+			using(XMSSMTProvider provider = new XMSSMTProvider(hashBits, treeHeight, treeLayers)) {
 				provider.Initialize();
 
-				Log.Information($"Creating a new XMSS^MT key named '{name}' with tree height {treeHeight}, tree layers {treeLayers} and hashBits {provider.HashBits} and good for {provider.MaximumHeight} signatures.");
+				NLog.Default.Information($"Creating a new XMSS^MT key named '{name}' with tree height {treeHeight}, tree layers {treeLayers} and hashBits {provider.HashBits} and good for {provider.MaximumHeight} signatures.");
 
 				(ByteArray privateKey, ByteArray publicKey) = await provider.GenerateKeys(true, progressCallback).ConfigureAwait(false);
 
@@ -3587,7 +3651,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.HashKey(key);
 
-			Log.Information("XMSS^MT Keys created");
+			NLog.Default.Information("XMSS^MT Keys created");
 
 			return key;
 		}
@@ -3597,7 +3661,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.PrepareQTeslaKey(key, securityCategory);
 
-			Log.Information("QTesla Key created");
+			NLog.Default.Information("QTesla Key created");
 
 			return key;
 		}
@@ -3608,7 +3672,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			using(QTeslaProvider provider = new QTeslaProvider(securityCategory)) {
 				provider.Initialize();
 
-				Log.Information($"Creating a new QTesla key named '{key.Name}' with security category {securityCategory}");
+				NLog.Default.Information($"Creating a new QTesla key named '{key.Name}' with security category {securityCategory}");
 
 				key.KeyType = Enums.KeyTypes.QTESLA;
 				key.SecurityCategory = (byte) securityCategory;
@@ -3632,7 +3696,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public ISecretWalletKey CreateSecretKey(string name, QTESLASecurityCategory.SecurityCategories securityCategorySecret, ISecretWalletKey previousKey = null) {
 
-			Log.Information($"Creating a new Secret key named '{name}'. generating qTesla base.");
+			NLog.Default.Information($"Creating a new Secret key named '{name}'. generating qTesla base.");
 
 			ISecretWalletKey key = this.CreateBasicKey<ISecretWalletKey>(name, Enums.KeyTypes.Secret);
 
@@ -3646,14 +3710,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				key.AccountUuid = previousKey.AccountUuid;
 			}
 
-			Log.Information("Secret Key created");
+			NLog.Default.Information("Secret Key created");
 
 			return key;
 		}
 
 		public ISecretComboWalletKey CreateSecretComboKey(string name, QTESLASecurityCategory.SecurityCategories securityCategorySecret, ISecretWalletKey previousKey = null) {
 
-			Log.Information($"Creating a new Secret combo key named '{name}'. generating qTesla base.");
+			NLog.Default.Information($"Creating a new Secret combo key named '{name}'. generating qTesla base.");
 
 			ISecretComboWalletKey key = this.CreateBasicKey<ISecretComboWalletKey>(name, Enums.KeyTypes.SecretCombo);
 
@@ -3670,14 +3734,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				key.AccountUuid = previousKey.AccountUuid;
 			}
 
-			Log.Information("Secret combo Key created");
+			NLog.Default.Information("Secret combo Key created");
 
 			return key;
 		}
 
 		public ISecretDoubleWalletKey CreateSecretDoubleKey(string name, QTESLASecurityCategory.SecurityCategories securityCategorySecret, QTESLASecurityCategory.SecurityCategories securityCategorySecond, ISecretDoubleWalletKey previousKey = null) {
 
-			Log.Information($"Creating a new Secret double key named '{name}'. generating qTesla base.");
+			NLog.Default.Information($"Creating a new Secret double key named '{name}'. generating qTesla base.");
 			ISecretDoubleWalletKey key = this.CreateBasicKey<ISecretDoubleWalletKey>(name, Enums.KeyTypes.SecretDouble);
 
 			this.PrepareQTeslaKey(key, securityCategorySecret);
@@ -3695,7 +3759,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				key.AccountUuid = previousKey.AccountUuid;
 			}
 
-			Log.Information("Secret double Key created");
+			NLog.Default.Information("Secret double Key created");
 
 			return key;
 		}
@@ -3733,14 +3797,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(key is IXmssWalletKey xmssWalletKey) {
 
 				// check if we reached the maximum use of our key
-				bool keyStillUsable = xmssWalletKey.KeyUseIndex < xmssWalletKey.ChangeHeight || allowPassKeyLimit;
+				bool keyStillUsable = (xmssWalletKey.KeyUseIndex < xmssWalletKey.ChangeHeight) || allowPassKeyLimit;
 				bool keyMaxedOut = xmssWalletKey.KeyUseIndex > xmssWalletKey.MaximumHeight;
 
 				if(keyStillUsable && !keyMaxedOut) {
 
 					XMSSProviderBase provider = null;
 
-					if(key is IXmssMTWalletKey xmssMTWalletKey && key.KeyType == Enums.KeyTypes.XMSSMT) {
+					if(key is IXmssMTWalletKey xmssMTWalletKey && (key.KeyType == Enums.KeyTypes.XMSSMT)) {
 						provider = new XMSSMTProvider(xmssMTWalletKey.HashBits, Enums.ThreadMode.Half, xmssMTWalletKey.TreeHeight, xmssMTWalletKey.TreeLayers);
 					} else {
 						provider = new XMSSProvider(xmssWalletKey.HashBits, xmssWalletKey.TreeHeight);
@@ -3784,13 +3848,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					// Here we trigger the key change workflow, we must change the key, its time adn we wont trust the user to do it in time at this point. they were warned already
 
 					if(keyMaxedOut) {
-						Log.Fatal($"Key named {key.Name} has reached end of life. It must be changed with a super key.");
+						NLog.Default.Fatal($"Key named {key.Name} has reached end of life. It must be changed with a super key.");
 					} else if(xmssWalletKey.KeyUseIndex >= xmssWalletKey.ChangeHeight) {
-						Log.Warning($"Key named {key.Name} has reached end of life. An automatic key change is being performed. You can not use the key until the change is fully confirmed.");
+						NLog.Default.Warning($"Key named {key.Name} has reached end of life. An automatic key change is being performed. You can not use the key until the change is fully confirmed.");
 
 						this.KeyUseMaximumLevelReached(key.KeyAddress.OrdinalId, xmssWalletKey.KeyUseIndex, xmssWalletKey.WarningHeight, xmssWalletKey.ChangeHeight, new CorrelationContext());
 					} else if(xmssWalletKey.KeyUseIndex >= xmssWalletKey.WarningHeight) {
-						Log.Warning($"Key named {key.Name}  nearing its end of life. An automatic key change is being performed. You can keep using it until the change is fully confirmed.");
+						NLog.Default.Warning($"Key named {key.Name}  nearing its end of life. An automatic key change is being performed. You can keep using it until the change is fully confirmed.");
 						this.KeyUseWarningLevelReached(key.KeyAddress.OrdinalId, xmssWalletKey.KeyUseIndex, xmssWalletKey.WarningHeight, xmssWalletKey.ChangeHeight, new CorrelationContext());
 					}
 				}
@@ -3851,7 +3915,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		protected virtual void LaunchChangeKeyWorkflow(byte changeKeyOrdinal, long keyUseIndex, long warningHeight, long maximumHeight, CorrelationContext correlationContext) {
-			var changeKeyTransactionWorkflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateChangeKeyTransactionWorkflow(changeKeyOrdinal, "automatically triggered keychange", correlationContext);
+			ICreateChangeKeyTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> changeKeyTransactionWorkflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateChangeKeyTransactionWorkflow(changeKeyOrdinal, "automatically triggered keychange", correlationContext);
 
 			this.centralCoordinator.PostWorkflow(changeKeyTransactionWorkflow);
 		}
@@ -3860,7 +3924,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.EnsureWalletIsLoaded();
 
-			var synced = await this.Synced(lockContext).ConfigureAwait(false);
+			bool? synced = await this.Synced(lockContext).ConfigureAwait(false);
 
 			if(!synced.HasValue || !synced.Value) {
 				// we cant do it if not synced, we will give a chance for the transactions to arrive
@@ -3869,7 +3933,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			bool changed = await this.ResetTimedOutWalletEntries(lockContext, forcedKeys).ConfigureAwait(false);
 
-			var result = await this.ClearTimedOutTransactions(lockContext).ConfigureAwait(false);
+			Dictionary<AccountId, int> result = await this.ClearTimedOutTransactions(lockContext).ConfigureAwait(false);
 
 			if(result.Any(e => e.Value != 0)) {
 				changed = true;
@@ -3879,13 +3943,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		/// <summary>
-		/// update wallet accounts adn keys for any timeout in transaction operations.
+		///     update wallet accounts adn keys for any timeout in transaction operations.
 		/// </summary>
 		/// <param name="forcedKeys"></param>
 		public virtual async Task<bool> ResetTimedOutWalletEntries(LockContext lockContext, List<(Guid accountUuid, string name)> forcedKeys = null) {
 			this.EnsureWalletIsLoaded();
 
-			var synced = await this.Synced(lockContext).ConfigureAwait(false);
+			bool? synced = await this.Synced(lockContext).ConfigureAwait(false);
 
 			if(!synced.HasValue || !synced.Value) {
 				// we cant do it if not synced, we will give a chance for the transactions to arrive
@@ -3895,13 +3959,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// let's use the last block timestamp as a limit, in case its not up to date
 			DateTime lastBlockTimestamp = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockTimestamp;
 
-			var accounts = await this.GetAllAccounts(lockContext).ConfigureAwait(false);
+			List<IWalletAccount> accounts = await this.GetAllAccounts(lockContext).ConfigureAwait(false);
 
 			bool changed = false;
 
-			foreach(var account in accounts) {
+			foreach(IWalletAccount account in accounts) {
 				//now we ttake care of presentation transactions
-				if(account.Status == Enums.PublicationStatus.Dispatched && account.PresentationTransactionTimeout.HasValue && account.PresentationTransactionTimeout.Value < lastBlockTimestamp) {
+				if((account.Status == Enums.PublicationStatus.Dispatched) && account.PresentationTransactionTimeout.HasValue && (account.PresentationTransactionTimeout.Value < lastBlockTimestamp)) {
 					// ok, this is a timeout, we reset it
 					account.PresentationTransactionTimeout = null;
 					account.PresentationTransactionId = null;
@@ -3912,20 +3976,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			changed = false;
 
-			foreach(var account in accounts) {
+			foreach(IWalletAccount account in accounts) {
 				// and finally keys if we can
-				foreach(var key in account.Keys) {
+				foreach(KeyInfo key in account.Keys) {
 
-					if(forcedKeys != null && forcedKeys.Contains((account.AccountUuid, key.Name))) {
+					if((forcedKeys != null) && forcedKeys.Contains((account.AccountUuid, key.Name))) {
 						// ok, this key MUST be checked
 						this.EnsureKeyFileIsPresent(account.AccountUuid, key.Name, 1, lockContext);
 						this.EnsureKeyPassphrase(account.AccountUuid, key.Name, 1, lockContext);
 					}
 
 					if(this.IsKeyFileIsPresent(account.AccountUuid, key.Name, 1, lockContext) && this.IsKeyPassphraseValid(account.AccountUuid, key.Name, 1, lockContext)) {
-						using var walletKey = await this.LoadKey(account.AccountUuid, key.Name, lockContext).ConfigureAwait(false);
+						using IWalletKey walletKey = await this.LoadKey(account.AccountUuid, key.Name, lockContext).ConfigureAwait(false);
 
-						if(walletKey.Status == Enums.KeyStatus.Changing && walletKey.KeyChangeTimeout.HasValue && walletKey.KeyChangeTimeout.Value < lastBlockTimestamp) {
+						if((walletKey.Status == Enums.KeyStatus.Changing) && walletKey.KeyChangeTimeout.HasValue && (walletKey.KeyChangeTimeout.Value < lastBlockTimestamp)) {
 
 							walletKey.Status = Enums.KeyStatus.Ok;
 							walletKey.KeyChangeTimeout = null;
@@ -3940,14 +4004,125 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return changed;
 		}
 
+		public async Task UpdateMiningStatistics(AccountId accountId, Enums.MiningTiers miningTiers, Action<WalletElectionsMiningSessionStatistics> sessionCallback, Action<WalletElectionsMiningAggregateStatistics> totalCallback, LockContext lockContext, bool resetSession = false) {
+
+			var configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			if((sessionCallback == null && totalCallback == null) || configuration.MiningStatistics == ChainConfigurations.MiningStatisticsModes.None) {
+				return;
+			}
+			
+			var account = await this.GetWalletAccount(accountId, lockContext).ConfigureAwait(false);
+			var statisticsInfo = this.WalletFileInfo.Accounts[account.AccountUuid].WalletElectionsStatisticsInfo;
+			
+			if(configuration.MiningStatistics.HasFlag(ChainConfigurations.MiningStatisticsModes.Session) && sessionCallback != null) {
+				try {
+					if(resetSession) {
+						await statisticsInfo.CloseSessionStatistics(lockContext).ConfigureAwait(false);
+					}
+					var statistic = await statisticsInfo.SessionStatisticsBase(miningTiers, lockContext).ConfigureAwait(false);
+
+					if(statistic == null) {
+						throw new ArgumentNullException(nameof(statistic));
+					}
+					sessionCallback(statistic);
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to update session wallet mining statistics.");
+				}
+			}
+			
+			if(configuration.MiningStatistics.HasFlag(ChainConfigurations.MiningStatisticsModes.Total) && totalCallback != null) {
+				try {
+					var statistic = await statisticsInfo.AggregateStatisticsBase(miningTiers, lockContext).ConfigureAwait(false);
+
+					if(statistic == null) {
+						throw new ArgumentNullException(nameof(statistic));
+					}
+					totalCallback(statistic);
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to update total wallet mining statistics.");
+				}
+			}
+		}
+
+		public async Task StopSessionMiningStatistics(AccountId accountId, LockContext lockContext) {
+			var configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			
+			if(configuration.MiningStatistics.HasFlag(ChainConfigurations.MiningStatisticsModes.Session)) {
+				
+				try {
+					var account = await this.GetWalletAccount(accountId, lockContext).ConfigureAwait(false);
+					var statisticsInfo = this.WalletFileInfo.Accounts[account.AccountUuid].WalletElectionsStatisticsInfo;
+
+					await statisticsInfo.CloseSessionStatistics(lockContext).ConfigureAwait(false);
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to update total wallet mining statistics.");
+				}
+			}
+		}
+
+		public async Task<(MiningStatisticSessionAPI session, MiningStatisticAggregateAPI aggregate)> QueryMiningStatistics(AccountId miningAccountId, Enums.MiningTiers miningTiers, LockContext lockContext) {
+			
+			var configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			var account = await this.GetWalletAccount(miningAccountId, lockContext).ConfigureAwait(false);
+			var statisticsInfo = this.WalletFileInfo.Accounts[account.AccountUuid].WalletElectionsStatisticsInfo;
+
+			var aggregateStatisticsEntry = await statisticsInfo.AggregateStatisticsBase(miningTiers, lockContext).ConfigureAwait(false);
+
+			if(aggregateStatisticsEntry == null) {
+				throw new ArgumentNullException(nameof(aggregateStatisticsEntry));
+			}
+			
+			(var miningStatisticSessionSet, var miningStatisticAggregateSet) = this.CreateMiningStatisticSet();
+			
+			this.PrepareMiningStatisticAggregateSet(miningStatisticAggregateSet, aggregateStatisticsEntry);
+
+			if(configuration.MiningStatistics.HasFlag(ChainConfigurations.MiningStatisticsModes.Session)) {
+				
+				// dont load or start anything. just query as it is
+				var sessionStatisticsEntry = statisticsInfo.SessionStatisticsBaseAsIs(miningTiers, lockContext);
+
+				if(sessionStatisticsEntry != null) {
+					this.PrepareMiningStatisticSessionSet(miningStatisticSessionSet, sessionStatisticsEntry);
+				}
+			}
+
+			return (miningStatisticSessionSet, miningStatisticAggregateSet);
+		}
+
+		protected virtual void PrepareMiningStatisticAggregateSet(MiningStatisticAggregateAPI miningStatisticAggregateSet, WalletElectionsMiningAggregateStatistics aggregateStatisticsEntry) {
+			miningStatisticAggregateSet.BlocksProcessed = aggregateStatisticsEntry.BlocksProcessed;
+			miningStatisticAggregateSet.BlocksElected = aggregateStatisticsEntry.BlocksElected;
+			miningStatisticAggregateSet.MiningSessions = aggregateStatisticsEntry.MiningSessions;
+			miningStatisticAggregateSet.PercentElected = 0;
+			if(aggregateStatisticsEntry.BlocksProcessed != 0){
+				miningStatisticAggregateSet.PercentElected = (double)aggregateStatisticsEntry.BlocksElected / aggregateStatisticsEntry.BlocksProcessed;
+			}
+			miningStatisticAggregateSet.LastBlockElected = aggregateStatisticsEntry.LastBlockElected;
+		}
+		
+		protected virtual void PrepareMiningStatisticSessionSet(MiningStatisticSessionAPI miningStatisticSessionSet, WalletElectionsMiningSessionStatistics sessionStatisticsEntry) {
+			miningStatisticSessionSet.BlocksProcessed = sessionStatisticsEntry.BlocksProcessed;
+			miningStatisticSessionSet.BlocksElected = sessionStatisticsEntry.BlocksElected;
+			miningStatisticSessionSet.BlockStarted = sessionStatisticsEntry.BlockStarted;
+			miningStatisticSessionSet.Start = sessionStatisticsEntry.Start;
+			miningStatisticSessionSet.PercentElected = 0;
+			if(miningStatisticSessionSet.BlocksProcessed != 0){
+				miningStatisticSessionSet.PercentElected = (double)sessionStatisticsEntry.BlocksElected / sessionStatisticsEntry.BlocksProcessed;
+			}
+			miningStatisticSessionSet.LastBlockElected = sessionStatisticsEntry.LastBlockElected;
+		}
+		
+		protected abstract (MiningStatisticSessionAPI session, MiningStatisticAggregateAPI aggregate) CreateMiningStatisticSet();
+		
 		/// <summary>
-		/// here we remove all timed out transactions from the wallet
+		///     here we remove all timed out transactions from the wallet
 		/// </summary>
 		public virtual async Task<Dictionary<AccountId, int>> ClearTimedOutTransactions(LockContext lockContext) {
 
 			this.EnsureWalletIsLoaded();
 
-			var synced = await this.Synced(lockContext).ConfigureAwait(false);
+			bool? synced = await this.Synced(lockContext).ConfigureAwait(false);
 
 			if(!synced.HasValue || !synced.Value) {
 				// we cant do it if not synced, we will give a chance for the transactions to arrive
@@ -3957,13 +4132,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// let's use the last block timestamp as a limit, in case its not up to date
 			DateTime lastBlockTimestamp = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockTimestamp;
 
-			var accounts = await this.GetAllAccounts(lockContext).ConfigureAwait(false);
+			List<IWalletAccount> accounts = await this.GetAllAccounts(lockContext).ConfigureAwait(false);
 
 			bool changed = false;
 
 			Dictionary<AccountId, int> totals = new Dictionary<AccountId, int>();
 
-			foreach(var account in accounts) {
+			foreach(IWalletAccount account in accounts) {
 
 				int total = 0;
 				IWalletTransactionCacheFileInfo transactionCacheFileInfo = this.WalletFileInfo.Accounts[account.AccountUuid].WalletTransactionCacheInfo;
@@ -3993,14 +4168,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public virtual async Task<List<WalletTransactionHistoryHeaderAPI>> APIQueryWalletTransactionHistory(Guid accountUuid, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			var results = await this.WalletFileInfo.Accounts[accountUuid].WalletTransactionHistoryInfo.RunQuery<WalletTransactionHistoryHeaderAPI, WalletTransactionHistory>(caches => caches.Select(t => {
+			WalletTransactionHistoryHeaderAPI[] results = await this.WalletFileInfo.Accounts[accountUuid].WalletTransactionHistoryInfo.RunQuery<WalletTransactionHistoryHeaderAPI, WalletTransactionHistory>(caches => caches.Select(t => {
 
 				TransactionId transactionId = new TransactionId(t.TransactionId);
-				var version = new ComponentVersion<TransactionType>(t.Version);
+				ComponentVersion<TransactionType> version = new ComponentVersion<TransactionType>(t.Version);
 
 				return new WalletTransactionHistoryHeaderAPI {
 					TransactionId = t.TransactionId, Sender = transactionId.Account.ToString(), Timestamp = TimeService.FormatDateTimeStandardUtc(t.Timestamp), Status = t.Status,
-					Version = new VersionAPI() {TransactionType = version.Type.Value.Value, Major = version.Major.Value, Minor = version.Minor.Value}, Local = t.Local, Note = t.Note, Recipient = t.Recipient
+					Version = new VersionAPI {TransactionType = version.Type.Value.Value, Major = version.Major.Value, Minor = version.Minor.Value}, Local = t.Local, Note = t.Note, Recipient = t.Recipient
 				};
 			}).OrderByDescending(t => t.Timestamp).ToList(), lockContext).ConfigureAwait(false);
 
@@ -4015,13 +4190,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				accountUuid = await this.GetAccountUuid(lockContext).ConfigureAwait(false);
 			}
 
-			var results = await this.WalletFileInfo.Accounts[accountUuid].WalletTransactionHistoryInfo.RunQuery<WalletTransactionHistoryDetailsAPI, WalletTransactionHistory>(caches => caches.Where(t => t.TransactionId == transactionId).Select(t => {
+			WalletTransactionHistoryDetailsAPI[] results = await this.WalletFileInfo.Accounts[accountUuid].WalletTransactionHistoryInfo.RunQuery<WalletTransactionHistoryDetailsAPI, WalletTransactionHistory>(caches => caches.Where(t => t.TransactionId == transactionId).Select(t => {
 
-				var version = new ComponentVersion<TransactionType>(t.Version);
+				ComponentVersion<TransactionType> version = new ComponentVersion<TransactionType>(t.Version);
 
 				return new WalletTransactionHistoryDetailsAPI {
 					TransactionId = t.TransactionId, Sender = new TransactionId(t.TransactionId).Account.ToString(), Timestamp = TimeService.FormatDateTimeStandardUtc(t.Timestamp), Status = t.Status,
-					Version = new VersionAPI() {TransactionType = version.Type.Value.Value, Major = version.Major.Value, Minor = version.Minor.Value}, Recipient = t.Recipient, Contents = t.Contents, Local = t.Local,
+					Version = new VersionAPI {TransactionType = version.Type.Value.Value, Major = version.Major.Value, Minor = version.Minor.Value}, Recipient = t.Recipient, Contents = t.Contents, Local = t.Local,
 					Note = t.Note
 				};
 			}).ToList(), lockContext).ConfigureAwait(false);
@@ -4060,7 +4235,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			Guid activeAccountUuid = (await this.GetActiveAccount(lockContext).ConfigureAwait(false)).AccountUuid;
 
-			var apiAccounts = new List<WalletAccountAPI>();
+			List<WalletAccountAPI> apiAccounts = new List<WalletAccountAPI>();
 
 			foreach(IWalletAccount account in await this.GetAccounts(lockContext).ConfigureAwait(false)) {
 
@@ -4085,7 +4260,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			Guid activeAccountUuid = (await this.GetActiveAccount(lockContext).ConfigureAwait(false)).AccountUuid;
 			IWalletAccount account = await this.GetWalletAccount(accountUuid, lockContext).ConfigureAwait(false);
 
-			var apiAccounts = new List<WalletAccountAPI>();
+			List<WalletAccountAPI> apiAccounts = new List<WalletAccountAPI>();
 
 			return new WalletAccountDetailsAPI {
 				AccountUuid = account.AccountUuid, AccountId = account.PublicAccountId?.ToString(), AccountHash = account.AccountUuidHash?.ToString(), FriendlyName = account.FriendlyName,
@@ -4116,7 +4291,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.EnsureWalletIsLoaded();
 
 			//TODO: make sure we confirm our signature height in the wallet with the recorded one on chain. To prevent mistaken wallet copies.
-			IWalletAccount activeAccount = await GetActiveAccount(lockContext).ConfigureAwait(false);
+			IWalletAccount activeAccount = await this.GetActiveAccount(lockContext).ConfigureAwait(false);
 
 			using IWalletKey key = await this.LoadKey<IWalletKey>(k => k, activeAccount.AccountUuid, keyName, lockContext).ConfigureAwait(false);
 
@@ -4150,7 +4325,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(configuration.UseKeyLog && configuration.KeySecurityConfigurations.EnableKeyHeightChecks) {
 				KeyUseIndexSet lastSyncedKeyUse = await this.GetChainStateLastSyncedKeyHeight(key, lockContext).ConfigureAwait(false);
 
-				if(lastSyncedKeyUse.IsSet && new KeyUseIndexSet(key.KeySequenceId, key.KeyUseIndex, key.KeyAddress.OrdinalId) < lastSyncedKeyUse) {
+				if(lastSyncedKeyUse.IsSet && (new KeyUseIndexSet(key.KeySequenceId, key.KeyUseIndex, key.KeyAddress.OrdinalId) < lastSyncedKeyUse)) {
 					throw new ApplicationException("Your key height is lower than the chain key use height. This is very serious. Are you using an older copy of your regular wallet?");
 				}
 			}
@@ -4205,7 +4380,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			BrotliCompression compressor = new BrotliCompression();
 
-			foreach(var apiTransaction in synthesizedBlockApi.ConfirmedGeneralTransactions) {
+			foreach(KeyValuePair<string, byte[]> apiTransaction in synthesizedBlockApi.ConfirmedGeneralTransactions) {
 				IDehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
 
 				SafeArrayHandle bytes = compressor.Decompress(ByteArray.Wrap(apiTransaction.Value));
@@ -4214,12 +4389,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				ITransaction transaction = null;
 
-				try {
-					transaction = dehydratedTransaction.RehydrateTransaction(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
-				} catch(UnrecognizedElementException urex) {
-
-					throw;
-				}
+				transaction = dehydratedTransaction.RehydrateTransaction(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
 				synthesizedBlock.ConfirmedGeneralTransactions.Add(transaction.TransactionId, transaction);
 			}
@@ -4232,7 +4402,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			bool hasAcountHash = !string.IsNullOrWhiteSpace(synthesizedBlockApi.AccountHash);
 
 			if(hasPublicAccount || hasAcountHash) {
-				var accounts = await this.GetAccounts(lockContext).ConfigureAwait(false);
+				List<IWalletAccount> accounts = await this.GetAccounts(lockContext).ConfigureAwait(false);
 
 				if(hasPublicAccount) {
 					accountId = new AccountId(synthesizedBlockApi.AccountId);
@@ -4254,7 +4424,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				SynthesizedBlock.SynthesizedBlockAccountSet synthesizedBlockAccountSet = new SynthesizedBlock.SynthesizedBlockAccountSet();
 
-				foreach(var apiTransaction in synthesizedBlockApi.ConfirmedTransactions) {
+				foreach(KeyValuePair<string, byte[]> apiTransaction in synthesizedBlockApi.ConfirmedTransactions) {
 
 					IDehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
 
@@ -4262,19 +4432,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					dehydratedTransaction.Rehydrate(bytes);
 					bytes.Return();
 
-					try {
-						ITransaction transaction = dehydratedTransaction.RehydrateTransaction(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
+					ITransaction transaction = dehydratedTransaction.RehydrateTransaction(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
-						if(transaction.TransactionId.Account == accountId) {
-							synthesizedBlockAccountSet.ConfirmedLocalTransactions.Add(transaction.TransactionId, transaction);
-						} else {
-							synthesizedBlockAccountSet.ConfirmedExternalsTransactions.Add(transaction.TransactionId, transaction);
+					if(transaction.TransactionId.Account == accountId) {
+						synthesizedBlockAccountSet.ConfirmedLocalTransactions.Add(transaction.TransactionId, transaction);
+					} else {
+						synthesizedBlockAccountSet.ConfirmedExternalsTransactions.Add(transaction.TransactionId, transaction);
+					}
+
+					synthesizedBlock.ConfirmedTransactions.Add(transaction.TransactionId, transaction);
+				}
+
+				foreach(var apiRejectedTransaction in synthesizedBlockApi.RejectedTransactions) {
+
+					if(TransactionId.IsValid(apiRejectedTransaction.Key)) {
+						var transactionId = new TransactionId(apiRejectedTransaction.Key);
+						if(transactionId.Account == accountId) {
+							synthesizedBlockAccountSet.RejectedTransactions.Add(new RejectedTransaction(transactionId, apiRejectedTransaction.Value));
 						}
-
-						synthesizedBlock.ConfirmedTransactions.Add(transaction.TransactionId, transaction);
-					} catch(UnrecognizedElementException urex) {
-
-						throw;
 					}
 				}
 
@@ -4316,21 +4491,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#endregion
 
-		public Task Pause() {
-			using(this.locker.Lock()) {
-				this.paused = true;
-			}
-
-			return this.WaitTransactionCompleted();
-		}
-
-		public Task Resume() {
-			using(this.locker.Lock()) {
-				this.paused = false;
-			}
-
-			return Task.CompletedTask;
-		}
 	}
 
 }

@@ -6,13 +6,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
@@ -77,17 +78,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return this.shutdownRequest || this.CheckCancelRequested();
 		}
 
-		protected void CheckShouldStopThrow()
-		{
-			if (this.CheckShouldStop())
-			{
+		protected void CheckShouldStopThrow() {
+			if(this.CheckShouldStop()) {
 				this.CancelTokenSource.Cancel();
 				this.CancelToken.ThrowIfCancellationRequested();
 			}
 		}
 
+		private readonly object uniqueLocker = new object();
+		private bool working = false;
 		protected override async Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+
+			try {
+				// just make sure it is always a unique instance. just in case
+				lock(this.uniqueLocker) {
+					if(this.working) {
+						return;
+					}
+
+					this.working = true;
+				}
+				await this.PerformSyncWork(workflow, taskRoutingContext, lockContext).ConfigureAwait(false);
+			} finally {
+				lock(this.uniqueLocker) {
+					this.working = false;
+				}
+			}
 			
+		}
+		protected async Task PerformSyncWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+
 			if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.NodeShareType().DoesNotShare && !GlobalSettings.ApplicationSettings.SynclessMode) {
 
 				await this.TriggerWalletSynced(lockContext).ConfigureAwait(false);
@@ -124,7 +144,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				this.IsBusy = true;
 
-				Log.Verbose("Wallet sync started");
+				NLog.Default.Verbose("Wallet sync started");
 
 				long targetBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
 
@@ -145,10 +165,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				await this.RunWalletUpdateSequence(currentBlockHeight, targetBlockHeight, taskRoutingContext, lockContext).ConfigureAwait(false);
 
 				lowestAccountBlockSyncHeight = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
-				if (lowestAccountBlockSyncHeight.HasValue)
-					currentBlockHeight = lowestAccountBlockSyncHeight.Value;
 
-				if (currentBlockHeight > this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) {
+				if(lowestAccountBlockSyncHeight.HasValue) {
+					currentBlockHeight = lowestAccountBlockSyncHeight.Value;
+				}
+
+				if(currentBlockHeight > this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight) {
 					currentBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
 				}
 
@@ -163,13 +185,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					lastClearTimedout = DateTime.Now.AddMinutes(10);
 				}
 
-				Log.Verbose("Wallet sync completed");
+				NLog.Default.Verbose("Wallet sync completed");
 			} catch(Exception ex) {
-				Log.Error(ex, "Wallet sync failed");
+				NLog.Default.Error(ex, "Wallet sync failed");
 
 				//In mobile, no need to resync every blocks when it fails. We only need to resume at the last block that worked.
-				if (GlobalSettings.ApplicationSettings.SynclessMode && ex is WalletSyncException walletSyncException)
+				if(GlobalSettings.ApplicationSettings.SynclessMode && ex is WalletSyncException walletSyncException) {
 					currentBlockHeight = walletSyncException.BlockId - 1;
+				}
 
 				throw;
 			} finally {
@@ -183,13 +206,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
-		private class ClosureState {
-			public List<(long planBlockId, BlockModes mode)> currentPlan;
-			public Dictionary<long, SynthesizedBlock> loadedSynthesizedBlocks;
-			public long lastFullBlockSynced;
-			public long targetBlockHeight;
-			public long nextPlanBlockHeight;
-		}
 		/// <summary>
 		///     Prepare sync plans and run batch updates on the wallet
 		/// </summary>
@@ -212,12 +228,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			// ensure that captured closures dont lock variables
 			ClosureState closureState = new ClosureState();
 			
-			while(currentBlockHeight < targetBlockHeight) {
+			// Get initialized outside the loop once and must stay outside because the sync is different for mobile. It gets updated at every full block sync (which is not every block for mobile, but it is for desktop).
+			closureState.lastFullBlockSynced = currentBlockHeight;
+			
+			while (currentBlockHeight < targetBlockHeight) {
 
-				closureState.lastFullBlockSynced = currentBlockHeight;
 				closureState.nextPlanBlockHeight = currentBlockHeight + totalIncrement;
 				closureState.targetBlockHeight = targetBlockHeight;
-				
+
 				Task<(List<(long planBlockId, BlockModes mode)> currentPlan, Dictionary<long, SynthesizedBlock> loadedSynthesizedBlocks, int increment)> prefetchBlocksTask = null;
 
 				if(closureState.nextPlanBlockHeight < targetBlockHeight) {
@@ -228,7 +246,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						Dictionary<long, SynthesizedBlock> loadedBlocks = new Dictionary<long, SynthesizedBlock>();
 
-						//TODO: here it would be good to have a single multi load method instead of many separate calls
+						// TODO: Load blocks in batches instead of one at a time.
 						foreach((long planBlockId, BlockModes mode) in nextPlan.OrderBy(e => e.planBlockId)) {
 							if(mode == BlockModes.FullBlock) {
 								// load block
@@ -239,58 +257,62 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						return (nextPlan, loadedBlocks, increment);
 					});
 				}
-				
+
 				if(closureState.currentPlan != null) {
-					
+
 					// here we execute the plan and run the insertion transaction
-
 					await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(async (provider, token, lc) => {
-
+					
 						// run transaction and insert blocks
+
 						foreach((long planBlockId, BlockModes mode) in closureState.currentPlan.OrderBy(e => e.planBlockId)) {
 							(Action<BlockId, BlockId> Action, BlockId blockId, BlockId target)? syncEvent = null;
-
 							try {
 								if(mode == BlockModes.FullBlock) {
+									
 									await this.SynchronizeBlock(provider, closureState.loadedSynthesizedBlocks[planBlockId], planBlockId, closureState.lastFullBlockSynced, closureState.targetBlockHeight, taskRoutingContext, lc).ConfigureAwait(false);
+									this.rateCalculator.AddHistoryEntry(planBlockId);
+									//TODO: since the new refactor, the sync rate calculations should change. as it is, it wont be constant anymore.
+									closureState.syncRate = this.rateCalculator.CalculateSyncingRate(closureState.targetBlockHeight - planBlockId);
+									
+									//For desktop, the lastFullBlockSynced will always be the previous one. For mobile, it's not always the case.
 									closureState.lastFullBlockSynced = planBlockId;
+					
 									syncEvent = ((b, h) => {
-										this.rateCalculator.AddHistoryEntry(b);
-										
-										//TODO: since the new refactor, the sync rate calculations should change. as it is, it wont be constant anymore.
-										string syncRate = this.rateCalculator.CalculateSyncingRate(h - b);
-										// alert that we are syncing a block
-										this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, syncRate));
-									}, planBlockId, closureState.targetBlockHeight);
+											            // alert that we are syncing a block
+											            this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, closureState.syncRate));
+										            }, planBlockId, closureState.targetBlockHeight);
 								} else if(mode == BlockModes.InterpolatedMajor) {
 									syncEvent = ((b, h) => {
-										this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, ""));
-									}, planBlockId, closureState.targetBlockHeight);
-									
+											            this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, ""));
+										            }, planBlockId, closureState.targetBlockHeight);
+					
 								} else if(mode == BlockModes.InterpolatedMinor) {
 									//TODO: do something?
 								}
-
-								if (syncEvent.HasValue)
-								{
-									var action = syncEvent.Value;
+					
+								if(syncEvent.HasValue) {
+									(Action<BlockId, BlockId> Action, BlockId blockId, BlockId target) action = syncEvent.Value;
 									action.Action(action.blockId, action.target);
 								}
-
+					
 							} catch(Exception ex) {
 								throw new WalletSyncException(planBlockId, $"Failed to sync block Id {planBlockId} during wallet sync.", ex);
 							}
 						}
-
+					
 					}, lockContext).ConfigureAwait(false);
-					
+
 					currentBlockHeight += totalIncrement;
-					
+
 					closureState.currentPlan = null;
 					closureState.loadedSynthesizedBlocks = null;
 				}
 
 				await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
+
+				// reset our total increment no matter what (sometimes the next plan fetch doesnt move, so this must be reset every time)
+				totalIncrement = 0;
 				
 				if(prefetchBlocksTask != null) {
 					(closureState.currentPlan, closureState.loadedSynthesizedBlocks, totalIncrement) = await prefetchBlocksTask.ConfigureAwait(false);
@@ -335,14 +357,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					mode = BlockModes.InterpolatedMajor;
 				} else {
 					//interpolation
-					
+
 					// if anything gets done here, then uncomment the below to give it a relative cost.
 					transactionUnits -= 0; //INTERPOLATED_MINOR_UNIT_COUNT;
-					
+
 					mode = BlockModes.InterpolatedMinor;
 				}
 
 				plan.Add((synthesizedBlockId, mode));
+
 				// we passed a new block
 				++increment;
 
@@ -394,7 +417,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		private async Task SynchronizeBlock(IWalletProvider provider, SynthesizedBlock synthesizedBlock, long currentHeight, long previousBlockId, long targetHeight, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
-			Log.Information($"Performing Wallet sync for block {synthesizedBlock.BlockId} out of {Math.Max(currentHeight, synthesizedBlock.BlockId)}");
+			NLog.Default.Information($"Performing Wallet sync for block {synthesizedBlock.BlockId} out of {Math.Max(currentHeight, synthesizedBlock.BlockId)}");
 
 			// run the workflow sequence!
 			this.CheckShouldStopThrow();
@@ -402,13 +425,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			await provider.UpdateWalletBlock(synthesizedBlock, previousBlockId, async (sb, lc) => {
 
 				this.CheckShouldStopThrow();
-				Log.Verbose($"ProcessBlockImmediateAccountsImpact for block {synthesizedBlock.BlockId}...");
+				NLog.Default.Verbose($"ProcessBlockImmediateAccountsImpact for block {synthesizedBlock.BlockId}...");
 
 				// run the interpretation if any account is tracked
 				await this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateAccountsImpact(synthesizedBlock, previousBlockId, lockContext).ConfigureAwait(false);
 
 				this.CheckShouldStopThrow();
-				Log.Verbose($"InterpretNewBlockLocalWallet for block {synthesizedBlock.BlockId}...");
+				NLog.Default.Verbose($"InterpretNewBlockLocalWallet for block {synthesizedBlock.BlockId}...");
 
 				// run the interpretation if any account is tracked
 				await this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.InterpretNewBlockLocalWallet(synthesizedBlock, previousBlockId, taskRoutingContext, lockContext).ConfigureAwait(false);
@@ -425,11 +448,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 
 			if(GlobalSettings.ApplicationSettings.SynclessMode) {
-				// in mobile mode, we will never have blocks. we can represent a block we dont ahve by an empoty synthesized block
-				synthesizedBlock = this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.CreateSynthesizedBlock();
-				synthesizedBlock.BlockId = blockId;
-
-				return synthesizedBlock;
+				// In mobile mode, every synthesized block should always be cached, or else it means the wallet is missing transactions from the Light Server.
+				throw new WalletSyncException(blockId, $"Failed to sync block Id {blockId} during wallet sync.");
 			}
 
 			IBlock block = null;
@@ -452,6 +472,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		private List<SynthesizedBlock> GetFutureSynthesizedBlocks(long blockId, LockContext lockContext) {
 			return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetCachedSynthesizedBlocks(blockId, lockContext);
+		}
+
+		private class ClosureState {
+			public List<(long planBlockId, BlockModes mode)> currentPlan;
+			public long lastFullBlockSynced;
+			public Dictionary<long, SynthesizedBlock> loadedSynthesizedBlocks;
+			public long nextPlanBlockHeight;
+			public long targetBlockHeight;
+			public string syncRate;
 		}
 
 		private enum BlockModes {

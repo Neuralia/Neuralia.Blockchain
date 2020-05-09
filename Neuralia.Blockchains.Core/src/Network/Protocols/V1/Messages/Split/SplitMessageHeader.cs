@@ -75,7 +75,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 		}
 
 		public long ComputeSliceHash() {
-			var hashes = this.SlicesValues.OrderBy(s => s.index).Select(s => s.hash).ToList();
+			List<long> hashes = this.SlicesValues.OrderBy(s => s.index).Select(s => s.hash).ToList();
 
 			return ComputeSliceHash(hashes);
 		}

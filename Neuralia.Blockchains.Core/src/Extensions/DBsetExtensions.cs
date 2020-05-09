@@ -9,26 +9,25 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 
 	public static class DBsetExtensions {
 
-		public static bool AnyLocal<T_ENTITY>(this DbSet<T_ENTITY> source,Func<T_ENTITY, bool> predicate)
-			where T_ENTITY : class
-		{
+		public static bool AnyLocal<T_ENTITY>(this DbSet<T_ENTITY> source, Func<T_ENTITY, bool> predicate)
+			where T_ENTITY : class {
 			return source.Local.Any(predicate);
 		}
-		
-		public static async Task<bool> AddIfNotExists<T_SOURCE>(this DbSet<T_SOURCE> dbSet, Func<T_SOURCE> prepare, Expression<Func<T_SOURCE, bool>> predicate = null) where T_SOURCE : class, new()
-		{
-			if(prepare != null && predicate != null) {
-				if(await dbSet.AnyAsync(predicate).ConfigureAwait(false)){
+
+		public static async Task<bool> AddIfNotExists<T_SOURCE>(this DbSet<T_SOURCE> dbSet, Func<T_SOURCE> prepare, Expression<Func<T_SOURCE, bool>> predicate = null)
+			where T_SOURCE : class, new() {
+			if((prepare != null) && (predicate != null)) {
+				if(await dbSet.AnyAsync(predicate).ConfigureAwait(false)) {
 					return false;
 				}
-				
+
 				T_SOURCE entity = prepare();
 				dbSet.Add(entity);
 			}
 
 			return true;
 		}
-		
+
 		/// <summary>
 		///     Query both the database and local version at the same time.
 		/// </summary>
@@ -48,16 +47,15 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 		public static T_SOURCE SingleLocal<T_SOURCE>(this DbSet<T_SOURCE> source, Expression<Func<T_SOURCE, bool>> predicate)
 			where T_SOURCE : class {
 
-			var compiled = predicate.Compile();
-
+			Func<T_SOURCE, bool> compiled = predicate.Compile();
 
 			return source.Local.Single(compiled);
 		}
-		
+
 		public static T_SOURCE SingleAll<T_SOURCE>(this DbSet<T_SOURCE> source, Expression<Func<T_SOURCE, bool>> predicate)
 			where T_SOURCE : class {
 
-			var compiled = predicate.Compile();
+			Func<T_SOURCE, bool> compiled = predicate.Compile();
 
 			if(source.Local.Any(compiled)) {
 				return source.Local.Single(compiled);
@@ -93,9 +91,9 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 			return source.All(predicate);
 
 		}
-		
+
 		/// <summary>
-		/// delete based on a predicate
+		///     delete based on a predicate
 		/// </summary>
 		/// <param name="dbSet"></param>
 		/// <param name="predicate"></param>
@@ -110,23 +108,23 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 			} finally {
 				dbContext.ChangeTracker.AutoDetectChangesEnabled = true;
 			}
-			
+
 		}
-		
+
 		public static async Task<List<T_KEY>> DeleteById<T_SOURCE, T_KEY>(this DbSet<T_SOURCE> dbSet, DbContext dbContext, Expression<Func<T_SOURCE, T_KEY>> keysSelector, Expression<Func<T_SOURCE, bool>> selector, Func<T_KEY, T_SOURCE> factory)
 			where T_SOURCE : class {
 
-			var deleteIds = await dbSet.AsNoTracking().Where(selector).Select(keysSelector).ToListAsync().ConfigureAwait(false);
+			List<T_KEY> deleteIds = await dbSet.AsNoTracking().Where(selector).Select(keysSelector).ToListAsync().ConfigureAwait(false);
 
 			if(deleteIds.Any()) {
 				try {
 					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
 
 					// get the local ones first
-					var allEntities = dbSet.Local.Where(selector.Compile()).ToList();
+					List<T_SOURCE> allEntities = dbSet.Local.Where(selector.Compile()).ToList();
 
 					// where is missing, we make up
-					var localIds = allEntities.Select(keysSelector.Compile()).ToList();
+					List<T_KEY> localIds = allEntities.Select(keysSelector.Compile()).ToList();
 
 					allEntities.AddRange(deleteIds.Where(e => !localIds.Contains(e)).Select(factory));
 

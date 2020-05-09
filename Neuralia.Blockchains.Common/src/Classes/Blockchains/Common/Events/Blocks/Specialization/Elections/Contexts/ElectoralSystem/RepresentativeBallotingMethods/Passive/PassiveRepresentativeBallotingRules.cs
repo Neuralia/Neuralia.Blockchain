@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public PassiveRepresentativeBallotingRules() {
 
 		}
-		
+
 		public PassiveRepresentativeBallotingRules(Dictionary<Enums.MiningTiers, ushort> miningTierTotals) : base(miningTierTotals) {
 
 		}

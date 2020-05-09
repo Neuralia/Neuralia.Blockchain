@@ -1,6 +1,5 @@
 using System;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
-using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Versions {
@@ -17,7 +16,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 		public SoftwareVersion(string version) {
 
-			var parts = version.Split('.', ',');
+			string[] parts = version.Split('.', ',');
 
 			int major = int.Parse(parts[0]);
 			int minor = int.Parse(parts[1]);
@@ -29,7 +28,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 			if(parts[3].Contains("(")) {
 
-				var subparts = parts[3].Split('(');
+				string[] subparts = parts[3].Split('(');
 
 				build = int.Parse(subparts[0]);
 
@@ -95,7 +94,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 			return (this.Build == other.Build) && (this.Major == other.Major) && (this.Revision == other.Revision) && (this.Minor == other.Minor);
 		}
-		
+
 		public HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = new HashNodeList();
 

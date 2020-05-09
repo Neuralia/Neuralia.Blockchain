@@ -1,9 +1,10 @@
-﻿using System;
+﻿using System.Collections.Generic;
 using System.Linq;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -84,11 +85,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
 
-			var otherEntries = this.dataChannels.Entries.Where(e => !e.Key.HasFlag(BlockChannelUtils.BlockChannelTypes.Keys)).OrderBy(v => (int) v.Key).ToList();
+			List<KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle>> otherEntries = this.dataChannels.Entries.Where(e => !e.Key.HasFlag(BlockChannelUtils.BlockChannelTypes.Keys)).OrderBy(v => (int) v.Key).ToList();
 
 			dehydrator.Write(otherEntries.Count);
 
-			foreach(var entry in otherEntries) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle> entry in otherEntries) {
 				dehydrator.Write((ushort) entry.Key);
 
 				dehydrator.WriteNonNullable(entry.Value);
@@ -105,7 +106,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
-			var dataChannels = new ChannelsEntries<SafeArrayHandle>();
+			ChannelsEntries<SafeArrayHandle> dataChannels = new ChannelsEntries<SafeArrayHandle>();
 
 			int count = rehydrator.ReadInt();
 
@@ -121,16 +122,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public void Rehydrate(ChannelsEntries<SafeArrayHandle> dataChannels) {
 
-			using var rehydrator = DataSerializationFactory.CreateRehydrator(dataChannels.HighHeaderData);
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(dataChannels.HighHeaderData);
 
-			var results = BlockHeader.RehydrateHeaderEssentials(rehydrator);
+			(ComponentVersion<BlockType> version, SafeArrayHandle hash, BlockId blockId) results = BlockHeader.RehydrateHeaderEssentials(rehydrator);
 
 			this.BlockId = results.blockId;
 			this.Hash.Entry = results.hash.Entry;
 
 			this.dataChannels.Entries.Clear();
 
-			foreach(var entry in dataChannels.Entries) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle> entry in dataChannels.Entries) {
 				this.dataChannels.Entries.Add(entry.Key, entry.Value.Branch());
 			}
 
@@ -138,7 +139,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public void Rehydrate(ChannelsEntries<IDataRehydrator> dataChannels) {
 
-			this.Rehydrate(dataChannels.ConvertAll(rehydrator => (SafeArrayHandle)rehydrator.ReadArray()));
+			this.Rehydrate(dataChannels.ConvertAll(rehydrator => (SafeArrayHandle) rehydrator.ReadArray()));
 		}
 
 		public IBlock RehydrateBlock(IBlockchainEventsRehydrationFactory rehydrationFactory, bool buildOffsets) {

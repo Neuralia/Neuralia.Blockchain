@@ -1,6 +1,4 @@
-﻿using System;
-using Neuralia.Blockchains.Core.Network.Protocols.SplitMessages;
-using Neuralia.Blockchains.Tools;
+﻿using Neuralia.Blockchains.Core.Network.Protocols.SplitMessages;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols {

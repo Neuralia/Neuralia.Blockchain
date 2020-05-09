@@ -12,13 +12,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		where MODERATOR_KEYS_SNAPSHOT : class, IChainStateModeratorKeysEntry<MODEL_SNAPSHOT, MODERATOR_KEYS_SNAPSHOT> {
 		Func<MODEL_SNAPSHOT> CreateNewEntry { get; set; }
 
-		
 		void PerformOperation(Action<CHAIN_STATE_CONTEXT> process);
 		T PerformOperation<T>(Func<CHAIN_STATE_CONTEXT, T> process);
-		
+
 		Task PerformOperationAsync(Func<CHAIN_STATE_CONTEXT, Task> process);
 		Task<T> PerformOperationAsync<T>(Func<CHAIN_STATE_CONTEXT, Task<T>> process);
-		
+
 		MODEL_SNAPSHOT LoadFullState(CHAIN_STATE_CONTEXT db);
 		MODEL_SNAPSHOT LoadSimpleState(CHAIN_STATE_CONTEXT db);
 	}

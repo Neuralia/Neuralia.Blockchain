@@ -7,16 +7,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public BlockValidationResult(ValidationResults result) : base(result) {
 		}
 
-		public BlockValidationResult(ValidationResults result, EventValidationErrorCode errorCode) : base(result, errorCode) {
+		public BlockValidationResult(ValidationResults result, IEventValidationErrorCodeBase errorCode) : base(result, errorCode) {
 		}
 
-		public BlockValidationResult(ValidationResults result, List<EventValidationErrorCode> errorCodes) : base(result, errorCodes) {
+		public BlockValidationResult(ValidationResults result, List<IEventValidationErrorCodeBase> errorCodes) : base(result, errorCodes) {
 		}
 
 		public BlockValidationResult(ValidationResults result, BlockValidationErrorCode errorCode) : base(result, errorCode) {
 		}
 
-		public BlockValidationResult(ValidationResults result, List<BlockValidationErrorCode> errorCodes) : base(result, errorCodes?.Cast<EventValidationErrorCode>().ToList()) {
+		public BlockValidationResult(ValidationResults result, List<BlockValidationErrorCode> errorCodes) : base(result, errorCodes?.Cast<IEventValidationErrorCodeBase>().ToList()) {
 		}
 
 		public override EventValidationException GenerateException() {
@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 	}
 
-	public class BlockValidationErrorCodes : EventValidationErrorCodes {
+	public class BlockValidationErrorCodes : EventValidationErrorCodes<BlockValidationErrorCode> {
 		public readonly BlockValidationErrorCode GENESIS_HASH_SET;
 		public readonly BlockValidationErrorCode GENESIS_PTAH_HASH_VERIFICATION_FAILED;
 		public readonly BlockValidationErrorCode INVALID_BLOCK_KEY_CORRELATION_TYPE;
@@ -40,32 +40,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 
 		public BlockValidationErrorCodes() {
-			this.LAST_BLOCK_HEIGHT_INVALID = this.CreateChildConstant();
-			this.INVALID_DIGEST_KEY = this.CreateChildConstant();
-			this.GENESIS_HASH_SET = this.CreateChildConstant();
-			this.GENESIS_PTAH_HASH_VERIFICATION_FAILED = this.CreateChildConstant();
-			this.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED = this.CreateChildConstant();
 
-			this.INVALID_BLOCK_SIGNATURE_TYPE = this.CreateChildConstant();
-			this.INVALID_BLOCK_KEY_CORRELATION_TYPE = this.CreateChildConstant();
+			this.CreateBaseConstant(ref this.LAST_BLOCK_HEIGHT_INVALID, nameof(this.LAST_BLOCK_HEIGHT_INVALID));
+			this.CreateBaseConstant(ref this.INVALID_DIGEST_KEY, nameof(this.INVALID_DIGEST_KEY));
+			this.CreateBaseConstant(ref this.GENESIS_HASH_SET, nameof(this.GENESIS_HASH_SET));
+			this.CreateBaseConstant(ref this.GENESIS_PTAH_HASH_VERIFICATION_FAILED, nameof(this.GENESIS_PTAH_HASH_VERIFICATION_FAILED));
+			this.CreateBaseConstant(ref this.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED, nameof(this.SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED));
+
+			this.CreateBaseConstant(ref this.INVALID_BLOCK_SIGNATURE_TYPE, nameof(this.INVALID_BLOCK_SIGNATURE_TYPE));
+			this.CreateBaseConstant(ref this.INVALID_BLOCK_KEY_CORRELATION_TYPE, nameof(this.INVALID_BLOCK_KEY_CORRELATION_TYPE));
 
 			//this.PrintValues(";");		
 		}
 
-		public static new BlockValidationErrorCodes Instance { get; } = new BlockValidationErrorCodes();
+		public static BlockValidationErrorCodes Instance { get; } = new BlockValidationErrorCodes();
 
 		public BlockValidationErrorCode CreateChildConstant(BlockValidationErrorCode offset = default) {
 			return new BlockValidationErrorCode(base.CreateChildConstant(offset).Value);
 		}
 	}
 
-	public class BlockValidationErrorCode : EventValidationErrorCode {
-
+	public class BlockValidationErrorCode : EventValidationErrorCodeBase<BlockValidationErrorCode> {
 		public BlockValidationErrorCode() {
 		}
 
 		public BlockValidationErrorCode(ushort value) : base(value) {
 		}
+
+		public override string ErrorPrefix => "BLK";
 
 		public static implicit operator BlockValidationErrorCode(ushort d) {
 			return new BlockValidationErrorCode(d);

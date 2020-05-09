@@ -27,9 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		IAccountAttribute Clone(IAccountAttribute source);
 		ISnapshot Clone(ISnapshot source);
 		IJointMemberAccount Clone(IJointMemberAccount source);
-		
-		
-		
+
 		// account keys utils
 		string GenerateCompositeKey(AccountId accountId, byte ordinal);
 		string GenerateCompositeKey(long accountId, byte ordinal);
@@ -107,7 +105,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public virtual void Copy(IAccountAttribute source, IAccountAttribute destination) {
 			destination.CorrelationId = source.CorrelationId;
 			destination.AttributeType = source.AttributeType;
-			
+
 			destination.Start = source.Start;
 			destination.Expiration = source.Expiration;
 
@@ -219,6 +217,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			throw new InvalidOperationException();
 		}
 
+		public string GenerateCompositeKey(AccountId accountId, byte ordinal) {
+			return this.GenerateCompositeKey(accountId.ToLongRepresentation(), ordinal);
+		}
+
+		public string GenerateCompositeKey(long accountId, byte ordinal) {
+			return accountId + ordinal.ToString();
+		}
+
+		public string GenerateCompositeKey(IAccountKeysSnapshot accountKey) {
+			return this.GenerateCompositeKey(accountKey.AccountId, accountKey.OrdinalId);
+		}
+
 		protected T GetCopy<T>(T source)
 			where T : ISnapshot {
 			return (T) Activator.CreateInstance(source.GetType());
@@ -244,18 +254,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 				destination.AddCollectionEntry(newEntry);
 			}
-		}
-
-
-		public string GenerateCompositeKey(AccountId accountId, byte ordinal) {
-			return this.GenerateCompositeKey(accountId.ToLongRepresentation(), ordinal);
-		}
-		
-		public string GenerateCompositeKey(long accountId, byte ordinal) {
-			return accountId.ToString() + ordinal.ToString();
-		}
-		public string GenerateCompositeKey(IAccountKeysSnapshot accountKey) {
-			return this.GenerateCompositeKey(accountKey.AccountId, accountKey.OrdinalId);
 		}
 	}
 }

@@ -1,10 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using MoreLinq;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
@@ -14,7 +13,6 @@ using Neuralia.Blockchains.Core.Serialization.OffsetCalculators;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Neuralia.BouncyCastle.extra;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1 {
 	public interface IFinalElectionResults : IElectionResult {
@@ -25,22 +23,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		IDelegateResults CreateDelegateResult();
 
 		Dictionary<AccountId, IElectedResults> GetTierElectedCandidates(Enums.MiningTiers miningTier);
-		
 	}
 
 	public abstract class FinalElectionResults : ElectionResult, IFinalElectionResults {
 		public Dictionary<AccountId, IDelegateResults> DelegateAccounts { get; } = new Dictionary<AccountId, IDelegateResults>();
 		public Dictionary<AccountId, IElectedResults> ElectedCandidates { get; } = new Dictionary<AccountId, IElectedResults>();
-		
+
 		public Dictionary<AccountId, IElectedResults> GetTierElectedCandidates(Enums.MiningTiers miningTier) {
 			return this.ElectedCandidates.Where(e => e.Value.ElectedTier == miningTier).ToDictionary();
 		}
-		
+
 		public override void Rehydrate(IDataRehydrator rehydrator, Dictionary<int, TransactionId> transactionIndexesTree) {
-			
+
 			this.ElectedCandidates.Clear();
 			this.DelegateAccounts.Clear();
-			
+
 			base.Rehydrate(rehydrator, transactionIndexesTree);
 
 			this.RehydrateHeader(rehydrator);
@@ -54,9 +51,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			SafeArrayHandle typeBytes = rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, count));
 			using SpecialIntegerSizeArray electorTypesArray = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, typeBytes, count);
 
-			var sortedDelegateAccounts = this.DelegateAccounts.Keys.OrderBy(k => k).ToList();
+			List<AccountId> sortedDelegateAccounts = this.DelegateAccounts.Keys.OrderBy(k => k).ToList();
 
-			var parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
+			AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
 			parameters.RehydrateExtraData = (accountId, offset, index, dh) => {
 
@@ -79,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				adaptiveLong.Rehydrate(rehydrator);
 				uint transactionCount = (uint) adaptiveLong.Value;
 
-				var assignedTransactions = new List<TransactionId>();
+				List<TransactionId> assignedTransactions = new List<TransactionId>();
 
 				if(transactionCount != 0) {
 
@@ -116,15 +113,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			base.JsonDehydrate(jsonDeserializer);
 
 			jsonDeserializer.SetArray("DelegateAccounts", this.DelegateAccounts, (js, e) => {
-				js.WriteObject((s) => {
+				js.WriteObject(s => {
 					s.SetProperty("AccountId", e.Key);
 					s.SetProperty("Results", e.Value);
 				});
 			});
 
-			foreach(var tier in ElectedCandidates.Select(e => e.Value.ElectedTier).Distinct()) {
+			foreach(Enums.MiningTiers tier in this.ElectedCandidates.Select(e => e.Value.ElectedTier).Distinct()) {
 				jsonDeserializer.SetArray($"{tier}ElectedCandidates", this.GetTierElectedCandidates(tier), (js, e) => {
-					js.WriteObject((s) => {
+					js.WriteObject(s => {
 						s.SetProperty("AccountId", e.Key);
 						s.SetProperty("Results", e.Value);
 					});
@@ -139,17 +136,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			nodeList.Add(BlockchainHashingUtils.GenerateFinalElectionResultNodeList(this.DelegateAccounts));
 
-
 			nodeList.Add(this.ElectedCandidates.Count);
 			nodeList.Add(BlockchainHashingUtils.GenerateFinalElectionResultNodeList(this.ElectedCandidates));
-			
+
 			return nodeList;
 		}
 
 		protected virtual void RehydrateHeader(IDataRehydrator rehydrator) {
 
 			this.DelegateAccounts.Clear();
-			var parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
+			AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
 			parameters.RehydrateExtraData = (delegateAccountId, offset, index, dh) => {
 

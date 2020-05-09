@@ -6,29 +6,29 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks {
 	public interface IXmssBlockNextAccountSignature : IBlockNextAccountSignature {
-		
+
 		bool KeyChange { get; set; }
 
 		Enums.KeyHashBits HashBits { get; set; }
 		byte TreeHeight { get; set; }
-		SafeArrayHandle PublicKey { get;  }
+		SafeArrayHandle PublicKey { get; }
 	}
 
 	public class XmssBlockNextAccountSignature : BlockNextAccountSignature, IXmssBlockNextAccountSignature {
-		
+
 		public bool KeyChange { get; set; }
 
 		public Enums.KeyHashBits HashBits { get; set; } = Enums.KeyHashBits.SHA3_256;
 		public byte TreeHeight { get; set; }
-		public SafeArrayHandle PublicKey { get;  } = SafeArrayHandle.Create();
-		
+		public SafeArrayHandle PublicKey { get; } = SafeArrayHandle.Create();
+
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = base.GetStructuresArray();
 
 			nodelist.Add(this.KeyChange);
 
 			if(this.KeyChange) {
-				nodelist.Add((byte)this.HashBits);
+				nodelist.Add((byte) this.HashBits);
 				nodelist.Add(this.TreeHeight);
 				nodelist.Add(this.PublicKey);
 			}
@@ -54,9 +54,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			base.Rehydrate(rehydrator);
 
 			this.KeyChange = rehydrator.ReadBool();
-			
+
 			if(this.KeyChange) {
-				this.HashBits = (Enums.KeyHashBits)rehydrator.ReadByte();
+				this.HashBits = (Enums.KeyHashBits) rehydrator.ReadByte();
 				this.TreeHeight = rehydrator.ReadByte();
 				this.PublicKey.Entry = rehydrator.ReadArray();
 			}
@@ -66,12 +66,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			base.JsonDehydrate(jsonDeserializer);
 
 			jsonDeserializer.SetProperty("KeyChange", this.KeyChange);
-			
-			if(this.KeyChange) {
-				jsonDeserializer.SetProperty("HashBits", this.HashBits.ToString());
-				jsonDeserializer.SetProperty("TreeHeight", this.TreeHeight);
-				jsonDeserializer.SetProperty("PublicKey", this.PublicKey);
-			}
+			jsonDeserializer.SetProperty("HashBits", this.HashBits.ToString());
+			jsonDeserializer.SetProperty("TreeHeight", this.TreeHeight);
+			jsonDeserializer.SetProperty("PublicKey", this.PublicKey);
 		}
 	}
 }

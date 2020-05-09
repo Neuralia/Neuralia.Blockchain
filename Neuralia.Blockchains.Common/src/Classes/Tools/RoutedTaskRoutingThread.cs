@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.System;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Threading;
@@ -29,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		public RoutedTaskRoutingThread(CENTRAL_COORDINATOR centralCoordinator, int maxParallelTasks, int sleepTime = 100) : base(sleepTime) {
 			this.RoutedTaskRoutingReceiver = new SpecializedRoutedTaskRoutingReceiver<T>(centralCoordinator, this as T, true, maxParallelTasks);
 			this.CentralCoordinator = centralCoordinator;
-			
+
 			//TODO: for production, give it 30 seconds
 			this.hibernateTimeoutSpan = TimeSpan.FromSeconds(30 * 60);
 		}
@@ -49,7 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			try {
 				this.RoutedTaskRoutingReceiver.ReceiveTask(task);
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to post task");
+				NLog.Default.Error(ex, "Failed to post task");
 			}
 
 			// now lets wakeup our thread and continue
@@ -121,7 +122,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			await base.Initialize(lockContext).ConfigureAwait(false);
 
 			if(this.IsOverride(nameof(Initialize), new[] {typeof(T), typeof(TaskRoutingContext), typeof(LockContext)})) {
-				var task = new RoutedTask<T, bool>();
+				RoutedTask<T, bool> task = new RoutedTask<T, bool>();
 
 				task.SetAction((workflow, taskRoutingContext, lc) => this.Initialize(workflow, taskRoutingContext, lc));
 
@@ -133,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			await base.Terminate(clean, lockContext).ConfigureAwait(false);
 
 			if(this.IsOverride(nameof(Terminate), new[] {typeof(bool), typeof(T), typeof(TaskRoutingContext), typeof(LockContext)})) {
-				var task = new RoutedTask<T, bool>();
+				RoutedTask<T, bool> task = new RoutedTask<T, bool>();
 
 				task.SetAction((workflow, taskRoutingContext, lc) => this.Terminate(clean, workflow, taskRoutingContext));
 
@@ -145,7 +146,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 			try {
 				if(this.IsOverride(nameof(ProcessLoop), new[] {typeof(T), typeof(TaskRoutingContext), typeof(LockContext)})) {
-					var task = new RoutedTask<T, bool>();
+					RoutedTask<T, bool> task = new RoutedTask<T, bool>();
 
 					task.SetAction(this.ProcessLoop);
 
@@ -154,7 +155,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 					await this.RoutedTaskRoutingReceiver.CheckTasks(async () => this.CheckShouldCancel()).ConfigureAwait(false);
 				}
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to process task loop");
+				NLog.Default.Error(ex, "Failed to process task loop");
 			}
 		}
 

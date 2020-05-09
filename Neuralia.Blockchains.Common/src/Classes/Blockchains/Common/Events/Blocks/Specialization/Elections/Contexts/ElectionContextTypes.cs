@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		static ElectionContextTypes() {
 		}
 
-		private ElectionContextTypes() : base(100) {
+		private ElectionContextTypes() : base((ushort) 100) {
 			this.Active = this.CreateBaseConstant();
 			this.Passive = this.CreateBaseConstant();
 		}

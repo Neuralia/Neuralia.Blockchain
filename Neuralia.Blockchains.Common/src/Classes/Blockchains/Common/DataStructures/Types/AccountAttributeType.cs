@@ -31,10 +31,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 	public class AccountAttributesTypes : UShortConstantSet<AccountAttributeType> {
 		public readonly AccountAttributeType GATED_ACCOUNT;
 		public readonly AccountAttributeType RESETABLE_ACCOUNT;
-		
-		public readonly AccountAttributeType THREE_WAY_GATED_TRANSFER;
-		// account types
 
+		public readonly AccountAttributeType THREE_WAY_GATED_TRANSFER;
+
+		// account types
 
 		static AccountAttributesTypes() {
 		}

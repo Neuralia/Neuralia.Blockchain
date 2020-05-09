@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers.Network;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Exceptions;
 using Neuralia.Blockchains.Tools.Locking;
@@ -36,8 +39,6 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 	}
 
 	public static class NetworkingWorkflow {
-
-		
 	}
 
 	public abstract class NetworkingWorkflow<MESSAGE_SET, HEADER, R> : Workflow<R>, INetworkingWorkflow<MESSAGE_SET, HEADER, R>
@@ -54,7 +55,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		public NetworkingWorkflow(ServiceSet<R> serviceSet) : base(serviceSet) {
 
 			this.networkMessageReceiver = new NetworkMessageReceiver<MESSAGE_SET>(serviceSet);
-			
+
 			this.ClientId = Guid.Empty;
 		}
 
@@ -63,11 +64,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// </summary>
 		public bool PeerUnique { get; protected set; } = false;
 
+		protected bool HasMessages => this.networkMessageReceiver.HasMessage;
+
 		/// <summary>
 		///     an ID to correlate between servers and clients
 		/// </summary>
 		public uint CorrelationId { get; protected set; }
-		
+
 		/// <summary>
 		///     an session ID to correlate between servers and clients when there are multiple instances of the same workflow
 		/// </summary>
@@ -91,7 +94,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			try {
 				this.networkMessageReceiver.ReceiveNetworkMessage(message);
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to post network message");
+				NLog.Default.Error(ex, "Failed to post network message");
 			} finally {
 				this.Awaken();
 			}
@@ -133,15 +136,15 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			}
 
 			//TODO: is the datetime precision high enough here?
-			DateTime timeoutTime = DateTime.UtcNow + timeout.Value;
+			DateTime timeoutTime = DateTimeEx.CurrentTime + timeout.Value;
 
-			var messages = new List<MESSAGE_SET>();
+			List<MESSAGE_SET> messages = new List<MESSAGE_SET>();
 
 			while(true) {
 				try {
 					this.CheckShouldCancel();
 
-					var result = this.networkMessageReceiver.CheckMessages(ProcessSingle, ProcessBatch);
+					List<MESSAGE_SET> result = this.networkMessageReceiver.CheckMessages(ProcessSingle, ProcessBatch);
 
 					// now process the list
 					if((result != null) && result.Any()) {
@@ -152,7 +155,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 						}
 					}
 
-					DateTime now = DateTime.UtcNow;
+					DateTime now = DateTimeEx.CurrentTime;
 
 					if(now > timeoutTime) {
 						// we timed out
@@ -166,7 +169,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 					this.Hibernate(TimeSpan.FromMilliseconds(minTimeout), autoEvent);
 
 				} catch(ThreadTimeoutException ex) {
-					//Log.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
+					//NLog.Default.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
 
 					// we return what we have
 					return messages;
@@ -188,7 +191,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			where SPECIALIZED_MESSAGE_SET : class, MESSAGE_SET, INetworkMessageSet<T, HEADER, R>
 			where R : IRehydrationFactory {
 
-			var messages = this.WaitNetworkMessages(messageSet => {
+			List<MESSAGE_SET> messages = this.WaitNetworkMessages(messageSet => {
 				if(messageSet.BaseMessage is T) {
 					return true;
 				}
@@ -204,7 +207,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 				// let's check if its the same message by hashing them
 				xxHashSakuraTree hasher = new xxHashSakuraTree();
 
-				var messageHashes = messages.Cast<T>().Select(m => {
+				IEnumerable<long> messageHashes = messages.Cast<T>().Select(m => {
 
 					using HashNodeList nodes = m.GetStructuresArray();
 
@@ -218,14 +221,14 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 				}
 
 				// ok, we will take the earliest one and return the later ones
-				var orderedMessages = messages.OrderBy(m => m.ReceivedTime).ToList();
+				List<MESSAGE_SET> orderedMessages = messages.OrderBy(m => m.ReceivedTime).ToList();
 
 				// return them ot the received queue
 				foreach(MESSAGE_SET message in orderedMessages.Skip(1)) {
 					this.networkMessageReceiver.ReceiveNetworkMessage(message);
 				}
 
-				Log.Warning("We got multiple different messages of the expected type, we were waiting for only one. The extra messages are returned to the queue");
+				NLog.Default.Warning("We got multiple different messages of the expected type, we were waiting for only one. The extra messages are returned to the queue");
 
 				return orderedMessages.First() as SPECIALIZED_MESSAGE_SET;
 			}
@@ -241,7 +244,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// <exception cref="WorkflowException"></exception>
 		protected MESSAGE_SET WaitSingleNetworkMessage(IEnumerable<Type> types, TimeSpan? timeout = null, ManualResetEventSlim autoEvent = null) {
 
-			var messages = this.WaitNetworkMessages(types, timeout, 1, autoEvent);
+			List<MESSAGE_SET> messages = this.WaitNetworkMessages(types, timeout, 1, autoEvent);
 
 			if(messages.Count == 0) {
 				throw new MessageReceptionException("We got no message, we were waiting for only one");
@@ -251,7 +254,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 				// let's check if its the same message by hashing them
 				xxHasher64 hasher = new xxHasher64();
 
-				var messageHashes = messages.Select(m => hasher.HashLong(m.Dehydrate())).Distinct();
+				IEnumerable<long> messageHashes = messages.Select(m => hasher.HashLong(m.Dehydrate())).Distinct();
 
 				if(messageHashes.Count() == 1) {
 					// the are the same message repeated. lets just take one.
@@ -259,14 +262,14 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 				}
 
 				// ok, we will take the earliest one and return the later ones
-				var orderedMessages = messages.OrderBy(m => m.ReceivedTime).ToList();
+				List<MESSAGE_SET> orderedMessages = messages.OrderBy(m => m.ReceivedTime).ToList();
 
 				// return them ot the received queue
 				foreach(MESSAGE_SET message in orderedMessages.Skip(1)) {
 					this.networkMessageReceiver.ReceiveNetworkMessage(message);
 				}
 
-				Log.Warning("We got multiple different messages of the expected type, we were waiting for only one. The extra messages are returned to the queue");
+				NLog.Default.Warning("We got multiple different messages of the expected type, we were waiting for only one. The extra messages are returned to the queue");
 
 				return orderedMessages.First();
 			}
@@ -274,8 +277,6 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			return messages.Single();
 		}
 
-		protected bool HasMessages => this.networkMessageReceiver.HasMessage;
-		
 		/// <summary>
 		///     Get a list of messages of a specific type. wait untl we receive them
 		/// </summary>
@@ -284,7 +285,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			where T : class, INetworkMessage<R>
 			where R : IRehydrationFactory {
 
-			var messages = this.WaitNetworkMessages(messageSet => {
+			List<MESSAGE_SET> messages = this.WaitNetworkMessages(messageSet => {
 				if(messageSet.BaseMessage is T) {
 					return true;
 				}
@@ -302,7 +303,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		protected List<MESSAGE_SET> WaitNetworkMessages(IEnumerable<Type> messageTypes, TimeSpan? timeout = null, int expectedCount = -1, ManualResetEventSlim autoEvent = null) {
 			return this.WaitNetworkMessages(messageSet => messageTypes.Contains(messageSet.BaseMessage.GetType()), null, timeout, expectedCount, autoEvent);
 		}
-		
+
 		protected override void LogWorkflowException(Exception ex) {
 
 			// dont show send message exceptions

@@ -1,6 +1,5 @@
 using System;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys {

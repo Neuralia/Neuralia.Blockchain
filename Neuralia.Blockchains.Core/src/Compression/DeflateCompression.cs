@@ -12,6 +12,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 			using(RecyclableMemoryStream output = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("compress")) {
 				using(RecyclableMemoryStream input = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("compress", data.Bytes, data.Offset, data.Length)) {
 					this.CompressData(input, output, level);
+
 					return ByteArray.Create(output);
 				}
 			}

@@ -12,6 +12,15 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		public static readonly int Default256Difficulty = (int) Math.Pow(10, DEFAULT_PRECISION);
 		public static readonly long Default512Difficulty = (long) Math.Pow(10, DEFAULT_PRECISION);
 
+		public static BigInteger GetBigInteger(SafeArrayHandle array) {
+			return GetBigInteger(array.ToExactByteArray());
+		}
+
+		public static BigInteger GetBigInteger(byte[] array) {
+			// here we must concat "00" to make sure it is unsigned positive.
+			return new BigInteger(array.Concat(new byte[] {0}).ToArray());
+		}
+
 	#region Hash Utility Functions 256 bits
 
 		public static decimal ConvertIncremental256DifficultyToDecimal(int difficulty) {
@@ -66,11 +75,12 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 	#region Hash Utility Functions 512 bits
 
 		static HashDifficultyUtils() {
-			var bytes = new byte[512>>3];
+			byte[] bytes = new byte[512 >> 3];
 
 			for(int d = 0; d < bytes.Length; d++) {
 				bytes[d] = 255;
 			}
+
 			MaxHash512 = GetBigInteger(bytes);
 		}
 
@@ -82,24 +92,16 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 		public static BigInteger GetHash512TargetByIncrementalDifficulty(long difficulty) {
 
-			var diff = new BigInteger(difficulty / Default512Difficulty);
+			BigInteger diff = new BigInteger(difficulty / Default512Difficulty);
 
 			if(diff == 0) {
 				diff = 1;
 			}
+
 			return MaxHash512 / diff;
 		}
 
-
 	#endregion
 
-		public static BigInteger GetBigInteger(SafeArrayHandle array) {
-			return GetBigInteger(array.ToExactByteArray());
-		}
-		
-		public static BigInteger GetBigInteger(byte[] array) {
-			// here we must concat "00" to make sure it is unsigned positive.
-			return new BigInteger(array.Concat(new byte[] {0}).ToArray());
-		}
 	}
 }

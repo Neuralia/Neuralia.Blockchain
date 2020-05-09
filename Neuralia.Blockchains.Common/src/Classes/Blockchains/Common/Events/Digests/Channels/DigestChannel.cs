@@ -28,13 +28,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where CHANEL_BANDS : struct, Enum
 		where CARD : class
 		where KEY : struct, IEquatable<KEY> {
-
-		private bool initialized = false;
 		public const string CHANNELS_FOLDER = "channels";
 		protected readonly string baseFolder;
 
 		protected readonly DigestChannelBandIndexSet<CHANEL_BANDS, CARD, KEY, INPUT_QUERY_KEY, QUERY_KEY> channelBandIndexSet;
 		protected readonly string scopeFolder;
+
+		private bool initialized;
 
 		public DigestChannel(string folder, string channelName) {
 
@@ -80,7 +80,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return this.channelBandIndexSet.BandIndices[indexId].GetFileBytes(fileId, partIndex, offset, length);
 		}
 
-		public void WriteFileBytes(int indexId, int fileId, uint partIndex,  SafeArrayHandle data) {
+		public void WriteFileBytes(int indexId, int fileId, uint partIndex, SafeArrayHandle data) {
 			this.channelBandIndexSet.BandIndices[indexId].WriteFileBytes(fileId, partIndex, data);
 		}
 

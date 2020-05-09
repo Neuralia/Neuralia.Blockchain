@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Core.Debugging {
 		}
 
 		public static List<string> SearchDirectoryForFiles(string sDir, string filename) {
-			var files = new List<string>();
+			List<string> files = new List<string>();
 
 			try {
 				foreach(string d in Directory.GetDirectories(sDir)) {

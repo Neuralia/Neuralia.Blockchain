@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		/// <param name="entry"></param>
 		/// <returns></returns>
 		public static decimal Normalize(this decimal entry) {
-			var bits = decimal.GetBits(entry);
+			int[] bits = decimal.GetBits(entry);
 
 			uint lo = (uint) bits[0];
 			uint mid = (uint) bits[1];

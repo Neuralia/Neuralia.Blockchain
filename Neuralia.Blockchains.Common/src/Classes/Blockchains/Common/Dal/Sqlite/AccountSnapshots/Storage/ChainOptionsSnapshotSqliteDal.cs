@@ -32,7 +32,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		public void EnsureEntryCreated(Action<ACCOUNT_SNAPSHOT_CONTEXT> operation) {
 			this.PerformOperation(operation);
 		}
-		
 
 		public Task<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshot(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task<CHAIN_OPTIONS_SNAPSHOT>> operation) {
 			return this.PerformOperationAsync(operation);
@@ -44,20 +43,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		}
 
 		public async Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
-			var result = new List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>();
+			List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> result = new List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>();
 
 			(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction) trx = await this.BeginHoldingTransaction().ConfigureAwait(false);
 			result.Add(trx);
-			
+
 			LockContext lockContext = null;
+
 			List<Func<ACCOUNT_SNAPSHOT_CONTEXT, Task>> wrappedOperations = actions.SelectMany(e => e.Value).Select(o => {
 
-				Task Func(ACCOUNT_SNAPSHOT_CONTEXT db) => o(db, lockContext);
+				Task Func(ACCOUNT_SNAPSHOT_CONTEXT db) {
+					return o(db, lockContext);
+				}
 
 				return (Func<ACCOUNT_SNAPSHOT_CONTEXT, Task>) Func;
 			}).ToList();
 
-			await this.PerformContextOperationsAsync(trx.db, wrappedOperations ).ConfigureAwait(false);
+			await this.PerformContextOperationsAsync(trx.db, wrappedOperations).ConfigureAwait(false);
 
 			return result;
 		}

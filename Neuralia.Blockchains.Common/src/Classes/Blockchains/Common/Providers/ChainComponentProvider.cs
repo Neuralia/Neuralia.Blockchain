@@ -8,7 +8,7 @@ using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
-	public interface IChainComponentProvider: IDisposableExtended {
+	public interface IChainComponentProvider : IDisposableExtended {
 		IWalletProviderProxy WalletProviderBase { get; }
 		IChainStateProvider ChainStateProviderBase { get; }
 		IChainConfigurationProvider ChainConfigurationProviderBase { get; }
@@ -22,6 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		Task Initialize(LockContext lockContext);
 	}
+
 	public interface IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainComponentProvider
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
@@ -36,7 +37,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainNetworkingProviderBase { get; }
 
 		IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> InterpretationProviderBase { get; }
-
 	}
 
 	public interface IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, out WALLET_PROVIDER_PROXY, out ASSEMBLY_PROVIDER, out MAIN_FACTORY_PROVIDER, out BLOCKCHAIN_PROVIDER, out CHAIN_STATE_PROVIDER, out CHAIN_CONFIGURATION_PROVIDER, out CHAIN_VALIDATION_PROVIDER, out CHAIN_MINING_PROVIDER, out CHAIN_LOADING_PROVIDER, out CHAIN_WRITING_PROVIDER, out ACCREDITATION_CERTIFICATE_PROVIDER, out ACCOUNT_SNAPSHOTS_PROVIDER, out CHAIN_NETWORKING_PROVIDER, out INTERPRETATION_PROVIDER> : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where WALLET_PROVIDER_PROXY : IWalletProviderProxy
 		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where MAIN_FACTORY_PROVIDER : IChainFactoryProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where BLOCKCHAIN_PROVIDER :  IBlockchainProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+		where BLOCKCHAIN_PROVIDER : IBlockchainProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_STATE_PROVIDER : IChainStateProvider
 		where CHAIN_CONFIGURATION_PROVIDER : IChainConfigurationProvider
 		where CHAIN_VALIDATION_PROVIDER : IChainValidationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -85,7 +85,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where WALLET_PROVIDER_PROXY : IWalletProviderProxy
 		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where MAIN_FACTORY_PROVIDER : IChainFactoryProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where BLOCKCHAIN_PROVIDER :  IBlockchainProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+		where BLOCKCHAIN_PROVIDER : IBlockchainProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_STATE_PROVIDER : IChainStateProvider
 		where CHAIN_CONFIGURATION_PROVIDER : IChainConfigurationProvider
 		where CHAIN_VALIDATION_PROVIDER : IChainValidationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -112,9 +112,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.ChainNetworkingProvider = chainNetworkingProvider;
 			this.InterpretationProvider = interpretationProvider;
 
-
 			this.Providers.Add(this.WalletProvider);
-			this.Providers.Add(((IWalletProviderProxyInternal)this.WalletProvider).UnderlyingWalletProvider);
+			this.Providers.Add(((IWalletProviderProxyInternal) this.WalletProvider).UnderlyingWalletProvider);
 			this.Providers.Add(this.AssemblyProvider);
 			this.Providers.Add(this.ChainFactoryProvider);
 			this.Providers.Add(this.BlockchainProvider);
@@ -146,7 +145,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public IChainValidationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainValidationProviderBase => this.ChainValidationProvider;
 		public IChainMiningProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainMiningProviderBase => this.ChainMiningProvider;
-		
 
 		public IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainNetworkingProviderBase => this.ChainNetworkingProvider;
 
@@ -172,7 +170,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public CHAIN_CONFIGURATION_PROVIDER ChainConfigurationProvider { get; }
 
 		public CHAIN_LOADING_PROVIDER ChainDataLoadProvider { get; }
-		public CHAIN_WRITING_PROVIDER ChainDataWriteProvider => (CHAIN_WRITING_PROVIDER)this.ChainDataLoadProvider;
+		public CHAIN_WRITING_PROVIDER ChainDataWriteProvider => (CHAIN_WRITING_PROVIDER) this.ChainDataLoadProvider;
 
 		public ACCREDITATION_CERTIFICATE_PROVIDER AccreditationCertificateProvider { get; }
 
@@ -184,19 +182,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public abstract ICardUtils CardUtils { get; }
 		public List<IChainProvider> Providers { get; } = new List<IChainProvider>();
-		
-		public async Task Initialize(LockContext lockContext){
-			
-			foreach(var provider in this.Providers) {
+
+		public async Task Initialize(LockContext lockContext) {
+
+			foreach(IChainProvider provider in this.Providers) {
 				await provider.Initialize(lockContext).ConfigureAwait(false);
 			}
-			
-			foreach(var provider in this.Providers) {
+
+			foreach(IChainProvider provider in this.Providers) {
 				await provider.PostInitialize().ConfigureAwait(false);
 			}
 		}
 
-		#region disposable
+	#region disposable
 
 		public bool IsDisposed { get; private set; }
 
@@ -206,7 +204,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		private void Dispose(bool disposing) {
-			
+
 			if(disposing && !this.IsDisposed) {
 				this.DisposeAll();
 			}
@@ -215,13 +213,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		protected virtual void DisposeAll() {
-			foreach(var provider in this.Providers) {
+			foreach(IChainProvider provider in this.Providers) {
 				try {
 					if(provider is IDisposable disposable) {
 						disposable.Dispose();
 					}
 				} catch {
-					
+
 				}
 			}
 		}
@@ -230,7 +228,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.Dispose(false);
 		}
 
-		#endregion
+	#endregion
+
 	}
-	
+
 }

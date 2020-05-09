@@ -32,31 +32,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 				long currentBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
 				int blockGossipCacheProximityLevel = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
 
-				var accept =  blockGossipMessageMetadataDetails.BlockId > currentBlockHeight && blockGossipMessageMetadataDetails.BlockId <= currentBlockHeight + blockGossipCacheProximityLevel;
+				bool accept = (blockGossipMessageMetadataDetails.BlockId > currentBlockHeight) && (blockGossipMessageMetadataDetails.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel));
 
-				if (accept){
+				if(accept) {
 					// ok, here we decide to accept the block. because we dont want the sync to ALSO download the block, we will give it some time to complete by gossip.
 					// here we attempt to acquire a lock, but we still accept it, because even if we have it, we want to propagate the message
 					this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.AttemptLockBlockDownload(blockGossipMessageMetadataDetails.BlockId);
 				}
+
 				return accept;
 			}
-			else if(gossipGroupMessageInfo.GossipMessageMetadata?.GossipMessageMetadataDetails is TransactionGossipMessageMetadataDetails transactionGossipMessageMetadataDetails) {
+
+			if(gossipGroupMessageInfo.GossipMessageMetadata?.GossipMessageMetadataDetails is TransactionGossipMessageMetadataDetails transactionGossipMessageMetadataDetails) {
 
 				if(!transactionGossipMessageMetadataDetails.IsPresentation == false) {
 					// its a regular transcation, jsut take it
 					return true;
 				}
-				
+
 				if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.AllowGossipPresentations) {
 					// its a regular transcation, jsut take it
 					return true;
 				}
-				
+
 				// ok, its a presentation transaction. accept it only if we really want to
 				return this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations;
 			}
-			
+
 			return true;
 		}
 	}

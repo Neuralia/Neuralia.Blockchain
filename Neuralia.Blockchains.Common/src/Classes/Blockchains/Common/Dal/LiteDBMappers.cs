@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using LiteDB;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snapshots;
+using Neuralia.Blockchains.Components.Blocks;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Specialized;
 using Neuralia.Blockchains.Tools.Data;
@@ -26,14 +26,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => ulong.Parse(bson.AsString.ToString()));
 
 			RegisterArrayTypes();
-			
+
 			RegisterAmount();
 
 			RegisterAccountId();
 
 			RegisterKeyUseIndexSet();
-
-			RegisterTransactionId();
 
 			RegisterTransactionId();
 
@@ -59,10 +57,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterArrayTypes() {
 
-			BsonMapper.Global.RegisterType<SafeArrayHandle>(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle)ByteArray.Create(bson.AsBinary));
-			BsonMapper.Global.RegisterType<ByteArray>(uri => uri.ToExactByteArray(), bson => ByteArray.Create((byte[]) bson.AsBinary));
+			BsonMapper.Global.RegisterType(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle) ByteArray.Create(bson.AsBinary));
+			BsonMapper.Global.RegisterType(uri => uri.ToExactByteArray(), bson => ByteArray.Create(bson.AsBinary));
 		}
-		
+
 		public static void RegisterWalletSnaphostTypes() {
 
 			BsonMapper.Global.Entity<IWalletAccountSnapshot>().Id(x => x.AccountId);
@@ -70,12 +68,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterAmount() {
 
-			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new Amount((decimal) bson.AsDecimal));
+			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new Amount(bson.AsDecimal));
 		}
 
 		public static void RegisterBlockId() {
-
-			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new BlockId((long) bson.AsInt64));
+			BlockId.RegisterBlockId();
 		}
 
 		public static void RegisterKeyAddress() {
@@ -85,7 +82,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			//				(uri) => uri.,
 			//				(bson) => new BlockId((long)bson.RawValue));
 		}
-		
+
 		public static void RegisterPublishedAddress() {
 
 			//			BsonMapper.Global.RegisterType<PublishedAddress>
@@ -93,7 +90,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			//				(uri) => uri.,
 			//				(bson) => new BlockId((long)bson.RawValue));
 		}
-		
 
 		public static void RegisterKeyUseIndexSet() {
 
@@ -103,15 +99,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterAccountId() {
 
-			BsonMapper.Global.RegisterType(uri => uri.ToLongRepresentation(), bson => AccountId.FromLongRepresentation((long) bson.AsInt64));
+			BsonMapper.Global.RegisterType(uri => uri.ToLongRepresentation(), bson => AccountId.FromLongRepresentation(bson.AsInt64));
 		}
 
 		public static void RegisterTransactionId() {
-			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => new TransactionId(bson.AsString));
+			TransactionId.RegisterTransactionId();
 		}
 
 		public static void RegisterTransactionTimestamp() {
-			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new TransactionTimestamp((long) bson.AsInt64));
+			TransactionTimestamp.RegisterTransactionTimestamp();
 		}
 
 		/// <summary>
@@ -137,7 +133,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		private static Dictionary<Guid, T> DeserializeDictionary<T>(BsonDocument value) {
-			var result = new Dictionary<Guid, T>();
+			Dictionary<Guid, T> result = new Dictionary<Guid, T>();
 
 			foreach(string key in value.Keys) {
 				Guid k = Guid.Parse(key);

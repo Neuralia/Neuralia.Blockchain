@@ -1,13 +1,10 @@
 using System;
+using System.Text.Json.Serialization;
 using LiteDB;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
-using Neuralia.Blockchains.Core.Network;
-using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Core.Network.ReadingContexts;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Neuralia.Blockchains.Core.Network.ReadingContexts;
 
 namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 	public abstract class AdaptiveNumber<T> : ITreeHashable, IBinarySerializable, IEquatable<AdaptiveNumber<T>>, IComparable<T>, IComparable<AdaptiveNumber<T>>
@@ -65,7 +62,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {
 
-			var data = this.GetShrunkBytes();
+			byte[] data = this.GetShrunkBytes();
 			dehydrator.WriteRawArray(data);
 		}
 
@@ -101,7 +98,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 			return this.value.Equals(other.value);
 		}
-		
+
 		public HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
 
@@ -134,7 +131,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 			// ensure the important type bits are set too
 
-			var shrunkBytes = new byte[adjusted.serializationByteSize];
+			byte[] shrunkBytes = new byte[adjusted.serializationByteSize];
 
 			// serialize the first byte, combination of 4 bits for the serialization type, and the firs 4 bits of our value
 			shrunkBytes[0] = (byte) ((byte) adjusted.bitValues & this.LowerMask);

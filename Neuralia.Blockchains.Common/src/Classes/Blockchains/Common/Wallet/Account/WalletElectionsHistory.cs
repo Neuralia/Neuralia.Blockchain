@@ -33,4 +33,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public Enums.MiningTiers MiningTier { get; set; }
 		public string SelectedTransactions { get; set; }
 	}
+
+	public interface IWalletElectionsMiningSessionStatistics {
+		[BsonId]
+		ObjectId Id { get; set; }
+		byte MiningTier { get; set; }
+		long BlocksProcessed { get; set; }
+		long BlocksElected { get; set; }
+		long BlockStarted { get; set; }
+		long LastBlockElected { get; set; }
+		DateTime Start { get; set; }
+		DateTime? Stop { get; set; }
+	}
+
+	public abstract class WalletElectionsMiningSessionStatistics : IWalletElectionsMiningSessionStatistics {
+		[BsonId]
+		public ObjectId Id { get; set; }
+		public byte MiningTier { get; set; }
+		public long BlocksProcessed { get; set; }
+		public long BlocksElected { get; set; }
+		
+		public long BlockStarted { get; set; }
+		public long LastBlockElected { get; set; }
+		public DateTime Start { get; set; }
+		public DateTime? Stop { get; set; }
+	}
+	
+	public interface IWalletElectionsMiningAggregateStatistics {
+		[BsonId]
+		ObjectId Id { get; set; }
+		byte MiningTier { get; set; }
+		long BlocksProcessed { get; set; }
+		long BlocksElected { get; set; }
+		long LastBlockElected { get; set; }
+		int MiningSessions { get; set; }
+	}
+	
+	public abstract class WalletElectionsMiningAggregateStatistics : IWalletElectionsMiningAggregateStatistics {
+		[BsonId]
+		public ObjectId Id { get; set; }
+		public byte MiningTier { get; set; }
+		public long BlocksProcessed { get; set; }
+		public long BlocksElected { get; set; }
+		public long LastBlockElected { get; set; }
+		public int MiningSessions { get; set; }
+	}
 }

@@ -6,11 +6,11 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Versions {
 
-	public interface IVersionableSerializable :  IBinarySerializable, ITreeHashable {
+	public interface IVersionableSerializable : IBinarySerializable, ITreeHashable {
 		IBinarySerializable BaseVersion { get; }
 	}
 
-	public interface IBaseVersionable<V> :  ISerializableCombo
+	public interface IBaseVersionable<V> : ISerializableCombo
 		where V : ComponentVersion {
 		V Version { get; }
 	}

@@ -3,15 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Serilog;
-using SafeArrayHandle = Neuralia.Blockchains.Tools.Data.SafeArrayHandle;
 
 namespace Neuralia.Blockchains.Core.Network {
 
@@ -161,7 +160,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		private void InvokeNewConnection(SafeArrayHandle bytes, ITcpConnection connection) {
-if(			this.NewConnection != null){			this.NewConnection(this, connection, bytes);}
+			if(this.NewConnection != null) {
+				this.NewConnection(this, connection, bytes);
+			}
 		}
 
 		private static void AcceptCallback(IAsyncResult result) {
@@ -219,17 +220,17 @@ if(			this.NewConnection != null){			this.NewConnection(this, connection, bytes)
 
 					}
 
-					Log.Verbose("Failed to establish connection");
+					NLog.Default.Verbose("Failed to establish connection");
 				}
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to listen for connections. this is bad. trying to reesablish connection.");
+				NLog.Default.Error(ex, "Failed to listen for connections. this is bad. trying to reesablish connection.");
 
 				try {
 					// lets try again
 					ConnectionInstance connectionInstance = (ConnectionInstance) result.AsyncState;
 					connectionInstance.listener.BeginAccept(AcceptCallback, connectionInstance);
 				} catch {
-					Log.Fatal(ex, "Failed to listen for any connections. this is seriously critical! server is not listening anymore.");
+					NLog.Default.Fatal(ex, "Failed to listen for any connections. this is seriously critical! server is not listening anymore.");
 				}
 			}
 
@@ -238,7 +239,7 @@ if(			this.NewConnection != null){			this.NewConnection(this, connection, bytes)
 		protected virtual bool CheckShouldDisconnect(IPEndPoint endPoint) {
 			return RateLimiter.Instance.CheckEntryCanConnect(endPoint.Address) == false;
 		}
-		
+
 		/// <summary>
 		///     if a connection is blacklisted, we reject it immediately, no niceness
 		/// </summary>
@@ -272,7 +273,9 @@ if(			this.NewConnection != null){			this.NewConnection(this, connection, bytes)
 			}
 
 			// make sure this connection is acceptable and not already created
-if(			this.NewConnectionRequestReceived != null){			this.NewConnectionRequestReceived(tcpConnection);}
+			if(this.NewConnectionRequestReceived != null) {
+				this.NewConnectionRequestReceived(tcpConnection);
+			}
 
 			//Wait for handshake
 			tcpConnection.StartWaitingForHandshake(bytes => {
@@ -294,10 +297,11 @@ if(			this.NewConnectionRequestReceived != null){			this.NewConnectionRequestRec
 			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Duplex) {
 				return new TcpDuplexConnection(socket, exceptionCallback, true, protocolMessageFilters);
 			}
+
 			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Stream) {
 				return new TcpStreamConnection(socket, exceptionCallback, true, protocolMessageFilters);
 			}
-			
+
 			throw new ApplicationException("Invalid socket type");
 		}
 

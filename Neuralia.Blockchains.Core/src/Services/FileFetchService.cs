@@ -1,64 +1,51 @@
 ﻿using System;
 using System.IO;
-
-using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
-using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Core.Services {
 
 	public interface IFileFetchService {
-		(SafeArrayHandle sha2, SafeArrayHandle sha3)? FetchGenesisHash(string hashuri, string chainWalletPat, string name);
-		(SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string hashuri, string chainWalletPath, int digestId);
-		Guid? FetchSuperkeyConfirmationUuid(string hashuri, long blockId);
+		Task<(SafeArrayHandle sha2, SafeArrayHandle sha3)?> FetchGenesisHash(string hashuri, string chainWalletPat, string name);
+		Task<(SafeArrayHandle sha2, SafeArrayHandle sha3)> FetchDigestHash(string hashuri, string chainWalletPath, int digestId);
+		Task<Guid?> FetchSuperkeyConfirmationUuid(string hashuri, long blockId);
 
-		SafeArrayHandle FetchBlockPublicHash(string hashuri, long blockId);
+		Task<SafeArrayHandle> FetchBlockPublicHash(string hashuri, long blockId);
 	}
 
 	public class FileFetchService : IFileFetchService {
+		private readonly ChainConfigurations chainConfiguration;
 
 		private readonly IGlobalsService globalsService;
 
 		private readonly IHttpService httpService;
-		private readonly ChainConfigurations chainConfiguration;
-		
+
 		public FileFetchService(IHttpService httpService, IGlobalsService globalsService) {
 			this.httpService = httpService;
 			this.globalsService = globalsService;
 		}
 
-		public static string Combine( string basepath, string path, string path2) {
-			return Combine(basepath, Combine(path, path2));
-		}
-		
-		public static string Combine(string uri1, string uri2)
-		{
-			uri1 = uri1.TrimEnd('/');
-			uri2 = uri2.TrimStart('/');
-			return $"{uri1}/{uri2}";
-		}
-		
-		public Guid? FetchSuperkeyConfirmationUuid(string hashuri, long blockId) {
+		public async Task<Guid?> FetchSuperkeyConfirmationUuid(string hashuri, long blockId) {
 			string confirmationName = $"confirmation-{blockId}.conf";
 
-			SafeArrayHandle result = this.httpService.Download((Combine(hashuri, "/confirmations/" ,confirmationName)).ToLower());
+			SafeArrayHandle result = await httpService.Download(Combine(hashuri, "/confirmations/", confirmationName).ToLower()).ConfigureAwait(false);
 
 			TypeSerializer.Deserialize(result.Span, out Guid confirmation);
 
 			return confirmation;
 		}
 
-		public SafeArrayHandle FetchBlockPublicHash(string hashuri, long blockId) {
+		public async Task<SafeArrayHandle> FetchBlockPublicHash(string hashuri, long blockId) {
 
 			string hashName = $"block-{blockId}.hash";
-			SafeArrayHandle result = this.httpService.Download((Combine(hashuri, "/hashes/", hashName)).ToLower());
+			SafeArrayHandle result = await httpService.Download(Combine(hashuri, "/hashes/", hashName).ToLower()).ConfigureAwait(false);
 
 			return result;
 		}
@@ -69,32 +56,33 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		/// <param name="name"></param>
 		/// <returns></returns>
-		public (SafeArrayHandle sha2, SafeArrayHandle sha3)? FetchGenesisHash(string hashuri, string genesisPath, string filename) {
+		public async Task<(SafeArrayHandle sha2, SafeArrayHandle sha3)?> FetchGenesisHash(string hashuri, string genesisPath, string filename) {
 
 			string hashName = $"{filename.CapitallizeFirstLetter()}.hash";
 			FileExtensions.EnsureDirectoryStructure(genesisPath);
 			string filepath = Path.Combine(genesisPath, hashName);
 
 			if(!File.Exists(filepath)) {
-				
+
 				string hashUri = Combine(hashuri.ToLower(), hashName);
-				Log.Information($"Downloading genesis hash from {hashUri}");
-				this.httpService.Download(hashUri, filepath);
+				NLog.Default.Information($"Downloading genesis hash from {hashUri}");
+				await httpService.Download(hashUri, filepath).ConfigureAwait(false);
 			}
 
 			if(!File.Exists(filepath)) {
 				return null;
 			}
 
-			var data = ByteArray.WrapAndOwn(File.ReadAllBytes(filepath));
+			ByteArray data = ByteArray.WrapAndOwn(await File.ReadAllBytesAsync(filepath).ConfigureAwait(false));
 
-			if(data == null || data.IsCleared) {
+			if((data == null) || data.IsCleared) {
 				throw new ApplicationException("Failed to obtain genesis verification hash.");
 			}
+
 			return HashingUtils.ExtractCombinedDualHash(data);
 		}
 
-		public (SafeArrayHandle sha2, SafeArrayHandle sha3) FetchDigestHash(string hashuri, string digestHashPath, int digestId) {
+		public async Task<(SafeArrayHandle sha2, SafeArrayHandle sha3)> FetchDigestHash(string hashuri, string digestHashPath, int digestId) {
 
 			string hashName = $"digest-{digestId}.hash";
 			FileExtensions.EnsureDirectoryStructure(digestHashPath);
@@ -102,19 +90,31 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			if(!File.Exists(filepath)) {
 
-				this.httpService.Download((Combine(hashuri, "/hashes/", hashName)).ToLower(), filepath);
+				await httpService.Download(Combine(hashuri, "/hashes/", hashName).ToLower(), filepath).ConfigureAwait(false);
 			}
 
 			if(!File.Exists(filepath)) {
 				return default;
 			}
 
-			var data = ByteArray.WrapAndOwn(File.ReadAllBytes(filepath));
+			ByteArray data = ByteArray.WrapAndOwn(await File.ReadAllBytesAsync(filepath).ConfigureAwait(false));
 
-			if(data == null || data.IsCleared) {
+			if((data == null) || data.IsCleared) {
 				throw new ApplicationException("Failed to obtain digest verification hash.");
 			}
+
 			return HashingUtils.ExtractCombinedDualHash(data);
+		}
+
+		public static string Combine(string basepath, string path, string path2) {
+			return Combine(basepath, Combine(path, path2));
+		}
+
+		public static string Combine(string uri1, string uri2) {
+			uri1 = uri1.TrimEnd('/');
+			uri2 = uri2.TrimStart('/');
+
+			return $"{uri1}/{uri2}";
 		}
 	}
 }

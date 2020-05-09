@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 using System.Linq.Expressions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
@@ -10,7 +9,6 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite {
 
@@ -43,7 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			uint index = (uint) (accountId / this.groupSize);
 
-			uint adjustedAccountId = (uint) (accountId - index * this.groupSize);
+			uint adjustedAccountId = (uint) (accountId - (index * this.groupSize));
 
 			// index is 1 based
 			return (adjustedAccountId, index + 1);
@@ -62,9 +60,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {
-			var results = new Dictionary<int, SafeArrayHandle>();
+			Dictionary<int, SafeArrayHandle> results = new Dictionary<int, SafeArrayHandle>();
 
-			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] {groupIndex}));
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.bandName, this.scopeFolder, new object[] {groupIndex}));
 
 			results.Add(this.BandType.ToInt32(null), this.HashFile(archivedFilename));
 
@@ -73,21 +71,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public override SafeArrayHandle GetFileBytes(int fileId, uint partIndex, long offset, int length) {
 
-			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] {partIndex}));
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.bandName, this.scopeFolder, new object[] {partIndex}));
 
 			return FileExtensions.ReadBytes(archivedFilename, offset, length, this.fileSystem);
 		}
-		
+
 		public override void WriteFileBytes(int fileId, uint partIndex, SafeArrayHandle data) {
 
-			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName,this.bandName, this.scopeFolder, new object[] {partIndex}));
+			string archivedFilename = this.GenerateFullPath(this.Providers[this.BandType].NamingProvider.GeneratedArchivedFileName(this.bandName, this.bandName, this.scopeFolder, new object[] {partIndex}));
 
 			FileExtensions.EnsureFileExists(archivedFilename, this.fileSystem);
 			FileExtensions.WriteAllBytes(archivedFilename, data, this.fileSystem);
 		}
 
 		public override List<int> GetFileTypes() {
-			var fileTypes = new List<int>();
+			List<int> fileTypes = new List<int>();
 
 			fileTypes.Add(this.BandType.ToInt32(null));
 
@@ -110,7 +108,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			this.InterpretationProvider.SetActiveFilename(Path.GetFileName(extractedFilename), Path.GetDirectoryName(extractedFilename));
 
-			var results = new DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS>(this.BandType);
+			DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> results = new DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS>(this.BandType);
 			results[this.BandType] = this.InterpretationProvider.QueryCard(adjustedKey.adjustedAccountId);
 
 			return results;

@@ -1,6 +1,5 @@
-
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
-	
+
 	public class TransactionStatusUpdate {
 		public enum Statuses {
 			Confirmed,

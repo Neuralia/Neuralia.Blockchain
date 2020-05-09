@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
@@ -16,7 +18,6 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 	///     further children tasks, wait, etc.
 	/// </summary>
 	public class TaskRoutingContext : ITaskStasher {
-		public InternalRoutedTask OwnerTask { get; }
 		private readonly IRoutedTaskRoutingHandler service;
 		private Task<bool> stashSideTask;
 
@@ -25,7 +26,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 			this.service = service;
 		}
 
-	
+		public InternalRoutedTask OwnerTask { get; }
+
 		/// <summary>
 		///     are there any child tasks ready to run?
 		/// </summary>
@@ -54,7 +56,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		public void SetCorrelationContext(CorrelationContext correlationContext) {
 			this.OwnerTask.CorrelationContext = correlationContext;
 		}
-		
+
 		/// <summary>
 		///     Add a sibling task in the same set as the current executing task
 		/// </summary>
@@ -176,7 +178,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 
 				do {
 
-					if(DateTime.UtcNow > absoluteTimeout) {
+					if(DateTimeEx.CurrentTime > absoluteTimeout) {
 						return false;
 					}
 
@@ -187,7 +189,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 						if(timeout == TimeSpan.MaxValue) {
 							await this.service.Wait().ConfigureAwait(false);
 						} else {
-							await this.service.Wait(absoluteTimeout - DateTime.UtcNow).ConfigureAwait(false);
+							await this.service.Wait(absoluteTimeout - DateTimeEx.CurrentTime).ConfigureAwait(false);
 						}
 					}
 				} while(!found);
@@ -205,7 +207,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		}
 
 		private DateTime GetAbsoluteTimeout(TimeSpan timeout) {
-			return timeout == TimeSpan.MaxValue ? DateTime.MaxValue : DateTime.UtcNow.Add(timeout);
+			return timeout == TimeSpan.MaxValue ? DateTime.MaxValue : DateTimeEx.CurrentTime.Add(timeout);
 		}
 
 		public void ResetChildTasks() {

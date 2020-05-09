@@ -13,8 +13,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 	public interface IWalletAccountSnapshotFileInfo : ISingleEntryWalletFileInfo {
 		Task<IWalletAccountSnapshot> WalletAccountSnapshot(LockContext lockContext);
-		void                         SetWalletAccountSnapshot(IWalletAccountSnapshot snapshot);
-		Task                         CreateEmptyFile(IWalletStandardAccountSnapshot entry, LockContext lockContext);
+		void SetWalletAccountSnapshot(IWalletAccountSnapshot snapshot);
+		Task CreateEmptyFile(IWalletStandardAccountSnapshot entry, LockContext lockContext);
 
 		Task InsertNewSnapshotBase(IWalletStandardAccountSnapshot snapshot, LockContext lockContext);
 
@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		where T : IWalletAccountSnapshot {
 
 		Task<T> WalletAccountSnapshot(LockContext lockContext);
-		void    SetWalletAccountSnapshot(T snapshot);
+		void SetWalletAccountSnapshot(T snapshot);
 
 		Task InsertNewSnapshot(T snapshot, LockContext lockContext);
 	}
@@ -34,19 +34,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		where T : IWalletAccountSnapshot {
 
 		private readonly IWalletAccount account;
-		private          T              walletAccountSnapshot;
+		private T walletAccountSnapshot;
 
 		public WalletAccountSnapshotFileInfo(IWalletAccount account, string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails) : base(filename, chainConfiguration, serviceSet, serialisationFal, walletSecurityDetails) {
 			this.account = account;
 
 		}
 
-		public async Task<IWalletAccountSnapshot> WalletSnapshotBase(LockContext lockContext) => await WalletAccountSnapshot(lockContext).ConfigureAwait(false);
-
 		public async Task<T> WalletAccountSnapshot(LockContext lockContext) {
 
 			if(this.walletAccountSnapshot == null) {
-				this.walletAccountSnapshot = await RunQueryDbOperation(async (litedbDal, lc) => {
+				this.walletAccountSnapshot = await this.RunQueryDbOperation(async (litedbDal, lc) => {
 
 					if(litedbDal.CollectionExists<T>() && litedbDal.Any<T>()) {
 						return litedbDal.GetSingle<T>();
@@ -58,6 +56,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 			return this.walletAccountSnapshot;
 
+		}
+		protected override T CreateEntryType() {
+			return default;
 		}
 
 		public void SetWalletAccountSnapshot(T snapshot) {
@@ -88,7 +89,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			return this.InsertNewDbData((T) snapshot, lockContext);
 		}
 
-		async Task<IWalletAccountSnapshot> IWalletAccountSnapshotFileInfo.WalletAccountSnapshot(LockContext lockContext) => await WalletAccountSnapshot(lockContext).ConfigureAwait(false);
+		async Task<IWalletAccountSnapshot> IWalletAccountSnapshotFileInfo.WalletAccountSnapshot(LockContext lockContext) {
+			return await this.WalletAccountSnapshot(lockContext).ConfigureAwait(false);
+		}
 
 		public Task CreateEmptyFile(IWalletStandardAccountSnapshot entry, LockContext lockContext) {
 			if(entry.GetType() != typeof(T)) {
@@ -98,15 +101,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			return base.CreateEmptyFile((T) entry, lockContext);
 		}
 
+		public async Task<IWalletAccountSnapshot> WalletSnapshotBase(LockContext lockContext) {
+			return await this.WalletAccountSnapshot(lockContext).ConfigureAwait(false);
+		}
+
 		/// <summary>
 		///     Insert the new empty wallet
 		/// </summary>
 		/// <param name="wallet"></param>
 		protected override async Task InsertNewDbData(T snapshot, LockContext lockContext) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.walletAccountSnapshot = snapshot;
 
-				await RunDbOperation((litedbDal, lc) => {
+				await this.RunDbOperation((litedbDal, lc) => {
 					if(litedbDal.CollectionExists<T>() && litedbDal.Exists<T>(s => s.AccountId == snapshot.AccountId)) {
 						throw new ApplicationException($"Snapshot with Id {snapshot.AccountId} already exists");
 					}
@@ -129,7 +136,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		protected override async Task CreateSecurityDetails(LockContext lockContext) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
@@ -138,7 +145,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(this.EncryptionInfo.Encrypt) {
 
 						this.EncryptionInfo.EncryptionParameters = this.account.KeyLogFileEncryptionParameters;
-						this.EncryptionInfo.Secret               = () => this.account.KeyLogFileSecret;
+						this.EncryptionInfo.Secret = () => this.account.KeyLogFileSecret;
 					}
 				}
 			}
@@ -147,7 +154,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		protected override Task UpdateDbEntry(LockContext lockContext) {
 			return this.RunDbOperation((litedbDal, lc) => {
 				if(litedbDal.CollectionExists<T>()) {
-					litedbDal.Update<T>(this.WalletAccountSnapshot(lc).WaitAndUnwrapException());
+					litedbDal.Update(this.WalletAccountSnapshot(lc).WaitAndUnwrapException());
 				}
 
 				return Task.CompletedTask;

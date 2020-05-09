@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Tags;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Simple;
@@ -26,13 +26,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			dehydrator.Write((ushort) this.Slices.Count);
 
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
-			foreach(var entry in this.Slices) {
+
+			foreach(Dictionary<BlockChannelUtils.BlockChannelTypes, int> entry in this.Slices) {
 
 				dehydrator.Write((byte) entry.Count);
 
-				foreach(var entry2 in entry) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, int> entry2 in entry) {
 
-					
 					dehydrator.Write((byte) entry2.Key);
 
 					adaptiveSet.Value = entry2.Value;
@@ -48,10 +48,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			nodesList.Add(this.Id);
 			nodesList.Add(this.Slices.Count);
 
-			foreach(var entry in this.Slices) {
+			foreach(Dictionary<BlockChannelUtils.BlockChannelTypes, int> entry in this.Slices) {
 				nodesList.Add((byte) entry.Count);
 
-				foreach(var entry2 in entry.OrderBy(e => e.Key)) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, int> entry2 in entry.OrderBy(e => e.Key)) {
 
 					nodesList.Add((byte) entry2.Key);
 					nodesList.Add(entry2.Value);
@@ -72,19 +72,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Slices.Clear();
 
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
+
 			for(int i = 0; i < count; i++) {
 
 				int count2 = rehydrator.ReadByte();
 
-				var channels = new Dictionary<BlockChannelUtils.BlockChannelTypes, int>();
+				Dictionary<BlockChannelUtils.BlockChannelTypes, int> channels = new Dictionary<BlockChannelUtils.BlockChannelTypes, int>();
 
 				for(int j = 0; j < count2; j++) {
 
 					BlockChannelUtils.BlockChannelTypes key = (BlockChannelUtils.BlockChannelTypes) rehydrator.ReadByte();
-					
+
 					adaptiveSet.Rehydrate(rehydrator);
 
-					channels.Add(key, (int)adaptiveSet.Value);
+					channels.Add(key, (int) adaptiveSet.Value);
 				}
 
 				this.Slices.Add(channels);

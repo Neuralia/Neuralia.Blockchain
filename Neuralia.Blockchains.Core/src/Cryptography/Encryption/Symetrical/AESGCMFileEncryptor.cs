@@ -2,7 +2,6 @@ using System;
 using System.Security;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.IO;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
@@ -12,38 +11,38 @@ using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
-	
-	
-	public class AESGCMFileEncryptorResult  {
-		
+
+	public class AESGCMFileEncryptorResult {
+
 		public AESGCMFileEncryptorResult() {
 
 		}
-		
+
 		public AESGCMFileEncryptorResult(ByteArray cipher, ByteArray tag) {
 			this.Cipher = cipher;
 			this.Tag = tag;
 		}
+
 		public ByteArray Cipher { get; private set; }
-		public ByteArray Tag { get;  private set; }
-		
+		public ByteArray Tag { get; private set; }
+
 		public static AESGCMFileEncryptorResult Rehydrate(ByteArray bytes) {
 
-			var rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
+			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 
-			var result = new AESGCMFileEncryptorResult();
+			AESGCMFileEncryptorResult result = new AESGCMFileEncryptorResult();
 			result.Rehydrate(rehydrator);
 
 			return result;
 		}
-		
+
 		private void Rehydrate(IDataRehydrator rehydrator) {
 			this.Cipher = rehydrator.ReadNonNullableArray();
 			this.Tag = rehydrator.ReadNonNullableArray();
 		}
 
 		public ByteArray Dehydrate() {
-			using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
 
 				this.Dehydrate(dehydrator);
 
@@ -57,7 +56,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		}
 	}
 
-	
 	/// <summary>
 	///     Utility class to encrypt with AES 256
 	/// </summary>
@@ -70,8 +68,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			// get a random salt
 			salt.FillSafeRandom();
 
-			var entry = new AesGcmEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_GCM_256, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			AesGcmEncryptorParameters entry = new AesGcmEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_GCM_256, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
 			entry.Salt.Entry = salt;
+
 			return entry;
 		}
 
@@ -85,7 +84,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 			try {
 				using(Rfc2898DeriveBytes rfc2898DeriveBytes = new Rfc2898DeriveBytes(password.ToExactByteArray(), parameters.Salt.ToExactByteArrayCopy(), parameters.Iterations)) {
-					
+
 					ByteArray key = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(parameters.KeyBitLength / 8));
 					ByteArray nonce = ByteArray.WrapAndOwn(rfc2898DeriveBytes.GetBytes(12));
 
@@ -105,36 +104,33 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 			ByteArray tag = ByteArray.Create(16);
 			ByteArray ciphertext = ByteArray.Create(plain.Length);
-			
 
-			using (AesGcm aesGcm = new AesGcm(key.ToExactByteArray()))
-			{
+			using(AesGcm aesGcm = new AesGcm(key.ToExactByteArray())) {
 				aesGcm.Encrypt(nonce.Span, plain.Span, ciphertext.Span, tag.Span);
 			}
-			
+
 			AESGCMFileEncryptorResult result = new AESGCMFileEncryptorResult(ciphertext, tag);
 
 			return result.Dehydrate();
 		}
-		
+
 		public static ByteArray Encrypt(SafeArrayHandle plain, SecureString password, AesGcmEncryptorParameters parameters) {
-			
+
 			return Encrypt(plain, password.ConvertToUnsecureBytes(), parameters);
-			
+
 		}
 
 		public static ByteArray Encrypt(SafeArrayHandle plain, SafeArrayHandle password, AesGcmEncryptorParameters parameters) {
 			return EncryptBytes(plain, password, parameters);
 		}
-		
+
 		private static ByteArray DecryptBytes(SafeArrayHandle cipher, SafeArrayHandle tag, SafeArrayHandle password, AesGcmEncryptorParameters parameters) {
-			
+
 			(ByteArray key, ByteArray nonce) = InitSymmetric(password, parameters);
-			
+
 			ByteArray decrypted = ByteArray.Create(cipher.Length);
-			
-			using (AesGcm aesGcm = new AesGcm(key.ToExactByteArray()))
-			{
+
+			using(AesGcm aesGcm = new AesGcm(key.ToExactByteArray())) {
 				aesGcm.Decrypt(nonce.Span, cipher.Span, tag.Span, decrypted.Span);
 			}
 
@@ -155,7 +151,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		public static ByteArray Decrypt(SafeArrayHandle cipher, SafeArrayHandle password, AesGcmEncryptorParameters parameters) {
 			try {
 				AESGCMFileEncryptorResult result = AESGCMFileEncryptorResult.Rehydrate(cipher.Entry);
-				
+
 				return DecryptBytes(result.Cipher, result.Tag, password, parameters);
 			} catch(DataEncryptionException ex) {
 				throw;
@@ -163,6 +159,5 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 				throw new DataEncryptionException("", ex);
 			}
 		}
-		
 	}
 }

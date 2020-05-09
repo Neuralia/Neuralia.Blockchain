@@ -5,11 +5,10 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks {
 	public interface IBlockNextAccountSignature : ISerializableCombo {
-
 	}
 
 	public abstract class BlockNextAccountSignature : IBlockNextAccountSignature {
-		
+
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
 		}
@@ -21,7 +20,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
 
-			
 			return nodeList;
 		}
 

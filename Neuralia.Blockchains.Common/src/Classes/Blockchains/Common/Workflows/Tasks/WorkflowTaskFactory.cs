@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		// public ValidationTask<IValidationManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateValidationTask<K>() {
 		// 	return new ValidationTask<IValidationManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>();
 		// }
-		
+
 		public BlockchainTask<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateBlockchainTask<K>() {
 			return new BlockchainTask<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, K, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>();
 		}

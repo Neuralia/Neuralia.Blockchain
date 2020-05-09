@@ -13,16 +13,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.JsonDehydrate(jsonDeserializer);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.NTRU;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
+		public override void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is INtruWalletKey ntruWalletKey) {
 
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.NTRU;
 		}
 	}
 }

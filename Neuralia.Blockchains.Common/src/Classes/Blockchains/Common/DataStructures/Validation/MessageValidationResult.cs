@@ -7,16 +7,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public MessageValidationResult(ValidationResults result) : base(result) {
 		}
 
-		public MessageValidationResult(ValidationResults result, EventValidationErrorCode errorCode) : base(result, errorCode) {
+		public MessageValidationResult(ValidationResults result, IEventValidationErrorCodeBase errorCode) : base(result, errorCode) {
 		}
 
-		public MessageValidationResult(ValidationResults result, List<EventValidationErrorCode> errorCodes) : base(result, errorCodes) {
+		public MessageValidationResult(ValidationResults result, List<IEventValidationErrorCodeBase> errorCodes) : base(result, errorCodes) {
 		}
 
 		public MessageValidationResult(ValidationResults result, MessageValidationErrorCode errorCode) : base(result, errorCode) {
 		}
 
-		public MessageValidationResult(ValidationResults result, List<MessageValidationErrorCode> errorCodes) : base(result, errorCodes?.Cast<EventValidationErrorCode>().ToList()) {
+		public MessageValidationResult(ValidationResults result, List<MessageValidationErrorCode> errorCodes) : base(result, errorCodes?.Cast<IEventValidationErrorCodeBase>().ToList()) {
 		}
 
 		public override EventValidationException GenerateException() {
@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 	}
 
-	public class MessageValidationErrorCodes : EventValidationErrorCodes {
+	public class MessageValidationErrorCodes : EventValidationErrorCodes<MessageValidationErrorCode> {
 
 		public readonly MessageValidationErrorCode INVALID_MESSAGE_XMSS_KEY_BIT_SIZE;
 		public readonly MessageValidationErrorCode INVALID_MESSAGE_XMSS_KEY_TYPE;
@@ -33,26 +33,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 
 		protected MessageValidationErrorCodes() {
-			this.INVALID_MESSAGE_XMSS_KEY_BIT_SIZE = this.CreateChildConstant();
-			this.INVALID_MESSAGE_XMSS_KEY_TYPE = this.CreateChildConstant();
+
+			this.CreateBaseConstant(ref this.INVALID_MESSAGE_XMSS_KEY_BIT_SIZE, nameof(this.INVALID_MESSAGE_XMSS_KEY_BIT_SIZE));
+			this.CreateBaseConstant(ref this.INVALID_MESSAGE_XMSS_KEY_TYPE, nameof(this.INVALID_MESSAGE_XMSS_KEY_TYPE));
 
 			//this.PrintValues(";");		
 		}
 
-		public static new MessageValidationErrorCodes Instance { get; } = new MessageValidationErrorCodes();
+		public static MessageValidationErrorCodes Instance { get; } = new MessageValidationErrorCodes();
 
 		protected MessageValidationErrorCode CreateChildConstant(MessageValidationErrorCode offset = default) {
 			return new MessageValidationErrorCode(base.CreateChildConstant(offset).Value);
 		}
 	}
 
-	public class MessageValidationErrorCode : EventValidationErrorCode {
-
+	public class MessageValidationErrorCode : EventValidationErrorCodeBase<MessageValidationErrorCode> {
 		public MessageValidationErrorCode() {
 		}
 
 		public MessageValidationErrorCode(ushort value) : base(value) {
 		}
+
+		public override string ErrorPrefix => "MSG";
 
 		public static implicit operator MessageValidationErrorCode(ushort d) {
 			return new MessageValidationErrorCode(d);

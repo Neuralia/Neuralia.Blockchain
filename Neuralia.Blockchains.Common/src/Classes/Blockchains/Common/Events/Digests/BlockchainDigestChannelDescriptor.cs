@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 			nodeList.Add(this.Hash);
 
-			foreach(var channel in this.Channels.OrderBy(c => c.Key)) {
+			foreach(KeyValuePair<ushort, BlockchainDigestChannelDescriptor> channel in this.Channels.OrderBy(c => c.Key)) {
 				nodeList.Add(channel.Key);
 				nodeList.Add(channel.Value);
 			}
@@ -53,7 +53,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 			nodeList.Add(this.LastEntryId);
 			nodeList.Add(this.Hash);
 
-			foreach(var channel in this.DigestChannelIndexDescriptors.OrderBy(c => c.Key)) {
+			foreach(KeyValuePair<int, DigestChannelIndexDescriptor> channel in this.DigestChannelIndexDescriptors.OrderBy(c => c.Key)) {
 				nodeList.Add(channel.Key);
 				nodeList.Add(channel.Value);
 			}
@@ -103,7 +103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 				nodeList.Add(this.Hash);
 
-				foreach(var channel in this.Files.OrderBy(c => c.Key)) {
+				foreach(KeyValuePair<int, DigestChannelIndexFileDescriptor> channel in this.Files.OrderBy(c => c.Key)) {
 					nodeList.Add(channel.Key);
 					nodeList.Add(channel.Value);
 				}
@@ -157,7 +157,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 					nodeList.Add(this.IsOptional);
 					nodeList.Add((byte) this.HashingType);
 
-					foreach(var channel in this.DigestChannelIndexFilePartDescriptors.OrderBy(c => c.Key)) {
+					foreach(KeyValuePair<uint, DigestChannelIndexFilePartDescriptor> channel in this.DigestChannelIndexFilePartDescriptors.OrderBy(c => c.Key)) {
 						nodeList.Add(channel.Key);
 						nodeList.Add(channel.Value);
 					}

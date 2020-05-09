@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			if(chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.AES_256) {
 				return AESFileEncryptor.GenerateEncryptionParameters();
 			}
-			
+
 			if(chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.AES_GCM_256) {
 				return AESGCMFileEncryptor.GenerateEncryptionParameters();
 			}

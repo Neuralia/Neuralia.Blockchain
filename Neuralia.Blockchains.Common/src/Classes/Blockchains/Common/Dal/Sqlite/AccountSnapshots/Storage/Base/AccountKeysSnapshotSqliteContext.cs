@@ -1,4 +1,3 @@
-using System;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
@@ -20,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			modelBuilder.Entity<STANDARD_ACCOUNT_KEYS_SNAPSHOT>(eb => {
 				eb.HasKey(c => c.CompositeKey);
-				
+
 				eb.HasIndex(c => c.AccountId);
 				eb.HasIndex(c => c.OrdinalId);
 				eb.ToTable("StandardAccountKeys");

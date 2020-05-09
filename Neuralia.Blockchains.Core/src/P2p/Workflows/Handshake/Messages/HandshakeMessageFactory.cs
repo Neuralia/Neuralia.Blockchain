@@ -1,6 +1,7 @@
 using System;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
@@ -104,7 +105,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages {
 						messageSet.Header = header; // set the header explicitely
 						messageSet.RehydrateRest(dr, rehydrationFactory);
 					} catch(Exception ex) {
-						Log.Error(ex, "Invalid data sent");
+						NLog.Default.Error(ex, "Invalid data sent");
 					}
 
 					return messageSet;
@@ -120,7 +121,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages {
 		/// <param name="workflowCorrelationId"></param>
 		/// <returns></returns>
 		public TriggerMessageSet<HandshakeTrigger<R>, R> CreateHandshakeWorkflowTriggerSet(uint workflowCorrelationId) {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<HandshakeTrigger<R>, R>, HandshakeTrigger<R>>(workflowCorrelationId);
+			TriggerMessageSet<HandshakeTrigger<R>, R> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<HandshakeTrigger<R>, R>, HandshakeTrigger<R>>(workflowCorrelationId);
 
 			return messageSet;
 		}
@@ -131,7 +132,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages {
 		/// <param name="triggerHeader"></param>
 		/// <returns></returns>
 		protected TriggerMessageSet<HandshakeTrigger<R>, R> CreateHandshakeWorkflowTriggerSet(TargettedHeader triggerHeader) {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<HandshakeTrigger<R>, R>, HandshakeTrigger<R>>(triggerHeader);
+			TriggerMessageSet<HandshakeTrigger<R>, R> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<HandshakeTrigger<R>, R>, HandshakeTrigger<R>>(triggerHeader);
 
 			return messageSet;
 		}
@@ -141,7 +142,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages {
 		}
 
 		public TargettedMessageSet<ClientHandshakeConfirm<R>, R> CreateClientConfirmSet(TargettedHeader triggerHeader = null) {
-			var messageSet = this.MainMessageFactory.CreateTargettedMessageSet<TargettedMessageSet<ClientHandshakeConfirm<R>, R>, ClientHandshakeConfirm<R>>(triggerHeader);
+			TargettedMessageSet<ClientHandshakeConfirm<R>, R> messageSet = this.MainMessageFactory.CreateTargettedMessageSet<TargettedMessageSet<ClientHandshakeConfirm<R>, R>, ClientHandshakeConfirm<R>>(triggerHeader);
 
 			return messageSet;
 		}

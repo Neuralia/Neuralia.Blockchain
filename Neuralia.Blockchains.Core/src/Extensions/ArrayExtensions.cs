@@ -8,7 +8,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		/// </summary>
 		/// <param name="input"></param>
 		/// <returns></returns>
-		public static Span<byte> TrimEnd(this ref Span<byte> input) {
+		public static Span<byte> TrimEnd(this Span<byte> input) {
 
 			int length = 0;
 

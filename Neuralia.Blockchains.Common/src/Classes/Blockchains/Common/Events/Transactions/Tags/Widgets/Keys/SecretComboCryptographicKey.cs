@@ -49,11 +49,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("NonceHash", this.NonceHash);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.SecretCombo;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
+		public override void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is ISecretComboWalletKey secretComboWalletKey) {
@@ -63,6 +59,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				this.NextKeyHashSha3.Entry = sha3.Entry;
 				this.NonceHash = nonceHash;
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.SecretCombo;
 		}
 	}
 }

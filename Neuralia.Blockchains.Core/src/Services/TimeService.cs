@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Tools;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Services {
@@ -12,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		DateTime CurrentRealTime { get; }
 
 		long CurrentRealTimeTicks { get; }
-		
+
 		void InitTime();
 
 		DateTime GetDateTime(long ticks);
@@ -32,98 +35,115 @@ namespace Neuralia.Blockchains.Core.Services {
 
 	public class TimeService : ITimeService {
 
-		private DateTime networkDateTime;
-		private TimeSpan timeDelta;
+		private Timer timer;
 
-		public static string FormatDateTimeStandardUtc(DateTime dateTime) {
-			return dateTime.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
-		}
-		
 		public void InitTime() {
-			//default Windows time server
-			var ntpServers = new List<string>();
 
-			//TODO: add more time servers
-			ntpServers.Add("pool.ntp.org");
-			ntpServers.Add("time.nist.gov");
-			ntpServers.Add("time.google.com");
-			ntpServers.Add("time2.google.com");
-			ntpServers.Add("time.windows.com");
-
-			// mix them up, to get a new one every time.
-			ntpServers.Shuffle();
-
-			// NTP message size - 16 bytes of the digest (RFC 2030)
-			var ntpData = new byte[48];
-			bool succeeded = false;
-
-			foreach(string ntpServer in ntpServers) {
+			this.timer = new Timer(state => {
 
 				try {
+					//default Windows time server
+					List<string> ntpServers = new List<string>();
 
-					Array.Clear(ntpData, 0, ntpData.Length);
+					//TODO: add more time servers
+					ntpServers.Add("pool.ntp.org");
+					ntpServers.Add("time.nist.gov");
+					ntpServers.Add("time.google.com");
+					ntpServers.Add("time2.google.com");
+					ntpServers.Add("time.windows.com");
 
-					//Setting the Leap Indicator, SoftwareVersion Number and Mode values
-					ntpData[0] = 0x1B; //LI = 0 (no warning), VN = 3 (IPv4 only), Mode = 3 (Client Mode)
+					// mix them up, to get a new one every time.
+					ntpServers.Shuffle();
 
-					var addresses = Dns.GetHostEntry(ntpServer).AddressList;
+					// NTP message size - 16 bytes of the digest (RFC 2030)
+					byte[] ntpData = new byte[48];
+					bool succeeded = false;
+					
+					foreach(string ntpServer in ntpServers) {
 
-					//The UDP port number assigned to NTP is 123
-					IPEndPoint ipEndPoint = new IPEndPoint(addresses[0], 123);
+						
+						try {
+							IPAddress[] addresses = Dns.GetHostEntry(ntpServer).AddressList;
 
-					//NTP uses UDP
-					using(Socket tcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)) {
-						tcpSocket.ExclusiveAddressUse = true;
+							foreach(var address in addresses) {
 
-						//Stops code hang if NTP is transactioned
-						tcpSocket.ReceiveTimeout = 1000;
-						tcpSocket.SendTimeout = 1000;
+								Array.Clear(ntpData, 0, ntpData.Length);
 
-						tcpSocket.Connect(ipEndPoint);
+								//Setting the Leap Indicator, SoftwareVersion Number and Mode values
+								ntpData[0] = 0x1B; //LI = 0 (no warning), VN = 3, Mode = 3 (Client Mode)
+								
+								try {
+									//The UDP port number assigned to NTP is 123
+									IPEndPoint ipEndPoint = new IPEndPoint(address, 123);
 
-						tcpSocket.Send(ntpData);
-						tcpSocket.Receive(ntpData);
-						tcpSocket.Close();
+									//NTP uses UDP
+
+									using(var tcpSocket = new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp)) {
+										tcpSocket.ExclusiveAddressUse = true;
+
+										//Stops code hang if NTP is transactioned
+										tcpSocket.ReceiveTimeout = 1000;
+										tcpSocket.SendTimeout = 1000;
+
+										tcpSocket.Connect(ipEndPoint);
+
+										tcpSocket.Send(ntpData);
+										tcpSocket.Receive(ntpData);
+										tcpSocket.Close();
+									}
+
+									// seems that it worked
+									succeeded = true;
+
+									break;
+								} catch(Exception e) {
+									// just continue
+									NLog.Default.Verbose(e, $"Failed to query ntp server '{ntpServer}' at address {address}:123.");
+								}
+							}
+
+							if(succeeded) {
+								break;
+							}
+						} catch(Exception e) {
+							// failed to reach the NTP server
+							NLog.Default.Verbose(e, $"Failed to query ntp server '{ntpServer}'.");
+						}
 					}
 
-					// seems that it worked
-					succeeded = true;
+					if(!succeeded) {
+						NLog.Default.Error("Failed to query ALL ntp servers. this could be problematic, you could be rejected by the network if your time is off by too much.");
 
-					break;
-				} catch(Exception e) {
-					// failed to reach the NTP server
-					Log.Verbose(e, $"Failed to query ntp server '{ntpServer}'.");
+						return;
+					}
+
+					//Get the seconds part
+					ulong nominator = (ulong) ntpData[40] << 24 | (ulong) ntpData[41] << 16 | (ulong) ntpData[42] << 8 | ntpData[43];
+					ulong fraction = (ulong) ntpData[44] << 24 | (ulong) ntpData[45] << 16 | (ulong) ntpData[46] << 8 | ntpData[47];
+
+					var milliseconds = (nominator * 1000) + ((fraction * 1000) / 0x100000000L);
+
+					//**UTC** time
+					DateTime networkDateTime = (new DateTime(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc)).AddMilliseconds((long) milliseconds);
+
+					// compare the time of the time servers and ours. we should not be too far
+					TimeSpan delta = (networkDateTime - DateTime.UtcNow).Duration();
+
+					if(delta > TimeSpan.FromMinutes(30)) {
+						// this is very serious, we are very out of sync with true time. we cant continue.
+						//TODO: how can we improve this?
+						NLog.Default.Fatal($"The time server tells us that current UTC time is {networkDateTime} and we have a local UTC time of {DateTime.UtcNow}. The difference is too big; we could be set in the wrong timezone. check your time settings to continue.");
+						Thread.Sleep(1000);
+						Environment.Exit(0);
+					}
+					
+					DateTimeEx.SetTime(networkDateTime);
+					
+				} catch(Exception ex) {
+					//TODO: do something?
+					NLog.Default.Error(ex, "Timer exception");
 				}
-			}
-
-			if(!succeeded) {
-				Log.Error("Failed to query ALL ntp servers. this could be problematic, you could be rejected by the network if your time is off by too much.");
-
-				return;
-			}
-
-			//TODO: rewrite this
-
-			//Offset to get to the "Transmit Value" field (time at which the reply 
-			//departed the server for the client, in 64-bit timestamp format."
-			const byte serverReplyTime = 40;
-
-			//Get the seconds part
-			ulong intPart = BitConverter.ToUInt32(ntpData, serverReplyTime);
-
-			//Get the seconds fraction
-			ulong fractPart = BitConverter.ToUInt32(ntpData, serverReplyTime + 4);
-
-			//Convert From big-endian to little-endian
-			intPart = this.SwapEndianness(intPart);
-			fractPart = this.SwapEndianness(fractPart);
-
-			ulong milliseconds = (intPart * 1000) + ((fractPart * 1000) / 0x100000000L);
-
-			//**UTC** time
-			this.networkDateTime = new DateTime(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds((long) milliseconds);
-
-			this.timeDelta = this.networkDateTime.Subtract(DateTime.UtcNow);
+			}, this, TimeSpan.FromSeconds(1), TimeSpan.FromHours(10));
 		}
 
 		/// <summary>
@@ -133,18 +153,17 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <returns></returns>
 		public bool WithinAcceptableRange(DateTime timestamp, TimeSpan acceptableTimeRange) {
 			DateTime utcTimestamp = timestamp.ToUniversalTime();
-			
-			return ((this.CurrentRealTime - acceptableTimeRange) < utcTimestamp) && (utcTimestamp < (this.CurrentRealTime + acceptableTimeRange));
+
+			return (utcTimestamp > (this.CurrentRealTime - acceptableTimeRange)) && (utcTimestamp < (this.CurrentRealTime + acceptableTimeRange));
 
 		}
-
 
 		public bool WithinAcceptableRange(long timestamp, DateTime chainInception, TimeSpan acceptableTimeRange) {
 
 			return this.WithinAcceptableRange(this.GetTimestampDateTime(timestamp, chainInception), acceptableTimeRange);
 		}
 
-		public DateTime CurrentRealTime => DateTime.UtcNow.Add(this.timeDelta);
+		public DateTime CurrentRealTime => DateTimeEx.CurrentTime;
 
 		public long CurrentRealTimeTicks => this.CurrentRealTime.Ticks;
 
@@ -186,7 +205,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			if(chainInception.Kind != DateTimeKind.Utc) {
 				throw new ApplicationException("Chain inception should always be in UTC");
 			}
-			
+
 			return (chainInception + TimeSpan.FromSeconds(timestamp)).ToUniversalTime();
 		}
 
@@ -194,6 +213,10 @@ namespace Neuralia.Blockchains.Core.Services {
 			DateTime rebuiltTime = this.GetTimestampDateTime(timestamp, chainInception);
 
 			return time.ToUniversalTime() - rebuiltTime;
+		}
+
+		public static string FormatDateTimeStandardUtc(DateTime dateTime) {
+			return dateTime.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
 		}
 
 		protected void ValidateChainInception(DateTime chainInception) {

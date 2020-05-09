@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Base;
@@ -26,20 +27,20 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 
 			// ok, we just received a trigger, lets examine it
 
-			var serverPeerListReply = this.MessageFactory.CreateServerPeerListRequestSet(this.triggerMessage.Header);
+			TargettedMessageSet<PeerListRequestServerReply<R>, R> serverPeerListReply = this.MessageFactory.CreateServerPeerListRequestSet(this.triggerMessage.Header);
 
-			Log.Verbose($"Received peer list request from peer {this.ClientConnection.ScoppedAdjustedIp}");
-			
+			NLog.Default.Verbose($"Received peer list request from peer {this.ClientConnection.ScoppedAdjustedIp}");
+
 			// lets send the server our list of nodeAddressInfo IPs
 			serverPeerListReply.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(this.triggerMessage.Message.NodeInfo, this.triggerMessage.Message.NodeInfo.GetSupportedBlockchains(), NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {this.ClientConnection.NodeAddressInfo}.ToList(), true, 20));
 
 			if(!this.Send(serverPeerListReply)) {
-				Log.Verbose($"Connection with peer  {this.ClientConnection.ScoppedAdjustedIp} was terminated");
+				NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScoppedAdjustedIp} was terminated");
 
 				return;
 			}
 
-			Log.Verbose($"We sent {serverPeerListReply.Message.nodes.Nodes.Count} other peers to peer {this.ClientConnection.ScoppedAdjustedIp} request");
+			NLog.Default.Verbose($"We sent {serverPeerListReply.Message.nodes.Nodes.Count} other peers to peer {this.ClientConnection.ScoppedAdjustedIp} request");
 		}
 
 		protected override PeerListRequestMessageFactory<R> CreateMessageFactory() {

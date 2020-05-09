@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -9,7 +8,6 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Serialization;
-
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1 {
 
@@ -91,6 +89,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("PowSolutions", this.PowSolutions);
 		}
 
+		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
+
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (PRESENTATION: TransactionTypes.Instance.SIMPLE_PRESENTATION, 1, 0);
 		}
@@ -143,7 +143,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		protected abstract ITransactionAccountAttribute CreateTransactionAccountFeature();
-		
-		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
 	}
 }

@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Exceptions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
@@ -39,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		/// </summary>
 		private Guid? awaitingTaskId;
 
-		private bool performWalletTransactionCheck = false;
+		private bool performWalletTransactionCheck;
 
 		public RoutedTaskRoutingReceiver(ITaskRouter coordinatorTaskRouter, bool enableStashing = true, int maxParallelTasks = 1, RouteMode routeMode = RouteMode.Emiter) {
 			this.TaskRouter = coordinatorTaskRouter;
@@ -51,7 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		/// <summary>
 		///     Under certain conditions, we can optimize by not creating a delegate thread.
 		/// </summary>
-		protected bool IsInthreaded => this.Synchronous || this.maxParallelTasks == 1;
+		protected bool IsInthreaded => this.Synchronous || (this.maxParallelTasks == 1);
 
 		/// <summary>
 		///     Make sure we return the owner of the receiver to check for authenticity
@@ -81,8 +84,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 				throw new ApplicationException("Stashing is not enabled");
 			}
 
-			using var context = new LockContext();
-			using(await this.locker.LockAsync(context).ConfigureAwait(false)){
+			using LockContext context = new LockContext();
+
+			using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
 				if(this.stashedTasks.ContainsKey(task.Id)) {
 					return;
 				}
@@ -106,7 +110,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		///     up. but, when
 		///     they are returned to the main stack, they are counted in the max parallel count, which is nicer
 		/// </remarks>
-		public  async Task RestoreStashedTask(InternalRoutedTask task) {
+		public async Task RestoreStashedTask(InternalRoutedTask task) {
 			if(!this.enableStashing) {
 				throw new ApplicationException("Stashing is not enabled");
 			}
@@ -114,8 +118,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			if(task.StashStatus != RoutedTask.StashStatuses.Stashed) {
 				return;
 			}
-			using var context = new LockContext();
-			using(await this.locker.LockAsync(context).ConfigureAwait(false)){
+
+			using LockContext context = new LockContext();
+
+			using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
 				if(this.executingTasks.ContainsKey(task.Id)) {
 					return;
 				}
@@ -145,10 +151,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			InternalRoutedTask targettedTask = null;
 
 			if(this.enableStashing) {
-				using var context = new LockContext();
-				using(await this.locker.LockAsync(context).ConfigureAwait(false)){
+				using LockContext context = new LockContext();
+
+				using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
 					if(this.stashedTasks.Any()) {
-						targettedTask = this.stashedTasks.FirstOrDefault(t => t.Value.routedTask.StashStatus == RoutedTask.StashStatuses.None && t.Key == taskId).Value.routedTask;
+						targettedTask = this.stashedTasks.FirstOrDefault(t => (t.Value.routedTask.StashStatus == RoutedTask.StashStatuses.None) && (t.Key == taskId)).Value.routedTask;
 
 						if(targettedTask != null) {
 							this.stashedTasks.Remove(taskId);
@@ -156,8 +163,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 					}
 				}
 			}
-			using var context1 = new LockContext();
-			using(await this.locker.LockAsync(context1).ConfigureAwait(false)){
+
+			using LockContext context1 = new LockContext();
+
+			using(await this.locker.LockAsync(context1).ConfigureAwait(false)) {
 				if(this.executingTasks.Any()) {
 
 					// now see if we have any parallel tasks that might finally be completed
@@ -170,11 +179,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 					}
 				}
 			}
-			using var context2 = new LockContext();
-			using(await this.locker.LockAsync(context2).ConfigureAwait(false)){
-				if(targettedTask == null && this.selectedTaskIds.Contains(taskId)) {
 
-					var tasks = this.selectedTaskQueue.OfType<InternalRoutedTask>().Where(t => t.Id == taskId).ToList();
+			using LockContext context2 = new LockContext();
+
+			using(await this.locker.LockAsync(context2).ConfigureAwait(false)) {
+				if((targettedTask == null) && this.selectedTaskIds.Contains(taskId)) {
+
+					List<InternalRoutedTask> tasks = this.selectedTaskQueue.OfType<InternalRoutedTask>().Where(t => t.Id == taskId).ToList();
 
 					if(tasks.Any()) {
 						targettedTask = tasks.First();
@@ -213,8 +224,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 						executionCompleted = await this.ProcessTask(targettedTask).ConfigureAwait(false);
 					} catch(NotReadyForProcessingException nex) {
 						// ok, this task is just not ready, we reinsert it for a later replay
-						using var context = new LockContext();
-						using(await this.locker.LockAsync(context).ConfigureAwait(false)){
+						using LockContext context = new LockContext();
+
+						using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
 							if(!this.selectedTaskIds.Contains(targettedTask.Id)) {
 								this.selectedTaskQueue.Add(targettedTask);
 								this.selectedTaskIds.Add(targettedTask.Id);
@@ -225,7 +237,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 					executionCompleted = true;
 				}
 
-				if(targettedTask.TaskExecutionResults.Error && targettedTask.TaskExecutionResults.HandlingMode == TaskExecutionResults.ExceptionHandlingModes.Rethrow) {
+				if(targettedTask.TaskExecutionResults.Error && (targettedTask.TaskExecutionResults.HandlingMode == TaskExecutionResults.ExceptionHandlingModes.Rethrow)) {
 					// ok, we have an exception, we need to throw it here
 					throw targettedTask.TaskExecutionResults.Exception;
 				}
@@ -269,7 +281,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			InternalRoutedTask routingTask = (InternalRoutedTask) task;
 			routingTask.Caller = this.Owner;
 
-			await this.DispatchTaskNoReturnAsync(task,lockContext).ConfigureAwait(false);
+			await this.DispatchTaskNoReturnAsync(task, lockContext).ConfigureAwait(false);
 		}
 
 		public async Task DispatchTaskNoReturnAsync(IRoutedTask task, LockContext lockContext) {
@@ -329,7 +341,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 			InternalRoutedTask routingTask = (InternalRoutedTask) task;
 
-			if(this.Synchronous || routingTask.Mode == RoutedTask.ExecutionMode.Sync || routingTask.RoutingStatus == RoutedTask.RoutingStatuses.Disposed) {
+			if(this.Synchronous || (routingTask.Mode == RoutedTask.ExecutionMode.Sync) || (routingTask.RoutingStatus == RoutedTask.RoutingStatuses.Disposed)) {
 				return true; // in sync mode, we always find it.
 			}
 
@@ -338,8 +350,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			// we are waiting for this task, so lets make sure its not cleaned out before we receive it
 			this.awaitingTaskId = taskId;
 
-			using var context = new LockContext();
-			using(await this.locker.LockAsync(context).ConfigureAwait(false)){
+			using LockContext context = new LockContext();
+
+			using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
 				this.excludedTasks.Add(taskId);
 			}
 
@@ -354,8 +367,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 				do {
 					found = await this.CheckSingleTask(taskId).ConfigureAwait(false);
 
-					using var context1 = new LockContext();
-					using(await this.locker.LockAsync(context1).ConfigureAwait(false)){
+					using LockContext context1 = new LockContext();
+
+					using(await this.locker.LockAsync(context1).ConfigureAwait(false)) {
 						if(this.executingTasks.ContainsKey(taskId)) {
 							taskSet = this.executingTasks[taskId];
 						}
@@ -365,7 +379,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 						continue;
 					}
 
-					if(absoluteTimeout < DateTime.UtcNow) {
+					if(absoluteTimeout < DateTimeEx.CurrentTime) {
 						// time out, we stop here
 						return false;
 					}
@@ -383,29 +397,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 						Thread.Sleep(100);
 
 					}
-				} while(DateTime.UtcNow < absoluteTimeout && !found);
+				} while((DateTimeEx.CurrentTime < absoluteTimeout) && !found);
 
 				return found;
 			} finally {
 				this.awaitingTaskId = null;
 
-				using var context2 = new LockContext();
-				using(await this.locker.LockAsync(context2).ConfigureAwait(false)){
+				using LockContext context2 = new LockContext();
+
+				using(await this.locker.LockAsync(context2).ConfigureAwait(false)) {
 					this.excludedTasks.Remove(taskId);
 				}
 			}
 		}
 
-		public  Task Wait() {
+		public Task Wait() {
 			return this.Wait(TimeSpan.MaxValue);
 		}
 
-		public  async Task Wait(TimeSpan timeout) {
+		public async Task Wait(TimeSpan timeout) {
 			if(timeout == TimeSpan.MaxValue) {
 				this.resetEvent.Wait();
 			} else {
 				this.resetEvent.Wait(timeout);
 			}
+
 			this.resetEvent.Reset();
 		}
 
@@ -418,7 +434,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 			internalRoutedTask.Mode = RoutedTask.ExecutionMode.Async;
 
-			if(!internalRoutedTask.EnableSelfLoop && internalRoutedTask.RoutingStatus != RoutedTask.RoutingStatuses.Returned && internalRoutedTask.RoutingStatus != RoutedTask.RoutingStatuses.Disposed && internalRoutedTask.Caller != null && internalRoutedTask.Caller.Equals(this.Owner)) {
+			if(!internalRoutedTask.EnableSelfLoop && (internalRoutedTask.RoutingStatus != RoutedTask.RoutingStatuses.Returned) && (internalRoutedTask.RoutingStatus != RoutedTask.RoutingStatuses.Disposed) && (internalRoutedTask.Caller != null) && internalRoutedTask.Caller.Equals(this.Owner)) {
 				throw new ApplicationException("Sending a task to sender. loops are not allowed.");
 			}
 
@@ -455,24 +471,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 			// clear stashed tasks
 			if(this.enableStashing) {
-				using var context = new LockContext();
-				using(await this.locker.LockAsync(context).ConfigureAwait(false)){
-					foreach(var completedTask in this.stashedTasks.Where(t => t.Value.threadTask?.IsCompleted ?? true).ToArray()) {
+				using LockContext context = new LockContext();
+
+				using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
+					foreach(KeyValuePair<Guid, (Task threadTask, InternalRoutedTask routedTask)> completedTask in this.stashedTasks.Where(t => t.Value.threadTask?.IsCompleted ?? true).ToArray()) {
 						this.stashedTasks.Remove(completedTask.Key);
 					}
 
 					//stashed tasks that have completed their stash but not their thread, we return them to the tashed
-					foreach(var completedTask in this.stashedTasks.Where(t => t.Value.routedTask.StashStatus == RoutedTask.StashStatuses.None).ToArray()) {
+					foreach(KeyValuePair<Guid, (Task threadTask, InternalRoutedTask routedTask)> completedTask in this.stashedTasks.Where(t => t.Value.routedTask.StashStatus == RoutedTask.StashStatuses.None).ToArray()) {
 						await this.RestoreStashedTask(completedTask.Value.routedTask).ConfigureAwait(false);
 					}
 				}
 			}
 
 			if(!this.IsInthreaded) {
-				using var context = new LockContext();
-				using(await this.locker.LockAsync(context).ConfigureAwait(false)){
+				using LockContext context = new LockContext();
+
+				using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
 					// clear completed tasks
-					foreach(var completedTask in this.executingTasks.Where(t =>  t.Value.threadTask == null || t.Value.threadTask.IsCompleted && (!this.awaitingTaskId.HasValue || t.Key != this.awaitingTaskId.Value)).ToArray()) {
+					foreach(KeyValuePair<Guid, (Task threadTask, InternalRoutedTask routedTask)> completedTask in this.executingTasks.Where(t => (t.Value.threadTask == null) || (t.Value.threadTask.IsCompleted && (!this.awaitingTaskId.HasValue || (t.Key != this.awaitingTaskId.Value)))).ToArray()) {
 						this.executingTasks.Remove(completedTask.Key);
 					}
 				}
@@ -484,8 +502,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			await this.CleanBuffers().ConfigureAwait(false);
 
 			if(!this.IsInthreaded) {
-				using var context = new LockContext();
-				using(await this.locker.LockAsync(context).ConfigureAwait(false)){
+				using LockContext context = new LockContext();
+
+				using(await this.locker.LockAsync(context).ConfigureAwait(false)) {
 					// we dont go above our maximum amount of executing tasks
 					if(this.executingTasks.Count >= this.maxParallelTasks) {
 						return null;
@@ -499,8 +518,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		public void WaitTasks() {
 
 			List<(Task threadTask, InternalRoutedTask routedTask)> taskLists = null;
-			using var context = new LockContext();
-			using(this.locker.Lock(context)){
+			using LockContext context = new LockContext();
+
+			using(this.locker.Lock(context)) {
 				taskLists = this.executingTasks.Values.ToList();
 
 				taskLists.AddRange(this.stashedTasks.Values);
@@ -510,7 +530,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		}
 
 		private DateTime GetAbsoluteTimeout(TimeSpan timeout) {
-			return timeout == TimeSpan.MaxValue ? DateTime.MaxValue : DateTime.UtcNow.Add(timeout);
+			return timeout == TimeSpan.MaxValue ? DateTime.MaxValue : DateTimeEx.CurrentTime.Add(timeout);
 		}
 
 		protected override async Task<bool> ProcessTask(IRoutedTask task) {
@@ -522,26 +542,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 			if(this.IsInthreaded) {
 
 				await RoutedTaskProcessor.ProcessTask((InternalRoutedTask) task, this.Owner).ConfigureAwait(false);
-				
+
 				return true;
 			}
 
 			// this is multi threaded.
-			async Task Method(LockContext lockContext)  {
+			async Task Method(LockContext lockContext) {
 				try {
 					await RoutedTaskProcessor.ProcessTask((InternalRoutedTask) task, this.Owner).ConfigureAwait(false);
 				} catch(NotReadyForProcessingException nrex) {
-					Log.Error("NotReadyForProcessingExceptions can not be launched from multi threaded processing");
+					NLog.Default.Error("NotReadyForProcessingExceptions can not be launched from multi threaded processing");
 				}
 
 				// lets set it to wake up the parent, in case it is waiting
 				this.resetEvent.Set();
-			};
+			}
 
-			using var context = new LockContext();
-			using var handle = await this.locker.LockAsync(context).ConfigureAwait(false);
-				this.executingTasks.Add(task.Id, (Method(handle), (InternalRoutedTask) task));
-			
+			;
+
+			using LockContext context = new LockContext();
+			using LockHandle handle = await this.locker.LockAsync(context).ConfigureAwait(false);
+			this.executingTasks.Add(task.Id, (Method(handle), (InternalRoutedTask) task));
 
 			return false;
 		}

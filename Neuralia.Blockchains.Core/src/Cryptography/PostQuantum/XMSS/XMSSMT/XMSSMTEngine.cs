@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses;
@@ -38,6 +38,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 		/// <param name="levels">Number of levels of the tree</param>
 		/// <param name="length">Length in bytes of the message digest as well as of each node</param>
 		/// <param name="wParam">Winternitz parameter {4,16}</param>
+		/// <remarks>Can sign 2^height messages. More layers (example 4 layers vs 2 layers) make key generation dramatically faster but signature size twice as large, signature time twice as fast and verification time twice as long.</remarks>
 		public XMSSMTEngine(XMSSOperationModes mode, Enums.ThreadMode threadMode, XMSSExecutionContext xmssExecutionContext, int height, int layers) {
 
 			if(height < 2) {
@@ -57,7 +58,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			this.xmssExecutionContext = xmssExecutionContext;
 			this.wotsPlusProvider = new WotsPlus(threadMode, this.xmssExecutionContext);
-			
+
 			this.ReducedHeight = this.height / this.layers;
 			this.LeafCount = 1L << this.height;
 			this.ReducedLeafCount = 1L << this.ReducedHeight;
@@ -93,13 +94,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			return result;
 		}
 
-		public async Task<(XMSSMTPrivateKey privateKey, XMSSMTPublicKey publicKey)> GenerateKeys(bool buildCache = true, Func<int, int, int, Task> progressCallback = null) {
+		public async Task<(XMSSMTPrivateKey privateKey, XMSSMTPublicKey publicKey)> GenerateKeys(bool buildCache = true, Func<int, long, int, Task> progressCallback = null) {
 
 			(ByteArray publicSeed, ByteArray secretSeed, ByteArray secretSeedPrf) = XMSSCommonUtils.GenerateSeeds(this.xmssExecutionContext);
 
 			this.wotsPrivateSeedsCache.Clear();
 
-			var nonces = new List<(int nonce1, int nonce2)>();
+			List<(int nonce1, int nonce2)> nonces = new List<(int nonce1, int nonce2)>();
 
 			for(int i = 0; i < this.ReducedLeafCount; i++) {
 
@@ -109,18 +110,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				nonces.Add((this.xmssExecutionContext.Random.NextInt(), this.xmssExecutionContext.Random.NextInt()));
 #endif
 			}
-			
+
 			nonces.Shuffle();
 
 			XMSSMTPrivateKey secretKey = new XMSSMTPrivateKey(this.height, this.layers, publicSeed, secretSeed, secretSeedPrf, new XMSSNonceSet(nonces), this.xmssExecutionContext);
 
 			// now lets prepare the public key
 			int lastLayer = this.layers - 1;
-			
+
 			OtsHashAddress adrs = this.xmssExecutionContext.OtsHashAddressPool.GetObject();
-			
+
 			for(int layer = 0; layer < this.layers; layer++) {
-				for(int tree = 0; tree < (1 << ((this.layers - 1 - layer) * this.ReducedHeight)); tree++) {
+				for(long tree = 0; tree < (1 << ((this.layers - 1 - layer) * this.ReducedHeight)); tree++) {
 
 					adrs.Reset();
 
@@ -130,10 +131,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 					using XMSSPrivateKey xmssPrivateKey = this.BuildXmssPrivateKey(adrs, secretKey, 0);
 
 					// build the node tree
-					int tree1 = tree;
+					long tree1 = tree;
 					int layer1 = layer;
 
-					var root = await this.xmssEngine.TreeHash(xmssPrivateKey, 0, this.ReducedHeight, publicSeed, adrs, pct => {
+					ByteArray root = await this.xmssEngine.TreeHash(xmssPrivateKey, 0, this.ReducedHeight, publicSeed, adrs, pct => {
 
 						if(progressCallback != null) {
 							return progressCallback(pct, tree1, layer1);
@@ -145,7 +146,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 					if(layer == lastLayer) {
 						secretKey.Root = root;
 					}
-					
+
 					// so it wont be disposed, since we keep it in the xmss^mt key
 					xmssPrivateKey.ClearNodeCache();
 				}
@@ -153,7 +154,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			this.xmssExecutionContext.OtsHashAddressPool.PutObject(adrs);
 
-			
 			XMSSMTPublicKey publicKey = new XMSSMTPublicKey(publicSeed, secretKey.Root.Clone(), this.xmssExecutionContext);
 
 			if(!buildCache) {
@@ -164,7 +164,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 		}
 
 		private XMSSPrivateKey BuildXmssPrivateKey(XMSSMTreeId id, XMSSMTPrivateKey xmssmtSecretKey, int leafIndex) {
-			
+
 			XMSSPrivateKey key = new XMSSPrivateKey(this.ReducedHeight, xmssmtSecretKey.PublicSeed, xmssmtSecretKey.SecretSeed, xmssmtSecretKey.SecretPrf, new XMSSNonceSet(xmssmtSecretKey.Nonces.Nonces), this.xmssExecutionContext, xmssmtSecretKey.NodeCache?[id]);
 
 			key.SetIndex(leafIndex);
@@ -177,14 +177,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				throw new ArgumentException("The key index is higher than the key size");
 			}
 		}
-		
+
 		public async Task<ByteArray> Sign(ByteArray message, XMSSMTPrivateKey xmssmtSecretKey) {
 
-			
 			this.CheckValidIndex(xmssmtSecretKey);
-			
+
 			long signatureIndex = xmssmtSecretKey.Index;
-			
+
 			OtsHashAddress adrs = this.xmssExecutionContext.OtsHashAddressPool.GetObject();
 			adrs.Reset();
 
@@ -300,8 +299,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			bool result = XMSSCommonUtils.EqualsConstantTime(loadedPublicKey.Root, node);
 
 			node.Return();
-			
-			return Task.FromResult<bool>(result);
+
+			return Task.FromResult(result);
 		}
 
 		/// <summary>
@@ -318,7 +317,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				return;
 			}
 
-			var nodes = this.xmssEngine.BuildAuthTreeNodesList((int) xmssmtSecretKey.Index);
+			ImmutableList<XMSSNodeId> nodes = this.xmssEngine.BuildAuthTreeNodesList((int) xmssmtSecretKey.Index);
 
 			foreach(XMSSNodeCache xmssNodeCache in xmssmtSecretKey.NodeCache.CachesTree.Values) {
 				this.xmssEngine.ShakeAuthTree(xmssNodeCache, (int) xmssmtSecretKey.Index, nodes);

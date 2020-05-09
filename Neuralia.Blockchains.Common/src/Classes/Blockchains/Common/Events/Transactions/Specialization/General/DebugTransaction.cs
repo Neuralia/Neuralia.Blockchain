@@ -10,10 +10,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 	public abstract class DebugTransaction : Transaction, IDebugTransaction {
 
+		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
+
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.DEBUG, 1, 0);
 		}
-		
-		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
 	}
 }

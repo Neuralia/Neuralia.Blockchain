@@ -1,8 +1,6 @@
 using System;
-using Neuralia.Blockchains.Core;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI.Wallet {
-	
 
 	public class WalletAccountAPI {
 		public Guid AccountUuid { get; set; }

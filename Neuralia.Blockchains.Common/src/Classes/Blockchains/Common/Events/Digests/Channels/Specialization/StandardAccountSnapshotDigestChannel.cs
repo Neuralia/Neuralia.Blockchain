@@ -25,8 +25,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		}
 
-		public override DigestChannelType ChannelType => DigestChannelTypes.Instance.StandardAccountSnapshot;
 		protected override Enums.AccountTypes AccountType => Enums.AccountTypes.Standard;
+
+		public override DigestChannelType ChannelType => DigestChannelTypes.Instance.StandardAccountSnapshot;
 	}
 
 	public static class StandardAccountSnapshotDigestChannel {

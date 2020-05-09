@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		string TransactionId { get; set; }
 
 		DateTime Timestamp { get; set; }
-		SafeArrayHandle Transaction { get;  }
+		SafeArrayHandle Transaction { get; }
 		string Version { get; set; }
 		byte Status { get; set; }
 		long GossipMessageHash { get; set; }

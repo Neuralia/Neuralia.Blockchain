@@ -65,6 +65,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 			if(this.messageFactories.ContainsKey(chainType)) {
 				this.messageFactories.Remove(chainType);
 			}
+
 			this.messageFactories.Add(chainType, messageFactory);
 		}
 
@@ -75,6 +76,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 				NetworkMessageSet.ResetAfterHeader(dr);
 
 				short workflowType = 0;
+
 				using(IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes)) {
 
 					workflowType = messageRehydrator.ReadShort();
@@ -128,7 +130,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 				byte networkOptions = dr.ReadByte();
 				(int headerSize, int _, int _) = dr.ReadSectionSize();
 
-				var version = dr.RehydrateRewind<ComponentVersion<SimpleUShort>>();
+				ComponentVersion<SimpleUShort> version = dr.RehydrateRewind<ComponentVersion<SimpleUShort>>();
 
 				switch(version.Type.Value.Value) {
 					case 1:

@@ -25,13 +25,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	}
 
 	public sealed class DigestChannelTypes : UShortConstantSet<DigestChannelType> {
-		public readonly DigestChannelType StandardAccountKeys;
-		public readonly DigestChannelType StandardAccountSnapshot;
-		
-		public readonly DigestChannelType JointAccountSnapshot;
-		
+
 		public readonly DigestChannelType AccreditationCertificates;
 		public readonly DigestChannelType ChainOptions;
+
+		public readonly DigestChannelType JointAccountSnapshot;
+		public readonly DigestChannelType StandardAccountKeys;
+		public readonly DigestChannelType StandardAccountSnapshot;
 
 		static DigestChannelTypes() {
 		}

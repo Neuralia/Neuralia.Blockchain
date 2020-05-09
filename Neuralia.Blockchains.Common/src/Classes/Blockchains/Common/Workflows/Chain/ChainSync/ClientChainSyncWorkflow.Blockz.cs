@@ -5,14 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
@@ -23,22 +22,23 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.Cha
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
-using Neuralia.Blockchains.Common.Classes.Configuration;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Base;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Collections;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
-using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync {
 	public abstract partial class ClientChainSyncWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY, FINISH_SYNC, REQUEST_BLOCK, REQUEST_DIGEST, SEND_BLOCK, SEND_DIGEST, REQUEST_BLOCK_INFO, SEND_BLOCK_INFO, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, REQUEST_DIGEST_INFO, SEND_DIGEST_INFO, REQUEST_BLOCK_SLICE_HASHES, SEND_BLOCK_SLICE_HASHES> : ClientChainWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IClientChainSyncWorkflow
@@ -60,20 +60,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		where REQUEST_BLOCK_SLICE_HASHES : ClientRequestBlockSliceHashes
 		where SEND_BLOCK_SLICE_HASHES : ServerRequestBlockSliceHashes {
 
+		public enum InterpretationResults {
+			Inserted,
+			Sleep,
+			StopSync
+		}
+
 		/// <summary>
-		/// launch a wallet sync every X blocks inserted
+		///     launch a wallet sync every X blocks inserted
 		/// </summary>
-		/// <remarks>making this too large may make the wallet sync the cached blocks, or make the cache too large. so keep it at a reasonable rate.</remarks>
+		/// <remarks>
+		///     making this too large may make the wallet sync the cached blocks, or make the cache too large. so keep it at a
+		///     reasonable rate.
+		/// </remarks>
 		private const int WALLET_SYNC_STEP = 10;
-		
-		private readonly ConcurrentDictionary<BlockId, bool> downloadQueue = new ConcurrentDictionary<BlockId, bool>();
 
 		private readonly WrapperConcurrentQueue<BlockId> downloadedBlockIdsHistory = new WrapperConcurrentQueue<BlockId>();
 
-		public enum InterpretationResults{
-			Inserted, Sleep, StopSync
-		}
-		
+		private readonly ConcurrentDictionary<BlockId, bool> downloadQueue = new ConcurrentDictionary<BlockId, bool>();
+
+		private BlockId currentBlockDownloadId = 0;
+
+		private long? downloadBlockHeight;
+
+		private DateTime? nextGCCollect;
+
 		/// <summary>
 		///     Now we perform the synchronization for the next block
 		/// </summary>
@@ -89,14 +100,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(1, 1, ""));
 
-			if(singleEntryContext.syncManifest != null && (singleEntryContext.syncManifest.Key != 1 || singleEntryContext.syncManifest.Attempts >= 3)) {
+			if((singleEntryContext.syncManifest != null) && ((singleEntryContext.syncManifest.Key != 1) || (singleEntryContext.syncManifest.Attempts >= 3))) {
 				// we found one, but if we are here, it is stale so we delete it
 				this.ClearBlockSyncManifest(singleEntryContext.details.Id);
 
 				singleEntryContext.syncManifest = null;
 			}
 
-			if(singleEntryContext.syncManifest != null && singleEntryContext.syncManifest.IsComplete) {
+			if((singleEntryContext.syncManifest != null) && singleEntryContext.syncManifest.IsComplete) {
 
 				// we are done it seems. move on to the next
 				this.ClearBlockSyncManifest(singleEntryContext.details.Id);
@@ -110,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// no choice, we must fetch the connection
 				await Repeater.RepeatAsync(async () => {
 
-					var nextBlockPeerDetails = await this.FetchPeerBlockInfo(singleEntryContext, true, true).ConfigureAwait(false);
+					(Dictionary<Guid, PeerBlockSpecs> results, ResultsState state) nextBlockPeerDetails = await this.FetchPeerBlockInfo(singleEntryContext, true, true).ConfigureAwait(false);
 
 					singleEntryContext.details = this.GetBlockInfoConsensus(nextBlockPeerDetails.results);
 				}).ConfigureAwait(false);
@@ -143,26 +154,41 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				bool success = false;
 
 				try {
-					Log.Verbose($"Fetching genesis block data, attempt {singleEntryContext.blockFetchAttemptCounter}");
+					NLog.Default.Verbose($"Fetching genesis block data, attempt {singleEntryContext.blockFetchAttemptCounter}");
 
 					if(singleEntryContext.syncManifest.IsComplete) {
 						// if we are here and the manifest is fully complete, something went very wrong. lets clear it and start over.
 						this.ResetBlockSyncManifest(singleEntryContext.syncManifest);
 					}
 
-					var result = await this.FetchPeerBlockData(singleEntryContext).ConfigureAwait(false);
+					(Dictionary<Guid, PeerBlockSpecs> results, ResultsState state) = await this.FetchPeerBlockData(singleEntryContext).ConfigureAwait(false);
 
-					if(result.state == ResultsState.OK) {
+					if(!results.Any()) {
+						// we got no valuable results, we must get more peers.
+						throw new NoSyncingConnectionsException();
+					}
+
+					singleEntryContext.details = this.GetBlockInfoConsensus(results);
+
+					// while we are here, lets update the chain block height with the news. its always important to do so
+					try {
+
+						this.UpdatePublicBlockHeight(results.Values.Select(r => r.publicChainBlockHeight.Value).ToList());
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, "Failed to update public block height");
+					}
+					
+					if(state == ResultsState.OK) {
 						success = true;
 					}
 				} catch(NoSyncingConnectionsException e) {
 					throw;
 				} catch(Exception e) {
-					Log.Error(e, "Failed to fetch genesis block data. might try again...");
+					NLog.Default.Error(e, "Failed to fetch genesis block data. might try again...");
 				}
 
 				if(!success) {
-					Log.Fatal("Failed to fetch genesis block data. we tried all the attempts we could and it still failed. this is critical. we may try again.");
+					NLog.Default.Fatal("Failed to fetch genesis block data. we tried all the attempts we could and it still failed. this is critical. we may try again.");
 
 					// well, thats not great, we have to try again if we can
 					singleEntryContext.blockFetchAttempt += 1;
@@ -215,7 +241,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							throw new SplitDecisionException();
 						}
 					} catch(SplitDecisionException e2) {
-						// lets do nothing, since we will try again concensus below with more data
+						// lets do nothing, since we will try again consensus below with more data
 						consensusSpecs.Id = long.MaxValue;
 					}
 				}
@@ -223,7 +249,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// here we dont need to test the consensus. its its the end, we finish, otherwise we will test again below
 			}
 
-			if(consensusSpecs.Id == null || consensusSpecs.Id <= 0) {
+			if((consensusSpecs.Id == null) || (consensusSpecs.Id <= 0)) {
 				consensusSpecs.end = true;
 
 				// well, the consensus tells us that we have reached the end of the chain. we are fully synched and we can now stop
@@ -237,7 +263,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.TestConsensus(nextBlockHeightConsensusType, nameof(consensusSpecs.Id));
 			this.TestConsensus(nextBlockHeightConsensusType, nameof(nextBlockHash));
 
-			var consensusSet = ChannelsInfoSet.RestructureConsensusBands<BlockChannelUtils.BlockChannelTypes, BlockChannelsInfoSet<DataSliceSize>, DataSliceSize>(peerBlockSpecs.ToDictionary(c => c.Key, c => c.Value.nextBlockSize));
+			Dictionary<BlockChannelUtils.BlockChannelTypes, List<(Guid peerId, DataSliceSize entry)>> consensusSet = ChannelsInfoSet.RestructureConsensusBands<BlockChannelUtils.BlockChannelTypes, BlockChannelsInfoSet<DataSliceSize>, DataSliceSize>(peerBlockSpecs.ToDictionary(c => c.Key, c => c.Value.nextBlockSize));
 
 			// now the various channel sizes
 			foreach(BlockChannelUtils.BlockChannelTypes channel in consensusSet.Keys) {
@@ -273,7 +299,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 			} catch(Exception ex) {
-				Log.Error(ex, $"Failed to query Unvalidated Block Gossip messages for block Id {currentBlockId}");
+				NLog.Default.Error(ex, $"Failed to query Unvalidated Block Gossip messages for block Id {currentBlockId}");
 
 				// otherwise, just continue...
 			}
@@ -310,7 +336,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				}
 
-				while(retryAttempt <= maxRetryAttempts && connectionRetryAttempt <= maxRetryAttempts) {
+				while((retryAttempt <= maxRetryAttempts) && (connectionRetryAttempt <= maxRetryAttempts)) {
 					// we run two parallel threads. one is the workflow to get new peers in the sync, the other is the sync itself with the peers we have
 					this.CheckShouldStopThrow();
 
@@ -325,11 +351,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						connections.FreeLowLevelBans();
 
 						// Get the ultimate list of all connections we currently have in the network manager and extract the ones that are new
-						var newConnections = connections.GetNewPotentialConnections(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase, this.chainType);
+						List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> newConnections = connections.GetNewPotentialConnections(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase, this.chainType);
 
-						if(newConnections.Any() && connectionRetryAttempt <= maxRetryAttempts) {
+						if(newConnections.Any() && (connectionRetryAttempt <= maxRetryAttempts)) {
 							// create a copy of our connections so we can work in parallel
-							var newConnectionSet = new ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>();
+							ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> newConnectionSet = new ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>();
 
 							newConnectionSet.Set(newConnections);
 
@@ -342,14 +368,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								this.HandleNewPeerTaskResult(ref this.newPeerTask, connections);
 							}, TaskContinuationOptions.OnlyOnRanToCompletion);
 
-							while(!connections.HasSyncingConnections && this.newPeerTask != null && !this.newPeerTask.IsCompleted) {
+							while(!connections.HasSyncingConnections && (this.newPeerTask != null) && !this.newPeerTask.IsCompleted) {
 
 								Thread.Sleep(50);
 
 								this.CheckShouldStopThrow();
 							}
 
-							if(!connections.HasSyncingConnections || connections.SyncingConnectionsCount < this.MinimumSyncPeerCount) {
+							if(!connections.HasSyncingConnections || (connections.SyncingConnectionsCount < this.MinimumSyncPeerCount)) {
 								// if we still have none or nont enough, then lets clear the rejected connections. give them a chance
 								connections.FreeLowLevelBans();
 
@@ -366,7 +392,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 
 							connectionRetryAttempt = 0;
-						} else if(!connections.HasSyncingConnections && connectionRetryAttempt <= maxRetryAttempts) {
+						} else if(!connections.HasSyncingConnections && (connectionRetryAttempt <= maxRetryAttempts)) {
 
 							// sleep about 1 second
 							Sleep(1000);
@@ -376,7 +402,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							continue;
 						} else if(!connections.HasSyncingConnections) {
 							// ok, thats a big deal, we have no new connections and no more syncing connections. we have to stop syncing.
-							Log.Debug("No more syncing connections and no new connections. we have nobody to talk to.");
+							NLog.Default.Debug("No more syncing connections and no new connections. we have nobody to talk to.");
 
 							return (null, ResultsState.NoSyncingConnections);
 						}
@@ -414,35 +440,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 
 							if(state == ResultsState.NoSyncingConnections) {
-								Log.Verbose("We have no more syncing connections. we will try to get some more.");
+								NLog.Default.Verbose("We have no more syncing connections. we will try to get some more.");
 
 								throw new NoSyncingConnectionsException();
 							}
 
 							if(state == ResultsState.Error) {
-								Log.Verbose("An error occured.");
+								NLog.Default.Verbose("An error occured.");
 
 								throw new WorkflowException();
 							}
 
 						} catch(NoDigestInfoException ndex) {
-							Log.Verbose("No digest information could be obtained.");
+							NLog.Default.Verbose("No digest information could be obtained.");
 
 							// thats it, for digest we continue
 							return (null, ResultsState.OK);
 
 						} catch(NoSyncingConnectionsException e) {
-							Log.Verbose("We have no more syncing connections. we will try to get some more.");
+							NLog.Default.Verbose("We have no more syncing connections. we will try to get some more.");
 
 							retryAttempt++;
 
 							Thread.Sleep(TimeSpan.FromSeconds(3));
 						} catch(AttemptsOverflowException e) {
-							Log.Verbose(e, "We have attempted to correct errors and have reached an overflow limit.");
+							NLog.Default.Verbose(e, "We have attempted to correct errors and have reached an overflow limit.");
 
 							throw new ImpossibleToSyncException("We have attempted to correct errors and have reached an overflow limit.", e);
 						} catch(Exception e) {
-							Log.Verbose(e, "");
+							NLog.Default.Verbose(e, "");
 
 							retryAttempt++;
 						}
@@ -469,10 +495,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return (null, ResultsState.OK);
 		}
 
-		private class RunningWrapper {
-			public bool running = true;
-		}
-
 		/// <summary>
 		///     Run the 3 parallel processes that will ensure blocks are being synced.
 		///     1. downloading the blocks to disk
@@ -485,7 +507,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.UpdateSignificantActionTimestamp();
 
 			RunningWrapper running = new RunningWrapper();
-			this.nextGCCollect = DateTime.UtcNow.AddMinutes(1);
+			this.nextGCCollect = DateTimeEx.CurrentTime.AddMinutes(1);
 
 			//this variable ensures that we did at least one network check to udpate our blockchain info. set it to false, to reset the check
 			this.updatePublicBlockHeightPerformed = false;
@@ -501,18 +523,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			ManualResetEventSlim interpretResetEvent = null;
 
 			try {
-				
+
 				downloadResetEvent = new ManualResetEventSlim(false);
 				insertResetEvent = new ManualResetEventSlim(false);
 				interpretResetEvent = new ManualResetEventSlim(false);
 
 				RunningWrapper running1 = running;
 
-				var downloadTask = Task<Task<bool>>.Factory.StartNew(async () => {
+				Task<bool> downloadTask = Task<Task<bool>>.Factory.StartNew(async () => {
 
 					LockContext lockContext = null;
 					Thread.CurrentThread.Name = "Chain Sync Download Thread";
-					
+
 					this.CheckShouldStopThrow();
 
 					//int blockGossipCacheProximityLevel = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
@@ -546,7 +568,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								downloadResetEvent.Wait(TimeSpan.FromMilliseconds(sleepTime), this.CancelTokenSource.Token);
 							}
 						} catch(Exception ex) {
-							Log.Error(ex, "Failed to download block while syncing");
+							NLog.Default.Error(ex, "Failed to download block while syncing");
+
 							throw;
 						}
 					}
@@ -556,11 +579,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				RunningWrapper running2 = running;
 
-				var verifyTask = Task<Task<bool>>.Factory.StartNew(async () => {
-					
+				Task<bool> verifyTask = Task<Task<bool>>.Factory.StartNew(async () => {
+
 					LockContext lockContext = null;
 					Thread.CurrentThread.Name = "Chain Sync Verification Thread";
-					
+
 					this.CheckShouldStopThrow();
 
 					while(running2.running) {
@@ -579,7 +602,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								interpretResetEvent.Set();
 							}
 						} catch(Exception ex) {
-							Log.Error(ex, "Failed to insert block into chain while syncing");
+							NLog.Default.Error(ex, "Failed to insert block into chain while syncing");
+
 							throw;
 						}
 					}
@@ -589,11 +613,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				RunningWrapper running3 = running;
 
-				var interpretationTask = Task<Task<bool>>.Factory.StartNew(async () => {
-					
+				Task<bool> interpretationTask = Task<Task<bool>>.Factory.StartNew(async () => {
+
 					Thread.CurrentThread.Name = "Chain Sync Interpretation Thread";
 					LockContext lockContext = null;
-					
+
 					this.CheckShouldStopThrow();
 
 					while(running3.running) {
@@ -603,22 +627,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								return false;
 							}
 
-							var interpretationResults = await this.InterpretNextBlock(lockContext).ConfigureAwait(false);
-							
-							if (interpretationResults == InterpretationResults.Inserted) {
+							InterpretationResults interpretationResults = await this.InterpretNextBlock(lockContext).ConfigureAwait(false);
+
+							if(interpretationResults == InterpretationResults.Inserted) {
 								this.UpdateSignificantActionTimestamp();
-							}
-							else if (interpretationResults == InterpretationResults.StopSync){
+							} else if(interpretationResults == InterpretationResults.StopSync) {
 								// we can stop syncing!
 								return true;
-							}
-							else {
+							} else {
 								if(interpretResetEvent.Wait(TimeSpan.FromSeconds(2), this.CancelTokenSource.Token) || interpretResetEvent.IsSet) {
 									interpretResetEvent.Reset();
 								}
-							} 
+							}
 						} catch(Exception ex) {
-							Log.Error(ex, "Failed to interpret block into chain while syncing");
+							NLog.Default.Error(ex, "Failed to interpret block into chain while syncing");
+
 							throw;
 						}
 					}
@@ -626,10 +649,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return true;
 				}, this.CancelTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
 
-				var tasksSet = new Task[] {downloadTask, verifyTask, interpretationTask};
+				Task[] tasksSet = {downloadTask, verifyTask, interpretationTask};
 
 				while(true) {
-					
+
 					bool stop = this.CheckShouldStop() || tasksSet.Any(t => t.IsCompleted) || this.SignificantActionTimeout();
 
 					if(stop) {
@@ -637,9 +660,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						running.running = false;
 
 						void Wait(int time) {
-							try{
-								var continueTasks = tasksSet.Where(t => !t.IsCompleted).ToArray();
-								if (continueTasks.Any()){
+							try {
+								Task[] continueTasks = tasksSet.Where(t => !t.IsCompleted).ToArray();
+
+								if(continueTasks.Any()) {
 									Task.WaitAll(continueTasks, TimeSpan.FromSeconds(time));
 								}
 							} catch(TaskCanceledException tex) {
@@ -667,9 +691,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						// lets push forward the faults
 						if(tasksSet.Any(t => t.IsFaulted)) {
-							var faultedTasks = tasksSet.Where(t => t.IsFaulted && t.Exception != null).ToList();
+							List<Task> faultedTasks = tasksSet.Where(t => t.IsFaulted && (t.Exception != null)).ToList();
 
-							var exceptions = new List<Exception>();
+							List<Exception> exceptions = new List<Exception>();
 
 							foreach(Task task in faultedTasks) {
 
@@ -692,7 +716,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						GC.Collect();
 
 						// lets act again in X seconds
-						this.nextGCCollect = DateTime.UtcNow.AddMinutes(1);
+						this.nextGCCollect = DateTimeEx.CurrentTime.AddMinutes(1);
 					}
 
 					Thread.Sleep(1000);
@@ -715,8 +739,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
-		private DateTime? nextGCCollect;
-
 		/// <summary>
 		///     this method allows to check if its time to act, or if we should sleep more
 		/// </summary>
@@ -726,7 +748,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return true;
 			}
 
-			if(action.Value < DateTime.UtcNow) {
+			if(action.Value < DateTimeEx.CurrentTime) {
 				action = null;
 
 				return true;
@@ -734,10 +756,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			return false;
 		}
-
-		private BlockId currentBlockDownloadId = 0;
-
-		private long? downloadBlockHeight;
 
 		/// <summary>
 		///     Download the next block in line, or rather, the next required block
@@ -756,6 +774,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					this.downloadBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DownloadBlockHeight;
 				}
+
 				if(!this.downloadQueue.Any()) {
 					// if we have no blocks in the queue, we add the next set, unless we have them all
 					long publicBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight;
@@ -770,7 +789,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						if(this.updatePublicBlockHeightPerformed == false) {
 							return await this.RunBlockSyncingAction(async connectionsSet => {
 								//if we need to get a digest, we do now
-								if(connections.HasSyncingConnections && connections.SyncingConnectionsCount >= this.MinimumSyncPeerCount) {
+								if(connections.HasSyncingConnections && (connections.SyncingConnectionsCount >= this.MinimumSyncPeerCount)) {
 									// ok, we need to force an update to get the lastesdt blockchain info
 									BlockSingleEntryContext singleEntryContext = new BlockSingleEntryContext();
 									singleEntryContext.Connections = connections;
@@ -788,6 +807,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						return (nextBlockSpecs, ResultsState.SyncOver);
 					}
 				}
+
 				if(!this.downloadQueue.Any()) {
 					// nothing to download, let's sleep a while
 					return (nextBlockSpecs, state);
@@ -795,19 +815,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				// get the next lowest entry to download
 				this.currentBlockDownloadId = this.downloadQueue.Keys.ToArray().OrderBy(k => k).First();
-				
+
 				// ok, attempt to acquire the lock so the gossip does not download it at the same time.
-				if (!this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.AttemptLockBlockDownload(this.currentBlockDownloadId)){
+				if(!this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.AttemptLockBlockDownload(this.currentBlockDownloadId)) {
 					// we could not get the lock, so the gossip must have it. lets let it go for now
 					this.downloadQueue.RemoveSafe(this.currentBlockDownloadId);
-					
+
 					return (nextBlockSpecs, state);
 				}
-				
+
 				if(this.currentBlockDownloadId < this.downloadBlockHeight) {
 					// we are downloading a block that is back in time, lets free the loosely banned peers
 					connections.FreeLowLevelBans();
 				}
+
 				if(this.downloadedBlockIdsHistory.Any()) {
 					if(this.downloadedBlockIdsHistory.All(e => e.Entry == this.currentBlockDownloadId)) {
 						// this is bad, we repeated the same block request too many times.
@@ -817,47 +838,53 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						throw new WorkflowException();
 					}
 				}
+
 				this.downloadedBlockIdsHistory.Enqueue(this.currentBlockDownloadId);
 
 				while(this.downloadedBlockIdsHistory.Count > 5) {
-					this.downloadedBlockIdsHistory.TryDequeue(out var _);
+					this.downloadedBlockIdsHistory.TryDequeue(out _);
 				}
 
 				bool force = this.downloadQueue[this.currentBlockDownloadId];
 
 				bool done = false;
+
 				// first thing, check if we have a cached gossip message
 				if(await this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetUnvalidatedBlockGossipMessageCached(this.currentBlockDownloadId).ConfigureAwait(false)) {
 					done = true;
 				} else {
 					// now we check if we have a completed syncing manifest for it
 					ChainDataProvider.BlockFilesetSyncManifestStatuses status = this.GetBlockSyncManifestStatus(this.currentBlockDownloadId);
+
 					if(status == ChainDataProvider.BlockFilesetSyncManifestStatuses.Completed) {
 						done = true;
 					}
 				}
+
 				if(done) {
 					if(force) {
 						// reset it all
 						this.ClearBlockSyncManifest(this.currentBlockDownloadId);
 					} else {
 						// we already have it, we move on.
-						await UpdateDownloadBlockHeight(currentBlockDownloadId).ConfigureAwait(false);
+						await this.UpdateDownloadBlockHeight(this.currentBlockDownloadId).ConfigureAwait(false);
 
 						this.downloadQueue.RemoveSafe(this.currentBlockDownloadId);
 
 						return (nextBlockSpecs, ResultsState.OK);
 					}
 				}
+
 				(nextBlockSpecs, state) = await this.RunBlockSyncingAction(async connectionsSet => {
 					//if we need to get a digest, we do now
-					
+
 					(PeerBlockSpecs nextBlockSpecsx, ResultsState statex) = await this.DownloadNextBlock(this.currentBlockDownloadId, currentBlockSpecs, connectionsSet).ConfigureAwait(false);
 					await this.UpdateDownloadBlockHeight(this.currentBlockDownloadId).ConfigureAwait(false);
 					this.downloadQueue.RemoveSafe(this.currentBlockDownloadId);
 
 					return (nextBlockSpecsx, statex);
 				}, 3, connections).ConfigureAwait(false);
+
 				if(state != ResultsState.OK) {
 					throw new WorkflowException();
 				}
@@ -883,14 +910,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			if(diskBlockHeight < downloadBlockHeight) {
 
-				var dataChannels = new ChannelsEntries<SafeArrayHandle>();
+				ChannelsEntries<SafeArrayHandle> dataChannels = new ChannelsEntries<SafeArrayHandle>();
 
 				BlockId nextBlockId = new BlockId(diskBlockHeight + 1);
 
-				if (this.downloadQueue.ContainsKey(nextBlockId)){
+				if(this.downloadQueue.ContainsKey(nextBlockId)) {
 					// we have a race condition, most probably retrying a block. we should wait here for it to be completed
 					return false;
 				}
+
 				ChainDataProvider.BlockFilesetSyncManifestStatuses status2 = this.GetBlockSyncManifestStatus(nextBlockId);
 
 				LoadSources loadSource = LoadSources.NotLoaded;
@@ -928,24 +956,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							loadSource = LoadSources.Sync;
 
 							dehydratedBlock = new DehydratedBlock();
-							
-							try{
+
+							try {
 								dehydratedBlock.Rehydrate(dataChannels);
 
-								dehydratedBlock.RehydrateBlock(
-									this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase
-										.BlockchainEventsRehydrationFactoryBase, true);
-							}
-							catch (UnrecognizedElementException urex){
+								dehydratedBlock.RehydrateBlock(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase, true);
+							} catch(UnrecognizedElementException urex) {
 
 								throw;
-							}
-							catch (Exception ex){
-								throw new InvalidBlockDataException(
-									$"Failed to rehydrate block {nextBlockId} while syncing.", ex);
-							}
-							finally{
-								foreach (var entry in dataChannels.Entries){
+							} catch(Exception ex) {
+								throw new InvalidBlockDataException($"Failed to rehydrate block {nextBlockId} while syncing.", ex);
+							} finally {
+								foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle> entry in dataChannels.Entries) {
 									entry.Value?.Dispose();
 								}
 							}
@@ -964,7 +986,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					// now perform validation
 
 					if(loadSource == LoadSources.Gossip) {
-						foreach(var (envelope, xxHash) in gossipEnvelopes) {
+						foreach((IBlockEnvelope envelope, long xxHash) in gossipEnvelopes) {
 
 							await this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(envelope, false, result => {
 								results = result;
@@ -982,7 +1004,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									await sqliteDal.CheckMessageInCache(xxHash, true).ConfigureAwait(false);
 
 								} catch(Exception ex) {
-									Log.Error(ex, "Failed to update cached message validation status");
+									NLog.Default.Error(ex, "Failed to update cached message validation status");
 								}
 
 								break;
@@ -994,29 +1016,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}).ConfigureAwait(false);
 					}
 
-					if (results.Invalid){
+					if(results.Invalid) {
 						throw new WorkflowException($"failed to validate block id {dehydratedBlock.BlockId}. Error codes: {results.ErrorCodesJoined}");
 					}
-					
+
 					bool valid = await this.InsertBlockIntoChain(dehydratedBlock, 1, lockContext).ConfigureAwait(false);
+
 					if(valid) {
 						return true;
-					}
-					else{
+					} else {
 						throw new WorkflowException($"failed to insert block into chain for block id {dehydratedBlock.BlockId}.");
 					}
-		
+
 				} catch(UnrecognizedElementException urex) {
 
 					throw;
 				} catch(Exception ex) {
-					
-					Log.Error(ex, "Failed to insert block into chain while syncing.");
-					
+
+					NLog.Default.Error(ex, "Failed to insert block into chain while syncing.");
+
 					if(ex is InvalidBlockDataException inex) {
 						// pl, the data we received was invalid, we need to perform a check
 						await this.CompleteBlockSliceVerification(syncingManifest, connections).ConfigureAwait(false);
 					}
+
 					if(loadSource == LoadSources.Gossip) {
 
 						this.AddBlockIdToDownloadQueue(nextBlockId);
@@ -1041,11 +1064,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		/// <summary>
-		/// add a block id to the download queue, if ti is not already there and not being downloaded
+		///     add a block id to the download queue, if ti is not already there and not being downloaded
 		/// </summary>
 		/// <param name="nextBlockId"></param>
 		private void AddBlockIdToDownloadQueue(BlockId nextBlockId) {
-			if(!this.downloadQueue.ContainsKey(nextBlockId) && this.currentBlockDownloadId != nextBlockId) {
+			if(!this.downloadQueue.ContainsKey(nextBlockId) && (this.currentBlockDownloadId != nextBlockId)) {
 				this.downloadQueue.AddSafe(nextBlockId, true);
 			}
 		}
@@ -1057,7 +1080,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <returns></returns>
 		protected virtual async Task<InterpretationResults> InterpretNextBlock(LockContext lockContext) {
 
-			(long diskBlockHeight, long blockHeight) = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation<(long, long)>((lc) => Task.FromResult((this.ChainStateProvider.DiskBlockHeight, this.ChainStateProvider.BlockHeight)), lockContext).ConfigureAwait(false);	
+			(long diskBlockHeight, long blockHeight) = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation<(long, long)>(lc => Task.FromResult((this.ChainStateProvider.DiskBlockHeight, this.ChainStateProvider.BlockHeight)), lockContext).ConfigureAwait(false);
 
 			if(blockHeight < diskBlockHeight) {
 
@@ -1067,19 +1090,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				await this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InterpretBlock(block, dehydratedBlock, false, null, lockContext, false).ConfigureAwait(false);
 
-				var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+				BlockchainTask<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, bool, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
 				this.rateCalculator.AddHistoryEntry(dehydratedBlock.BlockId);
 
 				return InterpretationResults.Inserted;
 			}
 
-			if (this.updatePublicBlockHeightPerformed && blockHeight == diskBlockHeight){
-				
-				// check if we are fully synced
-				(long usableDiskBlockHeight, long usableBlockHeight, long usablePublicBlockHeight) = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation<(long, long, long)>((lc) => Task.FromResult((this.ChainStateProvider.DiskBlockHeight, this.ChainStateProvider.BlockHeight, this.ChainStateProvider.PublicBlockHeight)), lockContext).ConfigureAwait(false);	
+			if(this.updatePublicBlockHeightPerformed && (blockHeight == diskBlockHeight)) {
 
-				if (usableBlockHeight == usableDiskBlockHeight && usableBlockHeight == usablePublicBlockHeight){
+				// check if we are fully synced
+				(long usableDiskBlockHeight, long usableBlockHeight, long usablePublicBlockHeight) = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation<(long, long, long)>(lc => Task.FromResult((this.ChainStateProvider.DiskBlockHeight, this.ChainStateProvider.BlockHeight, this.ChainStateProvider.PublicBlockHeight)), lockContext).ConfigureAwait(false);
+
+				if((usableBlockHeight == usableDiskBlockHeight) && (usableBlockHeight == usablePublicBlockHeight)) {
 					// we are fully synced and fully interpreted. the sync can stop
 					return InterpretationResults.StopSync;
 				}
@@ -1093,18 +1116,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// </summary>
 		/// <param name="nextBlockId"></param>
 		private async Task UpdateDownloadBlockHeight(BlockId nextBlockId) {
-			if(nextBlockId == this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DownloadBlockHeight + 1) {
-				
+			if(nextBlockId == (this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DownloadBlockHeight + 1)) {
+
 				this.downloadBlockHeight = nextBlockId;
 
-				await centralCoordinator.ChainComponentProvider.ChainStateProviderBase.SetDownloadBlockHeight(nextBlockId).ConfigureAwait(false);
+				await this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.SetDownloadBlockHeight(nextBlockId).ConfigureAwait(false);
 			}
 		}
 
 		private Task UpdateBlockInfo(BlockSingleEntryContext singleEntryContext) {
 			return Repeater.RepeatAsync(async () => {
 
-				var nextBlockPeerDetails = await this.FetchPeerBlockInfo(singleEntryContext, true, true).ConfigureAwait(false);
+				(Dictionary<Guid, PeerBlockSpecs> results, ResultsState state) nextBlockPeerDetails = await this.FetchPeerBlockInfo(singleEntryContext, true, true).ConfigureAwait(false);
 
 				if(!nextBlockPeerDetails.results.Any()) {
 					// we got no valuable results, we must get more peers.
@@ -1118,7 +1141,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					this.UpdatePublicBlockHeight(nextBlockPeerDetails.results.Values.Select(r => r.publicChainBlockHeight.Value).ToList());
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to update public block height");
+					NLog.Default.Error(ex, "Failed to update public block height");
 				}
 			}, 2);
 		}
@@ -1141,7 +1164,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			bool reuseBlockSpecs = false;
 
-			if(singleEntryContext.details == null || singleEntryContext.details.Id != blockId) {
+			if((singleEntryContext.details == null) || (singleEntryContext.details.Id != blockId)) {
 				singleEntryContext.details = new PeerBlockSpecs();
 				singleEntryContext.details.Id = blockId;
 			} else {
@@ -1153,14 +1176,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			singleEntryContext.syncManifest = this.LoadBlockSyncManifest(blockId);
 
-			if(singleEntryContext.syncManifest != null && (singleEntryContext.syncManifest.Key != 1 || singleEntryContext.syncManifest.Attempts >= 3)) {
+			if((singleEntryContext.syncManifest != null) && ((singleEntryContext.syncManifest.Key != 1) || (singleEntryContext.syncManifest.Attempts >= 3))) {
 				// we found one, but if we are here, it is stale so we delete it
 				this.ClearBlockSyncManifest(blockId);
 
 				singleEntryContext.syncManifest = null;
 			}
 
-			if(singleEntryContext.syncManifest != null && singleEntryContext.syncManifest.IsComplete) {
+			if((singleEntryContext.syncManifest != null) && singleEntryContext.syncManifest.IsComplete) {
 				//TODO: check this
 				return (nextBlockSpecs, ResultsState.OK);
 			}
@@ -1174,12 +1197,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// ok, determine if there is a digest to get
 
 				// we might already have the block connection consensus
-				if(reuseBlockSpecs == false || fullyLoaded) {
+				if((reuseBlockSpecs == false) || fullyLoaded) {
 					// no choice, we must fetch the connection
 
 					await this.UpdateBlockInfo(singleEntryContext).ConfigureAwait(false);
 
-					if(fullyLoaded || singleEntryContext.details.Id == this.ChainStateProvider.DownloadBlockHeight || singleEntryContext.details.end) {
+					if(fullyLoaded || (singleEntryContext.details.Id == this.ChainStateProvider.DownloadBlockHeight) || singleEntryContext.details.end) {
 						// seems we are at the end, no need to go any further
 						singleEntryContext.details.end = singleEntryContext.details.end;
 
@@ -1193,7 +1216,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				singleEntryContext.syncManifest.Key = singleEntryContext.details.Id;
 
 				// lets generate the file map
-				foreach(var channel in singleEntryContext.details.nextBlockSize.SlicesInfo) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, DataSliceSize> channel in singleEntryContext.details.nextBlockSize.SlicesInfo) {
 					singleEntryContext.syncManifest.Files.Add(channel.Key, new DataSlice {Length = channel.Value.Length});
 				}
 
@@ -1205,7 +1228,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			string syncRate = this.rateCalculator.CalculateSyncingRate(this.ChainStateProvider.PublicBlockHeight - this.ChainStateProvider.DownloadBlockHeight);
 
-			Log.Information($"Estimated time to blockchain sync completion: {syncRate}");
+			NLog.Default.Information($"Estimated time to blockchain sync completion: {syncRate}");
 			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(singleEntryContext.details.Id, this.ChainStateProvider.PublicBlockHeight, syncRate));
 
 			singleEntryContext.blockFetchAttemptCounter = 1;
@@ -1221,14 +1244,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				bool success = false;
 
 				try {
-					Log.Verbose($"Fetching data for block id {blockId} , attempt {singleEntryContext.blockFetchAttemptCounter}");
+					NLog.Default.Verbose($"Fetching data for block id {blockId} , attempt {singleEntryContext.blockFetchAttemptCounter}");
 
 					if(singleEntryContext.syncManifest.IsComplete) {
 						this.ResetBlockSyncManifest(singleEntryContext.syncManifest);
 					}
 
 					// lets get the block bytes
-					var nextBlockPeerDetails = await this.FetchPeerBlockData(singleEntryContext).ConfigureAwait(false);
+					(Dictionary<Guid, PeerBlockSpecs> results, ResultsState state) nextBlockPeerDetails = await this.FetchPeerBlockData(singleEntryContext).ConfigureAwait(false);
 
 					if(!nextBlockPeerDetails.results.Any()) {
 						// we got no valuable results, we must get more peers.
@@ -1242,10 +1265,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				} catch(NoSyncingConnectionsException e) {
 					throw;
 				} catch(Exception e) {
-					Log.Error(e, "Failed to fetch block data. might try again...");
+					NLog.Default.Error(e, "Failed to fetch block data. might try again...");
 				}
+
 				if(!success) {
-					Log.Error("Failed to fetch block data. we tried all the attempts we could and it still failed. this is critical. we may try again.");
+					NLog.Default.Error("Failed to fetch block data. we tried all the attempts we could and it still failed. this is critical. we may try again.");
 
 					// well, thats not great, we have to try again if we can
 					singleEntryContext.blockFetchAttempt += 1;
@@ -1269,7 +1293,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				//TODO: add some higher level analytics
 			}
 
-			Log.Information($"Block {blockId} has been downloaded successfully");
+			NLog.Default.Information($"Block {blockId} has been downloaded successfully");
 
 			return (nextBlockSpecs, ResultsState.OK);
 		}
@@ -1284,32 +1308,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected async Task CompleteBlockSliceVerification(BlockFilesetSyncManifest syncingManifest, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connections) {
 			// ok, we tried twice and had invalid data. lets try to determine who is at fault
 
-			var sliceHahsesSet = await this.FetchPeerBlockSliceHashes(syncingManifest.Key, syncingManifest.Slices.Select(s => s.fileSlices.ToDictionary(e => e.Key, e => (int) e.Value.Length)).ToList(), connections).ConfigureAwait(false);
+			(Dictionary<Guid, (List<int> sliceHashes, int topHash)> results, ResultsState state) sliceHahsesSet = await this.FetchPeerBlockSliceHashes(syncingManifest.Key, syncingManifest.Slices.Select(s => s.fileSlices.ToDictionary(e => e.Key, e => (int) e.Value.Length)).ToList(), connections).ConfigureAwait(false);
 
 			if(!sliceHahsesSet.results.Any()) {
 				// we got no valuable results, we must get more peers.
 				throw new NoSyncingConnectionsException();
 			}
 
-			var peersToRemove = new Dictionary<Guid, PeerConnection>();
-			var syncingConnections = connections.GetSyncingConnections();
+			Dictionary<Guid, PeerConnection> peersToRemove = new Dictionary<Guid, PeerConnection>();
+			List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> syncingConnections = connections.GetSyncingConnections();
 
 			// ok, anybody that did not answer is auto banned
-			var keys = sliceHahsesSet.results.Keys.ToList();
+			List<Guid> keys = sliceHahsesSet.results.Keys.ToList();
 
-			foreach(var missing in syncingConnections.Where(c => !keys.Contains(c.PeerConnection.ClientUuid))) {
+			foreach(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> missing in syncingConnections.Where(c => !keys.Contains(c.PeerConnection.ClientUuid))) {
 				peersToRemove.Add(missing.PeerConnection.ClientUuid, missing.PeerConnection);
 			}
 
 			// ok, time to find out who says the truth
 
-			var peerTopHashes = sliceHahsesSet.results.Select(e => e.Value).ToList();
+			List<(List<int> sliceHashes, int topHash)> peerTopHashes = sliceHahsesSet.results.Select(e => e.Value).ToList();
 
-			(int result, ConsensusUtilities.ConsensusType concensusType) topHashConsensusSet = ConsensusUtilities.GetConsensus(peerTopHashes, a => a.topHash);
+			(int result, ConsensusUtilities.ConsensusType consensusType) topHashConsensusSet = ConsensusUtilities.GetConsensus(peerTopHashes, a => a.topHash);
 
-			if(topHashConsensusSet.concensusType == ConsensusUtilities.ConsensusType.Single || topHashConsensusSet.concensusType == ConsensusUtilities.ConsensusType.Split) {
+			if((topHashConsensusSet.consensusType == ConsensusUtilities.ConsensusType.Single) || (topHashConsensusSet.consensusType == ConsensusUtilities.ConsensusType.Split)) {
 				// this is completely unusable, we should remove all connections
-				foreach(var connection in syncingConnections) {
+				foreach(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connection in syncingConnections) {
 					peersToRemove.Add(connection.PeerConnection.ClientUuid, connection.PeerConnection);
 				}
 			} else {
@@ -1327,16 +1351,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(topHashConsensus != localTopHash) {
 					// lets see if we figure out who is lieing here
-					var faulty = sliceHahsesSet.results.Where(p => p.Value.topHash != topHashConsensus).ToList();
+					List<KeyValuePair<Guid, (List<int> sliceHashes, int topHash)>> faulty = sliceHahsesSet.results.Where(p => p.Value.topHash != topHashConsensus).ToList();
 
 					if(faulty.Any()) {
 						// lets remove these peers
 
-						foreach(var faultyPeer in faulty) {
+						foreach(KeyValuePair<Guid, (List<int> sliceHashes, int topHash)> faultyPeer in faulty) {
 
-							var peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == faultyPeer.Key);
+							ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == faultyPeer.Key);
 
-							if(peerConnection != null && !peersToRemove.ContainsKey(faultyPeer.Key)) {
+							if((peerConnection != null) && !peersToRemove.ContainsKey(faultyPeer.Key)) {
 								peersToRemove.Add(faultyPeer.Key, peerConnection.PeerConnection);
 							}
 						}
@@ -1344,13 +1368,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				// time to analyze who is lieing
-				var slicesSets = sliceHahsesSet.results.ToDictionary(e => e.Key, e => e.Value.sliceHashes);
+				Dictionary<Guid, List<int>> slicesSets = sliceHahsesSet.results.ToDictionary(e => e.Key, e => e.Value.sliceHashes);
 
-				(int result, ConsensusUtilities.ConsensusType concensusType) sliceCountConsensusSet = ConsensusUtilities.GetConsensus(slicesSets, a => a.Value.Count);
+				(int result, ConsensusUtilities.ConsensusType consensusType) sliceCountConsensusSet = ConsensusUtilities.GetConsensus(slicesSets, a => a.Value.Count);
 
-				if(sliceCountConsensusSet.concensusType == ConsensusUtilities.ConsensusType.Single || sliceCountConsensusSet.concensusType == ConsensusUtilities.ConsensusType.Split) {
+				if((sliceCountConsensusSet.consensusType == ConsensusUtilities.ConsensusType.Single) || (sliceCountConsensusSet.consensusType == ConsensusUtilities.ConsensusType.Split)) {
 					// this is completely unusable, we should remove all connections
-					foreach(var connection in syncingConnections) {
+					foreach(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connection in syncingConnections) {
 						connections.AddConnectionStrike(connection.PeerConnection, ConnectionSet.ConnectionStrikeset.RejectionReason.Banned);
 					}
 
@@ -1358,14 +1382,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				{
-					var faulty = sliceHahsesSet.results.Where(p => p.Value.sliceHashes.Count != sliceCountConsensusSet.result).ToList();
+					List<KeyValuePair<Guid, (List<int> sliceHashes, int topHash)>> faulty = sliceHahsesSet.results.Where(p => p.Value.sliceHashes.Count != sliceCountConsensusSet.result).ToList();
 
 					// lets remove these peers
-					foreach(var faultyPeer in faulty) {
+					foreach(KeyValuePair<Guid, (List<int> sliceHashes, int topHash)> faultyPeer in faulty) {
 
-						var peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == faultyPeer.Key);
+						ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == faultyPeer.Key);
 
-						if(peerConnection != null && !peersToRemove.ContainsKey(faultyPeer.Key)) {
+						if((peerConnection != null) && !peersToRemove.ContainsKey(faultyPeer.Key)) {
 							peersToRemove.Add(faultyPeer.Key, peerConnection.PeerConnection);
 						}
 					}
@@ -1374,25 +1398,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// now we check each entries in the slices to see who is lieing with the hashes
 				for(int i = 0; i < sliceCountConsensusSet.result; i++) {
 
-					(int result, ConsensusUtilities.ConsensusType concensusType) sliceEntryConsensusSet = ConsensusUtilities.GetConsensus(slicesSets, a => i < a.Value.Count ? a.Value[i] : 0);
+					(int result, ConsensusUtilities.ConsensusType consensusType) sliceEntryConsensusSet = ConsensusUtilities.GetConsensus(slicesSets, a => i < a.Value.Count ? a.Value[i] : 0);
 
-					if(sliceEntryConsensusSet.concensusType == ConsensusUtilities.ConsensusType.Single || sliceEntryConsensusSet.concensusType == ConsensusUtilities.ConsensusType.Split) {
+					if((sliceEntryConsensusSet.consensusType == ConsensusUtilities.ConsensusType.Single) || (sliceEntryConsensusSet.consensusType == ConsensusUtilities.ConsensusType.Split)) {
 						// this is completely unusable, we should remove all connections
-						foreach(var connection in syncingConnections) {
+						foreach(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connection in syncingConnections) {
 							connections.AddConnectionStrike(connection.PeerConnection, ConnectionSet.ConnectionStrikeset.RejectionReason.Banned);
 						}
 
 						return;
 					}
 
-					var faulty = sliceHahsesSet.results.Where(p => p.Value.sliceHashes.Count <= i || p.Value.sliceHashes[i] != sliceEntryConsensusSet.result).ToList();
+					List<KeyValuePair<Guid, (List<int> sliceHashes, int topHash)>> faulty = sliceHahsesSet.results.Where(p => (p.Value.sliceHashes.Count <= i) || (p.Value.sliceHashes[i] != sliceEntryConsensusSet.result)).ToList();
 
 					// lets remove these peers
-					foreach(var faultyPeer in faulty) {
+					foreach(KeyValuePair<Guid, (List<int> sliceHashes, int topHash)> faultyPeer in faulty) {
 
-						var peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == faultyPeer.Key);
+						ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == faultyPeer.Key);
 
-						if(peerConnection != null && !peersToRemove.ContainsKey(faultyPeer.Key)) {
+						if((peerConnection != null) && !peersToRemove.ContainsKey(faultyPeer.Key)) {
 							peersToRemove.Add(faultyPeer.Key, peerConnection.PeerConnection);
 						}
 					}
@@ -1402,9 +1426,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					if(lastSliceInfoEntry.Hash != sliceEntryConsensusSet.result) {
 						// ok, they lied! lets add this peer too
-						var peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == lastSliceInfoEntry.ClientGuid);
+						ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> peerConnection = syncingConnections.SingleOrDefault(c => c.PeerConnection.ClientUuid == lastSliceInfoEntry.ClientGuid);
 
-						if(peerConnection != null && !peersToRemove.ContainsKey(lastSliceInfoEntry.ClientGuid)) {
+						if((peerConnection != null) && !peersToRemove.ContainsKey(lastSliceInfoEntry.ClientGuid)) {
 							peersToRemove.Add(lastSliceInfoEntry.ClientGuid, peerConnection.PeerConnection);
 						}
 					}
@@ -1413,7 +1437,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			// ban these peers!
 			//TODO: any other logging we want to do on evil peers?
-			foreach(var peer in peersToRemove) {
+			foreach(KeyValuePair<Guid, PeerConnection> peer in peersToRemove) {
 				connections.AddConnectionStrike(peer.Value, ConnectionSet.ConnectionStrikeset.RejectionReason.Banned);
 			}
 
@@ -1431,14 +1455,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// </param>
 		/// <returns></returns>
 		protected Task<(Dictionary<Guid, PeerBlockSpecs> results, ResultsState state)> FetchPeerBlockInfo(BlockSingleEntryContext singleEntryContext, bool includeBlockDetails, bool considerPublicChainHeigthInConnection) {
-			var infoParameters = new FetchInfoParameter<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes, PeerBlockSpecs, REQUEST_BLOCK_INFO, SEND_BLOCK_INFO, BlockFilesetSyncManifest, BlockSingleEntryContext, BlockFilesetSyncManifest.BlockSyncingDataSlice>();
+			FetchInfoParameter<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes, PeerBlockSpecs, REQUEST_BLOCK_INFO, SEND_BLOCK_INFO, BlockFilesetSyncManifest, BlockSingleEntryContext, BlockFilesetSyncManifest.BlockSyncingDataSlice> infoParameters = new FetchInfoParameter<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes, PeerBlockSpecs, REQUEST_BLOCK_INFO, SEND_BLOCK_INFO, BlockFilesetSyncManifest, BlockSingleEntryContext, BlockFilesetSyncManifest.BlockSyncingDataSlice>();
 
 			infoParameters.singleEntryContext = singleEntryContext;
 			infoParameters.id = singleEntryContext.details.Id;
 
 			infoParameters.generateInfoRequestMessage = () => {
 				// its small enough, we will ask a single peer
-				var requestMessage = (BlockchainTargettedMessageSet<REQUEST_BLOCK_INFO>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestBlockInfo(this.trigger.BaseHeader);
+				BlockchainTargettedMessageSet<REQUEST_BLOCK_INFO> requestMessage = (BlockchainTargettedMessageSet<REQUEST_BLOCK_INFO>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestBlockInfo(this.trigger.BaseHeader);
 
 				requestMessage.Message.Id = infoParameters.singleEntryContext.details.Id;
 				requestMessage.Message.IncludeBlockDetails = includeBlockDetails;
@@ -1449,11 +1473,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			infoParameters.validNextInfoFunc = (peerReply, missingRequestInfos, nextPeerDetails, peersWithNoNextEntry, peerConnection) => {
 
 				if(peerReply.Message.Id <= 0) {
-					if(peerReply.Message.HasBlockDetails && peerReply.Message.BlockHash != null && peerReply.Message.BlockHash.HasData) {
+					if(peerReply.Message.HasBlockDetails && (peerReply.Message.BlockHash != null) && peerReply.Message.BlockHash.HasData) {
 						return ResponseValidationResults.Invalid; // no block data is a major issue
 					}
 
-					if(peerReply.Message.HasBlockDetails && peerReply.Message.SlicesSize.HighHeaderInfo.Length > 0) {
+					if(peerReply.Message.HasBlockDetails && (peerReply.Message.SlicesSize.HighHeaderInfo.Length > 0)) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
 
@@ -1461,7 +1485,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
 
-					if(peerReply.Message.HasBlockDetails && peerReply.Message.SlicesSize.LowHeaderInfo.Length > 0) {
+					if(peerReply.Message.HasBlockDetails && (peerReply.Message.SlicesSize.LowHeaderInfo.Length > 0)) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
 
@@ -1482,30 +1506,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					peersWithNoNextEntry.Add(peerReply.Header.ClientId);
 				} else if(peerReply.Message.Id != singleEntryContext.details.Id) {
 
-					if(peerReply.Message.Id == singleEntryContext.details.Id - 1) {
+					if(peerReply.Message.Id == (singleEntryContext.details.Id - 1)) {
 						return ResponseValidationResults.LatePreviousBlock; // that's a late message
 					}
 
 					return ResponseValidationResults.Invalid; // that's an illegal value
 				} else if(!nextPeerDetails.ContainsKey(peerConnection.PeerConnection.ClientUuid)) {
 
-					if(peerReply.Message.HasBlockDetails && (peerReply.Message.BlockHash == null || peerReply.Message.BlockHash.IsEmpty)) {
+					if(peerReply.Message.HasBlockDetails && ((peerReply.Message.BlockHash == null) || peerReply.Message.BlockHash.IsEmpty)) {
 						return ResponseValidationResults.Invalid; // no block data is a major issue
 					}
 
-					if(peerReply.Message.HasBlockDetails && peerReply.Message.SlicesSize.HighHeaderInfo.Length <= 0) {
+					if(peerReply.Message.HasBlockDetails && (peerReply.Message.SlicesSize.HighHeaderInfo.Length <= 0)) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
 
 					if(peerReply.Message.ChainBlockHeight <= 0) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
-					
+
 					if(peerReply.Message.PublicBlockHeight < peerReply.Message.ChainBlockHeight) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
 
-					if(peerReply.Message.HasBlockDetails && peerReply.Message.SlicesSize.LowHeaderInfo.Length <= 0) {
+					if(peerReply.Message.HasBlockDetails && (peerReply.Message.SlicesSize.LowHeaderInfo.Length <= 0)) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
 
@@ -1529,7 +1553,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					nextPeerDetails.Add(peerConnection.PeerConnection.ClientUuid, nextBlockSpecs);
 				}
 
-				foreach(var blockInfo in missingRequestInfos.Where(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid)) {
+				foreach(PeerRequestInfo<BlockId, REQUEST_BLOCK_INFO, SEND_BLOCK_INFO> blockInfo in missingRequestInfos.Where(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid)) {
 					// all good, keep the reply for later
 					blockInfo.responseMessage = peerReply.Message;
 				}
@@ -1546,20 +1570,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(this.UseAllBlocks) {
 
-					var selectedConnections = connections.GetSyncingConnections().Where(c => {
+					List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> selectedConnections = connections.GetSyncingConnections().Where(c => {
 
 						// here we select peers that can help us. They must store all blocks, be ahead of us and if they store partial chains, then the digest must be ahead too.
-						return (!considerPublicChainHeigthInConnection || c.ReportedDiskBlockHeight >= infoParameters.singleEntryContext.details.Id) && (c.TriggerResponse.Message.ShareType.AllBlocks || c.TriggerResponse.Message.EarliestBlockHeight <= infoParameters.singleEntryContext.details.Id);
+						return (!considerPublicChainHeigthInConnection || (c.ReportedDiskBlockHeight >= infoParameters.singleEntryContext.details.Id)) && (c.TriggerResponse.Message.ShareType.AllBlocks || (c.TriggerResponse.Message.EarliestBlockHeight <= infoParameters.singleEntryContext.details.Id));
 					}).ToList();
 
 					return selectedConnections;
 				}
 
 				// get the ones ahead of us
-				var selectedFinalConnections = connections.GetSyncingConnections().Where(c => {
+				List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> selectedFinalConnections = connections.GetSyncingConnections().Where(c => {
 
 					// here we select peers that can help us. They must store all blocks, be ahead of us and if they store partial chains, then the digest must be ahead too.
-					return !considerPublicChainHeigthInConnection || c.ReportedDiskBlockHeight >= infoParameters.singleEntryContext.details.Id;
+					return !considerPublicChainHeigthInConnection || (c.ReportedDiskBlockHeight >= infoParameters.singleEntryContext.details.Id);
 				}).ToList();
 
 				return selectedFinalConnections;
@@ -1575,21 +1599,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <param name="singleEntryContext"></param>
 		/// <returns></returns>
 		protected Task<(Dictionary<Guid, (List<int> sliceHashes, int topHash)> results, ResultsState state)> FetchPeerBlockSliceHashes(long blockId, List<Dictionary<BlockChannelUtils.BlockChannelTypes, int>> slices, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connectionsSet) {
-			var infoParameters = new FetchSliceHashesParameter<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes, (List<int> sliceHashes, int topHash), REQUEST_BLOCK_SLICE_HASHES, SEND_BLOCK_SLICE_HASHES>();
+			FetchSliceHashesParameter<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes, (List<int> sliceHashes, int topHash), REQUEST_BLOCK_SLICE_HASHES, SEND_BLOCK_SLICE_HASHES> infoParameters = new FetchSliceHashesParameter<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes, (List<int> sliceHashes, int topHash), REQUEST_BLOCK_SLICE_HASHES, SEND_BLOCK_SLICE_HASHES>();
 
 			infoParameters.id = blockId;
 			infoParameters.Connections = connectionsSet;
 
 			infoParameters.generateInfoRequestMessage = () => {
 				// its small enough, we will ask a single peer
-				var requestMessage = (BlockchainTargettedMessageSet<REQUEST_BLOCK_SLICE_HASHES>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestBlockSliceHashes(this.trigger.BaseHeader);
+				BlockchainTargettedMessageSet<REQUEST_BLOCK_SLICE_HASHES> requestMessage = (BlockchainTargettedMessageSet<REQUEST_BLOCK_SLICE_HASHES>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestBlockSliceHashes(this.trigger.BaseHeader);
 
 				requestMessage.Message.Id = blockId;
 
-				foreach(var sliceEntry in slices) {
-					var channels = new Dictionary<BlockChannelUtils.BlockChannelTypes, int>();
+				foreach(Dictionary<BlockChannelUtils.BlockChannelTypes, int> sliceEntry in slices) {
+					Dictionary<BlockChannelUtils.BlockChannelTypes, int> channels = new Dictionary<BlockChannelUtils.BlockChannelTypes, int>();
 
-					foreach(var channel in sliceEntry) {
+					foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, int> channel in sliceEntry) {
 
 						channels.Add(channel.Key, channel.Value);
 					}
@@ -1602,7 +1626,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			infoParameters.validNextInfoFunc = (peerReply, missingRequestInfos, nextPeerDetails, peersWithNoNextEntry, peerConnection) => {
 
-				if(peerReply.Message.Id <= 0 || !peerReply.Message.SliceHashes.Any() || peerReply.Message.SlicesHash == 0) {
+				if((peerReply.Message.Id <= 0) || !peerReply.Message.SliceHashes.Any() || (peerReply.Message.SlicesHash == 0)) {
 
 					// this guy says there is nothing
 					PeerBlockSpecs nextBlockSpecs = new PeerBlockSpecs();
@@ -1617,7 +1641,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					peersWithNoNextEntry.Add(peerReply.Header.ClientId);
 				} else if(peerReply.Message.Id != blockId) {
 
-					if(peerReply.Message.Id == blockId - 1) {
+					if(peerReply.Message.Id == (blockId - 1)) {
 						return ResponseValidationResults.LatePreviousBlock; // that's a late message
 					}
 
@@ -1633,7 +1657,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					nextPeerDetails.Add(peerConnection.PeerConnection.ClientUuid, (peerReply.Message.SliceHashes, peerReply.Message.SlicesHash));
 				}
 
-				var blockInfo = missingRequestInfos.Single(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid);
+				PeerRequestInfo<BlockId, REQUEST_BLOCK_SLICE_HASHES, SEND_BLOCK_SLICE_HASHES> blockInfo = missingRequestInfos.Single(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid);
 
 				// all good, keep the reply for later
 				blockInfo.responseMessage = peerReply.Message;
@@ -1650,17 +1674,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(this.UseAllBlocks) {
 
-					var selectedConnections = connections.GetSyncingConnections().Where(c => {
+					List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> selectedConnections = connections.GetSyncingConnections().Where(c => {
 
 						// here we select peers that can help us. They must store all blocks, be ahead of us and if they store partial chains, then the digest must be ahead too.
-						return c.ReportedDiskBlockHeight >= blockId && (c.TriggerResponse.Message.ShareType.AllBlocks || c.TriggerResponse.Message.EarliestBlockHeight <= blockId);
+						return (c.ReportedDiskBlockHeight >= blockId) && (c.TriggerResponse.Message.ShareType.AllBlocks || (c.TriggerResponse.Message.EarliestBlockHeight <= blockId));
 					}).ToList();
 
 					return selectedConnections;
 				}
 
 				// get the ones ahead of us
-				var selectedFinalConnections = connections.GetSyncingConnections().Where(c => {
+				List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> selectedFinalConnections = connections.GetSyncingConnections().Where(c => {
 
 					// here we select peers that can help us. They must store all blocks, be ahead of us and if they store partial chains, then the digest must be ahead too.
 					return c.ReportedDiskBlockHeight >= blockId;
@@ -1674,12 +1698,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected Task<(Dictionary<Guid, PeerBlockSpecs> results, ResultsState state)> FetchPeerBlockData(BlockSingleEntryContext singleBlockContext) {
 
-			var parameters = new FetchDataParameter<BlockChannelsInfoSet<DataSliceInfo>, DataSliceInfo, BlockChannelsInfoSet<DataSlice>, DataSlice, BlockId, BlockChannelUtils.BlockChannelTypes, PeerBlockSpecs, REQUEST_BLOCK, SEND_BLOCK, BlockFilesetSyncManifest, BlockSingleEntryContext, ChannelsEntries<SafeArrayHandle>, BlockFilesetSyncManifest.BlockSyncingDataSlice>();
+			FetchDataParameter<BlockChannelsInfoSet<DataSliceInfo>, DataSliceInfo, BlockChannelsInfoSet<DataSlice>, DataSlice, BlockId, BlockChannelUtils.BlockChannelTypes, PeerBlockSpecs, REQUEST_BLOCK, SEND_BLOCK, BlockFilesetSyncManifest, BlockSingleEntryContext, ChannelsEntries<SafeArrayHandle>, BlockFilesetSyncManifest.BlockSyncingDataSlice> parameters = new FetchDataParameter<BlockChannelsInfoSet<DataSliceInfo>, DataSliceInfo, BlockChannelsInfoSet<DataSlice>, DataSlice, BlockId, BlockChannelUtils.BlockChannelTypes, PeerBlockSpecs, REQUEST_BLOCK, SEND_BLOCK, BlockFilesetSyncManifest, BlockSingleEntryContext, ChannelsEntries<SafeArrayHandle>, BlockFilesetSyncManifest.BlockSyncingDataSlice>();
 			parameters.id = singleBlockContext.details.Id;
 
 			parameters.generateMultiSliceDataRequestMessage = () => {
 				// its small enough, we will ask a single peer
-				var requestMessage = (BlockchainTargettedMessageSet<REQUEST_BLOCK>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestBlock(this.trigger.BaseHeader);
+				BlockchainTargettedMessageSet<REQUEST_BLOCK> requestMessage = (BlockchainTargettedMessageSet<REQUEST_BLOCK>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestBlock(this.trigger.BaseHeader);
 
 				requestMessage.Message.Id = parameters.singleEntryContext.details.Id;
 
@@ -1699,7 +1723,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return connections.GetSyncingConnections().Where(c => {
 
 						// here we select peers that can help us. They must store all blocks, be ahead of us and if they store partial chains, then the digest must be ahead too.
-						return c.ReportedDiskBlockHeight >= parameters.singleEntryContext.details.Id && (c.TriggerResponse.Message.ShareType.AllBlocks || c.TriggerResponse.Message.EarliestBlockHeight <= parameters.singleEntryContext.details.Id);
+						return (c.ReportedDiskBlockHeight >= parameters.singleEntryContext.details.Id) && (c.TriggerResponse.Message.ShareType.AllBlocks || (c.TriggerResponse.Message.EarliestBlockHeight <= parameters.singleEntryContext.details.Id));
 					}).ToList();
 				}
 
@@ -1724,24 +1748,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				if(peerReply.Message.PublicBlockHeight < peerReply.Message.ChainBlockHeight) {
 					return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 				}
-				
+
 				// in this case, peer is valid if it has a more advanced blockchain than us and can share it back.
-				bool highDataEmpty = peerReply.Message.Slices.HighHeaderInfo?.Data == null || peerReply.Message.Slices.HighHeaderInfo.Data.IsEmpty;
-				bool lowDataEmpty = peerReply.Message.Slices.LowHeaderInfo?.Data == null || peerReply.Message.Slices.LowHeaderInfo.Data.IsEmpty;
-				bool contentDataEmpty = peerReply.Message.Slices.ContentsInfo?.Data == null || peerReply.Message.Slices.ContentsInfo.Data.IsEmpty;
+				bool highDataEmpty = (peerReply.Message.Slices.HighHeaderInfo?.Data == null) || peerReply.Message.Slices.HighHeaderInfo.Data.IsEmpty;
+				bool lowDataEmpty = (peerReply.Message.Slices.LowHeaderInfo?.Data == null) || peerReply.Message.Slices.LowHeaderInfo.Data.IsEmpty;
+				bool contentDataEmpty = (peerReply.Message.Slices.ContentsInfo?.Data == null) || peerReply.Message.Slices.ContentsInfo.Data.IsEmpty;
 
 				if(highDataEmpty && lowDataEmpty && contentDataEmpty) {
 					return ResponseValidationResults.Invalid; // no block data is a major issue
 				}
 
-				var slice = dispatchingSlices.SingleOrDefault(s => s.requestMessage.Message.SlicesInfo.FileId == peerReply.Message.Slices.FileId);
+				PeerRequestInfo<BlockId, REQUEST_BLOCK, SEND_BLOCK> slice = dispatchingSlices.SingleOrDefault(s => s.requestMessage.Message.SlicesInfo.FileId == peerReply.Message.Slices.FileId);
 
 				if(slice == null) {
 					// we found no matching slice
 					return ResponseValidationResults.Invalid;
 				}
 
-				foreach(var sliceInfo in peerReply.Message.Slices.SlicesInfo) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, DataSlice> sliceInfo in peerReply.Message.Slices.SlicesInfo) {
 					if(sliceInfo.Value.Data.Length != sliceInfo.Value.Length) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
@@ -1778,7 +1802,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					// there will be no next block with this guy. we will remove him for now, we can try him again later
 					peersWithNoNextEntry.Add(peerReply.Header.ClientId);
-				} else if(peerReply.Message.NextBlockHeight != parameters.singleEntryContext.details.Id + 1) {
+				} else if(peerReply.Message.NextBlockHeight != (parameters.singleEntryContext.details.Id + 1)) {
 
 					if(peerReply.Message.Id == parameters.singleEntryContext.details.Id) {
 						return ResponseValidationResults.LatePreviousBlock; // that's a late message
@@ -1788,7 +1812,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				} else if(!nextPeerDetails.ContainsKey(peerConnection.PeerConnection.ClientUuid)) {
 
-					if(peerReply.Message.NextBlockHash == null || peerReply.Message.NextBlockHash.IsEmpty) {
+					if((peerReply.Message.NextBlockHash == null) || peerReply.Message.NextBlockHash.IsEmpty) {
 						return ResponseValidationResults.Invalid; // no block data is a major issue
 					}
 
@@ -1805,7 +1829,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					nextBlockSpecs.nextBlockHash.Entry = peerReply.Message.NextBlockHash.Entry;
 					nextBlockSpecs.nextBlockSize = peerReply.Message.NextBlockChannelSizes;
 					nextBlockSpecs.publicChainBlockHeight = peerReply.Message.PublicBlockHeight;
-					
+
 					peerConnection.ReportedDiskBlockHeight = peerReply.Message.ChainBlockHeight;
 					peerConnection.ReportedPublicBlockHeight = peerReply.Message.PublicBlockHeight;
 
@@ -1834,9 +1858,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			parameters.prepareCompletedData = () => {
 				BlockFilesetSyncManifest syncManifest = parameters.singleEntryContext.syncManifest;
 
-				var dataChannels = new ChannelsEntries<SafeArrayHandle>();
+				ChannelsEntries<SafeArrayHandle> dataChannels = new ChannelsEntries<SafeArrayHandle>();
 
-				foreach(var file in syncManifest.Files) {
+				foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, DataSlice> file in syncManifest.Files) {
 					dataChannels[file.Key] = this.LoadBlockSyncManifestFile(syncManifest, file.Key);
 				}
 
@@ -1856,7 +1880,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				if(message.HasNextInfo) {
-					var specs = nextBlockPeerSpecs[clientUuid];
+					PeerBlockSpecs specs = nextBlockPeerSpecs[clientUuid];
 					specs.hasBlockDetails = true;
 					specs.Id = message.NextBlockHeight;
 					specs.end = specs.Id == 0;
@@ -1881,11 +1905,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			try {
 				// install the block, but ask for a wallet sync only when the block is a multiple of X.
-				bool performWalletSync = dehydratedBlock.BlockId.Value % WALLET_SYNC_STEP == 0 || dehydratedBlock.BlockId.Value == this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight;
+				bool performWalletSync = ((dehydratedBlock.BlockId.Value % WALLET_SYNC_STEP) == 0) || (dehydratedBlock.BlockId.Value == this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight);
 
 				valid = await this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertBlock(dehydratedBlock.RehydratedBlock, dehydratedBlock, performWalletSync, lockContext, false).ConfigureAwait(false);
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to insert block into the local blockchain. we may try again...");
+				NLog.Default.Error(ex, "Failed to insert block into the local blockchain. we may try again...");
 
 				if(blockFetchAttemptCounter == 3) {
 
@@ -1898,11 +1922,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		protected async Task RequestWalletSync(LockContext lockContext, bool async = true) {
-			var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+			BlockchainTask<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, bool, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
 			blockchainTask.SetAction(async (walletService, taskRoutingContext, lc) => {
 
-				await walletService.SynchronizeWallet(true,  lc, false).ConfigureAwait(false);
+				await walletService.SynchronizeWallet(true, lc, false).ConfigureAwait(false);
 			});
 
 			if(async) {
@@ -1956,7 +1980,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return null;
 			}
 
-			var channelsEntries = new ChannelsEntries<SafeArrayHandle>(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.ActiveBlockchainChannels);
+			ChannelsEntries<SafeArrayHandle> channelsEntries = new ChannelsEntries<SafeArrayHandle>(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.ActiveBlockchainChannels);
 
 			string path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSyncManifestFileName(filesetSyncManifest.Key);
 
@@ -2012,9 +2036,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			string path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSyncManifestCompletedFileName(blockId);
 
 			if(!this.fileSystem.FileExists(path)) {
-				using(Stream stream = this.fileSystem.CreateFile(path)) {
-					// do nothing, file is empty
-				}
+				this.fileSystem.CreateEmptyFile(path);
 			}
 		}
 
@@ -2032,14 +2054,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSyncManifestCompletedFileName(blockId);
 
-			if(this.fileSystem.FileExists(path)) {
-				this.fileSystem.DeleteFile(path);
+			try {
+				Repeater.Repeat(() => {
+					if(this.fileSystem.FileExists(path)) {
+						this.fileSystem.DeleteFile(path);
+					}
+				});
+			} catch(Exception ex) {
+				Log.Error(ex, $"Failed to clear block sync manifest file {path}");
 			}
-
+			
 			path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSyncManifestCacheFolder(blockId);
 
-			if(this.fileSystem.DirectoryExists(path)) {
-				this.fileSystem.DeleteDirectory(path, true);
+			try {
+				Repeater.Repeat(() => {
+					if(this.fileSystem.DirectoryExists(path)) {
+						this.fileSystem.DeleteDirectory(path, true);
+					}
+				});
+			} catch(Exception ex) {
+				Log.Error(ex, $"Failed to clear block sync manifest directory {path}");
 			}
 		}
 
@@ -2057,6 +2091,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		}
 
+		private class RunningWrapper {
+			public bool running = true;
+		}
+
 		private enum LoadSources {
 			NotLoaded,
 			Gossip,
@@ -2070,11 +2108,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		public class PeerBlockSpecs {
+			public readonly SafeArrayHandle nextBlockHash = SafeArrayHandle.Create();
 			public bool end;
 			public bool hasBlockDetails;
 
 			public BlockId Id = new BlockId();
-			public readonly SafeArrayHandle nextBlockHash = SafeArrayHandle.Create();
 			public BlockChannelsInfoSet<DataSliceSize> nextBlockSize = new BlockChannelsInfoSet<DataSliceSize>();
 			public BlockId publicChainBlockHeight;
 		}

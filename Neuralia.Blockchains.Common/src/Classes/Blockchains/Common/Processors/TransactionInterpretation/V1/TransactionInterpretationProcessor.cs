@@ -8,17 +8,15 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
-using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Components.Blocks;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Configuration;
-using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
-using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1 {
 
@@ -41,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		private readonly Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys;
 		private readonly TransactionImpactSet.OperationModes operationMode;
-		
+
 		private ImmutableList<AccountId> dispatchedAccounts;
 
 		private bool isInitialized;
@@ -51,8 +49,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		private ImmutableList<AccountId> publishedAccounts;
 
 		protected SnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCacheSet;
-		protected  IAccreditationCertificateProvider AccreditationCertificateProvider => ( IAccreditationCertificateProvider)this.centralCoordinator.ChainComponentProvider.AccreditationCertificateProviderBase;
-		protected  IAccountSnapshotsProvider AccountSnapshotsProvider => this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase;
 
 		public TransactionInterpretationProcessor(CENTRAL_COORDINATOR centralCoordinator) : this(centralCoordinator, TransactionImpactSet.OperationModes.Real) {
 
@@ -69,11 +65,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.enabledFastKeyTypes = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnabledFastKeyTypes;
 		}
 
+		protected IAccreditationCertificateProvider AccreditationCertificateProvider => this.centralCoordinator.ChainComponentProvider.AccreditationCertificateProviderBase;
+		protected IAccountSnapshotsProvider AccountSnapshotsProvider => this.centralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase;
+
 		public event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>>> RequestStandardAccountSnapshots;
-		public event Func<List<AccountId>, LockContext,  Task<Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>>> RequestJointAccountSnapshots;
-		public event Func<List<(long AccountId, byte OrdinalId)>, LockContext,  Task<Dictionary<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT>>> RequestStandardAccountKeySnapshots;
-		public event Func<List<int>, LockContext,  Task<Dictionary<int, ACCREDITATION_CERTIFICATE_SNAPSHOT>>> RequestAccreditationCertificateSnapshots;
-		public event Func<List<int>, LockContext,  Task<Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>>> RequestChainOptionSnapshots;
+		public event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>>> RequestJointAccountSnapshots;
+		public event Func<List<(long AccountId, byte OrdinalId)>, LockContext, Task<Dictionary<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT>>> RequestStandardAccountKeySnapshots;
+		public event Func<List<int>, LockContext, Task<Dictionary<int, ACCREDITATION_CERTIFICATE_SNAPSHOT>>> RequestAccreditationCertificateSnapshots;
+		public event Func<List<int>, LockContext, Task<Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>>> RequestChainOptionSnapshots;
 
 		public event Func<LockContext, Task<STANDARD_ACCOUNT_SNAPSHOT>> RequestCreateNewStandardAccountSnapshot;
 		public event Func<LockContext, Task<JOINT_ACCOUNT_SNAPSHOT>> RequestCreateNewJointAccountSnapshot;
@@ -89,7 +88,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		public Func<List<(long AccountId, byte OrdinalId)>, List<AccountId>, Task<bool>> IsAnyAccountKeysTracked { get; set; } = async (ids, accounts) => false;
 		public Func<List<int>, Task<bool>> IsAnyAccreditationCertificateTracked { get; set; } = async ids => false;
 		public Func<List<int>, Task<bool>> IsAnyChainOptionTracked { get; set; } = async ids => false;
-		public Func<bool, List<AccountId>, List<AccountId>, ITransaction, LockContext, Task> AccountInfluencingTransactionFound { get; set; } = null;
+		public Func<bool, List<AccountId>, List<AccountId>, ITransaction, BlockId, LockContext, Task> AccountInfluencingTransactionFound { get; set; } = null;
 
 		public async Task Initialize() {
 
@@ -105,13 +104,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					if(this.IsAnyAccountTracked == null) {
 						return false;
 					}
+
 					return await this.IsAnyAccountTracked(ids).ConfigureAwait(false);
 				};
+
 				this.TransactionImpactSets.GetTrackedAccounts = async ids => {
 
 					if(this.GetTrackedAccounts == null) {
 						return new List<AccountId>();
 					}
+
 					return await this.GetTrackedAccounts(ids).ConfigureAwait(false);
 				};
 
@@ -119,21 +121,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					if(this.IsAnyAccountKeysTracked == null) {
 						return false;
 					}
+
 					return await this.IsAnyAccountKeysTracked(ids, accounts).ConfigureAwait(false);
 				};
+
 				this.TransactionImpactSets.IsAnyAccreditationCertificateTracked = async ids => {
 					if(this.IsAnyAccreditationCertificateTracked == null) {
 						return false;
 					}
+
 					return await this.IsAnyAccreditationCertificateTracked(ids).ConfigureAwait(false);
 				};
+
 				this.TransactionImpactSets.IsAnyChainOptionTracked = async ids => {
 					if(this.IsAnyChainOptionTracked == null) {
 						return false;
 					}
+
 					return await this.IsAnyChainOptionTracked(ids).ConfigureAwait(false);
 				};
-				
 
 				this.snapshotCacheSet.RequestStandardAccountSnapshots += this.RequestStandardAccountSnapshots;
 				this.snapshotCacheSet.RequestJointAccountSnapshots += this.RequestJointAccountSnapshots;
@@ -180,9 +186,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 			foreach(IFinalElectionResults finalElectionResult in publicationResult) {
 
-				var trackedDelegateAccounts = await this.GetTrackedAccounts(finalElectionResult.DelegateAccounts.Keys.ToList()).ConfigureAwait(false);
+				List<AccountId> trackedDelegateAccounts = await this.GetTrackedAccounts(finalElectionResult.DelegateAccounts.Keys.ToList()).ConfigureAwait(false);
 
-				foreach(var entry in finalElectionResult.DelegateAccounts.Where(a => trackedDelegateAccounts.Contains(a.Key))) {
+				foreach(KeyValuePair<AccountId, IDelegateResults> entry in finalElectionResult.DelegateAccounts.Where(a => trackedDelegateAccounts.Contains(a.Key))) {
 
 					ACCOUNT_SNAPSHOT snapshot = await this.snapshotCacheSet.GetAccountSnapshotModify(entry.Key, lockContext).ConfigureAwait(false);
 
@@ -191,7 +197,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					}
 				}
 
-				var trackedElectedAccounts = await this.GetTrackedAccounts(finalElectionResult.ElectedCandidates.Keys.ToList()).ConfigureAwait(false);
+				List<AccountId> trackedElectedAccounts = await this.GetTrackedAccounts(finalElectionResult.ElectedCandidates.Keys.ToList()).ConfigureAwait(false);
 
 				foreach((AccountId key, IElectedResults value) in finalElectionResult.ElectedCandidates.Where(a => trackedElectedAccounts.Contains(a.Key))) {
 
@@ -223,7 +229,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 			foreach(SynthesizedBlock.SynthesizedElectionResult finalElectionResult in finalElectionResults) {
 
-				var trackedDelegateAccounts = await this.GetTrackedAccounts(finalElectionResult.DelegateAccounts).ConfigureAwait(false);
+				List<AccountId> trackedDelegateAccounts = await this.GetTrackedAccounts(finalElectionResult.DelegateAccounts).ConfigureAwait(false);
 
 				foreach(AccountId entry in finalElectionResult.DelegateAccounts.Where(a => trackedDelegateAccounts.Contains(a))) {
 
@@ -235,7 +241,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					}
 				}
 
-				var trackedElectedAccounts = await this.GetTrackedAccounts(finalElectionResult.ElectedAccounts.Keys.ToList()).ConfigureAwait(false);
+				List<AccountId> trackedElectedAccounts = await this.GetTrackedAccounts(finalElectionResult.ElectedAccounts.Keys.ToList()).ConfigureAwait(false);
 
 				foreach(AccountId entry in finalElectionResult.ElectedAccounts.Keys.Where(a => trackedElectedAccounts.Contains(a))) {
 
@@ -271,62 +277,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.dispatchedAccounts = null;
 		}
 
-		private async Task InterpretTransaction(ITransaction transaction, long blockId, LockContext lockContext) {
-			SnapshotKeySet impactedSnapshots = await this.GetTransactionImpactedSnapshots(transaction, lockContext).ConfigureAwait(false);
-				bool isLocal = false;
-				bool isDispatched = false;
-				AccountId accounthash = null;
-
-				if(this.localMode) {
-
-					// if we are in local mode, then we ensure we treat presentation transactions specially, they are special. we add the accountId hash.
-					if(transaction is IPresentationTransaction presentationTransaction) {
-						accounthash = presentationTransaction.TransactionId.Account;
-						isDispatched = this.dispatchedAccounts?.Contains(accounthash) ?? false;
-					}
-
-					// determine if it is a local account matching and if yes, if it is a dispatched one
-					isLocal = isDispatched || impactedSnapshots.standardAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false) || impactedSnapshots.jointAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false);
-
-					if(isLocal) {
-
-						var impactedLocalDispatchedAccounts = new List<AccountId>();
-
-						if(accounthash != null) {
-							impactedLocalDispatchedAccounts.Add(accounthash);
-						}
-
-						var impactedLocalPublishedAccounts = impactedSnapshots.standardAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false).ToList();
-						impactedLocalPublishedAccounts.AddRange(impactedSnapshots.jointAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false));
-
-						// determine if it is our own transaction, or if it is foreign
-						bool isOwn = impactedLocalPublishedAccounts.Contains(transaction.TransactionId.Account) || impactedLocalDispatchedAccounts.Contains(transaction.TransactionId.Account);
-
-						// this transaction concerns us, lets alert.
-						if(this.AccountInfluencingTransactionFound != null) {
-							await AccountInfluencingTransactionFound(isOwn, impactedLocalPublishedAccounts, impactedLocalDispatchedAccounts, transaction, lockContext).ConfigureAwait(false);
-						}
-					}
-				}
-
-				await this.TransactionImpactSets.InterpretTransaction(transaction, blockId, impactedSnapshots, this.fastKeys, this.enabledFastKeyTypes, this.operationMode, this.snapshotCacheSet, isLocal, isDispatched, this.TransactionRejected, lockContext).ConfigureAwait(false);
-
-		}
 		public virtual async Task InterpretTransactionStream(List<ITransaction> transactions, long blockId, LockContext lockContext, Action<int> step = null) {
-			
+
 			await this.PrepareImpactedSnapshotsList(transactions, lockContext).ConfigureAwait(false);
 
 			int index = 1;
 
 			foreach(ITransaction transaction in transactions) {
 
-				await this.InterpretTransaction(transaction,blockId, lockContext).ConfigureAwait(false);
-if(				step != null){	step(index);}
+				await this.InterpretTransaction(transaction, blockId, lockContext).ConfigureAwait(false);
+
+				if(step != null) {
+					step(index);
+				}
+
 				index++;
 			}
 
 		}
-		
+
 		public virtual async Task InterpretTransactions(List<ITransaction> transactions, long blockId, LockContext lockContext, Action<int> step = null) {
 
 			await this.Initialize().ConfigureAwait(false);
@@ -345,13 +314,13 @@ if(				step != null){	step(index);}
 			await this.Initialize().ConfigureAwait(false);
 
 			// the ones we did not create but target us one way or another
-			var impactingExternals = new Dictionary<TransactionId, (ITransaction transaction, AccountId targetAccount)>();
+			Dictionary<TransactionId, (ITransaction transaction, AccountId targetAccount)> impactingExternals = new Dictionary<TransactionId, (ITransaction transaction, AccountId targetAccount)>();
 
 			// the ones we created
-			var impactingLocals = new Dictionary<TransactionId, ITransaction>();
+			Dictionary<TransactionId, ITransaction> impactingLocals = new Dictionary<TransactionId, ITransaction>();
 
 			// here we group them by impacted account
-			var accountsTransactions = new Dictionary<AccountId, List<TransactionId>>();
+			Dictionary<AccountId, List<TransactionId>> accountsTransactions = new Dictionary<AccountId, List<TransactionId>>();
 
 			void AddTranaction(AccountId account, TransactionId transactionId) {
 				if(!accountsTransactions.ContainsKey(account)) {
@@ -363,7 +332,7 @@ if(				step != null){	step(index);}
 
 			foreach(ITransaction transaction in transactions) {
 
-				var search = new[] {transaction.TransactionId.Account}.ToList();
+				List<AccountId> search = new[] {transaction.TransactionId.Account}.ToList();
 
 				// if we track the transaction source account, then we add it
 				if(await this.IsAnyAccountTracked(search).ConfigureAwait(false)) {
@@ -379,7 +348,7 @@ if(				step != null){	step(index);}
 
 				SnapshotKeySet snapshots = await this.RunTransactionImpactSet(transaction, lockContext).ConfigureAwait(false);
 
-				var trackedAccounts = await this.GetTrackedAccounts(snapshots.AllAccounts).ConfigureAwait(false);
+				List<AccountId> trackedAccounts = await this.GetTrackedAccounts(snapshots.AllAccounts).ConfigureAwait(false);
 
 				foreach(AccountId account in trackedAccounts) {
 					// ok, this transaction impacts us. lets see if its send by us, or not
@@ -403,7 +372,51 @@ if(				step != null){	step(index);}
 
 			return (impactingLocals.Values.ToList(), impactingExternals.Values.ToList(), accountsTransactions);
 		}
-		
+
+		public TransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> TransactionImpactSets { get; }
+
+		private async Task InterpretTransaction(ITransaction transaction, long blockId, LockContext lockContext) {
+			SnapshotKeySet impactedSnapshots = await this.GetTransactionImpactedSnapshots(transaction, lockContext).ConfigureAwait(false);
+			bool isLocal = false;
+			bool isDispatched = false;
+			AccountId accounthash = null;
+
+			if(this.localMode) {
+
+				// if we are in local mode, then we ensure we treat presentation transactions specially, they are special. we add the accountId hash.
+				if(transaction is IPresentationTransaction presentationTransaction) {
+					accounthash = presentationTransaction.TransactionId.Account;
+					isDispatched = this.dispatchedAccounts?.Contains(accounthash) ?? false;
+				}
+
+				// determine if it is a local account matching and if yes, if it is a dispatched one
+				isLocal = isDispatched || impactedSnapshots.standardAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false) || impactedSnapshots.jointAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false);
+
+				if(isLocal) {
+
+					List<AccountId> impactedLocalDispatchedAccounts = new List<AccountId>();
+
+					if(accounthash != default(AccountId)) {
+						impactedLocalDispatchedAccounts.Add(accounthash);
+					}
+
+					List<AccountId> impactedLocalPublishedAccounts = impactedSnapshots.standardAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false).ToList();
+					impactedLocalPublishedAccounts.AddRange(impactedSnapshots.jointAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false));
+
+					// determine if it is our own transaction, or if it is foreign
+					bool isOwn = impactedLocalPublishedAccounts.Contains(transaction.TransactionId.Account) || impactedLocalDispatchedAccounts.Contains(transaction.TransactionId.Account);
+
+					// this transaction concerns us, lets alert.
+					if(this.AccountInfluencingTransactionFound != null) {
+						await this.AccountInfluencingTransactionFound(isOwn, impactedLocalPublishedAccounts, impactedLocalDispatchedAccounts, transaction, blockId, lockContext).ConfigureAwait(false);
+					}
+				}
+			}
+
+			await this.TransactionImpactSets.InterpretTransaction(transaction, blockId, impactedSnapshots, this.fastKeys, this.enabledFastKeyTypes, this.operationMode, this.snapshotCacheSet, isLocal, isDispatched, this.TransactionRejected, lockContext).ConfigureAwait(false);
+
+		}
+
 		protected virtual void ApplyDelegateResultsToSnapshot(ACCOUNT_SNAPSHOT snapshot, IDelegateResults delegateResults, Dictionary<TransactionId, ITransaction> transactions) {
 
 		}
@@ -464,12 +477,10 @@ if(				step != null){	step(index);}
 			return this.TransactionImpactSets.GetImpactedSnapshots(transaction, lockContext);
 		}
 
-		public TransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> TransactionImpactSets { get; }
-		
-		
 		protected byte[] Dehydratekey(ICryptographicKey key) {
 
 			using SafeArrayHandle bytes = key.Dehydrate();
+
 			return bytes.ToExactByteArrayCopy();
 		}
 	}

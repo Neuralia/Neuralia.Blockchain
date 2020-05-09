@@ -15,11 +15,11 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		where WORKFLOW : class, IWorkflow
 		where R : IRehydrationFactory {
 		private readonly uint correlationId;
-		private readonly uint? sessionId;
 		private readonly Guid myClientId;
 		private readonly Guid originatorId;
 
 		private readonly PeerConnection peerConnection;
+		private readonly uint? sessionId;
 		private readonly IWorkflowCoordinator<WORKFLOW, R> workflowCoordinator;
 
 		public WorkflowTracker(PeerConnection peerConnection, uint correlationId, uint? sessionId, Guid originatorId, Guid myClientId, IWorkflowCoordinator<WORKFLOW, R> workflowCoordinator) {

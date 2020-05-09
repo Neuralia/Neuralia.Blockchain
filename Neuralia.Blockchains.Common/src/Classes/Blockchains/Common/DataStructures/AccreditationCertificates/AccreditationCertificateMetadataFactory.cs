@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 
-			var version = rehydrator.RehydrateRewind<ComponentVersion<AccreditationCertificateType>>();
+			ComponentVersion<AccreditationCertificateType> version = rehydrator.RehydrateRewind<ComponentVersion<AccreditationCertificateType>>();
 
 			if(version.Type == AccreditationCertificateTypes.Instance.SDK_PROVIDER) {
 				return this.CreateSdkProviderAccreditationCertificateMetadata(version);

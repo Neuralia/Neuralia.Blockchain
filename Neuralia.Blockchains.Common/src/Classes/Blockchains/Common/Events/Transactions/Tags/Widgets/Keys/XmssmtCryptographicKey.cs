@@ -48,12 +48,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("TreeLayer", this.TreeLayer);
 		}
 
+		public override void SetFromWalletKey(IWalletKey walletKey) {
+			base.SetFromWalletKey(walletKey);
+		}
+
 		protected override void SetType() {
 			this.Type = Enums.KeyTypes.XMSSMT;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
-			base.SetFromWalletKey(walletKey);
 		}
 	}
 }

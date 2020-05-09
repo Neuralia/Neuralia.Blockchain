@@ -4,16 +4,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Network.ReadingContexts;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
-using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
-	
+
 	public class TcpStreamConnection : TcpConnection<StreamReadingContext> {
 
 		private readonly Memory<byte> buffer = new byte[4096];
 
 		protected NetworkStream networkStream;
-
 
 		public TcpStreamConnection(TcpConnection.ExceptionOccured exceptionCallback, bool isServer = false, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) : base(exceptionCallback, isServer, protocolMessageFilters) {
 		}
@@ -23,7 +21,6 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public TcpStreamConnection(NetworkEndPoint remoteEndPoint, TcpConnection.ExceptionOccured exceptionCallback, bool isServer = false, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) : base(remoteEndPoint, exceptionCallback, isServer, protocolMessageFilters) {
 		}
-		
 
 		protected override void SocketNewlyConnected() {
 			if(this.networkStream == null) {
@@ -32,7 +29,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				this.networkStream.ReadTimeout = 10000;
 			}
 		}
-		
+
 		protected override void WritePart(in ReadOnlySpan<byte> message) {
 			this.networkStream.Write(message);
 		}
@@ -54,13 +51,13 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		private async Task<Memory<byte>> ReadData(CancellationToken ct) {
-			
-			var asyncReadTask = this.networkStream.ReadAsync(this.buffer, ct).AsTask();
+
+			Task<int> asyncReadTask = this.networkStream.ReadAsync(this.buffer, ct).AsTask();
 
 			while(true) {
-				
+
 				await Task.WhenAny(asyncReadTask, Task.Delay(1000, ct)).ConfigureAwait(false);
-				
+
 				if(ct.IsCancellationRequested) {
 					this.ReadTaskCancelled();
 					ct.ThrowIfCancellationRequested();
@@ -75,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					// ReSharper disable once AsyncConverter.AsyncWait
 					return this.buffer.Slice(0, asyncReadTask.Result);
 				}
-				
+
 				return Memory<byte>.Empty;
 			}
 		}
@@ -83,11 +80,11 @@ namespace Neuralia.Blockchains.Core.Network {
 		protected override void DisposeAll() {
 
 			base.DisposeAll();
-			
+
 			try {
 				this.networkStream?.Dispose();
 			} catch {
-				
+
 			}
 		}
 
@@ -97,7 +94,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				this.networkStream?.Flush();
 				this.networkStream?.Close();
 			} catch {
-				
+
 			}
 
 			base.DisposeSocket();

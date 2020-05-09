@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Base;
@@ -40,17 +41,17 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			this.CheckShouldCancel();
 
 			// ok, we just received a trigger, lets examine it
-			
-			var reply = this.MessageFactory.CreateServerMessageGroupManifestSet(this.triggerMessage.Header);
-			
-			Log.Verbose($"Received {this.triggerMessage.Message.messageInfos.Count} gossip message hashes from peer {this.ClientConnection.ScoppedAdjustedIp}");
+
+			TargettedMessageSet<MessageGroupManifestServerReply<R>, R> reply = this.MessageFactory.CreateServerMessageGroupManifestSet(this.triggerMessage.Header);
+
+			NLog.Default.Verbose($"Received {this.triggerMessage.Message.messageInfos.Count} gossip message hashes from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// here we check which messages in the group we have already received, and which ones are new
-			(var messageReceived, int alreadyReceivedCount) = await this.PrepareGossipMessageAcceptations().ConfigureAwait(false);
+			(List<bool> messageReceived, int alreadyReceivedCount) = await this.PrepareGossipMessageAcceptations().ConfigureAwait(false);
 
 			int refusingCount = messageReceived.Count(m => !m);
 
-			Log.Verbose($"We already previously received {alreadyReceivedCount} out of {this.triggerMessage.Message.messageInfos.Count} messages just received. {refusingCount} messages will be ignored from peer {this.ClientConnection.ScoppedAdjustedIp}.");
+			NLog.Default.Verbose($"We already previously received {alreadyReceivedCount} out of {this.triggerMessage.Message.messageInfos.Count} messages just received. {refusingCount} messages will be ignored from peer {this.ClientConnection.ScoppedAdjustedIp}.");
 
 			reply.Message.messageApprovals.AddRange(messageReceived);
 
@@ -63,7 +64,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 				});
 			} catch(Exception ex) {
-				Log.Verbose($"Connection with peer {this.ClientConnection.ScoppedAdjustedIp} was terminated");
+				NLog.Default.Verbose($"Connection with peer {this.ClientConnection.ScoppedAdjustedIp} was terminated");
 
 				return;
 			}
@@ -73,16 +74,14 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				return;
 			}
 
+			TargettedMessageSet<ClientMessageGroupReply<R>, R> serverMessageGroupManifest = this.WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>(TimeSpan.FromSeconds(10));
 
-			var	serverMessageGroupManifest = this.WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>(TimeSpan.FromSeconds(10));
-
-
-			Log.Verbose($"We received {serverMessageGroupManifest.Message.gossipMessageSets.Count} gossip messages from peer {this.ClientConnection.ScoppedAdjustedIp}");
+			NLog.Default.Verbose($"We received {serverMessageGroupManifest.Message.gossipMessageSets.Count} gossip messages from peer {this.ClientConnection.ScoppedAdjustedIp}");
 
 			// ok, these are really messages, lets handle them as such
 			foreach(SafeArrayHandle message in serverMessageGroupManifest.Message.gossipMessageSets) // thats it, we formally receive the messages and send them to our message manager.
 			{
-				this.networkingService.PostNetworkMessage(message, this.ClientConnection); 
+				this.networkingService.PostNetworkMessage(message, this.ClientConnection);
 				message.Dispose();
 			}
 		}
@@ -90,15 +89,15 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 		protected virtual async Task<(List<bool> messageReceived, int alreadyReceivedCount)> PrepareGossipMessageAcceptations() {
 			IMessageRegistryDal sqliteDal = this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemFilesDirectoryPath(), this.serviceSet);
 
-			var gossipMessages = this.triggerMessage.Message.messageInfos.Select((mi, index) => (mi, index, mi.Hash)).ToList();
+			List<(GossipGroupMessageInfo<R> mi, int index, long Hash)> gossipMessages = this.triggerMessage.Message.messageInfos.Select((mi, index) => (mi, index, mi.Hash)).ToList();
 
-			var messageReceived = await sqliteDal.CheckMessagesReceived(gossipMessages.Select(mi => mi.Hash).ToList(), this.ClientConnection).ConfigureAwait(false);
+			List<bool> messageReceived = await sqliteDal.CheckMessagesReceived(gossipMessages.Select(mi => mi.Hash).ToList(), this.ClientConnection).ConfigureAwait(false);
 
 			//TODO: here we can add rate limiting on messages by refusing messages if they come too quickly
 			int alreadyReceivedCount = messageReceived.Count(m => !m);
 
 			// now we do extra processing by verifying the metadata associated with each message.
-			foreach(var metadataEntry in gossipMessages.Where(e => e.mi.GossipMessageMetadata != null)) {
+			foreach((GossipGroupMessageInfo<R> mi, int index, long Hash) metadataEntry in gossipMessages.Where(e => e.mi.GossipMessageMetadata != null)) {
 
 				// check the metadata and determine if we still want the message
 				if(messageReceived[metadataEntry.index] && ServerMessageGroupManifestWorkflow.GossipMetadataAnalysers.ContainsKey(metadataEntry.mi.GossipMessageMetadata.BlockchainType)) {

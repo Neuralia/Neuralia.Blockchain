@@ -60,6 +60,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 			if(disposing && !this.IsDisposed) {
 				this.parameters.Dispose();
 			}
+
 			this.IsDisposed = true;
 		}
 

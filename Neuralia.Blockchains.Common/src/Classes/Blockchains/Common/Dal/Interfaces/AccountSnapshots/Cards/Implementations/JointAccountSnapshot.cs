@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		public void CreateNewCollectionEntry(out IJointMemberAccount result) {
 			TypedCollectionExposureUtil<IJointMemberAccount>.CreateNewCollectionEntry(this.MemberAccounts, out result);
 		}
-		
+
 		void ITypedCollectionExposure<IJointMemberAccount>.ClearCollection() {
 			this.MemberAccounts.Clear();
 		}

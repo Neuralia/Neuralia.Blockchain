@@ -4,6 +4,7 @@ using System.Security;
 using System.Text;
 using System.Threading;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Serilog;
@@ -67,7 +68,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 			this.SetKeysPassphrase(identityUuid, passphrase.ConvertToSecureString(), timeout);
 		}
-		
+
 		public void SetKeysPassphrase(Guid identityUuid, SecureString passphrase, int? timeout = null) {
 
 			this.SetKeysPassphrase(identityUuid, null, passphrase, timeout);
@@ -105,7 +106,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 		}
 
 		private void SetKeyEntry(string scoppedName, SecureString passphrase, int? timeout = null) {
-			var passphraseTimeout = this.keyPassphraseTimeout;
+			int? passphraseTimeout = this.keyPassphraseTimeout;
 
 			if(timeout.HasValue) {
 				passphraseTimeout = timeout.Value;
@@ -126,10 +127,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			if(passphraseTimeout.HasValue) {
 				keysPassphraseTimer = new Timer(state => {
 
-					try{
+					try {
 						PassphraseDetails details = (PassphraseDetails) state;
 
-						if (this.keys.ContainsKey(scoppedName)){
+						if(this.keys.ContainsKey(scoppedName)) {
 							(SecureString keysPassphrase, Timer timer) = this.keys[scoppedName];
 
 							// lets clear everything
@@ -142,10 +143,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 							this.keys.Remove(scoppedName);
 						}
-					}
-					catch(Exception ex){
+					} catch(Exception ex) {
 						//TODO: do something?
-						Log.Error(ex, "Timer exception");
+						NLog.Default.Error(ex, "Timer exception");
 					}
 
 				}, this, TimeSpan.FromMinutes(passphraseTimeout.Value), new TimeSpan(-1));
@@ -228,7 +228,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 		}
 
 		public void ClearKeysPassphrase() {
-			foreach(var key in this.keys) {
+			foreach(KeyValuePair<string, (SecureString keysPassphrase, Timer keysPassphraseTimer)> key in this.keys) {
 
 				try {
 					key.Value.keysPassphrase?.Dispose();

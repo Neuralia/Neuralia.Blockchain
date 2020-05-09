@@ -1,5 +1,5 @@
 using System;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Services;
 
 namespace Neuralia.Blockchains.Common.Classes.Services {

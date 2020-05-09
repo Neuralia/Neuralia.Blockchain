@@ -31,6 +31,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			if(disposing && !this.IsDisposed) {
 				this.DisposeAll();
 			}
+
 			this.IsDisposed = true;
 		}
 

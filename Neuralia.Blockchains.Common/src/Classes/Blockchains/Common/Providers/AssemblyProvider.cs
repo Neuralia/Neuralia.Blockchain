@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts;
@@ -10,8 +12,8 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Si
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
@@ -20,24 +22,22 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical;
-using Neuralia.Blockchains.Core.Debugging;
+using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
-using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
-	public interface IAssemblyProvider: IChainProvider {
+	public interface IAssemblyProvider : IChainProvider {
 	}
 
 	public interface IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IAssemblyProvider
@@ -55,9 +55,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<IMessageEnvelope> GenerateDebugMessage();
 		Task<IMessageEnvelope> GenerateOnChainElectionsRegistrationMessage(AccountId electedAccountId, Enums.MiningTiers miningTier, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, LockContext lockContext);
 
-		Task<ITransactionEnvelope> GenerateTransaction(ITransaction transaction, string keyName, EnvelopeSignatureType signatureType, LockContext lockContext, byte expiration = 0, Func<LockContext, Task> customProcessing = null, Func<ITransactionEnvelope, ITransaction, Task> finalizationProcessing = null) ;
+		Task<ITransactionEnvelope> GenerateTransaction(ITransaction transaction, string keyName, EnvelopeSignatureType signatureType, LockContext lockContext, byte expiration = 0, Func<LockContext, Task> customProcessing = null, Func<ITransactionEnvelope, ITransaction, Task> finalizationProcessing = null);
 
-		Task<List<IMessageEnvelope> >PrepareElectionMessageEnvelopes(List<IElectionCandidacyMessage> messages, LockContext lockContext);
+		Task<List<IMessageEnvelope>> PrepareElectionMessageEnvelopes(List<IElectionCandidacyMessage> messages, LockContext lockContext);
 		Task PrepareTransactionBasics(ITransaction transaction, LockContext lockContext);
 	}
 
@@ -84,57 +84,58 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			try {
 				IStandardPresentationTransaction standardPresentation = this.CreateNewPresentationTransaction();
 
-				await this.GenerateRawTransaction(standardPresentation, lockContext, async (lc) => {
+				await this.GenerateRawTransaction(standardPresentation, lockContext, async lc => {
 
-                    // we also publish the hash of our backup key, in case we ever need it
+					// we also publish the hash of our backup key, in case we ever need it
 
-                    CentralCoordinator.PostSystemEvent(accountPublicationStepSet.CreatingPresentationTransaction, correlationContext);
+					this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.CreatingPresentationTransaction, correlationContext);
 
-                    // now lets publish our keys
+					// now lets publish our keys
 
-                    CentralCoordinator.ChainComponentProvider.WalletProviderBase.EnsureWalletIsLoaded();
+					this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.EnsureWalletIsLoaded();
 
 					// This is a VERY special case. presentation is the only transaction where we have no account ID on the chain.
 					// so, we will overwrite the empty accountId and publish our hash of our internal account id, and the mods will assign us a public id
-					standardPresentation.TransactionId.Account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountUuidHash(lc).ConfigureAwait(false);
+					standardPresentation.TransactionId.Account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccountUuidHash(lc).ConfigureAwait(false);
 					standardPresentation.CorrelationId = correlationId;
 
 					IWalletAccount account = null;
+
 					// now we publish our keys
 					if(accountUuid.HasValue) {
-						account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(accountUuid.Value, lockContext).ConfigureAwait(false);
+						account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(accountUuid.Value, lockContext).ConfigureAwait(false);
 					} else {
-						account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
+						account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
 					}
-					
-					using(IXmssWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.TRANSACTION_KEY_NAME, lc).ConfigureAwait(false)) {
+
+					using(IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.TRANSACTION_KEY_NAME, lc).ConfigureAwait(false)) {
 
 						if(key == null) {
 							throw new ApplicationException($"Failed to load '{GlobalsService.TRANSACTION_KEY_NAME}' key");
 						}
 
 						standardPresentation.TransactionCryptographicKey.SetFromWalletKey(key);
-						
+
 						// we are declaring this key in this block, so lets update our key
 						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
-                        await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
+						await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
 					}
 
-					using(IXmssWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.MESSAGE_KEY_NAME, lc).ConfigureAwait(false)) {
+					using(IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.MESSAGE_KEY_NAME, lc).ConfigureAwait(false)) {
 
 						if(key == null) {
 							throw new ApplicationException($"Failed to load '{GlobalsService.MESSAGE_KEY_NAME}' key");
 						}
-						
+
 						standardPresentation.MessageCryptographicKey.SetFromWalletKey(key);
 
 						// we are declaring this key in this block, so lets update our key
 						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
-						await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
+						await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
 
 					}
 
-					using(IXmssWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.CHANGE_KEY_NAME, lc).ConfigureAwait(false)) {
+					using(IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(account.AccountUuid, GlobalsService.CHANGE_KEY_NAME, lc).ConfigureAwait(false)) {
 
 						if(key == null) {
 							throw new ApplicationException($"Failed to load '{GlobalsService.CHANGE_KEY_NAME}' key");
@@ -142,24 +143,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 						standardPresentation.ChangeCryptographicKey.SetFromWalletKey(key);
 
-
 						// we are declaring this key in this block, so lets update our key
 						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
-						await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
+						await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
 					}
 
-
-					using(ISecretWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretWalletKey>(account.AccountUuid, GlobalsService.SUPER_KEY_NAME, lc).ConfigureAwait(false)) {
+					using(ISecretWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretWalletKey>(account.AccountUuid, GlobalsService.SUPER_KEY_NAME, lc).ConfigureAwait(false)) {
 
 						if(key == null) {
 							throw new ApplicationException($"Failed to load '{GlobalsService.SUPER_KEY_NAME}' key");
 						}
 
 						standardPresentation.SuperCryptographicKey.SetFromWalletKey(key);
-						
+
 						// we are declaring this key in this block, so lets update our key
 						key.KeyAddress.DeclarationTransactionId = standardPresentation.TransactionId;
-                        await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
+						await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateKey(key, lc).ConfigureAwait(false);
 
 						standardPresentation.SuperCryptographicKey.Id = key.KeyAddress.OrdinalId;
 					}
@@ -176,12 +175,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					try {
 						this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
 
-						(var solutions, int nonce) = pow.PerformPow(hash, GlobalsService.POW_DIFFICULTY, async (currentNonce, difficulty) => {
+						(List<int> solutions, int nonce) = pow.PerformPow(hash, GlobalsService.POW_DIFFICULTY, async (currentNonce, difficulty) => {
 
 							this.CentralCoordinator.PostSystemEvent(accountPublicationStepSet.PerformingPOWIteration(currentNonce, difficulty), correlationContext);
 							Thread.Sleep(500);
 						});
-						
+
 						standardPresentation.PowSolutions = solutions.Take(GlobalsService.POW_MAX_SOLUTIONS).ToList(); // take the top ones
 						standardPresentation.PowNonce = nonce;
 						standardPresentation.PowDifficulty = GlobalsService.POW_DIFFICULTY;
@@ -190,7 +189,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					} finally {
 						this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RestoreNetwork();
 					}
-				
+
 				} catch(Exception ex) {
 					throw new ApplicationException("Failed to generate presentation transaction proof of work", ex);
 				}
@@ -227,15 +226,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					signatureType = EnvelopeSignatureTypes.Instance.SingleSecret;
 				}
 
-				ITransactionEnvelope envelope = await this.GenerateTransaction(standardAccountKeyChange, keyMasterKeyName, signatureType, lockContext, expiration, async (lc) => {
+				ITransactionEnvelope envelope = await this.GenerateTransaction(standardAccountKeyChange, keyMasterKeyName, signatureType, lockContext, expiration, async lc => {
 
 					// now lets publish our keys
 
 					// now we publish our keys
-					IWalletAccount account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lc).ConfigureAwait(false);
+					IWalletAccount account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lc).ConfigureAwait(false);
 					BlockChainConfigurations chainConfiguration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-					if(newKeyOrdinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID || newKeyOrdinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID || newKeyOrdinal == GlobalsService.CHANGE_KEY_ORDINAL_ID) {
+					if((newKeyOrdinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || (newKeyOrdinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) || (newKeyOrdinal == GlobalsService.CHANGE_KEY_ORDINAL_ID)) {
 
 						async Task SetTrxDetails(IXmssWalletKey nextKey, bool isKeySet) {
 							if(nextKey == null) {
@@ -248,26 +247,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							// lets set it as our next one
 							if(isKeySet) {
-								await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey, lc).ConfigureAwait(false);
+								await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey, lc).ConfigureAwait(false);
 							} else {
-								await CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetNextKey(account.AccountUuid, nextKey, lc).ConfigureAwait(false);
+								await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetNextKey(account.AccountUuid, nextKey, lc).ConfigureAwait(false);
 							}
 
-							await CentralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lc).ConfigureAwait(false);
+							await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lc).ConfigureAwait(false);
 
 							// lets publish its public details
 							standardAccountKeyChange.XmssNewCryptographicKey.SetFromWalletKey(nextKey);
 						}
 
-						if(!await CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(account.AccountUuid, keyChangeName, lc).ConfigureAwait(false)) {
+						if(!await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(account.AccountUuid, keyChangeName, lc).ConfigureAwait(false)) {
 							using IXmssWalletKey newKey = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateXmssKey(keyChangeName).ConfigureAwait(false);
 
 							await SetTrxDetails(newKey, false).ConfigureAwait(false);
 
 						} else {
-							using IXmssWalletKey nextKey = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey<IXmssWalletKey>(account.AccountUuid, keyChangeName, lc).ConfigureAwait(false);
+							using IXmssWalletKey nextKey = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey<IXmssWalletKey>(account.AccountUuid, keyChangeName, lc).ConfigureAwait(false);
 
-							await SetTrxDetails((IXmssWalletKey) nextKey, true).ConfigureAwait(false);
+							await SetTrxDetails(nextKey, true).ConfigureAwait(false);
 
 						}
 					} else if(newKeyOrdinal == GlobalsService.SUPER_KEY_ORDINAL_ID) {
@@ -287,12 +286,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							// lets set it as our next one
 							if(isKeySet) {
-								await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey, lc).ConfigureAwait(false);
+								await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateNextKey(nextKey, lc).ConfigureAwait(false);
 							} else {
-								await CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetNextKey(account.AccountUuid, nextKey, lc).ConfigureAwait(false);
+								await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SetNextKey(account.AccountUuid, nextKey, lc).ConfigureAwait(false);
 							}
 
-							await CentralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lc).ConfigureAwait(false);
+							await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lc).ConfigureAwait(false);
 
 							// lets publish its public details
 							standardAccountKeyChange.NextSuperCryptographicKey.SetFromWalletKey(nextKey);
@@ -300,15 +299,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						// we use our secret backup key, so we create the next one
-						if(!await CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(account.AccountUuid, GlobalsService.SUPER_KEY_NAME, lc).ConfigureAwait(false)) {
+						if(!await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(account.AccountUuid, GlobalsService.SUPER_KEY_NAME, lc).ConfigureAwait(false)) {
 							using ISecretWalletKey newKey = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateSuperKey();
 
 							await SetTrxDetails(newKey, false).ConfigureAwait(false);
 
 						} else {
-							using ISecretWalletKey nextKey = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey<ISecretWalletKey>(account.AccountUuid, GlobalsService.SUPER_KEY_NAME, lc).ConfigureAwait(false);
+							using ISecretWalletKey nextKey = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadNextKey<ISecretWalletKey>(account.AccountUuid, GlobalsService.SUPER_KEY_NAME, lc).ConfigureAwait(false);
 
-							await SetTrxDetails((ISecretWalletKey) nextKey, true).ConfigureAwait(false);
+							await SetTrxDetails(nextKey, true).ConfigureAwait(false);
 
 						}
 
@@ -329,7 +328,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				registrationMessage.AccountId = electedAccountId;
 				registrationMessage.MiningTier = miningTier;
-				
+
 				// now, we encrypt our data for the moderator to see
 				ICryptographicKey key = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKey<ICryptographicKey>(GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID);
 
@@ -349,10 +348,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				throw new ApplicationException("failed to generate neuralium key change transaction", ex);
 			}
 		}
-		
+
 		public async Task<List<IMessageEnvelope>> PrepareElectionMessageEnvelopes(List<IElectionCandidacyMessage> messages, LockContext lockContext) {
 
-			var envelopes = new List<IMessageEnvelope>();
+			List<IMessageEnvelope> envelopes = new List<IMessageEnvelope>();
 
 			foreach(IElectionCandidacyMessage message in messages) {
 				envelopes.Add(await this.GenerateBlockchainMessage(message, lockContext).ConfigureAwait(false));
@@ -374,12 +373,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     Final processing done once the transaction is ready
 		///     and signed
 		/// </param>
-
 		public async Task<ITransactionEnvelope> GenerateTransaction(ITransaction transaction, string keyName, EnvelopeSignatureType signatureType, LockContext lockContext, byte expiration = 0, Func<LockContext, Task> customProcessing = null, Func<ITransactionEnvelope, ITransaction, Task> finalizationProcessing = null) {
 
-			await GenerateRawTransaction(transaction, lockContext, customProcessing).ConfigureAwait(false);
+			await this.GenerateRawTransaction(transaction, lockContext, customProcessing).ConfigureAwait(false);
 
-			return await PrepareTransactionEnvelope(transaction, keyName, signatureType, lockContext, expiration, finalizationProcessing).ConfigureAwait(false);
+			return await this.PrepareTransactionEnvelope(transaction, keyName, signatureType, lockContext, expiration, finalizationProcessing).ConfigureAwait(false);
 		}
 
 		public abstract Task<ITransactionEnvelope> GenerateDebugTransaction();
@@ -397,7 +395,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				throw new ApplicationException("Genesis block was never synced");
 			}
 
-			IWalletAccount account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
+			IWalletAccount account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
 
 			AccountId accountId = account.PublicAccountId;
 
@@ -412,7 +410,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected async Task GenerateRawTransaction(ITransaction transaction, LockContext lockContext, Func<LockContext, Task> customProcessing = null) {
 
 			// first, ensure that our account has been published. otherwise, we can't use it
-			Enums.PublicationStatus status = (await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
+			Enums.PublicationStatus status = (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
 
 			if(status != Enums.PublicationStatus.Published) {
 				if(transaction is IStandardPresentationTransaction) {
@@ -435,7 +433,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public async Task<ITransactionEnvelope> PrepareTransactionEnvelope(ITransaction transaction, string keyName, EnvelopeSignatureType signatureType, LockContext lockContext, byte expiration = 0, Func<ITransactionEnvelope, ITransaction, Task> finalizationProcessing = null) {
 
 			// first, ensure that our account has been published. otherwise, we can't use it
-			Enums.PublicationStatus status = (await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
+			Enums.PublicationStatus status = (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
 
 			if(status != Enums.PublicationStatus.Published) {
 				if(transaction is IStandardPresentationTransaction) {
@@ -447,7 +445,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 			}
 
-			if(transaction == null || transaction.TransactionId.Account == null) {
+			if((transaction == null) || (transaction.TransactionId.Account == default(AccountId))) {
 				throw new ApplicationException("The presentation transaction must be created before we can generate the envelope.");
 
 			}
@@ -486,12 +484,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// key change transactions have a special allowance to go further in the xmss limits
 				bool allowPassKeyLimit = transaction is IKeychange;
-				
+
 				ITransactionEnvelope transactionEnvelope = this.CreateNewTransactionEnvelope(signatureType);
 
 				transactionEnvelope.SetExpiration(expiration, transaction.TransactionId, this.CentralCoordinator.BlockchainServiceSet.BlockchainTimeService, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
 				transactionEnvelope.IsPresentation = transaction is IPresentation;
-				
+
 				// we will wait for the results, this is a VERY important event
 
 				// the first step. we set the extended transaction id key use index for our XMSS key with our current state
@@ -500,9 +498,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				} else if(transactionEnvelope.Signature is SecretEnvelopeSignature) {
 					transaction.KeyUseIndex = null;
 				} else {
-					using IXmssWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
+					using IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
-					if(key.Status == Enums.KeyStatus.New || key.KeyAddress.AnnouncementBlockId == 0) {
+					if((key.Status == Enums.KeyStatus.New) || (key.KeyAddress.AnnouncementBlockId == 0)) {
 						throw new ApplicationException("Key has not been published!");
 					}
 
@@ -520,7 +518,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				async Task SignTransaction(IWalletKey key) {
 					// hash the finalized transaction
 
-					Log.Verbose("Singing transaction...");
+					NLog.Default.Verbose("Singing transaction...");
 
 					SafeArrayHandle signature = null;
 
@@ -530,7 +528,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						signature = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignTransaction(transactionEnvelope.Hash, key, lockContext, allowPassKeyLimit).ConfigureAwait(false);
 					}
 
-					Log.Verbose("Transaction successfully signed.");
+					NLog.Default.Verbose("Transaction successfully signed.");
 
 					void SetSignature(IAccountSignature sig) {
 						if(sig is IPublishedAccountSignature publishedAccountSignature) {
@@ -602,7 +600,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						SetSignature(accountSignature);
 
 						((IJointEnvelopeSignature) transactionEnvelope.Signature).AccountSignatures.Add(accountSignature);
-					}else if(transactionEnvelope.Signature.Version == EnvelopeSignatureTypes.Instance.JointPublished) {
+					} else if(transactionEnvelope.Signature.Version == EnvelopeSignatureTypes.Instance.JointPublished) {
 						// add the first signature
 						IPublishedAccountSignature accountSignature = new PublishedAccountSignature();
 
@@ -619,44 +617,44 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					await SignTransaction(key).ConfigureAwait(false);
 
 				} else if(transactionEnvelope.Signature is SecretEnvelopeSignature secretEnvelopeSignature) {
-					using ISecretWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretWalletKey>(keyName, lockContext).ConfigureAwait(false);
+					using ISecretWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
 					// important, we dont reuse a secret twice! we must wait until the transaction is confirmed or rejected
-					if(!await CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false)) {
+					if(!await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false)) {
 						throw new ApplicationException("The secret key has already been used and not yet confirmed. we can not use it again until the transaction is confirmed");
 					}
 
 					await SignTransaction(key).ConfigureAwait(false);
 
 					// ok, we signed this transaction, so lets add it to our keyLog since our key has changed in the wallet already
-					IWalletAccount account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(key.AccountUuid, lockContext).ConfigureAwait(false);
-					await CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertKeyLogTransactionEntry(account, transaction.TransactionId, transaction.KeyUseIndex, key.KeyAddress.OrdinalId, lockContext).ConfigureAwait(false);
+					IWalletAccount account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(key.AccountUuid, lockContext).ConfigureAwait(false);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertKeyLogTransactionEntry(account, transaction.TransactionId, transaction.KeyUseIndex, key.KeyAddress.OrdinalId, lockContext).ConfigureAwait(false);
 
 				} else if(transactionEnvelope.Signature is SecretComboEnvelopeSignature secretComboEnvelopeSignature) {
-					using ISecretComboWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretComboWalletKey>(keyName, lockContext).ConfigureAwait(false);
+					using ISecretComboWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<ISecretComboWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
 					// important, we dont reuse a secret twice! we must wait until the transaction is confirmed or rejected
-					if(!await CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false)) {
+					if(!await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsNextKeySet(key.AccountUuid, key.Name, lockContext).ConfigureAwait(false)) {
 						throw new ApplicationException("The secret key has already been used and not yet confirmed. we can not use it again until the transaction is confirmed");
 					}
 
 					await SignTransaction(key).ConfigureAwait(false);
 
 					// ok, we signed this transaction, so lets add it to our keyLog since our key has changed in the wallet already
-					IWalletAccount account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(key.AccountUuid, lockContext).ConfigureAwait(false);
-					await CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertKeyLogTransactionEntry(account, transaction.TransactionId, transaction.KeyUseIndex, key.KeyAddress.OrdinalId, lockContext).ConfigureAwait(false);
+					IWalletAccount account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(key.AccountUuid, lockContext).ConfigureAwait(false);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertKeyLogTransactionEntry(account, transaction.TransactionId, transaction.KeyUseIndex, key.KeyAddress.OrdinalId, lockContext).ConfigureAwait(false);
 
 				} else {
-					using IXmssWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
+					using IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
 					await SignTransaction(key).ConfigureAwait(false);
 
 					// increment the key use index
-					await CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalChainStateKeyHeight(key, lockContext).ConfigureAwait(false);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalChainStateKeyHeight(key, lockContext).ConfigureAwait(false);
 
 					// ok, we signed this transaction, so lets add it to our keyLog since our key has changed in the wallet already
-					IWalletAccount account = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(key.AccountUuid, lockContext).ConfigureAwait(false);
-					await CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertKeyLogTransactionEntry(account, transaction.TransactionId, transaction.KeyUseIndex, key.KeyAddress.OrdinalId, lockContext).ConfigureAwait(false);
+					IWalletAccount account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletAccount(key.AccountUuid, lockContext).ConfigureAwait(false);
+					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertKeyLogTransactionEntry(account, transaction.TransactionId, transaction.KeyUseIndex, key.KeyAddress.OrdinalId, lockContext).ConfigureAwait(false);
 
 				}
 
@@ -676,21 +674,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// now as the last step in the building, we hash the entire transaction to get the sakura tree root
 
 				// load our key, and use it to set what we need to
-				using(IXmssWalletKey key = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(GlobalsService.MESSAGE_KEY_NAME, lockContext).ConfigureAwait(false)) {
+				using(IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(GlobalsService.MESSAGE_KEY_NAME, lockContext).ConfigureAwait(false)) {
 
 					// hash the finalized transaction
 					messageEnvelope.Hash.Entry = HashingUtils.GenerateHash(message).Entry;
 
-					Log.Verbose("Singing message...");
+					NLog.Default.Verbose("Singing message...");
 
 					messageEnvelope.Signature.AccountSignature.KeyAddress = key.KeyAddress.Clone();
-					
+
 					messageEnvelope.Signature.AccountSignature.PublicKey = KeyFactory.ConvertWalletKey(key);
 
 					// and sign the whole thing with our key
 					messageEnvelope.Signature.AccountSignature.Autograph.Entry = (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(messageEnvelope.Hash, key, lockContext).ConfigureAwait(false)).Entry;
 
-					Log.Verbose("Message successfully signed.");
+					NLog.Default.Verbose("Message successfully signed.");
 				}
 
 				return messageEnvelope;
@@ -703,7 +701,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected async Task<IMessageEnvelope> GenerateBlockchainMessage(IBlockchainMessage message, LockContext lockContext) {
 
 			// first, ensure that our account has been published. otherwise, we can't use it
-			Enums.PublicationStatus status = (await CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
+			Enums.PublicationStatus status = (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
 
 			if(status != Enums.PublicationStatus.Published) {
 				throw new ApplicationException("Our Account has not yet been published and confirmed. we can not create transactions yet with it.");
@@ -737,11 +735,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			} else if(signatureType == EnvelopeSignatureTypes.Instance.Joint) {
 				envelope.Signature = new JointEnvelopeSignature();
 
-			}
-			else if(signatureType == EnvelopeSignatureTypes.Instance.JointPublished) {
+			} else if(signatureType == EnvelopeSignatureTypes.Instance.JointPublished) {
 				envelope.Signature = new JointPublishedEnvelopeSignature();
 
 			}
+
 			return envelope;
 		}
 

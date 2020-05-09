@@ -6,22 +6,22 @@ using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks {
 	public interface ISecretBlockNextAccountSignature : IBlockNextAccountSignature {
-		SafeArrayHandle NextKeyHashSha2 { get;  }
-		SafeArrayHandle NextKeyHashSha3 { get;  }
+		SafeArrayHandle NextKeyHashSha2 { get; }
+		SafeArrayHandle NextKeyHashSha3 { get; }
 		int NonceHash { get; set; }
 
 		QTESLASecurityCategory.SecurityCategories NextSecondSecurityCategory { get; set; }
-		SafeArrayHandle NextSecondPublicKey { get;  }
+		SafeArrayHandle NextSecondPublicKey { get; }
 	}
 
 	public class SecretBlockNextAccountSignature : BlockNextAccountSignature, ISecretBlockNextAccountSignature {
 
-		public SafeArrayHandle NextKeyHashSha2 { get;  } = SafeArrayHandle.Create();
-		public SafeArrayHandle NextKeyHashSha3 { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle NextKeyHashSha2 { get; } = SafeArrayHandle.Create();
+		public SafeArrayHandle NextKeyHashSha3 { get; } = SafeArrayHandle.Create();
 		public int NonceHash { get; set; }
 
 		public QTESLASecurityCategory.SecurityCategories NextSecondSecurityCategory { get; set; }
-		public SafeArrayHandle NextSecondPublicKey { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle NextSecondPublicKey { get; } = SafeArrayHandle.Create();
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = base.GetStructuresArray();

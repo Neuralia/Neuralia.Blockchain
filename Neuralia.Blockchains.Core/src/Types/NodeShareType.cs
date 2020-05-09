@@ -3,17 +3,17 @@ using Neuralia.Blockchains.Core.Configuration;
 namespace Neuralia.Blockchains.Core.Types {
 	public struct NodeShareType {
 
-		public Enums.ChainSharingTypes SharingType { get; private set; }
-		
-		public NodeShareType( byte value ) : this((Enums.ChainSharingTypes)value){
+		public Enums.ChainSharingTypes SharingType { get; }
+
+		public NodeShareType(byte value) : this((Enums.ChainSharingTypes) value) {
 
 		}
-		
-		public NodeShareType( Enums.ChainSharingTypes chainSharingTypes ){
+
+		public NodeShareType(Enums.ChainSharingTypes chainSharingTypes) {
 			this.SharingType = chainSharingTypes;
 		}
 
-		public NodeShareType( AppSettingsBase.BlockSavingModes blockSavingMode ) : this(ConvertBlockSavingModes(blockSavingMode)){
+		public NodeShareType(AppSettingsBase.BlockSavingModes blockSavingMode) : this(ConvertBlockSavingModes(blockSavingMode)) {
 
 		}
 
@@ -30,13 +30,13 @@ namespace Neuralia.Blockchains.Core.Types {
 				case AppSettingsBase.BlockSavingModes.DigestAndBlocks:
 					return Enums.ChainSharingTypes.DigestAndBlocks;
 			}
-			
+
 			return Enums.ChainSharingTypes.None;
 		}
-		
+
 		public bool Shares => this.HasBlocks;
 		public bool DoesNotShare => !this.Shares;
-		
+
 		public bool HasDigests => UsesDigests(this.SharingType);
 		public bool AllBlocks => UsesAllBlocks(this.SharingType);
 		public bool OnlyBlocks => UsesOnlyBlocks(this.SharingType);
@@ -44,13 +44,13 @@ namespace Neuralia.Blockchains.Core.Types {
 		public bool HasBlocks => UsesBlocks(this.SharingType);
 		public bool HasDigestsAndBlocks => UsesDigestsAndBlocks(this.SharingType);
 		public bool HasDigestsThenBlocks => this.PartialBlocks;
-		
+
 		public static bool UsesDigests(Enums.ChainSharingTypes chainSharingTypes) {
 			return (chainSharingTypes == Enums.ChainSharingTypes.DigestAndBlocks) || (chainSharingTypes == Enums.ChainSharingTypes.DigestThenBlocks);
 		}
 
 		public static bool UsesOnlyBlocks(Enums.ChainSharingTypes chainSharingTypes) {
-			return (chainSharingTypes == Enums.ChainSharingTypes.BlockOnly);
+			return chainSharingTypes == Enums.ChainSharingTypes.BlockOnly;
 		}
 
 		public static bool UsesAllBlocks(Enums.ChainSharingTypes chainSharingTypes) {
@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Core.Types {
 		public static bool UsesPartialBlocks(Enums.ChainSharingTypes chainSharingTypes) {
 			return chainSharingTypes == Enums.ChainSharingTypes.DigestThenBlocks;
 		}
-		
+
 		/// <summary>
 		///     Do we even use blocks at all?
 		/// </summary>
@@ -69,32 +69,31 @@ namespace Neuralia.Blockchains.Core.Types {
 		public static bool UsesBlocks(Enums.ChainSharingTypes chainSharingTypes) {
 			return UsesAllBlocks(chainSharingTypes) || UsesPartialBlocks(chainSharingTypes);
 		}
-		
+
 		public static bool UsesDigestsAndBlocks(Enums.ChainSharingTypes chainSharingTypes) {
 			return UsesBlocks(chainSharingTypes) && UsesDigests(chainSharingTypes);
 		}
-		
+
 		public static bool SharesAnything(Enums.ChainSharingTypes chainSharingTypes) {
 			return chainSharingTypes != Enums.ChainSharingTypes.None;
 		}
 
-		
 		public static implicit operator NodeShareType(byte value) {
 			return new NodeShareType(value);
 		}
-		
+
 		public static implicit operator byte(NodeShareType nodeShareType) {
-			return (byte)nodeShareType.SharingType;
+			return (byte) nodeShareType.SharingType;
 		}
-		
+
 		public static implicit operator NodeShareType(Enums.ChainSharingTypes chainSharingTypes) {
 			return new NodeShareType(chainSharingTypes);
 		}
-		
+
 		public static implicit operator NodeShareType(AppSettingsBase.BlockSavingModes blockSavingMode) {
 			return new NodeShareType(blockSavingMode);
 		}
-		
+
 		public static implicit operator Enums.ChainSharingTypes(NodeShareType nodeShareType) {
 			return nodeShareType.SharingType;
 		}
@@ -102,7 +101,7 @@ namespace Neuralia.Blockchains.Core.Types {
 		public override string ToString() {
 			return this.SharingType.ToString();
 		}
-		
+
 		public bool Equals(NodeShareType other) {
 
 			return this.SharingType == other.SharingType;
@@ -120,7 +119,6 @@ namespace Neuralia.Blockchains.Core.Types {
 			return this.Equals((NodeShareType) obj);
 		}
 
-		
 		public static bool operator ==(NodeShareType a, NodeShareType b) {
 			return a.Equals(b);
 		}
@@ -128,21 +126,19 @@ namespace Neuralia.Blockchains.Core.Types {
 		public static bool operator !=(NodeShareType a, NodeShareType b) {
 			return !(a == b);
 		}
-		
+
 		public override int GetHashCode() {
-			return (int) this.SharingType.GetHashCode();
+			return this.SharingType.GetHashCode();
 		}
 
 		public static readonly NodeShareType Full = Enums.ChainSharingTypes.Full;
 		public static readonly NodeShareType None = Enums.ChainSharingTypes.None;
 	}
-	
-	public static class NodeShareTypeExtensions
-	{
+
+	public static class NodeShareTypeExtensions {
 		public static NodeShareType NodeShareType(this ChainConfigurations configuration) {
 			return new NodeShareType(configuration.BlockSavingMode);
 		}
-	}  
-	
-	
+	}
+
 }

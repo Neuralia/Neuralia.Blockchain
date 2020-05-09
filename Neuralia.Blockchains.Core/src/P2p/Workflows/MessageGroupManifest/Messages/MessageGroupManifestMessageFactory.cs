@@ -1,6 +1,7 @@
 using System;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
@@ -85,7 +86,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages 
 						messageSet.Header = header; // set the header explicitely
 						messageSet.RehydrateRest(dr, rehydrationFactory);
 					} catch(Exception ex) {
-						Log.Error(ex, "Invalid data sent");
+						NLog.Default.Error(ex, "Invalid data sent");
 					}
 
 					return messageSet;
@@ -101,13 +102,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages 
 		/// <param name="workflowCorrelationId"></param>
 		/// <returns></returns>
 		public TriggerMessageSet<MessageGroupManifestTrigger<R>, R> CreateMessageGroupManifestWorkflowTriggerSet(uint workflowCorrelationId, uint workflowSessionId) {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<MessageGroupManifestTrigger<R>, R>, MessageGroupManifestTrigger<R>>(workflowCorrelationId, workflowSessionId);
+			TriggerMessageSet<MessageGroupManifestTrigger<R>, R> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<MessageGroupManifestTrigger<R>, R>, MessageGroupManifestTrigger<R>>(workflowCorrelationId, workflowSessionId);
 
 			return messageSet;
 		}
 
 		private TriggerMessageSet<MessageGroupManifestTrigger<R>, R> CreateMessageGroupManifestWorkflowTriggerSet(TargettedHeader triggerHeader) {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<MessageGroupManifestTrigger<R>, R>, MessageGroupManifestTrigger<R>>(triggerHeader);
+			TriggerMessageSet<MessageGroupManifestTrigger<R>, R> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<MessageGroupManifestTrigger<R>, R>, MessageGroupManifestTrigger<R>>(triggerHeader);
 
 			return messageSet;
 		}
@@ -117,7 +118,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages 
 		}
 
 		public TargettedMessageSet<ClientMessageGroupReply<R>, R> CreateClientMessageGroupReplySet(TargettedHeader triggerHeader = null) {
-			var messageSet = this.MainMessageFactory.CreateTargettedMessageSet<TargettedMessageSet<ClientMessageGroupReply<R>, R>, ClientMessageGroupReply<R>>(triggerHeader);
+			TargettedMessageSet<ClientMessageGroupReply<R>, R> messageSet = this.MainMessageFactory.CreateTargettedMessageSet<TargettedMessageSet<ClientMessageGroupReply<R>, R>, ClientMessageGroupReply<R>>(triggerHeader);
 
 			return messageSet;
 		}

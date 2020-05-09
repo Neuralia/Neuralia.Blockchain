@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 			} else {
 				if(messageEntry.IsComplete) {
 					callback(messageEntry.Message.Branch());
-					
+
 				}
 			}
 		}
@@ -71,7 +71,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 
 				//TODO: this is over, trigger the message complete event
 				callback(assembledMessage, splitMessageEntry);
-				
+
 				return;
 			}
 

@@ -1,23 +1,14 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-
-using System.Linq;
-using System.Runtime.ExceptionServices;
 using System.Threading;
-using System.Threading.Tasks;
-using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
-using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
-using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 	public interface IResourceAccessScheduler<T> : IDisposableExtended {
 		void ScheduleRead(Action<T> action);
 		K ScheduleRead<K>(Func<T, K> action);
-		
+
 		void ScheduleWrite(Action<T> action);
 		K ScheduleWrite<K>(Func<T, K> action);
 	}
@@ -31,7 +22,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 	/// </summary>
 	public class SimpleResourceAccessScheduler<T> : IResourceAccessScheduler<T> {
 
-
 		private readonly ReaderWriterLockSlim readerWriterLock = new ReaderWriterLockSlim();
 
 		public SimpleResourceAccessScheduler(T fileProvider) {
@@ -42,53 +32,47 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public void ScheduleRead(Action<T> action) {
 			this.readerWriterLock.EnterReadLock();
+
 			try {
 				action(this.FileProvider);
-			}
-			finally
-			{
+			} finally {
 				this.readerWriterLock.ExitReadLock();
 			}
 		}
 
 		public K ScheduleRead<K>(Func<T, K> action) {
-			
+
 			this.readerWriterLock.EnterReadLock();
+
 			try {
 				return action(this.FileProvider);
-			}
-			finally
-			{
+			} finally {
 				this.readerWriterLock.ExitReadLock();
 			}
 		}
 
 		public void ScheduleWrite(Action<T> action) {
-			bool res = readerWriterLock.IsWriteLockHeld;
+			bool res = this.readerWriterLock.IsWriteLockHeld;
 			this.readerWriterLock.EnterWriteLock();
-			try
-			{
+
+			try {
 				action(this.FileProvider);
-			}
-			finally
-			{
+			} finally {
 				this.readerWriterLock.ExitWriteLock();
 			}
 		}
 
 		public K ScheduleWrite<K>(Func<T, K> action) {
-			bool res = readerWriterLock.IsWriteLockHeld;
+			bool res = this.readerWriterLock.IsWriteLockHeld;
 			this.readerWriterLock.EnterWriteLock();
-			try
-			{
+
+			try {
 				return action(this.FileProvider);
-			}
-			finally
-			{
+			} finally {
 				this.readerWriterLock.ExitWriteLock();
 			}
 		}
-		
+
 	#region Dispose
 
 		public bool IsDisposed { get; private set; }
@@ -106,13 +90,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 					try {
 						this.readerWriterLock?.Dispose();
 					} catch(Exception ex) {
-						Log.Verbose("error occured", ex);
+						NLog.Default.Verbose("error occured", ex);
 					}
 
 				} catch(Exception ex) {
 
-				} 
+				}
 			}
+
 			this.IsDisposed = true;
 		}
 
@@ -121,5 +106,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 	#endregion
+
 	}
 }

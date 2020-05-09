@@ -1,4 +1,3 @@
-using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
@@ -6,6 +5,7 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1.Structures {
@@ -23,17 +23,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public void Rehydrate(IDataRehydrator rehydrator) {
 			AdaptiveLong1_9 certificate = new AdaptiveLong1_9();
 			certificate.Rehydrate(rehydrator);
-			this.CorrelationId = (uint)certificate.Value;
-					
+			this.CorrelationId = (uint) certificate.Value;
+
 			certificate = new AdaptiveLong1_9();
 			certificate.Rehydrate(rehydrator);
-			this.AttributeType = (AccountAttributeType)certificate.Value;
+			this.AttributeType = (AccountAttributeType) certificate.Value;
 
-			var array = rehydrator.ReadArray();
+			ByteArray array = rehydrator.ReadArray();
 
 			this.Context = null;
-			
-			if(array?.HasData??false) {
+
+			if(array?.HasData ?? false) {
 				this.Context = array.ToExactByteArrayCopy();
 			}
 
@@ -42,15 +42,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
-			
-			
+
 			AdaptiveLong1_9 certificate = new AdaptiveLong1_9();
-			certificate.Value =	this.CorrelationId;
+			certificate.Value = this.CorrelationId;
 			certificate.Dehydrate(dehydrator);
-					
-			certificate.Value =	this.AttributeType.Value;
+
+			certificate.Value = this.AttributeType.Value;
 			certificate.Dehydrate(dehydrator);
-			
+
 			dehydrator.Write(this.Context);
 
 			dehydrator.Write(this.Start);
@@ -74,7 +73,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("FeatureType", this.AttributeType);
 			jsonDeserializer.SetProperty("CorrelationId", this.CorrelationId);
 			jsonDeserializer.SetProperty("Context", this.Context);
-			
+
 			jsonDeserializer.SetProperty("Start", this.Start);
 			jsonDeserializer.SetProperty("Expiration", this.Expiration);
 		}

@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
 using Neuralia.Blockchains.Core.Workflows;
@@ -246,7 +247,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				messageSet.Header = header; // set the header explicitely
 				messageSet.RehydrateRest(dr, rehydrationFactory);
 			} catch(Exception ex) {
-				Log.Error(ex, "Invalid data sent");
+				NLog.Default.Error(ex, "Invalid data sent");
 			}
 
 			return messageSet;
@@ -261,97 +262,97 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <param name="workflowCorrelationId"></param>
 		/// <returns></returns>
 		public IBlockchainTriggerMessageSet CreateSyncWorkflowTriggerSet(uint workflowCorrelationId) {
-			var messageSet = this.mainChainMessageFactory.CreateTriggerMessageSet<CHAIN_SYNC_TRIGGER>(workflowCorrelationId);
+			BlockchainTriggerMessageSet<CHAIN_SYNC_TRIGGER> messageSet = this.mainChainMessageFactory.CreateTriggerMessageSet<CHAIN_SYNC_TRIGGER>(workflowCorrelationId);
 
 			return messageSet;
 		}
 
 		private IBlockchainTriggerMessageSet CreateSyncWorkflowTriggerSet(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTriggerMessageSet<CHAIN_SYNC_TRIGGER>(triggerHeader);
+			BlockchainTriggerMessageSet<CHAIN_SYNC_TRIGGER> messageSet = this.mainChainMessageFactory.CreateTriggerMessageSet<CHAIN_SYNC_TRIGGER>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowTriggerServerReplySet(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SERVER_TRIGGER_REPLY>(triggerHeader);
+			BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SERVER_TRIGGER_REPLY>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowFinishSyncSet(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<CLOSE_CONNECTION>(triggerHeader);
+			BlockchainTargettedMessageSet<CLOSE_CONNECTION> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<CLOSE_CONNECTION>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowRequestBlock(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_BLOCK>(triggerHeader);
+			BlockchainTargettedMessageSet<REQUEST_BLOCK> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_BLOCK>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateServerSendBlock(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_BLOCK>(triggerHeader);
+			BlockchainTargettedMessageSet<SEND_BLOCK> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_BLOCK>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowRequestBlockInfo(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_BLOCK_INFO>(triggerHeader);
+			BlockchainTargettedMessageSet<REQUEST_BLOCK_INFO> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_BLOCK_INFO>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateServerSendBlockInfo(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_BLOCK_INFO>(triggerHeader);
+			BlockchainTargettedMessageSet<SEND_BLOCK_INFO> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_BLOCK_INFO>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowRequestDigest(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_DIGEST>(triggerHeader);
+			BlockchainTargettedMessageSet<REQUEST_DIGEST> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_DIGEST>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateServerSendDigest(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_DIGEST>(triggerHeader);
+			BlockchainTargettedMessageSet<SEND_DIGEST> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_DIGEST>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowRequestDigestFile(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_DIGEST_FILE>(triggerHeader);
+			BlockchainTargettedMessageSet<REQUEST_DIGEST_FILE> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_DIGEST_FILE>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateServerSendDigestFile(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_DIGEST_FILE>(triggerHeader);
+			BlockchainTargettedMessageSet<SEND_DIGEST_FILE> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_DIGEST_FILE>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowRequestDigestInfo(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_DIGEST_INFO>(triggerHeader);
+			BlockchainTargettedMessageSet<REQUEST_DIGEST_INFO> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_DIGEST_INFO>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateServerSendDigestInfo(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_DIGEST_INFO>(triggerHeader);
+			BlockchainTargettedMessageSet<SEND_DIGEST_INFO> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_DIGEST_INFO>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateSyncWorkflowRequestBlockSliceHashes(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_BLOCK_SLICE_HASHES>(triggerHeader);
+			BlockchainTargettedMessageSet<REQUEST_BLOCK_SLICE_HASHES> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<REQUEST_BLOCK_SLICE_HASHES>(triggerHeader);
 
 			return messageSet;
 		}
 
 		public ITargettedMessageSet<IBlockchainEventsRehydrationFactory> CreateServerSendBlockSliceHashes(TargettedHeader triggerHeader = null) {
-			var messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_BLOCK_SLICE_HASHES>(triggerHeader);
+			BlockchainTargettedMessageSet<SEND_BLOCK_SLICE_HASHES> messageSet = this.mainChainMessageFactory.CreateTargettedMessageSet<SEND_BLOCK_SLICE_HASHES>(triggerHeader);
 
 			return messageSet;
 		}

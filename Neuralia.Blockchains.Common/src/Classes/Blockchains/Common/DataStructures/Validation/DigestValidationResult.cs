@@ -7,16 +7,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public DigestValidationResult(ValidationResults result) : base(result) {
 		}
 
-		public DigestValidationResult(ValidationResults result, EventValidationErrorCode errorCode) : base(result, errorCode) {
+		public DigestValidationResult(ValidationResults result, IEventValidationErrorCodeBase errorCode) : base(result, errorCode) {
 		}
 
-		public DigestValidationResult(ValidationResults result, List<EventValidationErrorCode> errorCodes) : base(result, errorCodes) {
+		public DigestValidationResult(ValidationResults result, List<IEventValidationErrorCodeBase> errorCodes) : base(result, errorCodes) {
 		}
 
 		public DigestValidationResult(ValidationResults result, DigestValidationErrorCode errorCode) : base(result, errorCode) {
 		}
 
-		public DigestValidationResult(ValidationResults result, List<DigestValidationErrorCode> errorCodes) : base(result, errorCodes?.Cast<EventValidationErrorCode>().ToList()) {
+		public DigestValidationResult(ValidationResults result, List<DigestValidationErrorCode> errorCodes) : base(result, errorCodes?.Cast<IEventValidationErrorCodeBase>().ToList()) {
 		}
 
 		public override EventValidationException GenerateException() {
@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 	}
 
-	public class DigestValidationErrorCodes : EventValidationErrorCodes {
+	public class DigestValidationErrorCodes : EventValidationErrorCodes<DigestValidationErrorCode> {
 
 		public readonly DigestValidationErrorCode FAILED_DIGEST_HASH_VALIDATION;
 		public readonly DigestValidationErrorCode INVALID_CHANNEL_INDEX_HASH;
@@ -38,31 +38,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		}
 
 		public DigestValidationErrorCodes() {
-			this.FAILED_DIGEST_HASH_VALIDATION = this.CreateChildConstant();
-			this.INVALID_SLICE_HASH = this.CreateChildConstant();
-			this.INVALID_DIGEST_DESCRIPTOR_HASH = this.CreateChildConstant();
-			this.INVALID_CHANNEL_INDEX_HASH = this.CreateChildConstant();
-			this.INVALID_DIGEST_CHANNEL_HASH = this.CreateChildConstant();
-			this.INVALID_DIGEST_HASH = this.CreateChildConstant();
-			this.INVALID_DIGEST_KEY = this.CreateChildConstant();
+
+			this.CreateBaseConstant(ref this.FAILED_DIGEST_HASH_VALIDATION, nameof(this.FAILED_DIGEST_HASH_VALIDATION));
+			this.CreateBaseConstant(ref this.INVALID_SLICE_HASH, nameof(this.INVALID_SLICE_HASH));
+			this.CreateBaseConstant(ref this.INVALID_DIGEST_DESCRIPTOR_HASH, nameof(this.INVALID_DIGEST_DESCRIPTOR_HASH));
+			this.CreateBaseConstant(ref this.INVALID_CHANNEL_INDEX_HASH, nameof(this.INVALID_CHANNEL_INDEX_HASH));
+			this.CreateBaseConstant(ref this.INVALID_DIGEST_CHANNEL_HASH, nameof(this.INVALID_DIGEST_CHANNEL_HASH));
+			this.CreateBaseConstant(ref this.INVALID_DIGEST_HASH, nameof(this.INVALID_DIGEST_HASH));
+			this.CreateBaseConstant(ref this.INVALID_DIGEST_KEY, nameof(this.INVALID_DIGEST_KEY));
 
 			//this.PrintValues(";");		
 		}
 
-		public static new DigestValidationErrorCodes Instance { get; } = new DigestValidationErrorCodes();
+		public static DigestValidationErrorCodes Instance { get; } = new DigestValidationErrorCodes();
 
 		public DigestValidationErrorCode CreateChildConstant(DigestValidationErrorCode offset = default) {
 			return new DigestValidationErrorCode(base.CreateChildConstant(offset).Value);
 		}
 	}
 
-	public class DigestValidationErrorCode : EventValidationErrorCode {
-
+	public class DigestValidationErrorCode : EventValidationErrorCodeBase<DigestValidationErrorCode> {
 		public DigestValidationErrorCode() {
 		}
 
 		public DigestValidationErrorCode(ushort value) : base(value) {
 		}
+
+		public override string ErrorPrefix => "DIG";
 
 		public static implicit operator DigestValidationErrorCode(ushort d) {
 			return new DigestValidationErrorCode(d);

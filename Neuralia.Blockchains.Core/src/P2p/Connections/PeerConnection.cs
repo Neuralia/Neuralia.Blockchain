@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Network;
@@ -32,12 +31,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public const byte CONNECTION_PEER = 1;
 
+		public readonly Dictionary<BlockchainType, ChainSettings> ChainSettings = new Dictionary<BlockchainType, ChainSettings>();
+
 		public readonly SoftwareVersion clientSoftwareVersion = new SoftwareVersion();
 
 		public readonly ITcpConnection connection;
 		public readonly Directions direction;
-
-		public NodeAddressInfoList PeerNodes = new NodeAddressInfoList();
 
 		/// <summary>
 		///     here we store the peer's reported version for each blockchain, and if we consider them to be valid as per our
@@ -45,22 +44,22 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		public readonly Dictionary<BlockchainType, bool> ValidBlockchainVersions = new Dictionary<BlockchainType, bool>();
 
-		public readonly Dictionary<BlockchainType, ChainSettings> ChainSettings = new Dictionary<BlockchainType, ChainSettings>();
-
-		public GeneralSettings GeneralSettings { get; private set; }
-
 		public DateTime ConnectionTime;
 
 		public byte ConnectionType = CONNECTION_PEER;
 		private bool isDisposed;
+
+		public NodeAddressInfoList PeerNodes = new NodeAddressInfoList();
 
 		public PeerConnection(ITcpConnection connection, Directions direction) {
 			this.connection = connection;
 
 			this.connection.Disposing += this.Dispose;
 			this.direction = direction;
-			this.ConnectionTime = DateTime.UtcNow;
+			this.ConnectionTime = DateTimeEx.CurrentTime;
 		}
+
+		public GeneralSettings GeneralSettings { get; private set; }
 
 		public Guid ClientUuid => this.connection.ReportedUuid;
 
@@ -144,7 +143,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				return true;
 			}
 
-			return obj.GetType() == this.GetType() && this.Equals((PeerConnection) obj);
+			return (obj.GetType() == this.GetType()) && this.Equals((PeerConnection) obj);
 		}
 
 		public override int GetHashCode() {
@@ -169,7 +168,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public void SetGeneralSettings(GeneralSettings generalSettings) {
 			this.GeneralSettings = generalSettings;
 		}
-		
+
 		public void SetChainSettings(BlockchainType chainType, ChainSettings chainSettings) {
 			if(!this.ChainSettings.ContainsKey(chainType)) {
 				this.ChainSettings.Add(chainType, chainSettings);
@@ -193,16 +192,17 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				
+
 				// set this now, to prevent loopbacks
 				this.IsDisposed = true;
+
 				try {
 					this.connection.Dispose();
 				} finally {
 					this.TriggerDisposed();
 				}
 			}
-			
+
 		}
 
 		~PeerConnection() {

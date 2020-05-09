@@ -57,19 +57,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("NextKeyHashSha3", this.NextKeyHashSha3);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.Secret;
-		}
-		
 		public override  void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is ISecretWalletKey secretWalletKey) {
-				var hashes = BlockchainHashingUtils.HashSecretKey(secretWalletKey);
+				(SafeArrayHandle sha2, SafeArrayHandle sha3) hashes = BlockchainHashingUtils.HashSecretKey(secretWalletKey);
 
 				this.NextKeyHashSha2.Entry = hashes.sha2.Entry;
 				this.NextKeyHashSha3.Entry = hashes.sha3.Entry;
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.Secret;
 		}
 	}
 }

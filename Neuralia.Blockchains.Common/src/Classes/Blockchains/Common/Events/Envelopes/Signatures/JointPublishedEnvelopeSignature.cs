@@ -1,5 +1,4 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
@@ -9,7 +8,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public interface IJointPublishedEnvelopeSignature : IJointEnvelopeSignature {
 		PublishedAddress Address { get; set; }
 	}
-	
+
 	public class JointPublishedEnvelopeSignature : JointEnvelopeSignature, IJointPublishedEnvelopeSignature {
 		public PublishedAddress Address { get; set; }
 
@@ -40,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			this.Address.Rehydrate(rehydrator);
 		}
-		
+
 		protected override ComponentVersion<EnvelopeSignatureType> SetIdentity() {
 			return (EnvelopeSignatureTypes.Instance.JointPublished, 1, 0);
 		}

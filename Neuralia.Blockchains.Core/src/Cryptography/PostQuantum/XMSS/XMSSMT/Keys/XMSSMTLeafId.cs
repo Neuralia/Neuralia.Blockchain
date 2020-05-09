@@ -49,7 +49,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		public static implicit operator XMSSMTreeId(XMSSMTLeafId d) {
 			return new XMSSMTreeId(d.Tree, d.Layer);
 		}
-		
 
 		public static implicit operator XMSSMTLeafId((long index, XMSSMTreeId id) d) {
 			(long index, XMSSMTreeId id) = d;

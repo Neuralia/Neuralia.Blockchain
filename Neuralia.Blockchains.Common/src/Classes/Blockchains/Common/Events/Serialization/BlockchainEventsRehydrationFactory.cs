@@ -97,6 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 
 		public abstract IBlockchainDigest CreateDigest(IDehydratedBlockchainDigest dehydratedDigest);
 		public abstract IBlockchainDigestChannelFactory CreateDigestChannelfactory();
+
 		public void PrepareDigest(IBlockchainDigest digest) {
 			if(digest != null) {
 				// let's restore the actual time of the digest
@@ -110,9 +111,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 		public abstract IBlockchainMessage CreateMessage(IDehydratedBlockchainMessage dehydratedMessage);
 
 		public virtual IEnvelope RehydrateEnvelope(SafeArrayHandle data) {
-			var version = new ComponentVersion<EnvelopeType>();
+			ComponentVersion<EnvelopeType> version = new ComponentVersion<EnvelopeType>();
 
-			using var rehydrator = DataSerializationFactory.CreateRehydrator(data);
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 
 			version.Rehydrate(rehydrator);
 
@@ -149,7 +150,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 				// let's restore the actual time of the block
 				if(block is IGenesisBlock genesis) {
 					block.FullTimestamp = genesis.Inception;
-				} else if(this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight != 0){
+				} else if(this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight != 0) {
 					block.FullTimestamp = this.centralCoordinator.BlockchainServiceSet.BlockchainTimeService.GetTransactionDateTime(block.Timestamp, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception);
 				}
 			}

@@ -4,9 +4,9 @@ using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.Tools;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
-	
+
 	/// <summary>
-	/// a special server workflow class that is designed to have one client and multiple server instances
+	///     a special server workflow class that is designed to have one client and multiple server instances
 	/// </summary>
 	/// <typeparam name="WORKFLOW_TRIGGER_MESSAGE"></typeparam>
 	/// <typeparam name="MESSAGE_FACTORY"></typeparam>

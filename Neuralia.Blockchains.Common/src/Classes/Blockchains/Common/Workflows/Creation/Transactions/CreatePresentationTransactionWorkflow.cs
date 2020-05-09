@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
@@ -24,14 +23,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
 		protected readonly SystemEventGenerator.AccountPublicationStepSet accountPublicationStepSet;
-		private IStandardPresentationTransaction PresentationTransaction => (IStandardPresentationTransaction)this.transaction;
-		private Guid? accountUuid;
-		
+		private readonly Guid? accountUuid;
+
 		public CreatePresentationTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, CorrelationContext correlationContext, Guid? accountUuid) : base(centralCoordinator, expiration, null, correlationContext) {
 			this.accountPublicationStepSet = new SystemEventGenerator.AccountPublicationStepSet();
 			this.accountUuid = accountUuid;
 
 		}
+
+		private IStandardPresentationTransaction PresentationTransaction => (IStandardPresentationTransaction) this.transaction;
 
 		protected override int Timeout => 60 * 10; // this can be a long process, 10 minutes might be required.
 
@@ -43,13 +43,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected override Task<ITransactionEnvelope> AssembleEvent(LockContext lockContext) {
 			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GeneratePresentationEnvelope(this.PresentationTransaction, this.accountPublicationStepSet, this.correlationContext, lockContext, this.expiration);
 		}
-		
+
 		protected override void ProcessEnvelope(ITransactionEnvelope envelope) {
 			// we already have the transction, no need to do anything here.
 		}
 
 		protected override ValidationResult ValidateContents(ITransactionEnvelope envelope) {
-			
+
 			ValidationResult result = base.ValidateContents(envelope);
 
 			if(result.Invalid) {
@@ -69,14 +69,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 			try {
 				await base.PerformWork(workflow, taskRoutingContext, lockContext).ConfigureAwait(false);
-			}catch(Exception ex) {
+			} catch(Exception ex) {
 
 				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationError, this.correlationContext);
 
 				throw;
-			}
-			
-			finally {
+			} finally {
 				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, this.correlationContext);
 			}
 		}
@@ -96,7 +94,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		protected override async Task CheckAccounyStatus(LockContext lockContext) {
 			// now we ensure our account is not presented or repsenting
-			Enums.PublicationStatus accountStatus = (await centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
+			Enums.PublicationStatus accountStatus = (await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
 
 			if(accountStatus == Enums.PublicationStatus.Published) {
 				throw new EventGenerationException("The account has already been published and cannot be published again");
@@ -118,13 +116,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			//ok, now we mark this account as in process of being published
 
 			// now we publish our keys
-			IWalletAccount account = await centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
+			IWalletAccount account = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
 
 			account.Status = Enums.PublicationStatus.Dispatched;
 			account.PresentationTransactionId = envelope.Contents.Uuid;
 			account.PresentationTransactionTimeout = this.GetTransactionExpiration();
 
-			await centralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lockContext).ConfigureAwait(false);
+			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lockContext).ConfigureAwait(false);
 		}
 	}
 }

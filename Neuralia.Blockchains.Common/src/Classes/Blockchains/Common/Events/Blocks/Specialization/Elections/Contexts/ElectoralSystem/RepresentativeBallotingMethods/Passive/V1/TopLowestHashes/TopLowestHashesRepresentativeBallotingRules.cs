@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public TopLowestHashesRepresentativeBallotingRules() {
 
 		}
-		
+
 		public TopLowestHashesRepresentativeBallotingRules(Dictionary<Enums.MiningTiers, ushort> miningTierTotals) : base(miningTierTotals) {
 
 		}

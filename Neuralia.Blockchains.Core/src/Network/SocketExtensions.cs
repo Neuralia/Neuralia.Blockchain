@@ -34,7 +34,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			//};
 
 			int size = Marshal.SizeOf(new uint());
-			var inOptionValues = new byte[size * 3]; // 4 * 3 = 12
+			byte[] inOptionValues = new byte[size * 3]; // 4 * 3 = 12
 			bool OnOff = true;
 
 			BitConverter.GetBytes((uint) (OnOff ? 1 : 0)).CopyTo(inOptionValues, 0);
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
 				socket.IOControl(IOControlCode.KeepAliveValues, inOptionValues, null);
 			}
-			
+
 			socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 		}
 
@@ -132,15 +132,15 @@ namespace Neuralia.Blockchains.Core.Network {
 			// first, check the active connections and simply check the state of the active connections
 			bool success = false;
 
-			// if(connectionInfortmation != null) {
-			// 	TcpState stateOfConnection = connectionInfortmation.State;
+			// if(connectionInformation != null) {
+			// 	TcpState stateOfConnection = connectionInformation.State;
 			//
 			// 	if(stateOfConnection == TcpState.Established) {
 			// 		success = true;
 			// 	}
 			// }
 			//
-			// if((connectionInfortmation != null) && !success) {
+			// if((connectionInformation != null) && !success) {
 			// 	return false;
 			// }
 
@@ -183,19 +183,19 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			// sometimes the empty send technique does not work (with network streams notably), so we do a poll to confirm.
 			try {
-				success = !(socket.Poll(1, SelectMode.SelectRead) && socket.Available == 0);
+				success = !(socket.Poll(1, SelectMode.SelectRead) && (socket.Available == 0));
 			} catch(SocketException) {
 				return false;
 			}
-			
+
 			if(!success) {
 				return false;
 			}
-			
+
 			if(!socket.Connected) {
 				return false;
 			}
-			
+
 			// note: the bellow technique does not work for us. the connection might have no data and be perfectly valid
 			// // finally, poll the sock to see if we are still connected
 			// try {

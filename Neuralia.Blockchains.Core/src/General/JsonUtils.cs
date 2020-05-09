@@ -1,11 +1,10 @@
 using System;
 using System.Globalization;
-using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General {
 	public static class JsonUtils {
@@ -17,14 +16,14 @@ namespace Neuralia.Blockchains.Core.General {
 		public static string Serialize(object entry, JsonSerializerOptions serializerOptions) {
 			return JsonSerializer.Serialize(entry, serializerOptions);
 		}
-		
+
 		public static JsonSerializerOptions CreateSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
 			JsonSerializerOptions settings = new JsonSerializerOptions();
 			settings.WriteIndented = false;
 			settings.IgnoreNullValues = false;
 			settings.PropertyNameCaseInsensitive = false;
 			settings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-			
+
 			settings.Converters.Add(new ByteArrayBaseConverter(mode));
 			settings.Converters.Add(new DecimalConverter());
 
@@ -58,17 +57,16 @@ namespace Neuralia.Blockchains.Core.General {
 
 		public static JsonSerializerOptions CreateBlockSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
 			JsonSerializerOptions settings = CreateNoNamesSerializerSettings(mode);
-			
+
 			return settings;
 		}
 
 		public static string SerializeJsonSerializable(IJsonSerializable jsonSerializable) {
 
-			
 			return JsonDeserializer.Serialize(jsonSerializable);
 		}
 	}
-	
+
 	public class SafeArrayHandleConverter : JsonConverter<SafeArrayHandle> {
 		public enum BaseModes {
 			Base58,
@@ -76,18 +74,17 @@ namespace Neuralia.Blockchains.Core.General {
 		}
 
 		private readonly BaseModes mode;
-		
-		public override SafeArrayHandle Read(ref Utf8JsonReader reader, 
-		                                     Type typeToConvert,
-		                                     JsonSerializerOptions options)
-		{
+
+		public SafeArrayHandleConverter(BaseModes mode = BaseModes.Base58) {
+			this.mode = mode;
+
+		}
+
+		public override SafeArrayHandle Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
 			throw new NotImplementedException();
 		}
 
-		public override void Write(Utf8JsonWriter writer,
-		                           SafeArrayHandle value,
-		                           JsonSerializerOptions options)
-		{
+		public override void Write(Utf8JsonWriter writer, SafeArrayHandle value, JsonSerializerOptions options) {
 
 			if(value.IsEmpty) {
 				writer.WriteStringValue("");
@@ -103,11 +100,6 @@ namespace Neuralia.Blockchains.Core.General {
 		public override bool CanConvert(Type typeToConvert) {
 			return typeof(SafeArrayHandle).IsAssignableFrom(typeToConvert) || typeof(ByteArray).IsAssignableFrom(typeToConvert);
 		}
-		
-		public SafeArrayHandleConverter(BaseModes mode = BaseModes.Base58) {
-			this.mode = mode;
-
-		}
 	}
 
 	public class ByteArrayBaseConverter : JsonConverter<ByteArray> {
@@ -117,18 +109,17 @@ namespace Neuralia.Blockchains.Core.General {
 		}
 
 		private readonly BaseModes mode;
-		
-		public override ByteArray Read(ref Utf8JsonReader reader, 
-		                              Type typeToConvert,
-		                              JsonSerializerOptions options)
-		{
+
+		public ByteArrayBaseConverter(BaseModes mode = BaseModes.Base58) {
+			this.mode = mode;
+
+		}
+
+		public override ByteArray Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
 			throw new NotImplementedException();
 		}
 
-		public override void Write(Utf8JsonWriter writer,
-		                           ByteArray value,
-		                           JsonSerializerOptions options)
-		{
+		public override void Write(Utf8JsonWriter writer, ByteArray value, JsonSerializerOptions options) {
 
 			if(value.IsEmpty) {
 				writer.WriteStringValue("");
@@ -145,11 +136,6 @@ namespace Neuralia.Blockchains.Core.General {
 		public override bool CanConvert(Type typeToConvert) {
 			return typeof(ByteArray).IsAssignableFrom(typeToConvert);
 		}
-		
-		public ByteArrayBaseConverter(BaseModes mode = BaseModes.Base58) {
-			this.mode = mode;
-
-		}
 	}
 
 	internal class DecimalConverter : JsonConverter<decimal> {
@@ -157,19 +143,13 @@ namespace Neuralia.Blockchains.Core.General {
 			return (objectType == typeof(decimal)) || (objectType == typeof(decimal?));
 		}
 
-		public override decimal Read(ref Utf8JsonReader reader, 
-		                              Type typeToConvert,
-		                              JsonSerializerOptions options)
-		{
-			var name = reader.GetString();
+		public override decimal Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
+			string name = reader.GetString();
 
 			return decimal.Parse(name);
 		}
 
-		public override void Write(Utf8JsonWriter writer,
-		                           decimal value,
-		                           JsonSerializerOptions options)
-		{
+		public override void Write(Utf8JsonWriter writer, decimal value, JsonSerializerOptions options) {
 			writer.WriteStringValue(value.ToString(CultureInfo.InvariantCulture));
 		}
 	}

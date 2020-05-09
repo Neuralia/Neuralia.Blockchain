@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			long index = (long) Math.Ceiling((decimal) id / groupingSize);
 			long startingBlockId = ((index - 1) * groupingSize) + 1;
 
-			return (index, startingBlockId, (startingBlockId + groupingSize)-1);
+			return (index, startingBlockId, (startingBlockId + groupingSize) - 1);
 		}
 	}
 }

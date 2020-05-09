@@ -28,7 +28,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <summary>
 		///     the compressed bytes of the election context
 		/// </summary>
-		public SafeArrayHandle DehydratedElectionContext { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle DehydratedElectionContext { get; } = SafeArrayHandle.Create();
 
 		public override HashNodeList GetStructuresArray(SafeArrayHandle previousBlockHash) {
 			HashNodeList nodeList = base.GetStructuresArray(previousBlockHash);

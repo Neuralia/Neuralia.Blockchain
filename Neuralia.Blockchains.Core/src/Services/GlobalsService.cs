@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Core.Services {
 	public sealed class GlobalsService : IGlobalsService {
 
 		/// <summary>
-		/// The default fodler name where to find the wallet
+		///     The default fodler name where to find the wallet
 		/// </summary>
 #if TESTNET
 		public const string DEFAULT_SYSTEM_FILES_FOLDER_NAME = ".neuralium-testnet";
@@ -31,7 +31,6 @@ namespace Neuralia.Blockchains.Core.Services {
 #else
 	    public const string DEFAULT_SYSTEM_FILES_FOLDER_NAME = ".neuralium";
 #endif
-		
 
 		/// <summary>
 		///     this is the default port our listener listens to
@@ -43,7 +42,7 @@ namespace Neuralia.Blockchains.Core.Services {
 #else
 	    public const int DEFAULT_PORT = 33888;
 #endif
-		
+
 		/// <summary>
 		///     this is the default port our listener listens to
 		/// </summary>
@@ -54,7 +53,6 @@ namespace Neuralia.Blockchains.Core.Services {
 #else
 	    public const int DEFAULT_RPC_PORT = 12033;
 #endif
-		
 
 		/// <summary>
 		///     The size in bytes of public keys in our system. XMSS keys of course
@@ -95,32 +93,31 @@ namespace Neuralia.Blockchains.Core.Services {
 		public const byte POW_MAX_SOLUTIONS = 3;
 
 		public static readonly ushort POW_DIFFICULTY = (ushort) HashDifficultyUtils.Default256Difficulty;
-		
-		
+
 		/// <summary>
-		/// The delay in minutes after which we will update our mining registration
+		///     The delay in minutes after which we will update our mining registration
 		/// </summary>
 		public const int UPDATE_MINING_REGISTRATION_DELAY = 60;
-		
+
 		/// <summary>
-		/// The aboslute timeout of a mining registration since the last update
+		///     The aboslute timeout of a mining registration since the last update
 		/// </summary>
 		public const int MINING_REGISTRATION_TIMEOUT = UPDATE_MINING_REGISTRATION_DELAY * 2;
-		
+
 		public static readonly TimeSpan MinerSafeDelay = TimeSpan.FromMinutes(UPDATE_MINING_REGISTRATION_DELAY);
-		
+
 		/// <summary>
-		/// the timespan delay before a miner times out
+		///     the timespan delay before a miner times out
 		/// </summary>
 		public static readonly TimeSpan TimeoutMinerDelay = TimeSpan.FromMinutes(MINING_REGISTRATION_TIMEOUT);
-		
+
 		/// <summary>
-		/// The delay between each query for mining status
+		///     The delay between each query for mining status
 		/// </summary>
 		public const int UPDATE_MINING_STATUS_DELAY = 10;
-		
+
 		/// <summary>
-		/// How long to wait before the first mining status query after registration
+		///     How long to wait before the first mining status query after registration
 		/// </summary>
 		public const int UPDATE_MINING_STATUS_START_DELAY = 3;
 
@@ -150,7 +147,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		///     A list of hardcoded nodes. helps with the initialization of the app
 		/// </summary>
 		/// <returns></returns>
-		public List<string> HardcodedNodes { get; } = new List<string>();
+	public List<string> HardcodedNodes { get; } = new List<string>();
 
 		public string GetSystemFilesDirectoryPath() {
 			return GetGeneralSystemFilesDirectoryPath();
@@ -168,7 +165,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			return systemFilesPath;
 		}
-		
+
 		public string GetSystemStorageDirectoryPath() {
 			return Path.Combine(this.GetSystemFilesDirectoryPath(), COMMON_DIRECTORY_NAME);
 		}

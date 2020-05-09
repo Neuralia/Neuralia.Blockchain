@@ -9,15 +9,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 		public static SafeArrayHandle Encrypt(SafeArrayHandle plain, SecureString password, IEncryptorParameters parameters) {
 			if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
-				return AESFileEncryptor.Encrypt(plain, password, (AesEncryptorParameters)parameters);
+				return AESFileEncryptor.Encrypt(plain, password, (AesEncryptorParameters) parameters);
 			}
-			
+
 			if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_GCM_256) {
-				return AESGCMFileEncryptor.Encrypt(plain, password, (AesGcmEncryptorParameters)parameters);
+				return AESGCMFileEncryptor.Encrypt(plain, password, (AesGcmEncryptorParameters) parameters);
 			}
 
 			if((parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_20) || (parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_40)) {
-				XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters)parameters);
+				XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters) parameters);
 
 				return xchacha.Encrypt(plain, password);
 			}
@@ -27,15 +27,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 		public static SafeArrayHandle Encrypt(SafeArrayHandle plain, SafeArrayHandle password, IEncryptorParameters parameters) {
 			if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
-				return AESFileEncryptor.Encrypt(plain, password, (AesEncryptorParameters)parameters);
+				return AESFileEncryptor.Encrypt(plain, password, (AesEncryptorParameters) parameters);
 			}
-			
+
 			if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_GCM_256) {
-				return AESGCMFileEncryptor.Encrypt(plain, password, (AesGcmEncryptorParameters)parameters);
+				return AESGCMFileEncryptor.Encrypt(plain, password, (AesGcmEncryptorParameters) parameters);
 			}
 
 			if((parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_20) || (parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_40)) {
-				XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters)parameters);
+				XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters) parameters);
 
 				return xchacha.Encrypt(plain, password);
 			}
@@ -54,15 +54,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		public static SafeArrayHandle Decrypt(SafeArrayHandle cipher, int offset, int length, SecureString password, IEncryptorParameters parameters) {
 			try {
 				if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
-					return AESFileEncryptor.Decrypt(cipher, password, (AesEncryptorParameters)parameters);
+					return AESFileEncryptor.Decrypt(cipher, password, (AesEncryptorParameters) parameters);
 				}
-				
+
 				if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_GCM_256) {
-					return AESGCMFileEncryptor.Decrypt(cipher, password, (AesGcmEncryptorParameters)parameters);
+					return AESGCMFileEncryptor.Decrypt(cipher, password, (AesGcmEncryptorParameters) parameters);
 				}
 
 				if((parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_20) || (parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_40)) {
-					XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters)parameters);
+					XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters) parameters);
 
 					return xchacha.Decrypt(cipher, password);
 				}
@@ -78,15 +78,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		public static SafeArrayHandle Decrypt(SafeArrayHandle cipher, int offset, int length, SafeArrayHandle password, IEncryptorParameters parameters) {
 			try {
 				if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_256) {
-					return AESFileEncryptor.Decrypt(cipher, password, (AesEncryptorParameters)parameters);
+					return AESFileEncryptor.Decrypt(cipher, password, (AesEncryptorParameters) parameters);
 				}
-				
+
 				if(parameters.cipher == EncryptorParameters.SymetricCiphers.AES_GCM_256) {
-					return AESGCMFileEncryptor.Decrypt(cipher, password, (AesGcmEncryptorParameters)parameters);
+					return AESGCMFileEncryptor.Decrypt(cipher, password, (AesGcmEncryptorParameters) parameters);
 				}
 
 				if((parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_20) || (parameters.cipher == EncryptorParameters.SymetricCiphers.XCHACHA_40)) {
-					XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters)parameters);
+					XChaChaFileEncryptor xchacha = new XChaChaFileEncryptor((XChachaEncryptorParameters) parameters);
 
 					return xchacha.Decrypt(cipher, password);
 				}

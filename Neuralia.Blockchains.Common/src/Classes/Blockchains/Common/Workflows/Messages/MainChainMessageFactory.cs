@@ -245,7 +245,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		/// <returns></returns>
 		public BlockchainTargettedMessageSet<T> CreateTargettedMessageSet<T>()
 			where T : NetworkMessage<IBlockchainEventsRehydrationFactory>, new() {
-			var messageSet = this.MainMessageFactory.CreateTargettedMessageSet<BlockchainTargettedMessageSet<T>, T>();
+			BlockchainTargettedMessageSet<T> messageSet = this.MainMessageFactory.CreateTargettedMessageSet<BlockchainTargettedMessageSet<T>, T>();
 
 			messageSet.Header.chainId = this.chainType.Value;
 
@@ -254,16 +254,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 
 		public BlockchainTargettedMessageSet<T> CreateTargettedMessageSet<T>(TargettedHeader original)
 			where T : NetworkMessage<IBlockchainEventsRehydrationFactory>, new() {
-			var messageSet = this.MainMessageFactory.CreateTargettedMessageSet<BlockchainTargettedMessageSet<T>, T>(original);
+			BlockchainTargettedMessageSet<T> messageSet = this.MainMessageFactory.CreateTargettedMessageSet<BlockchainTargettedMessageSet<T>, T>(original);
 
 			messageSet.Header.chainId = this.chainType.Value;
 
 			return messageSet;
 		}
-		
+
 		public BlockchainTriggerMessageSet<T> CreateTriggerMessageSet<T>(uint workflowCorrelationId, uint? workflowSessionId = null)
 			where T : WorkflowTriggerMessage<IBlockchainEventsRehydrationFactory>, new() {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<BlockchainTriggerMessageSet<T>, T>(workflowCorrelationId);
+			BlockchainTriggerMessageSet<T> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<BlockchainTriggerMessageSet<T>, T>(workflowCorrelationId);
 
 			messageSet.Header.chainId = this.chainType.Value;
 
@@ -272,7 +272,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 
 		public BlockchainTriggerMessageSet<T> CreateTriggerMessageSet<T>(TargettedHeader original)
 			where T : WorkflowTriggerMessage<IBlockchainEventsRehydrationFactory>, new() {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<BlockchainTriggerMessageSet<T>, T>(original);
+			BlockchainTriggerMessageSet<T> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<BlockchainTriggerMessageSet<T>, T>(original);
 
 			messageSet.Header.chainId = this.chainType.Value;
 

@@ -1,12 +1,10 @@
 using System;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
-using Neuralia.Blockchains.Common.Classes.General.Json.Converters;
-using Neuralia.Blockchains.Core.General.Json.Converters;
-using Neuralia.Blockchains.Core.General.Types.Dynamic;
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using LiteDB;
+using Neuralia.Blockchains.Components.Converters;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 
-namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers {
+namespace Neuralia.Blockchains.Components.Blocks {
 	/// <summary>
 	///     this is a block Scope (number). In reality, we will never use more than can be store in a uint (since the timestamp
 	///     will expire before the block id pool).
@@ -16,7 +14,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.I
 	public class BlockId : AdaptiveLong1_8, IComparable<BlockId> {
 
 		static BlockId() {
-			LiteDBMappers.RegisterBlockId();
+			RegisterBlockId();
+		}
+		
+		public static void RegisterBlockId() {
+
+			BsonMapper.Global.RegisterType(uri => uri.Value, bson => new BlockId(bson.AsInt64));
 		}
 
 		public BlockId(long value) : base(value) {
@@ -135,7 +138,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.I
 		}
 
 		public static bool operator <=(BlockId a, BlockId b) {
-			return a == b || a < b;
+			return (a == b) || (a < b);
 		}
 
 		public static bool operator >(BlockId a, BlockId b) {
@@ -152,7 +155,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.I
 		}
 
 		public static bool operator >=(BlockId a, BlockId b) {
-			return a == b || a > b;
+			return (a == b) || (a > b);
 		}
 
 		/// <summary>

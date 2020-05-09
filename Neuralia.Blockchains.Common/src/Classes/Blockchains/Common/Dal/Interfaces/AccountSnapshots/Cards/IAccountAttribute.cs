@@ -3,10 +3,10 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Type
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards {
 	public interface IAccountAttribute : ISnapshot {
-		
+
 		AccountAttributeType AttributeType { get; set; }
 		uint CorrelationId { get; set; }
-		
+
 		byte[] Context { get; set; }
 
 		/// <summary>

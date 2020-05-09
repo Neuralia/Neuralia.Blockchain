@@ -31,10 +31,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public DbSet<MODEL_SNAPSHOT> ChannelBandCards { get; set; }
 
-	
-
 		protected override void OnModelCreating(ModelBuilder modelBuilder) {
-			
+
 			modelBuilder.Entity<MODEL_SNAPSHOT>(eb => {
 
 				if(this.keyDeclaration == null) {
@@ -43,10 +41,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				} else {
 					eb.HasKey(this.keyDeclaration);
 				}
-				
+
 				eb.ToTable("ChannelBand");
 			});
-			
+
 			base.OnModelCreating(modelBuilder);
 		}
 	}

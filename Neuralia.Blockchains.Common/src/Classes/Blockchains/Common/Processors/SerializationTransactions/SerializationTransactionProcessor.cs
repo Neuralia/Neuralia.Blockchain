@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 using System.Linq;
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Core.Extensions;
@@ -12,7 +10,6 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions {
 
@@ -31,8 +28,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		protected readonly Stack<SerializationTransactionOperation> UndoOperations = new Stack<SerializationTransactionOperation>();
 
 		private bool commited;
-		private bool restored = false;
-		
+		private bool restored;
+
 		public SerializationTransactionProcessor(string cachePath, FileSystemWrapper fileSystem) {
 			this.cachePath = cachePath;
 			this.fileSystem = fileSystem;
@@ -47,6 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 				this.Rollback();
 			}
 		}
+
 		private string GetUndoFilePath() {
 			return Path.Combine(this.cachePath, UNDO_FILE_NAME);
 		}
@@ -110,7 +108,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 
 				this.UndoOperations.Clear();
 
-				var loadedOperations = new List<SerializationTransactionOperation>();
+				List<SerializationTransactionOperation> loadedOperations = new List<SerializationTransactionOperation>();
 
 				for(int i = 0; i < count; i++) {
 					loadedOperations.Add(SerializationTransactionOperationFactory.Rehydrate(rehydrator, chainDataWriteProvider));
@@ -130,13 +128,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			if(this.restored) {
 				return;
 			}
+
 			this.Operations.Clear();
 
 			List<Action> actions = new List<Action>();
+
 			foreach(SerializationTransactionOperation entry in this.UndoOperations) {
 				actions.Add(() => entry.Undo());
 			}
-			
+
 			IndependentActionRunner.Run(actions);
 
 			this.UndoOperations.Clear();
@@ -146,12 +146,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 		public void Commit() {
 			this.commited = true;
 		}
-		
+
 		public void Uncommit() {
 
 			this.commited = false;
 		}
-
 
 		public void Rollback() {
 			if(!this.commited) {
@@ -177,6 +176,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 					this.Rollback();
 				}
 			}
+
 			this.IsDisposed = true;
 		}
 

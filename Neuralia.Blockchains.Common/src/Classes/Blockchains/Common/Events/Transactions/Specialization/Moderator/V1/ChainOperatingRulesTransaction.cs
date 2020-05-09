@@ -50,9 +50,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public int MaxBlockInterval { get; set; } = 60 * 3;
 
 		/// <summary>
-		/// are presentation transactions allowed on gossip protocol?
+		///     are presentation transactions allowed on gossip protocol?
 		/// </summary>
-		public bool AllowGossipPresentations { get; set; } = false;
+		public bool AllowGossipPresentations { get; set; }
 
 		public override HashNodeList GetStructuresArray() {
 
@@ -63,7 +63,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			nodeList.Add(this.MinimumVersionAllowed);
 			nodeList.Add(this.MaxBlockInterval);
 			nodeList.Add(this.AllowGossipPresentations);
-			
+
 			return nodeList;
 		}
 
@@ -81,9 +81,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			//
 			jsonDeserializer.SetProperty("MaxBlockInterval", this.MaxBlockInterval);
-			
+
 			jsonDeserializer.SetProperty("AllowGossipPresentations", this.AllowGossipPresentations);
 		}
+
+		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
 
 		protected override void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(dataChannels, rehydrationFactory);
@@ -110,7 +112,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (OPERATING_RULES: TransactionTypes.Instance.MODERATION_OPERATING_RULES, 1, 0);
 		}
-		
-		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
 	}
 }

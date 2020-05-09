@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neuralia.Blockchains.Common
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neuralia.Blockchains.Core", "Neuralia.Blockchains.Core\src\Neuralia.Blockchains.Core.csproj", "{8630E93D-CAA0-4193-89D6-CF1EF84C4555}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neuralia.Blockchains.Components", "Neuralia.Blockchains.Components\Neuralia.Blockchains.Components.csproj", "{126D7245-37CC-46ED-898B-A6CE14988D6A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -44,5 +46,17 @@ Global
 		{8630E93D-CAA0-4193-89D6-CF1EF84C4555}.Release|x64.Build.0 = Release|Any CPU
 		{8630E93D-CAA0-4193-89D6-CF1EF84C4555}.Release|x86.ActiveCfg = Release|Any CPU
 		{8630E93D-CAA0-4193-89D6-CF1EF84C4555}.Release|x86.Build.0 = Release|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Debug|x64.Build.0 = Debug|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Debug|x86.Build.0 = Debug|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Release|x64.ActiveCfg = Release|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Release|x64.Build.0 = Release|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Release|x86.ActiveCfg = Release|Any CPU
+		{126D7245-37CC-46ED-898B-A6CE14988D6A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

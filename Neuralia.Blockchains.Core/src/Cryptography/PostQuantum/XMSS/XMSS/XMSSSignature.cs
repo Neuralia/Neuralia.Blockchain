@@ -51,7 +51,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 			adaptiveLong.Rehydrate(rehydrator);
 			this.Index = (int) adaptiveLong.Value;
-			
+
 			this.Random = rehydrator.ReadArray(n);
 		}
 

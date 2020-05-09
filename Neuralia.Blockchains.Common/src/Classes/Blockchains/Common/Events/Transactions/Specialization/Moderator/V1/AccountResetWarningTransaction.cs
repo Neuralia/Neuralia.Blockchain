@@ -36,6 +36,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("Account", this.Account);
 		}
 
+		public override ImmutableList<AccountId> TargetAccounts => new[] {this.Account}.ToImmutableList();
+
 		protected override void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(dataChannels, rehydrationFactory);
 
@@ -53,7 +55,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.MODERATION_ACCOUNT_RESET_WARNING, 1, 0);
 		}
-		
-		public override ImmutableList<AccountId> TargetAccounts => new []{this.Account}.ToImmutableList();
 	}
 }

@@ -1,14 +1,13 @@
 using System;
-
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
-using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 
@@ -28,17 +27,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected readonly int groupSize;
 
-		protected abstract Enums.AccountTypes AccountType { get; }
-
 		public AccountSnapshotDigestChannel(CHANEL_BANDS channelBand, int groupSize, string folder, string channelName, string bandName) : base(folder, channelName) {
 			this.groupSize = groupSize;
 			this.channelBand = channelBand;
 			this.bandName = bandName;
 		}
 
+		protected abstract Enums.AccountTypes AccountType { get; }
+
 		public ACCOUNT_SNAPSHOT_CARD GetAccount(long accountId) {
 
-			var results = this.channelBandIndexSet.QueryCard(accountId);
+			DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS> results = this.channelBandIndexSet.QueryCard(accountId);
 
 			if(results.IsEmpty) {
 				return null;

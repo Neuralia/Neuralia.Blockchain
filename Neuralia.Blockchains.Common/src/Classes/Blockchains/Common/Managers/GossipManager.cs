@@ -1,56 +1,26 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security;
-using System.Threading;
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Genesis;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Serialization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Moderator.V1;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.BlockInsertionTransaction;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.WalletSync;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossip;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.System;
-using Neuralia.Blockchains.Common.Classes.Configuration;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Base;
 using Neuralia.Blockchains.Common.Classes.Services;
-using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Configuration;
-using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
-using Neuralia.Blockchains.Core.Services;
-using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
-using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 using Nito.AsyncEx.Synchronous;
-using Org.BouncyCastle.Security;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
@@ -71,6 +41,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
+		protected readonly ColoredRoutedTaskReceiver ColoredRoutedTaskReceiver;
+
 		protected readonly IBlockchainGuidService guidService;
 		protected readonly IBlockchainTimeService timeService;
 
@@ -83,8 +55,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		private DateTime? nextWalletSynchCheck;
 		private ISyncWalletWorkflow synchWalletWorkflow;
 
-		protected readonly ColoredRoutedTaskReceiver ColoredRoutedTaskReceiver;
-
 		public GossipManager(CENTRAL_COORDINATOR CentralCoordinator) : base(CentralCoordinator, 1, 500) {
 			this.timeService = CentralCoordinator.BlockchainServiceSet.BlockchainTimeService;
 			this.guidService = CentralCoordinator.BlockchainServiceSet.BlockchainGuidService;
@@ -95,7 +65,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		protected new CENTRAL_COORDINATOR CentralCoordinator => base.CentralCoordinator;
 
 		public void receiveGossipMessage(IGossipMessageSet blockchainGossipMessageSet, PeerConnection connection) {
-			var gossipMessageTask = new GossipMessageReceivedTask(blockchainGossipMessageSet, connection);
+			GossipMessageReceivedTask gossipMessageTask = new GossipMessageReceivedTask(blockchainGossipMessageSet, connection);
 			this.ColoredRoutedTaskReceiver.ReceiveTask(gossipMessageTask);
 		}
 
@@ -120,32 +90,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		protected virtual async Task HandleGossipMessageReceived(GossipMessageReceivedTask gossipMessageTask) {
 
 			LockContext lockContext = null;
-			if (gossipMessageTask == null || !(gossipMessageTask.gossipMessageSet is IBlockchainGossipMessageSet blockchainGossipMessageSet)){
+
+			if((gossipMessageTask == null) || !(gossipMessageTask.gossipMessageSet is IBlockchainGossipMessageSet blockchainGossipMessageSet)) {
 				return;
 			}
-			try{
 
-				if (blockchainGossipMessageSet == null){
+			try {
+
+				if(blockchainGossipMessageSet == null) {
 					throw new ApplicationException("Gossip message must be valid");
 				}
 
-				if (blockchainGossipMessageSet.BaseMessage == null){
+				if(blockchainGossipMessageSet.BaseMessage == null) {
 					throw new ApplicationException("Gossip message transaction must be valid");
 				}
 
-				var connection = gossipMessageTask.Connection;
+				PeerConnection connection = gossipMessageTask.Connection;
 
-				if (GlobalSettings.ApplicationSettings.SynclessMode){
-					if (blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope){
+				if(GlobalSettings.ApplicationSettings.SynclessMode) {
+					if(blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope) {
 						// in mobile mode, we simply do not handle any gossip messages
-						Log.Information("Mobile nodes does not handle block gossip messages");
+						NLog.Default.Information("Mobile nodes does not handle block gossip messages");
 
 						return;
 					}
 
-					if (!GlobalSettings.Instance.NodeInfo.GossipAccepted){
+					if(!GlobalSettings.Instance.NodeInfo.GossipAccepted) {
 						// some apps do not handle gossip at all
-						Log.Information("This node does not handle gossip messages");
+						NLog.Default.Information("This node does not handle gossip messages");
 
 						return;
 					}
@@ -153,108 +125,108 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				// ok, the first step is to ensure the message is valid. otherwise we do not handle it any further
 
-				var valid = new ValidationResult();
+				ValidationResult valid = new ValidationResult();
 
-				await this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, true, result => { valid = result; }).ConfigureAwait(false);
+				await this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, true, result => {
+					valid = result;
+				}).ConfigureAwait(false);
 
 				// ok, if we can't validate a message, we are most probably out of sync. if we are not already syncing, let's request one.
-				if (valid == ValidationResult.ValidationResults.CantValidate){
+				if(valid == ValidationResult.ValidationResults.CantValidate) {
 					// we have a condition when we may be out of sync and if we are not already syncing, we should do it
-					var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+					BlockchainTask<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, bool, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
-					blockchainTask.SetAction(async (blockchainService, taskRoutingContext2, lc) => { await blockchainService.SynchronizeBlockchain(true, lc).ConfigureAwait(false); });
+					blockchainTask.SetAction(async (blockchainService, taskRoutingContext2, lc) => {
+						await blockchainService.SynchronizeBlockchain(true, lc).ConfigureAwait(false);
+					});
 
 					// no need to wait, this can totally be async
 					await this.DispatchTaskAsync(blockchainTask, lockContext).ConfigureAwait(false);
 				}
 
-				var xxHash = blockchainGossipMessageSet.BaseHeader.Hash;
+				long xxHash = blockchainGossipMessageSet.BaseHeader.Hash;
 
 				//check if we have already received it, and if we did, we update the validation status, since we just did so.
-				var isInCache = await this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.CheckRegistryMessageInCache(xxHash, valid.Valid).ConfigureAwait(false);
+				bool isInCache = await this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.CheckRegistryMessageInCache(xxHash, valid.Valid).ConfigureAwait(false);
 
-				if (valid != ValidationResult.ValidationResults.Valid && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope invalidatedBlockEnvelope) {
+				if((valid != ValidationResult.ValidationResults.Valid) && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope invalidatedBlockEnvelope) {
 
 					// since this was useless, we can now free the block Id to sync otherwise
 					this.FreeLockedBlock(invalidatedBlockEnvelope.BlockId, true, lockContext);
 				}
 
 				// see if we should cache the message if it's a block
-				if (valid == ValidationResult.ValidationResults.CantValidate && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope unvalidatedBlockEnvelope) {
+				if((valid == ValidationResult.ValidationResults.CantValidate) && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope unvalidatedBlockEnvelope) {
 
 					// ok, its a block message. we can't validate it yet. If it is close enough from our chain height, we will cache it, so we can use it later.
-					var currentBlockHeight = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
-					var blockGossipCacheProximityLevel = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
+					long currentBlockHeight = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
+					int blockGossipCacheProximityLevel = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
 
-					if (unvalidatedBlockEnvelope.BlockId > currentBlockHeight && unvalidatedBlockEnvelope.BlockId <= currentBlockHeight + blockGossipCacheProximityLevel){
-						try{
+					if((unvalidatedBlockEnvelope.BlockId > currentBlockHeight) && (unvalidatedBlockEnvelope.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel))) {
+						try {
 							await this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.CacheUnvalidatedBlockGossipMessage(unvalidatedBlockEnvelope, xxHash).ConfigureAwait(false);
-						}
-						catch (Exception ex){
+						} catch(Exception ex) {
 							//just eat the exception if anything here, it's not so important
-							Log.Error(ex, $"Failed to cache gossip block message for block Id {unvalidatedBlockEnvelope.BlockId}");
+							NLog.Default.Error(ex, $"Failed to cache gossip block message for block Id {unvalidatedBlockEnvelope.BlockId}");
 						}
 					}
 				}
 
-				Task ForwardValidGossipMessage(){
+				Task ForwardValidGossipMessage() {
 					return this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.ForwardValidGossipMessage(blockchainGossipMessageSet, connection);
 				}
-				
-				if (valid.Result == ValidationResult.ValidationResults.Invalid){
+
+				if(valid.Result == ValidationResult.ValidationResults.Invalid) {
 
 					// this is the end, we go no further with an invalid message
 
 					//TODO: what should we do here? perhaps we should log it about the peer
-					Log.Error($"Gossip message received by peer {connection.ScoppedAdjustedIp} was invalid.");
+					NLog.Default.Error($"Gossip message received by peer {connection.ScoppedAdjustedIp} was invalid. errors: {valid}");
 					await this.RequestSync(lockContext).ConfigureAwait(false);
-				}
-				else if (valid == ValidationResult.ValidationResults.CantValidate){
+				} else if(valid == ValidationResult.ValidationResults.CantValidate) {
 					// seems we could do nothing with it. we just let it go
-					Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} but could not be validated. the message will be ignored.");
+					NLog.Default.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} but could not be validated. the message will be ignored. errors: {valid}");
 
 					await this.RequestSync(lockContext).ConfigureAwait(false);
-				}
-				else if (valid == ValidationResult.ValidationResults.EmbededKeyValid){
+				} else if(valid == ValidationResult.ValidationResults.EmbededKeyValid) {
 					// seems we could do nothing with it. we just let it go
-					Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} could not be validated, but the embeded public key was valid.");
+					NLog.Default.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} could not be validated, but the embeded public key was valid. errors: {valid}");
 
 					// ok, in this case, we can at least forward it on the gossip network
 					await ForwardValidGossipMessage().ConfigureAwait(false);
 
-				}
-				else if (valid.Valid){
+				} else if(valid.Valid) {
 
 					// and since this is good or possibly valid, now we ensure it will get forwarded to our peers
 					await ForwardValidGossipMessage().ConfigureAwait(false);
 
 					// ok, if we get here, this message is fully valid!  first step, we instantiate the workflow for this gossip transaction
 
-					if (blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage){
-						
+					if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage) {
+
 						// run this reception async, so we dont lock up the gossip manager in any case. we dont await because we want to continue.
-						var task = Task.Run(async () => {
+						Task task = Task.Run(async () => {
 
 							LockContext lc = null;
 							bool blockInserted = false;
 
 							try {
-								Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} was valid and is about to be processed.");
+								NLog.Default.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} was valid and is about to be processed.");
 
 								if(blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.TRANSACTION_RECEIVED) {
 
-									await CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertGossipTransaction((ITransactionEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope, lc).ConfigureAwait(false);
+									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertGossipTransaction((ITransactionEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope, lc).ConfigureAwait(false);
 
 								} else if(blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED) {
 
-									var blockEnvelope = (IBlockEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
+									IBlockEnvelope blockEnvelope = (IBlockEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
 
-									Log.Verbose($"Inserting block {blockEnvelope.BlockId} received by gossip message.");
+									NLog.Default.Verbose($"Inserting block {blockEnvelope.BlockId} received by gossip message.");
 									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertInterpretBlock(blockEnvelope.Contents.RehydratedBlock, blockEnvelope.Contents, true, lc).ConfigureAwait(false);
 
 									blockInserted = true;
 								} else if(blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.MESSAGE_RECEIVED) {
-									var messageEnvelope = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
+									IMessageEnvelope messageEnvelope = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
 
 									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedMessage, messageEnvelope.Contents, lc).ConfigureAwait(false);
 								} else {
@@ -262,28 +234,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 								}
 
 								// ok , we are done. good job :)
-								Log.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} was valid and was processed properly.");
+								NLog.Default.Verbose($"Gossip message received by peer {connection.ScoppedAdjustedIp} was valid and was processed properly.");
 							} catch(Exception ex) {
 
-								Log.Error(ex, "Failed to process gossip message that was found as valid.");
+								NLog.Default.Error(ex, "Failed to process gossip message that was found as valid.");
 
 							} finally {
-								if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage && blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope blockEnvelope) {
+								if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage && (blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED) && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope blockEnvelope) {
 
 									// try to remove the lock on the block
 									this.FreeLockedBlock(blockEnvelope.BlockId, !blockInserted, lc);
 								}
 							}
-							
+
 						}, this.CancelToken);
 					}
 				}
-			}
-			catch (Exception ex){
+			} catch(Exception ex) {
 
-				Log.Error(ex, "Failed to process gossip message.");
-				
-				if (blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope blockEnvelope) {
+				NLog.Default.Error(ex, "Failed to process gossip message.");
+
+				if(blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope blockEnvelope) {
 
 					// since this was useless, we can now free the block Id to sync otherwise
 					this.FreeLockedBlock(blockEnvelope.BlockId, true, lockContext);
@@ -292,7 +263,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		/// <summary>
-		/// free a block id from sync lock. also request a sync or not if error happened
+		///     free a block id from sync lock. also request a sync or not if error happened
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <param name="failed"></param>
@@ -300,15 +271,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.FreeLockedBlock(blockId);
 
 			// now control the sync. if we succeeded, then we reset the sync timer. otherwise, we nullify it and ask for a sync immediately.
-			this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = failed?DateTime.MinValue:DateTime.UtcNow;
+			this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = failed ? DateTime.MinValue : DateTimeEx.CurrentTime;
 
 			if(failed) {
 				this.RequestSync(lockContext).WaitAndUnwrapException();
 			}
 		}
-		
+
 		private Task RequestSync(LockContext lockContext) {
-			var blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+			BlockchainTask<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, bool, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainTask = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
 			blockchainTask.SetAction(async (service, taskRoutingContext2, lc) => {
 				await service.SynchronizeBlockchain(true, lc).ConfigureAwait(false);
@@ -326,6 +297,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				this.Connection = connection;
 			}
 		}
-
 	}
 }

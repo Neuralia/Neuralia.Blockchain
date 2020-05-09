@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
@@ -88,59 +89,60 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public static Guid IPtoGuid(string ipaddress) {
 			NodeAddressInfo node = new NodeAddressInfo(ipaddress, 80, NodeInfo.Unknown);
-			return IPUtils.IPtoGuid(node.Address);
+
+			return IPtoGuid(node.Address);
 		}
-		
+
 		public static Guid IPtoGuid(byte[] bytes) {
-			
+
 			NodeAddressInfo node = new NodeAddressInfo(new IPAddress(bytes), 80, NodeInfo.Unknown);
 			Span<byte> bytes2 = stackalloc byte[16];
 			node.Address.GetAddressBytes().CopyTo(bytes2);
 
 			return new Guid(bytes);
 		}
-		
+
 		public static Guid IPtoGuid(IPAddress ipaddress) {
-			
+
 			NodeAddressInfo node = new NodeAddressInfo(ipaddress, 80, NodeInfo.Unknown);
 			Span<byte> bytes = stackalloc byte[16];
-			
-			var addressSpan = node.Address.GetAddressBytes().AsSpan();
+
+			Span<byte> addressSpan = node.Address.GetAddressBytes().AsSpan();
 
 			if(addressSpan.Length == 16) {
 				addressSpan.Slice(0, 16).CopyTo(bytes);
-			}
-			else if(addressSpan.Length == 4) {
+			} else if(addressSpan.Length == 4) {
 				addressSpan.CopyTo(bytes.Slice(12, 4));
 			} else {
-				throw new ApplicationException($"Invalid IP address bytes.");
+				throw new ApplicationException("Invalid IP address bytes.");
 			}
-			
+
 			return new Guid(bytes);
 		}
-		
+
 		public static byte[] GuidToBytes(Guid guid) {
 
 			byte[] bytes = new byte[16];
 			guid.TryWriteBytes(bytes);
-			
+
 			return bytes;
 		}
-		
+
 		public static IPAddress GuidToIP(Guid guid) {
 
 			Span<byte> bytes = stackalloc byte[16];
 			guid.TryWriteBytes(bytes);
-			
+
 			return new IPAddress(bytes);
 		}
-		
+
 		public static string GuidToIPstring(Guid guid) {
 
 			NodeAddressInfo node = new NodeAddressInfo(GuidToIP(guid), 80, NodeInfo.Unknown);
+
 			return node.Ip; // always as IpV6
 		}
-		
+
 		/// <summary>
 		///     tells us if a certain address is in the provided range
 		/// </summary>
@@ -176,17 +178,41 @@ namespace Neuralia.Blockchains.Core.Network {
 						}
 					}
 				} catch {
-					
+
 				}
 			}
 
 			return false;
 		}
+		
+		public static IPMode GetIPMode(string ipaddress) {
+			return GetIPMode(new NodeAddressInfo(ipaddress, 80, NodeInfo.Unknown));
+		}
 
+		public static IPMode GetIPMode(byte[] bytes) {
+
+			return GetIPMode(new IPAddress(bytes));
+		}
+		
+		public static IPMode GetIPMode(Guid guid) {
+
+			return GetIPMode(GuidToIP(guid));
+		}
+
+		public static IPMode GetIPMode(IPAddress ipaddress) {
+			
+			return GetIPMode(new NodeAddressInfo(ipaddress, 80, NodeInfo.Unknown));
+		}
+
+		public static IPMode GetIPMode(NodeAddressInfo nodeInfo) {
+
+			return nodeInfo.IsIpV4 ? IPMode.IPv4 : IPMode.IPv6;
+		}
 	#region IPV4
 
+		
 		public static List<IPV4CIDRRange> GetDefaultV4Ranges() {
-			var ranges = new List<IPV4CIDRRange>();
+			List<IPV4CIDRRange> ranges = new List<IPV4CIDRRange>();
 
 			ranges.Add(IPV4ToCIDRComponents("10.0.0.0/8"));
 			ranges.Add(IPV4ToCIDRComponents("172.16.0.0/12"));
@@ -197,10 +223,11 @@ namespace Neuralia.Blockchains.Core.Network {
 			return ranges;
 		}
 
+		
 		public static IPV4CIDRRange GenerateCIDRV4Range(IPAddress address, IPAddress netMask) {
 
-			var maskComponents = IPV4ToComponents(netMask);
-			var addressComponents = IPV4ToComponents(address);
+			byte[] maskComponents = IPV4ToComponents(netMask);
+			byte[] addressComponents = IPV4ToComponents(address);
 
 			byte bitCount = (byte) string.Join("", maskComponents.Select(c => Convert.ToString(c, 2))).ToCharArray().Count(c => c == '1');
 
@@ -219,9 +246,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static byte[] IPV4ToComponents(string address) {
-			var components = address.Split('.');
+			string[] components = address.Split('.');
 
-			var results = new byte[4];
+			byte[] results = new byte[4];
 
 			results[0] = (byte) (Convert.ToUInt32(components[0]) & 0xff);
 			results[1] = (byte) (Convert.ToUInt32(components[1]) & 0xff);
@@ -232,9 +259,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static IPV4CIDRRange IPV4ToCIDRComponents(string address) {
-			var components = address.Split('.', '/');
+			string[] components = address.Split('.', '/');
 
-			var results = new byte[5];
+			byte[] results = new byte[5];
 
 			results[0] = (byte) (Convert.ToUInt32(components[0]) & 0xff);
 			results[1] = (byte) (Convert.ToUInt32(components[1]) & 0xff);
@@ -249,7 +276,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static IPV4CIDRRange IPV4ComponentsToCIDR(byte[] components, byte range) {
-			var results = new byte[5];
+			byte[] results = new byte[5];
 
 			results[0] = components[0];
 			results[1] = components[1];
@@ -266,7 +293,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static IPAddress IPV4NumberToAddress(uint ip) {
-			var components = new byte[4];
+			byte[] components = new byte[4];
 			components[3] = (byte) (ip & 0xff);
 			components[2] = (byte) ((ip >> 8) & 0xff);
 			components[1] = (byte) ((ip >> 16) & 0xff);
@@ -275,6 +302,19 @@ namespace Neuralia.Blockchains.Core.Network {
 			return new IPAddress(components);
 		}
 
+		public static bool GetIPV4CIDRRange(IPAddress address, List<IPV4CIDRRange> ranges) {
+			foreach(IPV4CIDRRange range in ranges) {
+
+				(IPAddress lower, IPAddress upper) rangeComponents = IPUtils.GetIPV4CIDRRange(range);
+
+				if(IPUtils.IsIPV4InCIDRRange(address.MapToIPv4(), rangeComponents)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+		
 		public static (IPAddress lower, IPAddress upper) GetIPV4CIDRRange(string ip) {
 			return GetIPV4CIDRRange(IPV4ToCIDRComponents(ip));
 		}
@@ -293,8 +333,20 @@ namespace Neuralia.Blockchains.Core.Network {
 			return (IPV4NumberToAddress(start), IPV4NumberToAddress(end));
 		}
 
+		public static bool IsIPV4InCIDRRange(IPAddress address, IPV4CIDRRange CIDRRange) {
+
+			return IsIPV4InCIDRRange(address.MapToIPv4(), GetIPV4CIDRRange(CIDRRange)) ;
+		}
+		
+		public static bool IsIPV4InCIDRRange(IPAddress address, string range) {
+
+			return IsIPV4InCIDRRange(address, GetIPV4CIDRRange(range)) ;
+		}
+
 		public static bool IsIPV4InCIDRRange(IPAddress address, (IPAddress lowerInclusive, IPAddress upperInclusive) range) {
-			return IsIPV4InCIDRRange(address, range.lowerInclusive, range.upperInclusive);
+			(IPAddress lowerInclusive, IPAddress upperInclusive) = range;
+
+			return IsIPV4InCIDRRange(address, lowerInclusive, upperInclusive);
 		}
 
 		public static bool IsIPV4InCIDRRange(IPAddress address, IPAddress lowerInclusive, IPAddress upperInclusive) {
@@ -302,10 +354,10 @@ namespace Neuralia.Blockchains.Core.Network {
 				return false;
 			}
 
-			var lowerBytes = lowerInclusive.GetAddressBytes();
-			var upperBytes = upperInclusive.GetAddressBytes();
+			byte[] lowerBytes = lowerInclusive.GetAddressBytes();
+			byte[] upperBytes = upperInclusive.GetAddressBytes();
 
-			var addressBytes = address.GetAddressBytes();
+			byte[] addressBytes = address.GetAddressBytes();
 
 			bool lowerBoundary = true, upperBoundary = true;
 
@@ -333,11 +385,20 @@ namespace Neuralia.Blockchains.Core.Network {
 				return false;
 			}
 
-			return new NodeAddressInfo(result, NodeInfo.Unknown).IsIpV4;
+			return IsIPV4(result);
+		}
+		
+		public static bool IsIPV4(Guid guid) {
+			return IsIPV4(GuidToIP(guid));
+		}
+		
+		public static bool IsIPV4(IPAddress ip) {
+			
+			return new NodeAddressInfo(ip, NodeInfo.Unknown).IsIpV4;
 		}
 
 		public static string TranslateDnsToIP(string host) {
-			bool isIp = IPUtils.IsIPV4(host) || IPUtils.IsIPV6(host);
+			bool isIp = IsIPV4(host) || IsIPV6(host);
 
 			if(!isIp) {
 				try {
@@ -345,7 +406,7 @@ namespace Neuralia.Blockchains.Core.Network {
 						string source = host;
 
 						string resultIp = host;
-						
+
 						if(source.ToLower() == "localhost") {
 							resultIp = "127.0.0.1";
 						} else {
@@ -359,7 +420,7 @@ namespace Neuralia.Blockchains.Core.Network {
 						return resultIp;
 					});
 				} catch(Exception ex) {
-					Log.Error(ex, $"Failed to translate host ip for name '{host}'.");
+					NLog.Default.Error(ex, $"Failed to translate host ip for name '{host}'.");
 				}
 			}
 
@@ -368,12 +429,12 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public static Uri TranslateHostDnsToIPUri(string url) {
 			Uri uri = new Uri(url);
-			
-			string result = IPUtils.TranslateDnsToIP(uri.Host);
+
+			string result = TranslateDnsToIP(uri.Host);
 
 			if(result != uri.Host) {
-				Log.Information($"DNS '{uri.Host}' was converted to IP '{result}'." );
-				
+				NLog.Default.Information($"DNS '{uri.Host}' was converted to IP '{result}'.");
+
 				UriBuilder builder = new UriBuilder(uri);
 				builder.Host = result;
 
@@ -382,7 +443,6 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			return uri;
 		}
-		
 
 	#endregion
 
@@ -391,7 +451,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		//TODO: IPV6 CIDR range generation
 
 		public static List<IPV6CIDRRange> GetDefaultV6Ranges() {
-			var ranges = new List<IPV6CIDRRange>();
+			List<IPV6CIDRRange> ranges = new List<IPV6CIDRRange>();
 
 			ranges.Add(IPV6ToCIDRComponents("::/128"));
 			ranges.Add(IPV6ToCIDRComponents("::1/128"));
@@ -406,7 +466,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static IPV6CIDRRange IPV6ToCIDRComponents(string address) {
-			var parts = address.Split('/');
+			string[] parts = address.Split('/');
 
 			return new IPV6CIDRRange(IPV6ToComponents(parts[0]), byte.Parse(parts[1]));
 		}
@@ -414,15 +474,31 @@ namespace Neuralia.Blockchains.Core.Network {
 		public static string GetIPV6Root(byte[] components, byte prefix) {
 
 			// not the fastest way, but it works
-			var bytes = components.Select(c => Convert.ToString(c, 2).PadLeft(8, '0'));
+			IEnumerable<string> bytes = components.Select(c => Convert.ToString(c, 2).PadLeft(8, '0'));
 
-			var pieces = string.Join("", bytes).ToCharArray().Take(prefix);
+			IEnumerable<char> pieces = string.Join("", bytes).ToCharArray().Take(prefix);
 
 			return string.Join("", pieces);
 		}
-
+		
+		// public static bool IsIPV6InCIDRRange(IPAddress address, IPV6CIDRRange CIDRRange) {
+		//
+		// 	return IsIPV6InCIDRRange(address.MapToIPv6(), IPV6ToCIDRComponents(CIDRRange)) ;
+		// }
+		//
+		// public static bool IsIPV6InCIDRRange(IPAddress address, string range) {
+		//
+		// 	return IsIPV6InCIDRRange(address, GetIPV4CIDRRange(range)) ;
+		// }
+		//
+		// public static bool IsIPV6InCIDRRange(IPAddress address, (IPAddress lowerInclusive, IPAddress upperInclusive) range) {
+		// 	(IPAddress lowerInclusive, IPAddress upperInclusive) = range;
+		//
+		// 	return IsIPV6InCIDRRange(address, lowerInclusive, upperInclusive);
+		// }
+		
 		public static bool IsIPV6InCIDRRange(IPAddress address, IPV6CIDRRange range) {
-			var components = address.GetAddressBytes();
+			byte[] components = address.GetAddressBytes();
 
 			string rangeRoot = GetIPV6Root(range.Components, range.Prefix);
 			string addressRoot = GetIPV6Root(components, range.Prefix);
@@ -436,14 +512,25 @@ namespace Neuralia.Blockchains.Core.Network {
 			return regexCIDRV6.Match(ip).Success;
 		}
 
+		
+		public static bool IsIPV6(IPAddress ip) {
+			
+			return new NodeAddressInfo(ip, NodeInfo.Unknown).IsIpV6;
+		}
+		
 		public static bool IsIPV6(string ip) {
 
 			if(!IPAddress.TryParse(ip, out IPAddress result)) {
 				return false;
 			}
 
-			return new NodeAddressInfo(result, NodeInfo.Unknown).IsIpV6;
+			return IsIPV6(result);
 		}
+		
+		public static bool IsIPV6(Guid guid) {
+			return IsIPV6(GuidToIP(guid));
+		}
+
 
 	#endregion
 

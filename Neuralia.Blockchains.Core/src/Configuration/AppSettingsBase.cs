@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
-using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 
 namespace Neuralia.Blockchains.Core.Configuration {
@@ -15,7 +16,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			Duplex,
 			Stream
 		}
-		
+
 		public enum SerializationTypes {
 			Master,
 			Feeder
@@ -27,7 +28,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			BlockOnly = 2,
 			DigestThenBlocks = 3,
 			DigestAndBlocks = 4
-			
+
 		}
 
 		[Flags]
@@ -37,7 +38,6 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			WebOrGossip = Web | Gossip
 		}
 
-		
 		/// <summary>
 		///     when we save a digest, to we save the entire digest or only our own snapshots?
 		/// </summary>
@@ -77,7 +77,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			Localhost,
 			Any
 		}
-		
+
 		public enum RpcLoggingLevels {
 			Information,
 			Verbose
@@ -87,6 +87,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			None,
 			List,
 			All
+		}
+		
+		public enum MemoryCheckModes {
+			Disabled,
+			Virtual,
+			CGroup
 		}
 
 		/// <summary>
@@ -110,15 +116,15 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		}
 
 		/// <summary>
-		/// What type of tcp socket to use
+		///     What type of tcp socket to use
 		/// </summary>
 		public SocketTypes SocketType { get; set; } = SocketTypes.Duplex;
 
 		/// <summary>
-		/// If true, we will use faster but larger memory buffers from the array pool. if false, we will use the regular exact sized buffer. slower but less ram
+		///     If true, we will use faster but larger memory buffers from the array pool. if false, we will use the regular exact
+		///     sized buffer. slower but less ram
 		/// </summary>
 		public bool UseArrayPools { get; set; } = true;
-		
 
 		public string SystemFilesPath { get; set; }
 
@@ -126,14 +132,14 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     Turn on special behaviors for mobiles
 		/// </summary>
 		public bool MobileMode { get; set; } = false;
-		
+
 		/// <summary>
 		///     Turn on special behaviors for syncless
 		/// </summary>
 		public bool SynclessMode { get; set; } = false;
 
 		public int LogLevel { get; set; }
-		
+
 		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
 		public int RpcPort { get; set; } = GlobalsService.DEFAULT_RPC_PORT;
 
@@ -143,17 +149,22 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public List<Node> Blacklist { get; set; } = new List<Node>();
 
 		/// <summary>
+		/// the loggers we wish to enable. empty means all.
+		/// </summary>
+		public List<NLog.LoggerTypes> EnabledLoggers { get; set; } = new List<NLog.LoggerTypes>(); 
+		
+		/// <summary>
 		///     how does it serialize?  if master, it will have its full blockchain files, and database. if feeder, it simply
 		///     observes the files and databases that are updated by a master
 		/// </summary>
 		public SerializationTypes SerializationType { get; set; } = SerializationTypes.Master;
 
-
 		/// <summary>
-		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so its preferable to use. 
+		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so
+		///     its preferable to use.
 		/// </summary>
 		public ContactMethods HubContactMethod { get; set; } = ContactMethods.WebOrGossip;
-		
+
 #if TESTNET
 		public string HubsGossipAddress { get; set; } = "test-hubs.neuralium.com";
 		public string HubsWebAddress { get; set; } = "http://test-web-hubs.neuralium.com";
@@ -164,7 +175,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 	    public string HubsGossipAddress { get; set; } = "hubs.neuralium.com";
 		public string HubsWebAddress { get; set; } = "https://web-hubs.neuralium.com";
 #endif
-		
+
 		/// <summary>
 		///     the maximum amount of IPs to keep in our cache
 		/// </summary>
@@ -188,7 +199,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     here we can reject IPs from the same CIDR range as ours.
 		/// </summary>
 		public bool AllowConnectionsFromLocalCidrRange { get; set; } = true;
-		
+
 		public ProxySettings ProxySettings { get; set; } = null;
 
 		/// <summary>
@@ -240,9 +251,9 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     Do we allow the Rpc to listen only to localhost, or any address
 		/// </summary>
 		public RpcBindModes RpcBindMode { get; set; } = RpcBindModes.Localhost;
-		
+
 		/// <summary>
-		/// What level should we use for Rpc message logging
+		///     What level should we use for Rpc message logging
 		/// </summary>
 		public RpcLoggingLevels RpcLoggingLevel { get; set; } = RpcLoggingLevels.Information;
 
@@ -252,6 +263,27 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public string TlsCertificate { get; set; } = "neuralium.com.rpc.crt";
 
+		/// <summary>
+		/// should we use memory limits
+		/// </summary>
+		/// <remarks>CGroup this is very OS specific and best suited for containers, may not be set on the OS and not all methods may be implemented. see latest documentation</remarks>
+		public MemoryCheckModes MemoryLimitCheckMode { get; set; } = MemoryCheckModes.Disabled;
+		
+		/// <summary>
+		/// if 0, we use virtual memory. If set, we use this limit in BYTES
+		/// </summary>
+		public long TotalUsableMemory { get; set; } = 0;
+		
+		/// <summary>
+		/// start warning that we are using a lot of memory
+		/// </summary>
+		public double MemoryLimitWarning { get; set; } = 0.7;
+		
+		/// <summary>
+		/// stop the app, if we reach this and limits are enabled
+		/// </summary>
+		public double MemoryLimit { get; set; } = 0.9;
+		
 		public abstract ChainConfigurations GetChainConfiguration(BlockchainType chaintype);
 
 		public class Node {
@@ -302,11 +334,20 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			Messages = 1 << 1,
 			All = Transactions | Messages
 		}
-		
+
 		public enum HashTypes {
 			Sha2,
 			Sha3,
 			Blake2
+		}
+		
+		[Flags]
+		public enum MiningStatisticsModes {
+			None,
+			Total = 1 << 0,
+			Session = 1 << 1,
+			Both = Session | Total
+			
 		}
 
 		/// <summary>
@@ -316,7 +357,6 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		public EncryptorParameters.SymetricCiphers WalletEncryptionFormat { get; set; } = EncryptorParameters.SymetricCiphers.XCHACHA_40;
 
-		
 		public bool Enabled { get; set; } = true;
 
 		/// <summary>
@@ -324,18 +364,19 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     observes the files and databases that are updated by a master
 		/// </summary>
 		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Master;
-		
 
 		/// <summary>
 		///     The http url of the mining registration API
 		/// </summary>
 #if TESTNET
 		public string WebElectionsRegistrationUrl { get; set; } = "http://test-election-registration.neuralium.com";
+
 		public string WebElectionsRecordsUrl { get; set; } = "http://test-election-records.neuralium.com";
 		public string WebElectionsStatusUrl { get; set; } = "http://test-election-status.neuralium.com";
 		public string WebPresentationRegistrationUrl { get; set; } = "http://test-presentation-registration.neuralium.com";
 		public string WebTransactionRegistrationUrl { get; set; } = "http://test-transaction-registration.neuralium.com";
 		public string WebMessageRegistrationUrl { get; set; } = "http://test-message-registration.neuralium.com";
+		public string WebTransactionPoolUrl { get; set; } = "http://test-transaction-pool.neuralium.com";
 #elif DEVNET
 		public string WebElectionsRegistrationUrl { get; set; } = "http://dev-election-registration.neuralium.com";
 		public string WebRegistrationUrl { get; set; } = "http://dev-registration.neuralium.com";
@@ -346,8 +387,9 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public string WebPresentationRegistrationUrl { get; set; } = "https://presentation-registration.neuralium.com";
 		public string WebTransactionRegistrationUrl { get; set; } = "https://transaction-registration.neuralium.com";
 		public string WebMessageRegistrationUrl { get; set; } = "https://message-registration.neuralium.com";
+		public string WebTransactionPoolUrl { get; set; } = "http://transaction-pool.neuralium.com";
 #endif
-		
+
 		/// <summary>
 		///     The http url of the hash server
 		/// </summary>
@@ -356,8 +398,13 @@ namespace Neuralia.Blockchains.Core.Configuration {
 #elif DEVNET
 		public string HashUrl { get; set; } = "https://dev-hash.neuralium.com";
 #else
-	    public string HashUrl { get; set; } = "https://hash.neuralium.com"; 
+	    public string HashUrl { get; set; } = "https://hash.neuralium.com";
 #endif
+
+		/// <summary>
+		/// if true, we will contact the web transaction pools to get the webreg ones
+		/// </summary>
+		public bool UseWebTransactionPool  { get; set; } = true;
 		
 		/// <summary>
 		///     If true, during the wallet sync, the public block height will be updated, causing a creaping sync target. at false,
@@ -372,7 +419,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public AppSettingsBase.PassphraseQueryMethod PassphraseCaptureMethod { get; set; } = AppSettingsBase.PassphraseQueryMethod.Event;
 
 		/// <summary>
-		/// if true, mining can be enabled even chain is not synced. mining wlil start when fully synced
+		///     if true, mining can be enabled even chain is not synced. mining wlil start when fully synced
 		/// </summary>
 		public bool EnableMiningPreload { get; set; } = false;
 
@@ -391,10 +438,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     Should we encrypt the wallet keys when creating a new wallet
 		/// </summary>
 		public bool EncryptWallet { get; set; } = false;
-		
-		
-		public bool CompressWallet { get; set; } = true;
 
+		public bool CompressWallet { get; set; } = true;
 
 		/// <summary>
 		///     Should we encrypt the wallet keys when creating a new wallet
@@ -407,7 +452,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public bool EncryptWalletKeysSeparate { get; set; } = false;
 
 		/// <summary>
-		/// if enabled, the noe will use the mining pool facilities to check if correctly registered for mining
+		///     if enabled, the noe will use the mining pool facilities to check if correctly registered for mining
 		/// </summary>
 		public bool EnableMiningStatusChecks { get; set; } = true;
 
@@ -449,7 +494,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public AppSettingsBase.MessageSavingModes MessageSavingMode { get; set; } = AppSettingsBase.MessageSavingModes.Disabled;
 
 		/// <summary>
-		/// should we publish our key indices inside transactions for key logging? (recommended)
+		///     should we publish our key indices inside transactions for key logging? (recommended)
 		/// </summary>
 		public bool PublishKeyUseIndices { get; set; } = true;
 
@@ -463,7 +508,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     do we want to disable the block sync with other peers?
 		/// </summary>
 		public bool DisableSync { get; set; } = false;
-
+		
+		/// <summary>
+		/// Should we store mining statistics in the wallet
+		/// </summary>
+		public MiningStatisticsModes MiningStatistics { get; set; } = MiningStatisticsModes.Both;
+		
 		/// <summary>
 		///     do we want to disable the wallet block sync?
 		/// </summary>
@@ -513,14 +563,15 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     if the peer can not open it's default port through the firewall
 		/// </summary>
 		public AppSettingsBase.ContactMethods ElectionsRegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
-		
+
 		/// <summary>
-		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so its preferable to use. 
+		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so
+		///     its preferable to use.
 		/// </summary>
 		public AppSettingsBase.ContactMethods RegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 
 		/// <summary>
-		/// force a specific mining tier (if possible)
+		///     force a specific mining tier (if possible)
 		/// </summary>
 		public Enums.MiningTiers? MiningTier { get; set; } = null;
 
@@ -537,7 +588,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		///     what kind of strength do we want for our xmss main key
 		/// </summary>
-		public byte TransactionXmssKeyTreeHeight { get; set; } = 9;
+		public byte TransactionXmssKeyTreeHeight { get; set; } = 11;
 
 		/// <summary>
 		///     Percentage level where we warn of a key change comming
@@ -577,7 +628,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		///     what kind of strength do we want for our xmss main key
 		/// </summary>
-		public byte ChangeXmssKeyTreeHeight { get; set; } = 7;
+		public byte ChangeXmssKeyTreeHeight { get; set; } = 9;
 
 		/// <summary>
 		///     Percentage level where we warn of a key change comming
@@ -595,7 +646,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public HashTypes ChangeXmssKeyHashType { get; set; } = HashTypes.Sha3;
 
 		/// <summary>
-		/// if true, we will allow gossip presentations even if not allowed otherwise
+		///     if true, we will allow gossip presentations even if not allowed otherwise
 		/// </summary>
 		public bool AllowGossipPresentations { get; set; } = false;
 	}
@@ -635,6 +686,20 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     a debug option to skip if a peer is a hub.. useful to test the hubs, but otherwise not healthy for peers
 		/// </summary>
 		public bool SkipHubCheck { get; set; } = false;
+
+		public string WhiteListNodesRegex { get; set; } = "";
+
+		public List<NATRule> NATRules { get; set; } = new List<NATRule>();
+		
+		public class NATRule {
+			public AppSettingsBase.FullNode FromNode { get; set; } // Example "172.17.0.1:4000" -> matches sockets 172.17.0.1:4000, 172.17.0.1:4001, ...
+			public AppSettingsBase.Node ToIP { get; set; } 
+			// Example with IncrementIPWithPortDelta == true:  "172.23.0.42" -> translated to sockets 172.23.0.42:4000, 172.23.0.43:4001, ... 
+			// Example with IncrementIPWithPortDelta == false:  "172.23.0.42" -> translated to sockets 172.23.0.42:4000, 172.23.0.42:4001, ... 
+
+			public bool IncrementIPWithPortDelta { get; set; } = true;
+		}
+
 	}
 
 	public class ProxySettings {

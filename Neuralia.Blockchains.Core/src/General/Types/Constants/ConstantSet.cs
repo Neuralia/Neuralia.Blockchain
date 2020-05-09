@@ -22,6 +22,11 @@ namespace Neuralia.Blockchains.Core.General.Types.Constants {
 			this.baseOffset = baseOffset;
 		}
 
+		protected ConstantSet(U baseOffset) {
+			this.baseOffset = new T();
+			this.baseOffset.Value = baseOffset;
+		}
+
 		protected void SetOffset(T offset = default) {
 			// if we wanted a reserved offset, we got it
 			if((offset != null) && offset.GreaterThan(ZERO)) {

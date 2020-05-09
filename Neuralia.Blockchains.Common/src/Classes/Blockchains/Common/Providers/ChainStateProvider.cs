@@ -2,18 +2,18 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
@@ -22,7 +22,6 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
-using Nito.AsyncEx;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
 
@@ -73,7 +72,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task SetMiningPassword(long value);
 		Task SetMiningAutograph(byte[] value);
 		Task SetLastMiningRegistrationUpdate(DateTime? value);
-		
+
 		string[] SetChainInceptionField(DateTime value);
 		string[] SetLastBlockHashField(byte[] value);
 		string[] SetLastBlockTimestampField(DateTime value);
@@ -98,7 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		string[] SetMiningPasswordField(long value);
 		string[] SetMiningAutographField(byte[] value);
 		string[] SetLastMiningRegistrationUpdateField(DateTime? value);
-		
+
 		Task UpdateFields(IEnumerable<Func<IChainStateProvider, string[]>> actions);
 		Task UpdateFields(Func<IChainStateProvider, string[]> action);
 	}
@@ -106,7 +105,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IChainStateProvider<CHAIN_STATE_DAL, CHAIN_STATE_CONTEXT> : IChainStateProvider
 		where CHAIN_STATE_DAL : IChainStateDal
 		where CHAIN_STATE_CONTEXT : class, IChainStateContext {
-
 	}
 
 	public interface IChainStateProvider<CHAIN_STATE_DAL, CHAIN_STATE_CONTEXT, CHAIN_STATE_SNAPSHOT, MODERATOR_KEYS_SNAPSHOT> : IChainStateProvider<CHAIN_STATE_DAL, CHAIN_STATE_CONTEXT>
@@ -131,18 +129,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where MODERATOR_KEYS_SNAPSHOT : class, IChainStateModeratorKeysEntry<CHAIN_STATE_SNAPSHOT, MODERATOR_KEYS_SNAPSHOT>, new() {
 
 		private const string BLOCKS_ID_FILE = "block.id";
+		private const int MAX_CONCURRENT_READERS = 9;
+
+		/// <summary>
+		///     allow parallel readers, one writer
+		/// </summary>
+		private readonly RecursiveAsyncReaderWriterLock asyncLocker = new RecursiveAsyncReaderWriterLock();
 
 		private readonly CENTRAL_COORDINATOR centralCoordinator;
 
 		private readonly string folderPath;
 
 		private readonly object locker = new object();
-		private const int MAX_CONCURRENT_READERS = 9;
-		/// <summary>
-		/// allow parallel readers, one writer
-		/// </summary>
-		private readonly RecursiveAsyncReaderWriterLock asyncLocker = new RecursiveAsyncReaderWriterLock();
-		
+
 		protected readonly ITimeService timeService;
 		private CHAIN_STATE_DAL chainStateDal;
 
@@ -176,13 +175,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		/// <summary>
-		/// make sure the chain state will be requeried.
+		///     make sure the chain state will be requeried.
 		/// </summary>
 		public void ResetChainState() {
-			
-			
 
-			using (this.asyncLocker.WriterLock()){
+			using(this.asyncLocker.WriterLock()) {
 				this.chainStateEntry = null;
 			}
 		}
@@ -195,7 +192,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetChainInceptionField(DateTime value) {
 			this.chainStateEntry.Value.entry.ChainInception = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.ChainInception)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.ChainInception)};
 		}
 
 		public Task SetChainInception(DateTime value) {
@@ -210,7 +207,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetLastBlockHashField(byte[] value) {
 			this.chainStateEntry.Value.entry.LastBlockHash = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.LastBlockHash)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastBlockHash)};
 		}
 
 		public Task SetLastBlockHash(byte[] value) {
@@ -225,7 +222,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetLastBlockTimestampField(DateTime value) {
 			this.chainStateEntry.Value.entry.LastBlockTimestamp = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.LastBlockTimestamp)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastBlockTimestamp)};
 		}
 
 		public Task SetLastBlockTimestamp(DateTime value) {
@@ -240,7 +237,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetLastBlockLifespanField(ushort value) {
 			this.chainStateEntry.Value.entry.LastBlockLifespan = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.LastBlockLifespan)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastBlockLifespan)};
 		}
 
 		public Task SetLastBlockLifespan(ushort value) {
@@ -255,7 +252,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetBlockInterpretationStatusField(ChainStateEntryFields.BlockInterpretationStatuses value) {
 			this.chainStateEntry.Value.entry.BlockInterpretationStatus = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.BlockInterpretationStatus)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.BlockInterpretationStatus)};
 		}
 
 		public Task SetBlockInterpretationStatus(ChainStateEntryFields.BlockInterpretationStatuses value) {
@@ -268,13 +265,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public string[] SetGenesisBlockHashField(byte[] value) {
-			var stateEntry = this.chainStateEntry;
+			(CHAIN_STATE_SNAPSHOT entry, bool full)? stateEntry = this.chainStateEntry;
 
 			if(stateEntry != null) {
 				stateEntry.Value.entry.GenesisBlockHash = value;
 			}
 
-			return new []{nameof(this.chainStateEntry.Value.entry.GenesisBlockHash)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.GenesisBlockHash)};
 		}
 
 		public Task SetGenesisBlockHash(byte[] value) {
@@ -286,11 +283,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			set => this.SetBlockHeight(value).WaitAndUnwrapException();
 		}
 
-		public string[] SetBlockHeightField(long value){
-			var entry = this.chainStateEntry.Value.entry;
+		public string[] SetBlockHeightField(long value) {
+			CHAIN_STATE_SNAPSHOT entry = this.chainStateEntry.Value.entry;
 			entry.BlockHeight = value;
 
-			var propertyNames = new List<string>();
+			List<string> propertyNames = new List<string>();
 			propertyNames.Add(nameof(entry.BlockHeight));
 
 			//make sure it is always at least worth the block height
@@ -305,11 +302,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(value > entry.DownloadBlockHeight) {
 				propertyNames.AddRange(this.SetDownloadBlockHeightField(value));
 			}
-			
+
 			return propertyNames.ToArray();
 		}
 
-		public Task SetBlockHeight(long value){
+		public Task SetBlockHeight(long value) {
 			return this.UpdateFields(prov => prov.SetBlockHeightField(value));
 		}
 
@@ -319,12 +316,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public string[] SetDiskBlockHeightField(long value) {
-			var entry = this.chainStateEntry.Value.entry;
+			CHAIN_STATE_SNAPSHOT entry = this.chainStateEntry.Value.entry;
 			entry.DiskBlockHeight = value;
 
-			var propertyNames = new List<string>();
+			List<string> propertyNames = new List<string>();
 			propertyNames.Add(nameof(entry.DiskBlockHeight));
-			
+
 			//make sure it is always at least worth the block height
 			if(value > entry.DownloadBlockHeight) {
 				propertyNames.AddRange(this.SetDownloadBlockHeightField(value));
@@ -347,14 +344,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					FileExtensions.EnsureFileExists(path, this.centralCoordinator.FileSystem);
 					FileExtensions.WriteAllBytes(path, bytes, this.centralCoordinator.FileSystem);
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to write blocks id file.");
+					NLog.Default.Error(ex, "Failed to write blocks id file.");
 				}
 			}
-			
+
 			return propertyNames.ToArray();
 		}
 
-		public Task SetDiskBlockHeight(long value){
+		public Task SetDiskBlockHeight(long value) {
 			return this.UpdateFields(prov => prov.SetDiskBlockHeightField(value));
 		}
 
@@ -364,16 +361,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public string[] SetDownloadBlockHeightField(long value) {
-			
-			var entry = this.chainStateEntry.Value.entry;
+
+			CHAIN_STATE_SNAPSHOT entry = this.chainStateEntry.Value.entry;
 			entry.DownloadBlockHeight = value;
 
-			var propertyNames = new List<string>();
+			List<string> propertyNames = new List<string>();
 			propertyNames.Add(nameof(entry.DownloadBlockHeight));
-			
+
 			if(value > entry.PublicBlockHeight) {
 				propertyNames.AddRange(this.SetPublicBlockHeightField(value));
 			}
+
 			return propertyNames.ToArray();
 		}
 
@@ -394,16 +392,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				return publicHeight;
 			}
-			set {
-				this.SetPublicBlockHeight(value).WaitAndUnwrapException();
-			}
+			set => this.SetPublicBlockHeight(value).WaitAndUnwrapException();
 		}
 
 		public string[] SetPublicBlockHeightField(long value) {
-			
-			var entry = this.chainStateEntry.Value.entry;
+
+			CHAIN_STATE_SNAPSHOT entry = this.chainStateEntry.Value.entry;
 			long publicHeight = value;
-			
+
 			// skip the lock, get the field directly
 			long blockHeight = entry.DiskBlockHeight;
 
@@ -412,8 +408,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			entry.PublicBlockHeight = publicHeight;
-			
-			return new []{nameof(entry.PublicBlockHeight)};
+
+			return new[] {nameof(entry.PublicBlockHeight)};
 		}
 
 		public Task SetPublicBlockHeight(long value) {
@@ -428,7 +424,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetDigestHeightField(int value) {
 			this.chainStateEntry.Value.entry.DigestHeight = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.DigestHeight)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.DigestHeight)};
 		}
 
 		public Task SetDigestHeight(int value) {
@@ -443,7 +439,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetDigestBlockHeightField(long value) {
 			this.chainStateEntry.Value.entry.DigestBlockHeight = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.DigestBlockHeight)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.DigestBlockHeight)};
 		}
 
 		public Task SetDigestBlockHeight(long value) {
@@ -458,7 +454,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetLastDigestHashField(byte[] value) {
 			this.chainStateEntry.Value.entry.LastDigestHash = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.LastDigestHash)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastDigestHash)};
 		}
 
 		public Task SetLastDigestHash(byte[] value) {
@@ -473,7 +469,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetLastDigestTimestampField(DateTime value) {
 			this.chainStateEntry.Value.entry.LastDigestTimestamp = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.LastDigestTimestamp)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastDigestTimestamp)};
 		}
 
 		public Task SetLastDigestTimestamp(DateTime value) {
@@ -488,7 +484,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetPublicDigestHeightField(int value) {
 			this.chainStateEntry.Value.entry.PublicDigestHeight = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.PublicDigestHeight)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.PublicDigestHeight)};
 		}
 
 		public Task SetPublicDigestHeight(int value) {
@@ -503,7 +499,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetLastSyncField(DateTime value) {
 			this.chainStateEntry.Value.entry.LastSync = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.LastSync)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastSync)};
 		}
 
 		public Task SetLastSync(DateTime value) {
@@ -518,7 +514,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetMaximumVersionAllowedField(string value) {
 			this.chainStateEntry.Value.entry.MaximumVersionAllowed = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.MaximumVersionAllowed)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.MaximumVersionAllowed)};
 		}
 
 		public Task SetMaximumVersionAllowed(string value) {
@@ -533,7 +529,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetMinimumWarningVersionAllowedField(string value) {
 			this.chainStateEntry.Value.entry.MinimumWarningVersionAllowed = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.MinimumWarningVersionAllowed)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.MinimumWarningVersionAllowed)};
 		}
 
 		public Task SetMinimumWarningVersionAllowed(string value) {
@@ -548,7 +544,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetMinimumVersionAllowedField(string value) {
 			this.chainStateEntry.Value.entry.MinimumVersionAllowed = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.MinimumVersionAllowed)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.MinimumVersionAllowed)};
 		}
 
 		public Task SetMinimumVersionAllowed(string value) {
@@ -563,7 +559,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetMaxBlockIntervalField(int value) {
 			this.chainStateEntry.Value.entry.MaxBlockInterval = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.MaxBlockInterval)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.MaxBlockInterval)};
 		}
 
 		public Task SetMaxBlockInterval(int value) {
@@ -578,7 +574,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetAllowGossipPresentationsField(bool value) {
 			this.chainStateEntry.Value.entry.AllowGossipPresentations = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.AllowGossipPresentations)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.AllowGossipPresentations)};
 		}
 
 		public Task SetAllowGossipPresentations(bool value) {
@@ -593,7 +589,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetMiningPasswordField(long value) {
 			this.chainStateEntry.Value.entry.MiningPassword = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.MiningPassword)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.MiningPassword)};
 		}
 
 		public Task SetMiningPassword(long value) {
@@ -608,7 +604,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetMiningAutographField(byte[] value) {
 			this.chainStateEntry.Value.entry.MiningAutograph = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.MiningAutograph)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.MiningAutograph)};
 		}
 
 		public Task SetMiningAutograph(byte[] value) {
@@ -623,7 +619,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public string[] SetLastMiningRegistrationUpdateField(DateTime? value) {
 			this.chainStateEntry.Value.entry.LastMiningRegistrationUpdate = value;
 
-			return new []{nameof(this.chainStateEntry.Value.entry.LastMiningRegistrationUpdate)};
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastMiningRegistrationUpdate)};
 		}
 
 		public Task SetLastMiningRegistrationUpdate(DateTime? value) {
@@ -637,7 +633,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			get {
 				Enums.ChainSyncState state = this.GetChainSyncState();
 
-				return state == Enums.ChainSyncState.Synchronized || state == Enums.ChainSyncState.LikelyDesynchronized;
+				return (state == Enums.ChainSyncState.Synchronized) || (state == Enums.ChainSyncState.LikelyDesynchronized);
 			}
 		}
 
@@ -680,7 +676,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// infinite lifespan, lets use something else
 
 				// take the block interval, otherwise a minute
-				var interval = this.MaxBlockInterval;
+				int interval = this.MaxBlockInterval;
 				maxBlockInterval = interval != 0 ? interval : (int) TimeSpan.FromMinutes(1).TotalSeconds;
 			} else {
 				maxBlockInterval = lifespan * 2; // we give it the chance of 2 blocks since we may get it through gossip
@@ -696,7 +692,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			DateTime syncDeadline = lastSync.AddSeconds(maxBlockInterval);
 			DateTime doubleSyncDeadline = lastSync.AddSeconds(maxBlockInterval * 2);
 
-			DateTime now = DateTime.UtcNow;
+			DateTime now = DateTimeEx.CurrentTime;
 
 			if(now > doubleSyncDeadline) {
 				return Enums.ChainSyncState.Desynchronized;
@@ -734,7 +730,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return null;
 			}
 
-			using var rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
+			using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 
 			return KeyFactory.RehydrateKey<T>(rehydrator);
 
@@ -796,6 +792,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return blockId <= this.DigestBlockHeight;
 		}
 
+		public async Task UpdateFields(IEnumerable<Func<IChainStateProvider, string[]>> actions) {
+
+			using(await this.asyncLocker.WriterLockAsync().ConfigureAwait(false)) {
+				await Repeater.RepeatAsync(() => {
+					return this.ChainStateDal.PerformOperationAsync(async db => {
+
+						if(this.chainStateEntry == null) {
+							this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
+						}
+
+						EntityEntry<CHAIN_STATE_SNAPSHOT> dbEntry = db.Context.Entry(this.chainStateEntry.Value.entry);
+
+						foreach(Func<IChainStateProvider, string[]> action in actions) {
+
+							foreach(string propertyName in action(this)) {
+								dbEntry.Property(propertyName).IsModified = true;
+							}
+						}
+
+						await db.SaveChangesAsync().ConfigureAwait(false);
+					});
+				}).ConfigureAwait(false);
+			}
+		}
+
+		public Task UpdateFields(Func<IChainStateProvider, string[]> action) {
+
+			return this.UpdateFields(new[] {action});
+		}
+
 		/// <summary>
 		///     feeders must check to see if a block has changed. if it did, we must update our state
 		/// </summary>
@@ -842,66 +868,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return chainStateEntry;
 		}
 
-		
-		public async Task UpdateFields(IEnumerable<Func<IChainStateProvider, string[]>> actions){
-			
-			using(await this.asyncLocker.WriterLockAsync().ConfigureAwait(false)) {
-				await Repeater.RepeatAsync(() => {
-					return this.ChainStateDal.PerformOperationAsync(async db => {
-
-						if(this.chainStateEntry == null) {
-							this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
-						}
-
-						var dbEntry = db.Context.Entry(this.chainStateEntry.Value.entry);
-
-						foreach(var action in actions) {
-
-							foreach(var propertyName in action(this)) {
-								dbEntry.Property(propertyName).IsModified = true;
-							}
-						}
-
-						await db.SaveChangesAsync().ConfigureAwait(false);
-					});
-				}).ConfigureAwait(false);
-			}
-		}
-
-		public Task UpdateFields(Func<IChainStateProvider, string[]> action) {
-
-			return this.UpdateFields(new[] {action});
-		}
-
 		protected T GetField<T>(Func<CHAIN_STATE_SNAPSHOT, T> function) {
-			
-			using (this.asyncLocker.ReaderLock())
-			{
-				if(this.chainStateEntry != null && !this.BlockIdChanged()) {
+
+			using(this.asyncLocker.ReaderLock()) {
+				if((this.chainStateEntry != null) && !this.BlockIdChanged()) {
 					return function(this.chainStateEntry?.entry);
 				}
 			}
-			
-			using (this.asyncLocker.WriterLock())
-			{
-				if(this.chainStateEntry != null && !this.BlockIdChanged()) {
+
+			using(this.asyncLocker.WriterLock()) {
+				if((this.chainStateEntry != null) && !this.BlockIdChanged()) {
 					return function(this.chainStateEntry?.entry);
 				}
-				
+
 				Repeater.Repeat(() => {
 					this.ChainStateDal.PerformOperation(db => {
 
 						this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
 					});
 				});
-				
+
 				return function(this.chainStateEntry?.entry);
 			}
 		}
 
 		protected void UpdateJoinedFields(Action action) {
-			
-			using(this.asyncLocker.WriterLock()){
+
+			using(this.asyncLocker.WriterLock()) {
 
 				Repeater.Repeat(() => {
 					this.ChainStateDal.PerformOperation(db => {
@@ -921,28 +914,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		protected T GetJoinedField<T>(Func<CHAIN_STATE_SNAPSHOT, T> function, bool force) {
-			
-			if (!force){
-				using (this.asyncLocker.ReaderLock()){
-					if (this.chainStateEntry != null && this.chainStateEntry.Value.full){
+
+			if(!force) {
+				using(this.asyncLocker.ReaderLock()) {
+					if((this.chainStateEntry != null) && this.chainStateEntry.Value.full) {
 						return function(this.chainStateEntry?.entry);
 					}
 				}
 			}
 
-			using (this.asyncLocker.WriterLock())
-			{
-				if(!force && this.chainStateEntry != null && this.chainStateEntry.Value.full) {
+			using(this.asyncLocker.WriterLock()) {
+				if(!force && (this.chainStateEntry != null) && this.chainStateEntry.Value.full) {
 					return function(this.chainStateEntry?.entry);
 				}
-				
+
 				Repeater.Repeat(() => {
 					this.ChainStateDal.PerformOperation(db => {
 
 						this.chainStateEntry = (this.ChainStateDal.LoadFullState(db), true);
 					});
 				});
-				
+
 				return function(this.chainStateEntry?.entry);
 			}
 		}
@@ -961,7 +953,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(disposing && !this.IsDisposed) {
 
 				try {
-
 
 				} catch(Exception ex) {
 

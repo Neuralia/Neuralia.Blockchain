@@ -5,11 +5,11 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpValidat
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Arrays;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Services {
@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 				connection.SendBytes(messages.response.Dehydrate());
 			} catch(Exception e) {
-				Log.Error(e, "Failed to respond to IP validation request");
+				NLog.Default.Error(e, "Failed to respond to IP validation request");
 
 				throw;
 			} finally {

@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Simple;
@@ -17,9 +15,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 		where R : IRehydrationFactory {
 
 		public readonly SoftwareVersion clientSoftwareVersion = new SoftwareVersion();
-		
+
 		public GeneralSettings generalSettings = new GeneralSettings();
-		
+
 		/// <summary>
 		///     since its impossible to know otherwise, we communicate our listening port, in case it is non standard. (0 means
 		///     off)
@@ -30,9 +28,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 
 		public int networkId;
 
-		public long nonce;
-
 		public NodeInfo nodeInfo = new NodeInfo();
+
+		public long nonce;
 
 		public string PerceivedIP;
 
@@ -59,11 +57,11 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			this.localTime = rehydrator.ReadDateTime();
 			this.listeningPort = rehydrator.ReadInt();
 			this.nonce = rehydrator.ReadLong();
-			
+
 			this.nodeInfo.Rehydrate(rehydrator);
-			
+
 			this.generalSettings.Rehydrate(rehydrator);
-			
+
 			this.PerceivedIP = rehydrator.ReadString();
 
 			this.clientSoftwareVersion.SetVersion(rehydrator.Rehydrate<SoftwareVersion>());
@@ -80,7 +78,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1 {
 			nodesList.Add(this.nodeInfo);
 			nodesList.Add(this.generalSettings);
 			nodesList.Add(this.PerceivedIP);
-			
+
 			return nodesList;
 		}
 

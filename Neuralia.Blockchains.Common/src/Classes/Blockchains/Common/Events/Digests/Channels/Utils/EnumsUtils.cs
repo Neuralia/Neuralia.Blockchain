@@ -55,9 +55,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				return (T[]) simpleEnumsCache[type];
 			}
 
-			var entries = GetAllEntries<T>();
+			T[] entries = GetAllEntries<T>();
 
-			var simpleEntries = new List<T>();
+			List<T> simpleEntries = new List<T>();
 
 			// now remove any that are flag combinations of others
 			foreach(T entry in entries) {

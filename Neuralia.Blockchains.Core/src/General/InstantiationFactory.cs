@@ -13,6 +13,6 @@ namespace Neuralia.Blockchains.Core.General {
 	public class InstantiationFactory<R> : IInstantiationFactory<R>
 		where R : IRehydrationFactory {
 		public Func<ServiceSet<R>, IMessagingManager<R>> CreateMessagingManager => serviceSet => new MessagingManager<R>(serviceSet);
-		public Func<ServiceSet<R>, IConnectionsManager<R>> CreateConnectionsManager => serviceSet => new ConnectionsManager<R>(serviceSet);
+		public Func<ServiceSet<R>, IConnectionsManager<R>> CreateConnectionsManager => serviceSet => new ConnectionsManagerIPCrawler<R>(serviceSet);
 	}
 }

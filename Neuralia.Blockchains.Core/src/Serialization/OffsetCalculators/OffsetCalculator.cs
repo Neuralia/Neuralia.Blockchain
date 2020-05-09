@@ -37,6 +37,7 @@ namespace Neuralia.Blockchains.Core.Serialization.OffsetCalculators {
 			if(currentValue < this.Baseline) {
 				throw new ArgumentOutOfRangeException(nameof(currentValue), $"value of {currentValue} is smaller than minimum acceptable baseline of {this.Baseline}.");
 			}
+
 			// a note here is that in the offset, a 0 counts as a spot. '0' is +1 relative to the previous one. (except for the first entry, which is the baseline)
 			long relativeOffset = this.Baseline + this.currentOffsetSum;
 

@@ -9,10 +9,9 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
-
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1 {
 	public interface IJointPresentationTransaction : IPresentationTransaction, IPresentation, IJointTransaction, IJointMembers {
-		
+
 		byte RequiredSignatureCount { get; set; }
 	}
 
@@ -63,6 +62,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("PowDifficulty", this.PowDifficulty);
 			jsonDeserializer.SetArray("PowSolutions", this.PowSolutions);
 		}
+
+		public override ImmutableList<AccountId> TargetAccounts => this.MemberAccounts.Select(e => e.AccountId.ToAccountId()).ToImmutableList();
 
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.JOINT_PRESENTATION, 1, 0);
@@ -136,8 +137,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		protected abstract ITransactionAccountAttribute CreateTransactionAccountFeature();
 		protected abstract ITransactionJointAccountMember CreateTransactionJointAccountMember();
-		
-		public override ImmutableList<AccountId> TargetAccounts => this.MemberAccounts.Select(e => e.AccountId.ToAccountId()).ToImmutableList();
-
 	}
 }

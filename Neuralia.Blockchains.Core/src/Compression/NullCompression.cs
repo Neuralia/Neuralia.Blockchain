@@ -33,7 +33,6 @@ namespace Neuralia.Blockchains.Core.Compression {
 				return ByteArray.Create(output);
 			}
 		}
-		
 
 		protected override void DecompressData(Stream intput, Stream output) {
 

@@ -2,9 +2,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
-using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
 
@@ -21,8 +19,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public QTeslaCryptographicKey FourthKey { get; set; } = new QTeslaCryptographicKey();
 		public XmssmtCryptographicKey FifthKey { get; set; } = new XmssmtCryptographicKey();
 
-		public override bool IsEmpty => base.IsEmpty || (this.ThirdKey?.IsEmpty??true) || (this.FourthKey?.IsEmpty??true) || (this.FifthKey?.IsEmpty??true);
-		
+		public override bool IsEmpty => base.IsEmpty || (this.ThirdKey?.IsEmpty ?? true) || (this.FourthKey?.IsEmpty ?? true) || (this.FifthKey?.IsEmpty ?? true);
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
@@ -59,24 +57,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("FifthKey", this.FifthKey);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.SecretPenta;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
+		public override void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is ISecretPentaWalletKey secretPentaWalletKey) {
-				
+
 				this.ThirdKey.SetFromWalletKey(secretPentaWalletKey.ThirdKey);
 				this.ThirdKey.Id = secretPentaWalletKey.KeyAddress.OrdinalId;
-				
+
 				this.FourthKey.SetFromWalletKey(secretPentaWalletKey.FourthKey);
 				this.FourthKey.Id = secretPentaWalletKey.KeyAddress.OrdinalId;
-				
+
 				this.FifthKey.SetFromWalletKey(secretPentaWalletKey.FifthKey);
 				this.FifthKey.Id = secretPentaWalletKey.KeyAddress.OrdinalId;
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.SecretPenta;
 		}
 	}
 }

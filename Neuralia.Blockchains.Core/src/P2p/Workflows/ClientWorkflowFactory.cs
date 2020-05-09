@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
-using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Handshake;
 using Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest;
 using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest;

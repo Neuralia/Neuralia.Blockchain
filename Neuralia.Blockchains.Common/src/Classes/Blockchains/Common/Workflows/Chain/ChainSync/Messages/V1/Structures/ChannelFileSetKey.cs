@@ -22,19 +22,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public uint FilePart { get; set; }
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
-			
+
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
 			adaptiveSet.Rehydrate(rehydrator);
-			this.ChannelId = (DigestChannelType)(ushort)adaptiveSet.Value;
-			
+			this.ChannelId = (ushort) adaptiveSet.Value;
+
 			adaptiveSet.Rehydrate(rehydrator);
-			this.IndexId = (int)adaptiveSet.Value;
-			
+			this.IndexId = (int) adaptiveSet.Value;
+
 			adaptiveSet.Rehydrate(rehydrator);
-			this.FileId = (int)adaptiveSet.Value;
-			
+			this.FileId = (int) adaptiveSet.Value;
+
 			adaptiveSet.Rehydrate(rehydrator);
-			this.FilePart = (uint)adaptiveSet.Value;
+			this.FilePart = (uint) adaptiveSet.Value;
 		}
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
@@ -57,7 +57,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		public static implicit operator ChannelFileSetKey(string d) {
-			var items = d.Split('-');
+			string[] items = d.Split('-');
 
 			return new ChannelFileSetKey(ushort.Parse(items[0]), int.Parse(items[1]), int.Parse(items[2]), uint.Parse(items[3]));
 		}
@@ -80,7 +80,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return false;
 				}
 
-				return this.ChannelId == other.ChannelId && this.IndexId == other.IndexId && this.FileId == other.FileId && this.FilePart == other.FilePart;
+				return (this.ChannelId == other.ChannelId) && (this.IndexId == other.IndexId) && (this.FileId == other.FileId) && (this.FilePart == other.FilePart);
 			}
 
 			return base.Equals(obj);

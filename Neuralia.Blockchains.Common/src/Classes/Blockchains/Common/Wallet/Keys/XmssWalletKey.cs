@@ -1,4 +1,3 @@
-using System;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
@@ -45,10 +44,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 		///     xmss tree height
 		/// </summary>
 		public int TreeHeight { get; set; }
-		
+
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
-			
+
 			nodeList.Add(this.TreeHeight);
 			nodeList.Add(this.KeyUseIndex);
 			nodeList.Add(this.WarningHeight);
@@ -59,56 +58,56 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			return nodeList;
 		}
 
+		public override void Dehydrate(IDataDehydrator dehydrator) {
+			base.Dehydrate(dehydrator);
+
+			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
+			entry.Value = this.TreeHeight;
+			entry.Dehydrate(dehydrator);
+
+			entry.Value = this.KeyUseIndex;
+			entry.Dehydrate(dehydrator);
+
+			entry.Value = this.WarningHeight;
+			entry.Dehydrate(dehydrator);
+
+			entry.Value = this.ChangeHeight;
+			entry.Dehydrate(dehydrator);
+
+			entry.Value = this.MaximumHeight;
+			entry.Dehydrate(dehydrator);
+
+			dehydrator.Write((byte) this.HashBits);
+		}
+
+		public override void Rehydrate(IDataRehydrator rehydrator) {
+			base.Rehydrate(rehydrator);
+
+			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
+			entry.Rehydrate(rehydrator);
+			this.TreeHeight = (int) entry.Value;
+
+			entry.Rehydrate(rehydrator);
+			this.KeyUseIndex = (int) entry.Value;
+
+			entry.Rehydrate(rehydrator);
+			this.WarningHeight = (int) entry.Value;
+
+			entry.Rehydrate(rehydrator);
+			this.ChangeHeight = (int) entry.Value;
+
+			entry.Rehydrate(rehydrator);
+			this.MaximumHeight = (int) entry.Value;
+
+			this.HashBits = (Enums.KeyHashBits) rehydrator.ReadByte();
+		}
+
 		protected override void DisposeAll() {
 			base.DisposeAll();
 
 			// yes, its good to clear this. just in case
 			this.KeyUseIndex = 0;
 			this.MaximumHeight = 0;
-		}
-
-		public override void Dehydrate(IDataDehydrator dehydrator) {
-			base.Dehydrate(dehydrator);
-			
-			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
-			entry.Value = this.TreeHeight;
-			entry.Dehydrate(dehydrator);
-			
-			entry.Value = this.KeyUseIndex;
-			entry.Dehydrate(dehydrator);
-			
-			entry.Value = this.WarningHeight;
-			entry.Dehydrate(dehydrator);
-			
-			entry.Value = this.ChangeHeight;
-			entry.Dehydrate(dehydrator);
-			
-			entry.Value = this.MaximumHeight;
-			entry.Dehydrate(dehydrator);
-
-			dehydrator.Write((byte)this.HashBits);
-		}
-
-		public override void Rehydrate(IDataRehydrator rehydrator) {
-			base.Rehydrate(rehydrator);
-			
-			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
-			entry.Rehydrate(rehydrator);
-			this.TreeHeight = (int)entry.Value;
-			
-			entry.Rehydrate(rehydrator);
-			this.KeyUseIndex = (int)entry.Value;
-			
-			entry.Rehydrate(rehydrator);
-			this.WarningHeight = (int)entry.Value;
-			
-			entry.Rehydrate(rehydrator);
-			this.ChangeHeight = (int)entry.Value;
-			
-			entry.Rehydrate(rehydrator);
-			this.MaximumHeight = (int)entry.Value;
-
-			this.HashBits = (Enums.KeyHashBits)rehydrator.ReadByte();
 		}
 	}
 }

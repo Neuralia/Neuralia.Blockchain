@@ -6,14 +6,11 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Speci
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.PrimariesBallotingMethods;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
-using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
-using Neuralia.Blockchains.Core.General.Types.Specialized;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
-using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts {
@@ -25,8 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		ImmutableList<Enums.MiningTiers> MiningTiers { get; }
 
 		Dictionary<Enums.MiningTiers, ushort> MaximumElectedTransactionCount { get; }
-		
-		
+
 		ICandidatureMethod CandidatureMethod { get; set; }
 		IPrimariesBallotingMethod PrimariesBallotingMethod { get; set; }
 
@@ -36,6 +32,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 	}
 
 	public abstract class ElectionContext : Versionable<ElectionContextType>, IElectionContext {
+
+		public ElectionContext() {
+		}
 
 		/// <summary>
 		///     Duration in amount of blocks before the election begins. if it is passive, then the mods will send Intermediary
@@ -47,7 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		///     Duration in amount of blocks before the election polls close and the results be published
 		/// </summary>
 		public byte Publication { get; set; }
-		
+
 		/// <summary>
 		///     HThe tiers enabled in this context
 		/// </summary>
@@ -69,10 +68,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public ElectionModes ElectionMode => this.Version.Type == ElectionContextTypes.Instance.Active ? ElectionModes.Active : ElectionModes.Passive;
 
-		public ElectionContext() {
-			MiningTierUtils.FillMiningTierSet(this.MaximumElectedTransactionCount, (ushort)1);
-		}
-		
 		public override sealed void Rehydrate(IDataRehydrator rehydrator) {
 			throw new NotSupportedException();
 		}
@@ -90,7 +85,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			this.MiningTiers = MiningTierUtils.RehydrateTierList(rehydrator);
 
-			MiningTierUtils.RehydrateMiningSet<ushort, AdaptiveShort1_2>(this.MaximumElectedTransactionCount, 1, rehydrator, (v) => (ushort)v);
+			MiningTierUtils.RehydrateMiningSet<ushort, AdaptiveShort1_2>(this.MaximumElectedTransactionCount, 1, rehydrator, v => (ushort) v);
 
 			this.CandidatureMethod = CandidatureMethodRehydrator.Rehydrate(rehydrator);
 			this.PrimariesBallotingMethod = PrimariesBallotingMethodRehydrator.Rehydrate(rehydrator);
@@ -102,7 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			nodeList.Add(this.Maturity);
 			nodeList.Add(this.Publication);
-			
+
 			nodeList.Add(MiningTierUtils.TiersToFlags(this.MiningTiers));
 
 			MiningTierUtils.AddStructuresArray(nodeList, this.MaximumElectedTransactionCount);
@@ -119,15 +114,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			jsonDeserializer.SetProperty("Maturity", this.Maturity);
 			jsonDeserializer.SetProperty("Publication", this.Publication);
 			jsonDeserializer.SetProperty("MiningTierCount", this.MiningTiers.Count);
-			
-			jsonDeserializer.SetArray("miningTiers", this.MiningTiers);
 
-			jsonDeserializer.SetProperty("Mining Tiers Count", this.MaximumElectedTransactionCount.Count);
+			jsonDeserializer.SetArray("miningTiers", this.MiningTiers);
 			
-			foreach(var entry in this.MaximumElectedTransactionCount) {
-				jsonDeserializer.SetProperty($"{entry.Key.ToString()}_MaximumElectedTransactionCount", entry.Value);
+			foreach(Enums.MiningTiers tier in this.MiningTiers) {
+				jsonDeserializer.SetProperty($"{tier.ToString()}_MaximumElectedTransactionCount", this.MaximumElectedTransactionCount[tier]);
 			}
-			
+
 			jsonDeserializer.SetProperty("CandidatureMethod", this.CandidatureMethod);
 			jsonDeserializer.SetProperty("PrimariesBallotingMethod", this.PrimariesBallotingMethod);
 		}

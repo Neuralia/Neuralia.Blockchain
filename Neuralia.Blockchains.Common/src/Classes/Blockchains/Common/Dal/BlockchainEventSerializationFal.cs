@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
@@ -11,27 +12,22 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
+using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.Extensions.FileProviders;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
-using Neuralia.Blockchains.Common.Classes.Tools;
-using Neuralia.Blockchains.Core.Tools;
-using Neuralia.Blockchains.Tools;
 using Serilog;
-using Zio;
-using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
@@ -59,7 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		SafeArrayHandle LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length);
 		DigestChannelSet RecreateDigestChannelSet(string digestFolderPath, BlockchainDigestSimpleChannelSetDescriptor blockchainDigestDescriptor);
 		void WriteDigestFile(DigestChannelSet digestChannelSet, DigestChannelType channelId, int indexId, int fileId, uint partIndex, SafeArrayHandle data);
-		
+
 		SafeArrayHandle LoadBlockHighHeaderData(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex);
 		SafeArrayHandle LoadGenesisHighHeaderBytes();
 
@@ -175,16 +171,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				if(!indexSchedulers.ContainsKey(blocksFolderPath)) {
 					BlockchainFiles blockchainIndexFiles = new BlockchainFiles(blocksFolderPath, configurations.BlockCacheL1Interval, configurations.BlockCacheL2Interval, enabledChannels, fileSystem);
 
-					var resourceAccessScheduler = new SimpleResourceAccessScheduler<BlockchainFiles>(blockchainIndexFiles);
-					
+					SimpleResourceAccessScheduler<BlockchainFiles> resourceAccessScheduler = new SimpleResourceAccessScheduler<BlockchainFiles>(blockchainIndexFiles);
+
 					indexSchedulers.Add(blocksFolderPath, resourceAccessScheduler);
 				}
 			}
+
 			if(configurations.EnableFastKeyIndex) {
 				this.fastKeyProvider = new FastKeyProvider(this.GetFastKeyIndexPath(), configurations.EnabledFastKeyTypes);
 			}
-			
-			Log.Information($"Fast key provider is {(configurations.EnableFastKeyIndex?"enabled":"disabled")}.");
+
+			NLog.Default.Information($"Fast key provider is {(configurations.EnableFastKeyIndex ? "enabled" : "disabled")}.");
 
 			// create the digest access channels
 			this.CreateDigestChannelSet(digestFolderPath);
@@ -221,7 +218,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				if(digestBlockHeight != blockGroupIndex.Value.endingBlockId) {
 					deleteGroupIndex -= 1;
 				}
-				
+
 				for(long i = deleteGroupIndex; i != 0; i--) {
 					string folderPath = this.GetBlockPath(i);
 
@@ -240,7 +237,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public void SaveDigestHeader(string digestHeaderFilepath, SafeArrayHandle digestHeader) {
 			string dirName = Path.GetDirectoryName(digestHeaderFilepath);
 
-			FileExtensions.EnsureDirectoryStructure(dirName ,this.fileSystem);
+			FileExtensions.EnsureDirectoryStructure(dirName, this.fileSystem);
 
 			FileExtensions.WriteAllBytes(digestHeaderFilepath, digestHeader, this.fileSystem);
 		}
@@ -306,11 +303,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public SafeArrayHandle LoadDigestFile(DigestChannelType channelId, int indexId, int fileId, uint partIndex, long offset, int length) {
 			return this.DigestChannelSet.Channels[channelId].GetFileBytes(indexId, fileId, partIndex, offset, length);
 		}
-		
+
 		public void WriteDigestFile(DigestChannelSet digestChannelSet, DigestChannelType channelId, int indexId, int fileId, uint partIndex, SafeArrayHandle data) {
 			digestChannelSet.Channels[channelId].WriteFileBytes(indexId, fileId, partIndex, data);
 		}
-		
+
 		public long? GetFileSize(string filename) {
 
 			if(!this.fileSystem.FileExists(filename)) {
@@ -356,7 +353,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			this.fileSystem.CreateDirectory(this.GetGenesisBlockFolderPath());
 
-			var dataChannels = genesisBlock.GetRawDataChannels();
+			ChannelsEntries<SafeArrayHandle> dataChannels = genesisBlock.GetRawDataChannels();
 
 			dataChannels[BlockChannelUtils.BlockChannelTypes.Keys] = this.PrepareMasterTransactionData(keyedOffsets);
 
@@ -434,11 +431,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		/// <param name="ordinal"></param>
 		/// <returns></returns>
 		public async Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
-			
-			if(ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID || ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
-				if (this.fastKeyProvider == null){
+
+			if((ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || (ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
+				if(this.fastKeyProvider == null) {
 					return null;
 				}
+
 				return await this.fastKeyProvider.LoadKeyFile(accountId, ordinal, this.fileSystem).ConfigureAwait(false);
 			}
 
@@ -447,17 +445,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public bool TestFastKeysPath() {
 
-			return this.fastKeyProvider?.Test()??true;
+			return this.fastKeyProvider?.Test() ?? true;
 		}
-		
+
 		public async Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal) {
 			if(this.fastKeyProvider != null) {
 				await this.fastKeyProvider.WriteKey(accountId, key, treeHeight, hashBits, ordinal, this.fileSystem).ConfigureAwait(false);
 			}
 		}
-		
+
 		/// <summary>
-		/// ensure the base structure exists
+		///     ensure the base structure exists
 		/// </summary>
 		public void EnsureFastKeysIndex() {
 			this.fastKeyProvider?.EnsureBaseFileExists(this.fileSystem);
@@ -512,7 +510,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? LoadBlockSizeAndHash(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int hashOffset, int hashLength) {
 
 			if(blockId == 1) {
-				var genesisSize = this.LoadBlockSize(blockId, blockIndex);
+				ChannelsEntries<int> genesisSize = this.LoadBlockSize(blockId, blockIndex);
 
 				return (genesisSize, this.LoadGenesisHeaderBytes(hashOffset, hashLength));
 			}
@@ -617,7 +615,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 					// try to clean up
 					try {
-						var files = new List<string>();
+						List<string> files = new List<string>();
 
 						// try to erase the genesis files
 						blockData.RunForAll((band, data) => {
@@ -644,7 +642,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				}
 			} else {
 				// write a regular block
-				using var bytes = this.PrepareMasterTransactionData(keyedOffsets);
+				using SafeArrayHandle bytes = this.PrepareMasterTransactionData(keyedOffsets);
 
 				this.ChainScheduler.ScheduleWrite(indexer => {
 					result = indexer.SaveBlockBytes(blockId, blockIndex, blockData, bytes);
@@ -701,6 +699,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public string GenesisFolderPath => this.GetGenesisBlockFolderPath();
+
+		public DigestChannelSet RecreateDigestChannelSet(string digestFolderPath, BlockchainDigestSimpleChannelSetDescriptor blockchainDigestDescriptor) {
+
+			FileExtensions.EnsureDirectoryStructure(digestFolderPath, this.fileSystem);
+
+			return DigestChannelSetFactory.CreateDigestChannelSet(digestFolderPath, blockchainDigestDescriptor.Channels.ToDictionary(e => e.Key, e => e.Value), this.blockchainDigestChannelFactory);
+
+		}
 
 		public (int offset, int length) LoadGenesisMasterTransactionOffsets(int masterTransactionIndex) {
 
@@ -796,14 +802,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				}
 			}
 		}
-		
-		public DigestChannelSet RecreateDigestChannelSet(string digestFolderPath, BlockchainDigestSimpleChannelSetDescriptor blockchainDigestDescriptor) {
-
-			FileExtensions.EnsureDirectoryStructure(digestFolderPath, this.fileSystem);
-
-			return DigestChannelSetFactory.CreateDigestChannelSet(digestFolderPath,  blockchainDigestDescriptor.Channels.ToDictionary(e => (DigestChannelType)e.Key, e => e.Value), this.blockchainDigestChannelFactory);
-
-		}
 
 		private string GetDigestChannelDescriptionFileName(string folderBase) {
 			return Path.Combine(folderBase, DIGEST_CHANNEL_DESC_FILE);
@@ -815,11 +813,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		protected BlockchainDigestSimpleChannelSetDescriptor LoadBlockchainDigestSimpleChannelDescriptor(string digestDescFilePath) {
 
-			var bytes = this.fileSystem.ReadAllBytes(digestDescFilePath);
+			byte[] bytes = this.fileSystem.ReadAllBytes(digestDescFilePath);
 
 			BlockchainDigestSimpleChannelSetDescriptor descriptor = new BlockchainDigestSimpleChannelSetDescriptor();
 
-			using(var rehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
 				descriptor.Rehydrate(rehydrator);
 			}
 
@@ -828,7 +826,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public ChannelsEntries<SafeArrayHandle> LoadGenesisBytes(ChannelsEntries<(int offset, int length)> offsets) {
 
-			var results = new ChannelsEntries<SafeArrayHandle>();
+			ChannelsEntries<SafeArrayHandle> results = new ChannelsEntries<SafeArrayHandle>();
 
 			offsets.RunForAll((band, bandOffsets) => {
 				results[band] = FileExtensions.ReadBytes(this.GetGenesisBlockBandFilename(band.ToString()), bandOffsets.offset, bandOffsets.length, this.fileSystem);
@@ -840,7 +838,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public ChannelsEntries<int> LoadGenesisBlockSize() {
 
-			var sizes = new ChannelsEntries<int>(this.enabledChannels);
+			ChannelsEntries<int> sizes = new ChannelsEntries<int>(this.enabledChannels);
 
 			sizes.RunForAll((band, bandOffsets) => {
 				sizes[band] = (int) this.fileSystem.GetFileLength(this.GetGenesisBlockBandFilename(band.ToString()));
@@ -888,7 +886,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public class BlockchainMessagesMetadata {
 			public Dictionary<int, int> Counts { get; set; }
 		}
-		
+
 	#region Dispose
 
 		public bool IsDisposed { get; private set; }
@@ -904,7 +902,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				try {
 
 					lock(schedulerLocker) {
-						foreach(var entry in indexSchedulers.Values) {
+						foreach(IResourceAccessScheduler<BlockchainFiles> entry in indexSchedulers.Values) {
 							try {
 								entry?.Dispose();
 							} catch {
@@ -914,8 +912,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 				} catch(Exception ex) {
 
-				} 
+				}
 			}
+
 			this.IsDisposed = true;
 		}
 
@@ -924,5 +923,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 	#endregion
+
 	}
 }

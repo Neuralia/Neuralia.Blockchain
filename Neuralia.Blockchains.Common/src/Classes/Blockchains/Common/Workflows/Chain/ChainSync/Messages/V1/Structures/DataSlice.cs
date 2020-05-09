@@ -8,14 +8,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 	public class DataSlice : DataSliceInfo, IDisposableExtended {
 
 		public DataSlice() {
-			
+
 		}
+
 		public DataSlice(long length, long offset, SafeArrayHandle data) : base(length, offset) {
 			this.Data.Entry = data.Entry;
 		}
 
 		public SafeArrayHandle Data { get; } = SafeArrayHandle.Create();
-
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			return hashNodeList;
 		}
-		
+
 	#region disposable
 
 		public bool IsDisposed { get; private set; }
@@ -60,5 +60,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 	#endregion
+
 	}
 }

@@ -1,9 +1,9 @@
 using System;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
+using Neuralia.Blockchains.Components.Blocks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Neuralia.Blockchains.Common.Classes.General.Json.Converters.old {
+namespace Neuralia.Blockchains.Components.Converters.old {
 	public class BlockIdJsonConverterOld : JsonConverter<BlockId> {
 		public override bool CanRead => true;
 

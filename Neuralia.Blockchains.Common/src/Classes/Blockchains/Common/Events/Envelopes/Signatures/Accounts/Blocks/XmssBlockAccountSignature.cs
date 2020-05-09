@@ -1,9 +1,6 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
-using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks {
@@ -14,8 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public class XmssBlockAccountSignature : BlockAccountSignature, IXmssBlockAccountSignature {
 
 		public KeyAddress KeyAddress { get; set; } = new KeyAddress();
-		
-		
+
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = base.GetStructuresArray();
 

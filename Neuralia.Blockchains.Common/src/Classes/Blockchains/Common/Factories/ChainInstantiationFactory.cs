@@ -4,7 +4,6 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Locking;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 

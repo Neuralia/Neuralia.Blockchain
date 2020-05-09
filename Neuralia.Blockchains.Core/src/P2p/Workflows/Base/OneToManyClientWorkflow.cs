@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 		}
 
 		/// <summary>
-		/// the client does not use the scope, response to all scopes
+		///     the client does not use the scope, response to all scopes
 		/// </summary>
 		public override WorkflowId Id => new NetworkWorkflowId(this.ClientId, this.CorrelationId, null);
 	}

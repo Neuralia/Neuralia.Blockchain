@@ -1,10 +1,8 @@
 using System;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
+using Neuralia.Blockchains.Components.Blocks;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions {
 	public class WalletSyncException : ApplicationException {
-
-		public BlockId BlockId { get; }
 
 		public WalletSyncException(BlockId blockId) {
 			this.BlockId = blockId;
@@ -17,5 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exception
 		public WalletSyncException(BlockId blockId, string message, Exception innerException) : base(message, innerException) {
 			this.BlockId = blockId;
 		}
+
+		public BlockId BlockId { get; }
 	}
 }

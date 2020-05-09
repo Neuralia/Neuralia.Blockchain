@@ -1,50 +1,24 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Net;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Genesis;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Serialization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Moderator.V1;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.BlockInsertionTransaction;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.WalletSync;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.System;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General.Types;
-using Neuralia.Blockchains.Core.Services;
-using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
-using Neuralia.Blockchains.Tools.Data;
-using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
@@ -57,8 +31,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		Task<bool> BlockchainSynced(LockContext lockContext);
 
 		Task<bool?> WalletSyncedNoWait(LockContext lockContext);
-		Task<bool>  WalletSynced(LockContext lockContext);
-		Task<bool>  WalletSyncing(LockContext lockContext);
+		Task<bool> WalletSynced(LockContext lockContext);
+		Task<bool> WalletSyncing(LockContext lockContext);
 
 		Task SynchronizeBlockchain(bool force, LockContext lockContext);
 		Task SynchronizeWallet(bool force, LockContext lockContext, bool? allowGrowth = null);
@@ -82,23 +56,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		protected readonly IBlockchainGuidService guidService;
 		protected readonly IBlockchainTimeService timeService;
 
-		private RecursiveAsyncLock asyncLocker         = new RecursiveAsyncLock();
-		private int                lastConnectionCount = 0;
-
-		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
+		private readonly RecursiveAsyncLock asyncLocker = new RecursiveAsyncLock();
 
 		// the sync workflow we keep as a reference.
 		private IClientChainSyncWorkflow chainSynchWorkflow;
-		private DateTime?                nextBlockchainSynchCheck;
-		private DateTime?                nextExpiredTransactionCheck;
-		private DateTime?                nextWalletSynchCheck;
-		private ISyncWalletWorkflow      synchWalletWorkflow;
+		private int lastConnectionCount;
+		private DateTime? nextBlockchainSynchCheck;
+		private DateTime? nextExpiredTransactionCheck;
+		private DateTime? nextWalletSynchCheck;
+		private ISyncWalletWorkflow synchWalletWorkflow;
 
 		public BlockchainManager(CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator, 1) {
 			this.timeService = centralCoordinator.BlockchainServiceSet.BlockchainTimeService;
 			this.guidService = centralCoordinator.BlockchainServiceSet.BlockchainGuidService;
 
 		}
+
+		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
 
 		protected new CENTRAL_COORDINATOR CentralCoordinator => base.CentralCoordinator;
 
@@ -120,9 +94,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(this.ShouldAct(ref this.nextExpiredTransactionCheck)) {
 
-				await CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.ChainEventPoolProvider.DeleteExpiredTransactions().ConfigureAwait(false);
+				await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.ChainEventPoolProvider.DeleteExpiredTransactions().ConfigureAwait(false);
 
-				this.nextExpiredTransactionCheck = DateTime.UtcNow.AddMinutes(30);
+				this.nextExpiredTransactionCheck = DateTimeEx.CurrentTime.AddMinutes(30);
 			}
 		}
 
@@ -146,21 +120,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		protected virtual async Task LoadWalletIfRequired(LockContext lockContext) {
 
-			var configuration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			BlockChainConfigurations configuration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			if(configuration.LoadWalletOnStart && !this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
 
-				if(configuration.CreateMissingWallet && !await CentralCoordinator.ChainComponentProvider.WalletProviderBase.WalletFileExists(lockContext).ConfigureAwait(false)) {
+				if(configuration.CreateMissingWallet && !await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.WalletFileExists(lockContext).ConfigureAwait(false)) {
 					//TODO: passphrases? this here is mostly for debug
 					// if we must, we will create a new wallet
-					
-						Dictionary<int, string> passphrases = new Dictionary<int, string>();
-						passphrases.Add(0, "toto");
 
-						if(!await CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(default, configuration.EncryptWallet, configuration.EncryptWalletKeys, false, passphrases.ToImmutableDictionary(), lockContext).ConfigureAwait(false)) {
-							throw new ApplicationException("Failed to create a new wallet");
-						}
-					
+					Dictionary<int, string> passphrases = new Dictionary<int, string>();
+					passphrases.Add(0, "toto");
+
+					if(!await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNewCompleteWallet(default, configuration.EncryptWallet, configuration.EncryptWalletKeys, false, passphrases.ToImmutableDictionary(), lockContext).ConfigureAwait(false)) {
+						throw new ApplicationException("Failed to create a new wallet");
+					}
+
 				}
 
 				if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
@@ -170,9 +144,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.EnsureWalletLoaded(lockContext).ConfigureAwait(false);
 
 					} catch(WalletNotLoadedException ex) {
-						Log.Warning("Failed to load wallet. Not loaded.");
+						NLog.Default.Warning("Failed to load wallet. Not loaded.");
 					} catch(Exception ex) {
-						Log.Warning("Failed to load wallet. Not loaded.", ex);
+						NLog.Default.Warning("Failed to load wallet. Not loaded.", ex);
 					}
 				}
 			}
@@ -188,7 +162,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
 
-			if(this.lastConnectionCount < minimumSyncPeerCount && count >= minimumSyncPeerCount) {
+			if((this.lastConnectionCount < minimumSyncPeerCount) && (count >= minimumSyncPeerCount)) {
 				// we just got enough peers to potentially first peer, let's sync
 				await this.SynchronizeBlockchain(true, lockContext).ConfigureAwait(false);
 			}
@@ -219,10 +193,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// lets check again in X seconds
 				if(this.hasBlockchainSyncedOnce) {
 					// ok, now we can wait the regular intervals
-					this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
+					this.nextBlockchainSynchCheck = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
 				} else {
 					// we never synced, we need to check more often to be ready to do so
-					this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(2);
+					this.nextBlockchainSynchCheck = DateTimeEx.CurrentTime.AddSeconds(2);
 				}
 			} else {
 				this.nextBlockchainSynchCheck = DateTime.MaxValue;
@@ -240,17 +214,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = DateTime.MinValue;
 				}
 
-				if((!NetworkPaused && !await BlockchainSyncing(lockContext).ConfigureAwait(false) && !await BlockchainSynced(lockContext).ConfigureAwait(false) && this.CheckNetworkSyncable())) {
+				if(!this.NetworkPaused && !await this.BlockchainSyncing(lockContext).ConfigureAwait(false) && !await this.BlockchainSynced(lockContext).ConfigureAwait(false) && this.CheckNetworkSyncable()) {
 
 					IChainStateProvider chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 
 					// if we are not synchronized, we go ahead and do it.
 					if(!this.hasBlockchainSyncedOnce || chainStateProvider.IsChainDesynced) {
 						// that's it, we launch a chain sync
-						using(var handle = await this.asyncLocker.LockAsync().ConfigureAwait(false)) {
+						using(LockHandle handle = await this.asyncLocker.LockAsync().ConfigureAwait(false)) {
 
-							if(this.chainSynchWorkflow != null && this.chainSynchWorkflow.IsCompleted) {
-								var task = Task.Run(() => this.chainSynchWorkflow?.Dispose());
+							if((this.chainSynchWorkflow != null) && this.chainSynchWorkflow.IsCompleted) {
+								Task task = Task.Run(() => this.chainSynchWorkflow?.Dispose());
 								this.chainSynchWorkflow = null;
 							}
 
@@ -265,13 +239,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 								this.chainSynchWorkflow.Completed += async (success, workflow) => {
 									LockContext innerLockContext = null;
 
-									using(var handle = await this.asyncLocker.LockAsync(innerLockContext).ConfigureAwait(false)) {
+									using(LockHandle handle = await this.asyncLocker.LockAsync(innerLockContext).ConfigureAwait(false)) {
 
 										if(success && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
-											this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
+											this.nextBlockchainSynchCheck = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
 										} else {
 											// we never synced, we need to check more often to be ready to do so
-											this.nextBlockchainSynchCheck = DateTime.UtcNow.AddSeconds(5);
+											this.nextBlockchainSynchCheck = DateTimeEx.CurrentTime.AddSeconds(5);
 										}
 
 										this.chainSynchWorkflow = null;
@@ -287,14 +261,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		/// <summary>
-		/// Return the state of the network and if it is syncable for us.
+		///     Return the state of the network and if it is syncable for us.
 		/// </summary>
 		/// <returns></returns>
 		protected virtual bool CheckNetworkSyncable() {
-			var networkingProvider   = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase;
+			IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> networkingProvider = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase;
 			int minimumSyncPeerCount = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MinimumSyncPeerCount;
 
-			return networkingProvider.HasPeerConnections && networkingProvider.CurrentPeerCount >= minimumSyncPeerCount;
+			return networkingProvider.HasPeerConnections && (networkingProvider.CurrentPeerCount >= minimumSyncPeerCount);
 		}
 
 		/// <summary>
@@ -302,8 +276,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// </summary>
 		public async Task<bool> BlockchainSyncing(LockContext lockContext) {
 
-			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-				return this.chainSynchWorkflow != null && !this.chainSynchWorkflow.IsCompleted;
+			using(LockHandle handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return (this.chainSynchWorkflow != null) && !this.chainSynchWorkflow.IsCompleted;
 			}
 
 		}
@@ -313,8 +287,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// </summary>
 		public async Task<bool> BlockchainSynced(LockContext lockContext) {
 
-			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-				return (!await this.BlockchainSyncing(handle).ConfigureAwait(false) || (this.chainSynchWorkflow?.IsCompleted ?? true)) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced;
+			using(LockHandle handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return (!(await this.BlockchainSyncing(handle).ConfigureAwait(false)) || (this.chainSynchWorkflow?.IsCompleted ?? true)) && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced;
 
 			}
 		}
@@ -339,18 +313,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			if(this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
 
-				await this.SynchronizeWallet(false, lockContext, true).ConfigureAwait(false);
+				await this.SynchronizeWallet(false, lockContext).ConfigureAwait(false);
 
 				// lets check again in X seconds
 				if(this.hasWalletSyncedOnce) {
 					// ok, now we can wait the regular intervals
-					this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
+					this.nextWalletSynchCheck = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
 				} else {
 					// we never synced, we need to check more often to be ready to do so
-					this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(2);
+					this.nextWalletSynchCheck = DateTimeEx.CurrentTime.AddSeconds(2);
 				}
 			} else {
-				this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(5);
+				this.nextWalletSynchCheck = DateTimeEx.CurrentTime.AddSeconds(5);
 			}
 		}
 
@@ -373,19 +347,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		public virtual async Task SynchronizeWallet(List<IBlock> blocks, bool force, bool mobileForce, LockContext lockContext, bool? allowGrowth = null) {
 
-			var walletSynced = await WalletSyncedNoWait(lockContext).ConfigureAwait(false);
+			bool? walletSynced = await this.WalletSyncedNoWait(lockContext).ConfigureAwait(false);
 
 			if(!walletSynced.HasValue) {
 				// we could not verify, try again later
-				this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(1);
+				this.nextWalletSynchCheck = DateTimeEx.CurrentTime.AddSeconds(1);
 
 				return;
 			}
 
-			if(!this.NetworkPaused && this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded && (mobileForce && GlobalSettings.ApplicationSettings.SynclessMode || !this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableWalletSync && force || !walletSynced.Value)) {
-				using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-					if(this.synchWalletWorkflow != null && this.synchWalletWorkflow.IsCompleted) {
-						var task = Task.Run(() => this.synchWalletWorkflow?.Dispose());
+			if(!this.NetworkPaused && this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded && ((mobileForce && GlobalSettings.ApplicationSettings.SynclessMode) || (!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration().DisableWalletSync && force) || !walletSynced.Value)) {
+				using(LockHandle handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+					if((this.synchWalletWorkflow != null) && this.synchWalletWorkflow.IsCompleted) {
+						Task task = Task.Run(() => this.synchWalletWorkflow?.Dispose());
 						this.synchWalletWorkflow = null;
 					}
 
@@ -406,13 +380,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						this.synchWalletWorkflow.Completed += async (success, workflow) => {
 
 							// ok, now we can wait the regular intervals
-							LockContext lockContext2   = null;
-							var         walletIsSynced = await CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced(lockContext2).ConfigureAwait(false);
+							LockContext lockContext2 = null;
+							bool? walletIsSynced = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced(lockContext2).ConfigureAwait(false);
 
 							if(success && walletIsSynced.HasValue && walletIsSynced.Value && this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.IsChainSynced) {
-								this.nextWalletSynchCheck = this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
+								this.nextWalletSynchCheck = this.nextWalletSynchCheck = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.WalletSyncDelay);
 							} else {
-								this.nextWalletSynchCheck = DateTime.UtcNow.AddSeconds(5);
+								this.nextWalletSynchCheck = DateTimeEx.CurrentTime.AddSeconds(5);
 							}
 
 							this.synchWalletWorkflow = null;
@@ -431,8 +405,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// </summary>
 		public async Task<bool> WalletSyncing(LockContext lockContext) {
 
-			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-				return this.synchWalletWorkflow != null && !this.synchWalletWorkflow.IsCompleted;
+			using(LockHandle handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return (this.synchWalletWorkflow != null) && !this.synchWalletWorkflow.IsCompleted;
 			}
 
 		}
@@ -443,14 +417,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// </summary>
 		public async Task<bool?> WalletSyncedNoWait(LockContext lockContext) {
 
-			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-				var walletSynced = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait(handle).ConfigureAwait(false);
+			using(LockHandle handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				bool? walletSynced = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait(handle).ConfigureAwait(false);
 
 				if(!walletSynced.HasValue) {
 					return null;
 				}
 
-				return (!await WalletSyncing(handle).ConfigureAwait(false) || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletSynced.Value;
+				return (!await this.WalletSyncing(handle).ConfigureAwait(false) || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletSynced.Value;
 
 			}
 		}
@@ -461,14 +435,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// </summary>
 		public async Task<bool> WalletSynced(LockContext lockContext) {
 
-			using(var handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-				var walletIsSynced = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced(handle).ConfigureAwait(false);
+			using(LockHandle handle = await this.asyncLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+				bool? walletIsSynced = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.Synced(handle).ConfigureAwait(false);
 
 				if(!walletIsSynced.HasValue) {
 					return false;
 				}
 
-				return (!await WalletSyncing(handle).ConfigureAwait(false) || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletIsSynced.Value;
+				return (!await this.WalletSyncing(handle).ConfigureAwait(false) || (this.synchWalletWorkflow?.IsCompleted ?? true)) && walletIsSynced.Value;
 			}
 
 		}
@@ -478,7 +452,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 	#region wallet manager
 
 		private Task CopyWalletRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
-			Log.Information("Requesting loading wallet.");
+			NLog.Default.Information("Requesting loading wallet.");
 
 			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
 
@@ -491,12 +465,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// wait up to 5 minutes for the wallet to be ready to load
 				resetEvent.Wait(TimeSpan.FromMinutes(5));
 			}
-			
+
 			return Task.CompletedTask;
 		}
 
 		private Task<(SecureString passphrase, bool keysToo)> WalletProviderOnWalletPassphraseRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
-			Log.Information("Requesting wallet passphrase.");
+			NLog.Default.Information("Requesting wallet passphrase.");
 
 			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
@@ -518,7 +492,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		private Task<SecureString> WalletProviderOnWalletKeyPassphraseRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt, LockContext lockContext) {
-			Log.Information($"Requesting wallet key {keyname} passphrase.");
+			NLog.Default.Information($"Requesting wallet key {keyname} passphrase.");
 
 			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
@@ -536,7 +510,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		private Task WalletProviderOnWalletCopyKeyFileRequest(CorrelationContext correlationContext, Guid accountuuid, string keyname, int attempt, LockContext lockContext) {
-			Log.Information($"Requesting wallet key {keyname} passphrase.");
+			NLog.Default.Information($"Requesting wallet key {keyname} passphrase.");
 
 			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 
@@ -549,7 +523,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			// wait up to 5 hours for the wallet to be ready to load
 			resetEvent.Wait(TimeSpan.FromHours(5));
 
-			return System.Threading.Tasks.Task.CompletedTask;
+			return Task.CompletedTask;
 		}
 
 		public Task ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, LockContext lockContext) {

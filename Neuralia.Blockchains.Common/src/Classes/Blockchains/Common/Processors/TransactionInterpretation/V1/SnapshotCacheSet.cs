@@ -99,7 +99,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		event Func<LockContext, Task<STANDARD_ACCOUNT_KEY_SNAPSHOT>> RequestCreateNewAccountKeySnapshot;
 		event Func<LockContext, Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> RequestCreateNewAccreditationCertificateSnapshot;
 		event Func<LockContext, Task<CHAIN_OPTIONS_SNAPSHOT>> RequestCreateNewChainOptionSnapshot;
-		
+
 		event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>>> RequestStandardAccountSnapshots;
 		event Func<List<AccountId>, LockContext, Task<Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>>> RequestJointAccountSnapshots;
 		event Func<List<(long AccountId, byte OrdinalId)>, LockContext, Task<Dictionary<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT>>> RequestAccountKeySnapshots;
@@ -237,14 +237,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public async Task<STANDARD_ACCOUNT_SNAPSHOT> CreateNewStandardAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext) {
-			
+
 			STANDARD_ACCOUNT_SNAPSHOT entry = this.simpleAccountSnapshotCache.LastNew(newAccountId);
-			
+
 			if(entry != null) {
 				return entry;
 			}
-			
-			entry = await CreateLooseStandardAccountSnapshot(newAccountId, lockContext).ConfigureAwait(false);
+
+			entry = await this.CreateLooseStandardAccountSnapshot(newAccountId, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -276,7 +276,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return this.RequestCreateNewStandardAccountSnapshot(lockContext);
 			}
 
-			return Task.FromResult((STANDARD_ACCOUNT_SNAPSHOT)null);
+			return Task.FromResult((STANDARD_ACCOUNT_SNAPSHOT) null);
 		}
 
 		public Task<STANDARD_ACCOUNT_SNAPSHOT> GetStandardAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext) {
@@ -288,14 +288,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public async Task<JOINT_ACCOUNT_SNAPSHOT> CreateNewJointAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext) {
-			
+
 			JOINT_ACCOUNT_SNAPSHOT entry = this.jointAccountSnapshotCache.LastNew(newAccountId);
-			
+
 			if(entry != null) {
 				return entry;
 			}
 
-			entry = await CreateLooseJointAccountSnapshot(newAccountId, lockContext).ConfigureAwait(false);
+			entry = await this.CreateLooseJointAccountSnapshot(newAccountId, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -317,7 +317,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return this.RequestCreateNewJointAccountSnapshot(lockContext);
 			}
 
-			return Task.FromResult((JOINT_ACCOUNT_SNAPSHOT)null);
+			return Task.FromResult((JOINT_ACCOUNT_SNAPSHOT) null);
 		}
 
 		public Task<JOINT_ACCOUNT_SNAPSHOT> GetJointAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext) {
@@ -337,17 +337,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.jointAccountSnapshotCache.DeleteEntry(newAccountId, lockContext);
 		}
 
-		protected abstract ICardUtils GetCardUtils();
-		
 		public async Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> CreateNewAccountKeySnapshot((long AccountId, byte OrdinalId) key, LockContext lockContext) {
-			
+
 			STANDARD_ACCOUNT_KEY_SNAPSHOT entry = this.accountKeySnapshotCache.LastNew(key);
-			
+
 			if(entry != null) {
 				return entry;
 			}
 
-			entry = await CreateLooseAccountKeySnapshot(key, lockContext).ConfigureAwait(false);
+			entry = await this.CreateLooseAccountKeySnapshot(key, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -367,7 +365,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return this.RequestCreateNewAccountKeySnapshot(lockContext);
 			}
 
-			return Task.FromResult((STANDARD_ACCOUNT_KEY_SNAPSHOT)null);
+			return Task.FromResult((STANDARD_ACCOUNT_KEY_SNAPSHOT) null);
 		}
 
 		public Task<STANDARD_ACCOUNT_KEY_SNAPSHOT> GetAccountKeySnapshotReadonly((long AccountId, byte OrdinalId) key, LockContext lockContext) {
@@ -388,14 +386,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public async Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> CreateNewAccreditationCertificateSnapshot(int id, LockContext lockContext) {
-			
+
 			ACCREDITATION_CERTIFICATE_SNAPSHOT entry = this.accreditationCertificateSnapshotCache.LastNew(id);
-			
+
 			if(entry != null) {
 				return entry;
 			}
 
-			entry = await CreateLooseAccreditationCertificateSnapshot(id, lockContext).ConfigureAwait(false);
+			entry = await this.CreateLooseAccreditationCertificateSnapshot(id, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -412,7 +410,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return this.RequestCreateNewAccreditationCertificateSnapshot(lockContext);
 			}
 
-			return Task.FromResult((ACCREDITATION_CERTIFICATE_SNAPSHOT)null);
+			return Task.FromResult((ACCREDITATION_CERTIFICATE_SNAPSHOT) null);
 		}
 
 		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificateSnapshotReadonly(int id, LockContext lockContext) {
@@ -435,12 +433,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		public async Task<CHAIN_OPTIONS_SNAPSHOT> CreateNewChainOptionsSnapshot(int id, LockContext lockContext) {
 
 			CHAIN_OPTIONS_SNAPSHOT entry = this.chainOptionsSnapshotCache.LastNew(id);
-			
+
 			if(entry != null) {
 				return entry;
 			}
-			
-			entry = await CreateLooseChainOptionsSnapshot(id, lockContext).ConfigureAwait(false);
+
+			entry = await this.CreateLooseChainOptionsSnapshot(id, lockContext).ConfigureAwait(false);
 
 			if(entry == null) {
 				return null;
@@ -456,7 +454,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				return this.RequestCreateNewChainOptionSnapshot(lockContext);
 			}
 
-			return Task.FromResult((CHAIN_OPTIONS_SNAPSHOT)null);
+			return Task.FromResult((CHAIN_OPTIONS_SNAPSHOT) null);
 		}
 
 		public Task<CHAIN_OPTIONS_SNAPSHOT> GetChainOptionsSnapshotReadonly(int id, LockContext lockContext) {
@@ -476,9 +474,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.chainOptionsSnapshotCache.DeleteEntry(id, lockContext);
 		}
 
+		protected abstract ICardUtils GetCardUtils();
+
 		public SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> GetEntriesModificationStack() {
 
-			var history = new SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>();
+			SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> history = new SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>();
 
 			history.simpleAccounts = this.simpleAccountSnapshotCache.GetEntriesSubKeyModificationStack();
 			history.jointAccounts = this.jointAccountSnapshotCache.GetEntriesSubKeyModificationStack();
@@ -529,7 +529,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		public List<AccountId> AllAccounts {
 			get {
-				var results = this.standardAccounts.ToList();
+				List<AccountId> results = this.standardAccounts.ToList();
 
 				results.AddRange(this.jointAccounts);
 
@@ -542,7 +542,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.standardAccounts.AddRange(accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard));
 			this.jointAccounts.AddRange(accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint));
 		}
-		
+
 		public void AddAccounts(List<AccountId> accountIds) {
 
 			this.AddAccounts(accountIds.ToImmutableList());
@@ -597,31 +597,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		public void Add(SnapshotSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotSet) {
 			if(snapshotSet != null) {
 
-				foreach(var entry in snapshotSet.simpleAccounts) {
+				foreach(KeyValuePair<AccountId, STANDARD_ACCOUNT_SNAPSHOT> entry in snapshotSet.simpleAccounts) {
 					if(!this.simpleAccounts.ContainsKey(entry.Key)) {
 						this.simpleAccounts[entry.Key] = entry.Value;
 					}
 				}
 
-				foreach(var entry in snapshotSet.jointAccounts) {
+				foreach(KeyValuePair<AccountId, JOINT_ACCOUNT_SNAPSHOT> entry in snapshotSet.jointAccounts) {
 					if(!this.jointAccounts.ContainsKey(entry.Key)) {
 						this.jointAccounts[entry.Key] = entry.Value;
 					}
 				}
 
-				foreach(var entry in snapshotSet.accountKeys) {
+				foreach(KeyValuePair<(long AccountId, byte OrdinalId), STANDARD_ACCOUNT_KEY_SNAPSHOT> entry in snapshotSet.accountKeys) {
 					if(!this.accountKeys.ContainsKey(entry.Key)) {
 						this.accountKeys[entry.Key] = entry.Value;
 					}
 				}
 
-				foreach(var entry in snapshotSet.accreditationCertificates) {
+				foreach(KeyValuePair<Guid, ACCREDITATION_CERTIFICATE_SNAPSHOT> entry in snapshotSet.accreditationCertificates) {
 					if(!this.accreditationCertificates.ContainsKey(entry.Key)) {
 						this.accreditationCertificates[entry.Key] = entry.Value;
 					}
 				}
 
-				foreach(var entry in snapshotSet.chainOptions) {
+				foreach(KeyValuePair<int, CHAIN_OPTIONS_SNAPSHOT> entry in snapshotSet.chainOptions) {
 					if(!this.chainOptions.ContainsKey(entry.Key)) {
 						this.chainOptions[entry.Key] = entry.Value;
 					}

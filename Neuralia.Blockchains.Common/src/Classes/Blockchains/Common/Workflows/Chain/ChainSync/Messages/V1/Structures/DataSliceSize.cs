@@ -7,9 +7,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 	public class DataSliceSize : IBinarySerializable, ITreeHashable {
 
 		public DataSliceSize() {
-			
+
 		}
-		
+
 		public DataSliceSize(long length) {
 			this.Length = length;
 		}

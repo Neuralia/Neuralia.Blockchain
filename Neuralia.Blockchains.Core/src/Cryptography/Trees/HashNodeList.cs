@@ -5,7 +5,6 @@
 #endif
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,7 +12,6 @@ using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Serilog;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	public class HashNodeList : IHashNodeList, IDisposableExtended {
@@ -22,13 +20,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			SafeArrayHandle Data { get; }
 			bool IsEmpty { get; }
 		}
-		
+
 		public abstract class HashNode : IHashNode {
-			
+
 			public abstract SafeArrayHandle Data { get; }
 			public abstract bool IsEmpty { get; }
 
-			#region Dispose
+		#region Dispose
 
 			public bool IsDisposed { get; private set; }
 
@@ -38,16 +36,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			}
 
 			private void Dispose(bool disposing) {
-				
+
 				if(disposing && !this.IsDisposed) {
 					this.DisposeAll();
 				}
-			
+
 				this.IsDisposed = true;
 			}
 
 			protected virtual void DisposeAll() {
-				
+
 			}
 
 			~HashNode() {
@@ -55,29 +53,41 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			}
 
 		#endregion
+
 		}
 
 		private class ArrayHashNode : HashNode {
 
-			public override SafeArrayHandle Data { get; }
-			public override bool IsEmpty => this.Data?.IsEmpty ?? true;
-			
-			protected override void DisposeAll() {
-				base.DisposeAll();
-				
-				this.Data?.Dispose();
-			}
-
 			public ArrayHashNode(SafeArrayHandle data) {
 				this.Data = data;
 			}
+
+			public override SafeArrayHandle Data { get; }
+			public override bool IsEmpty => this.Data?.IsEmpty ?? true;
+
+			protected override void DisposeAll() {
+				base.DisposeAll();
+
+				this.Data?.Dispose();
+			}
 		}
 
-		public class LazyHashNode<T, S> : HashNode 
-			where S: class {
+		public class LazyHashNode<T, S> : HashNode
+			where S : class {
+
+			private readonly Func<T, S, SafeArrayHandle> action;
+			private readonly T entry;
+			private readonly S state;
 #if DEBUG
-			private bool alreadyCalled = false;
+			private bool alreadyCalled;
 #endif
+
+			public LazyHashNode(T entry, Func<T, S, SafeArrayHandle> action, S state = null) {
+				this.action = action;
+				this.state = state;
+				this.entry = entry;
+			}
+
 			public override SafeArrayHandle Data {
 				get {
 #if DEBUG
@@ -92,32 +102,22 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			}
 
 			public override bool IsEmpty => this.action == null;
-
-			private readonly Func<T, S, SafeArrayHandle> action;
-			private readonly S state;
-			private readonly T entry;
-			
-			public LazyHashNode(T entry, Func<T, S, SafeArrayHandle> action, S state = null) {
-				this.action = action;
-				this.state = state;
-				this.entry = entry;
-			}
 		}
 
 		public HashNodeList() {
-			
+
 #if LOG_SOURCE
 		Console.WriteLine("WARNING!!! HashNodeList is writing stacktrace!!!");
-			Log.Warning("WARNING!!! HashNodeList is writing stacktrace!!!");
+			NLog.Default.Warning("WARNING!!! HashNodeList is writing stacktrace!!!");
 #endif
 		}
-		
+
 		private readonly List<IHashNode> nodes = new List<IHashNode>();
 
 #if LOG_SOURCE
 		public List<IHashNode> Nodes => this.nodes;
 		public readonly List<string> Sources = new List<string>();
-		
+
 #endif
 		public SafeArrayHandle this[int i] => this.nodes[i].Data;
 
@@ -138,18 +138,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(IHashNode value) {
-			
+
 			this.nodes.Add(value);
-			
+
 #if LOG_SOURCE
 			this.Sources.Add(System.Environment.StackTrace.ToString());
 #endif
 
 			return this;
 		}
-		
+
 		public HashNodeList Add(short value) {
-			
+
 			return this.AddOwn(TypeSerializer.Serialize(value));
 		}
 
@@ -320,17 +320,17 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		public HashNodeList AddOwn(Span<byte> array) {
 			return this.AddOwn(array.ToArray());
 		}
-		
+
 		public HashNodeList Add(Span<byte> array) {
 			return this.Add(array.ToArray());
 		}
-		
+
 		private HashNodeList AddOwn(byte[] array) {
 			this.Add(new ArrayHashNode(ByteArray.Create(array)));
 
 			return this;
 		}
-		
+
 		public HashNodeList Add(byte[] array) {
 			this.Add(new ArrayHashNode(ByteArray.Wrap(array)));
 
@@ -342,13 +342,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 			return this;
 		}
-		
+
 		public HashNodeList AddOwn(ByteArray array) {
 			this.Add(new ArrayHashNode(ByteArray.Create(array)));
 
 			return this;
 		}
-		
+
 		public HashNodeList Add(ref byte[] array, int length) {
 			this.Add(new ArrayHashNode(ByteArray.Create(array, length)));
 
@@ -357,7 +357,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		public HashNodeList Add(byte[] array, int length) {
 
-			var bytes = array;
+			byte[] bytes = array;
+
 			return this.Add(ref bytes, length);
 		}
 
@@ -425,11 +426,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 			if(obj is SafeArrayHandle array) {
 				return this.Add(array);
 			}
-			
+
 			if(obj is ByteArray byteArray) {
 				return this.Add(byteArray);
 			}
-			
+
 			if(obj is byte[] bytes) {
 				return this.Add(bytes);
 			}
@@ -452,29 +453,28 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 			this.Add(kv.Key);
 			this.Add(kv.Value);
-			
 
 			return this;
 		}
-		
+
 		public HashNodeList Add<T, U>(IDictionary<T, U> nodes)
 			where T : ITreeHashable {
 
 			this.Add(nodes.Count);
 
-			foreach(var entry in nodes) {
+			foreach(KeyValuePair<T, U> entry in nodes) {
 				this.Add(entry);
 			}
 
 			return this;
 		}
-		
+
 		public HashNodeList Add<T>(IOrderedEnumerable<T> nodes)
 			where T : ITreeHashable {
 
-			return this.Add((IEnumerable<T> )nodes);
+			return this.Add((IEnumerable<T>) nodes);
 		}
-		
+
 		public HashNodeList Add<T>(IEnumerable<T> nodes)
 			where T : ITreeHashable {
 
@@ -486,11 +486,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 			return this;
 		}
-		
+
 		public HashNodeList Add<T>(List<T> nodes)
 			where T : ITreeHashable {
-			
-			return this.Add((IEnumerable<T>)nodes);
+
+			return this.Add((IEnumerable<T>) nodes);
 		}
 
 		public HashNodeList Add(ITreeHashable treeHashable) {
@@ -527,7 +527,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 			return this;
 		}
-		
+
 	#region Dispose
 
 		public bool IsDisposed { get; private set; }
@@ -538,15 +538,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		private void Dispose(bool disposing) {
-			
 
 			if(disposing && !this.IsDisposed) {
-				
-				foreach(var entry in this.nodes) {
+
+				foreach(IHashNode entry in this.nodes) {
 					entry?.Dispose();
 				}
 			}
-			
+
 			this.IsDisposed = true;
 		}
 
@@ -555,5 +554,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 	#endregion
+
 	}
 }

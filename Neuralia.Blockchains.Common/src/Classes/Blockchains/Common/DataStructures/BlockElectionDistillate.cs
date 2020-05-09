@@ -1,49 +1,46 @@
-using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Neuralia.Blockchains.Core;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures {
 
 	public abstract class BlockElectionDistillate {
 		public readonly SafeArrayHandle blockHash = SafeArrayHandle.Create();
-		public string blockHashSerialized;
 
 		public readonly List<string> BlockTransactionIds = new List<string>();
+
+		public readonly List<FinalElectionResultDistillate> FinalElectionResults = new List<FinalElectionResultDistillate>();
+
+		public readonly List<IntermediaryElectionContextDistillate> IntermediaryElectionResults = new List<IntermediaryElectionContextDistillate>();
+		public string blockHashSerialized;
 
 		public ComponentVersion<BlockType> blockType;
 		public string blockTypeString;
 		public int blockxxHash;
-		public long electionBockId;
 
 		public string DehydratedElectionContext;
-
-		[JsonIgnore]
-		public IElectionContext ElectionContext { get; set; }
-
-		public readonly List<FinalElectionResultDistillate> FinalElectionResults = new List<FinalElectionResultDistillate>();
+		public long electionBockId;
 
 		public bool HasActiveElection = false;
 
 		public AccountId MiningAccountId;
 
-		public readonly List<IntermediaryElectionContextDistillate> IntermediaryElectionResults = new List<IntermediaryElectionContextDistillate>();
+		[JsonIgnore]
+		public IElectionContext ElectionContext { get; set; }
 
 		public bool IsElectionContextLoaded => this.ElectionContext != null;
 
 		public void RehydrateElectionContext(IBlockchainEventsRehydrationFactory rehydrationFactory) {
-			if(this.ElectionContext == null && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
+			if((this.ElectionContext == null) && !string.IsNullOrWhiteSpace(this.DehydratedElectionContext)) {
 
 				using SafeArrayHandle compressed = ByteArray.FromBase64(this.DehydratedElectionContext);
 
@@ -72,19 +69,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 	public abstract class IntermediaryElectionContextDistillate {
 
 		public int BlockOffset;
-		
-		public ElectionBlockQuestionDistillate SecondTierQuestion;
 		public ElectionDigestQuestionDistillate DigestQuestion;
 		public ElectionBlockQuestionDistillate FirstTierQuestion;
-		
+
 		public PassiveElectionContextDistillate PassiveElectionContextDistillate;
+
+		public ElectionBlockQuestionDistillate SecondTierQuestion;
 	}
-	
+
 	public abstract class ElectionContextDistillate {
 
 		public readonly List<string> TransactionIds = new List<string>();
 	}
-	
+
 	public abstract class PassiveElectionContextDistillate : ElectionContextDistillate {
 
 		public long electionBlockId;
@@ -98,51 +95,48 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 	}
 
 	public abstract class ElectedCandidateResultDistillate {
+
+		public readonly List<string> SelectedTransactionIds = new List<string>();
 		public long BlockId;
+		public long? digestAnswer;
 
 		public ElectionModes ElectionMode;
-
-		public long? secondTierAnswer;
-		public long? digestAnswer;
 		public long? firstTierAnswer;
-
-		public Enums.MiningTiers MiningTier = Enums.MiningTiers.ThirdTier;
 		public ComponentVersion<BlockType> MatureBlockType;
 		public ComponentVersion MatureElectionContextVersion;
 		public int MaturityBlockHash;
 		public long MaturityBlockId;
 
-		public readonly List<string> SelectedTransactionIds = new List<string>();
+		public Enums.MiningTiers MiningTier = Enums.MiningTiers.ThirdTier;
+
+		public long? secondTierAnswer;
 	}
 
 	public abstract class ElectionQuestionDistillate {
-		
 	}
-	
+
 	public abstract class ElectionBlockQuestionDistillate : ElectionQuestionDistillate {
-		
 	}
-	
+
 	public abstract class ElectionDigestQuestionDistillate : ElectionQuestionDistillate {
-		
 	}
-	
-	public class BlockTransactionSectionQuestionDistillate : ElectionBlockQuestionDistillate{
-		public long BlockId { get; set; } 
+
+	public class BlockTransactionSectionQuestionDistillate : ElectionBlockQuestionDistillate {
+		public long BlockId { get; set; }
 		public int? TransactionIndex { get; set; }
 
-		public byte SelectedTransactionSection{ get; set; }
-		public byte SelectedComponent{ get; set; }
+		public byte SelectedTransactionSection { get; set; }
+		public byte SelectedComponent { get; set; }
 	}
-	
-	public class BlockBytesetQuestionDistillate : ElectionBlockQuestionDistillate{
-		public long BlockId { get; set; } 
+
+	public class BlockBytesetQuestionDistillate : ElectionBlockQuestionDistillate {
+		public long BlockId { get; set; }
 		public int Offset { get; set; }
 		public byte Length { get; set; }
 	}
-	
-	public class DigestBytesetQuestionDistillate : ElectionDigestQuestionDistillate{
-		public int DigestID { get; set; } 
+
+	public class DigestBytesetQuestionDistillate : ElectionDigestQuestionDistillate {
+		public int DigestID { get; set; }
 		public int Offset { get; set; }
 		public byte Length { get; set; }
 	}

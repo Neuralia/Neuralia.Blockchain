@@ -16,11 +16,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		///     The trust level we currently have on chain
 		/// </summary>
 		byte TrustLevel { get; set; }
-		
+
 		bool Correlated { get; set; }
 
 		public ImmutableList<IAccountAttribute> AppliedAttributesBase { get; }
-
 	}
 
 	public interface IAccountSnapshot<ACCOUNT_ATTRIBUTE> : IAccountSnapshot

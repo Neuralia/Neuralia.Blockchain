@@ -2,10 +2,10 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using LiteDB;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Components.Blocks;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
@@ -13,7 +13,7 @@ using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
-	public class WalletKeyLogFileInfo : SingleEntryWalletFileInfo<WalletAccountKeyLog> {
+	public class WalletKeyLogFileInfo : TypedEntryWalletFileInfo<WalletAccountKeyLog> {
 
 		private readonly IWalletAccount account;
 
@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     Insert the new empty wallet
 		/// </summary>
 		/// <param name="wallet"></param>
-		protected override Task InsertNewDbData(WalletAccountKeyLog keyLog, LockContext lockContext) {
+		protected Task InsertNewDbData(WalletAccountKeyLog keyLog, LockContext lockContext) {
 
 			return this.RunDbOperation((litedbDal, lc) => {
 				litedbDal.Insert(keyLog, c => c.Id);
@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		protected override async Task CreateSecurityDetails(LockContext lockContext) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				if(this.EncryptionInfo == null) {
 					this.EncryptionInfo = new EncryptionInfo();
 
@@ -56,21 +56,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(this.EncryptionInfo.Encrypt) {
 
 						this.EncryptionInfo.EncryptionParameters = this.account.KeyLogFileEncryptionParameters;
-						this.EncryptionInfo.Secret               = () => this.account.KeyLogFileSecret;
+						this.EncryptionInfo.Secret = () => this.account.KeyLogFileSecret;
 					}
 				}
 			}
 		}
-
-		protected override Task UpdateDbEntry(LockContext lockContext) {
-			// do nothing, we dont udpate
-
-			return Task.CompletedTask;
-		}
-
 		public async Task InsertKeyLogEntry(WalletAccountKeyLog walletAccountKeyLog, LockContext lockContext) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				await RunDbOperation((litedbDal, lc) => {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await this.RunDbOperation((litedbDal, lc) => {
 					// lets check the last one inserted, make sure it was a lower key height than ours now
 
 					// -1 is for keys without an index. otherwise we check it
@@ -94,7 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					return Task.CompletedTask;
 				}, handle).ConfigureAwait(false);
 
-				await Save(handle).ConfigureAwait(false);
+				await this.Save(handle).ConfigureAwait(false);
 			}
 		}
 
@@ -107,21 +100,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		public async Task<bool> ConfirmKeyLogEntry(string eventId, Enums.BlockchainEventTypes eventType, long confirmationBlockId, KeyUseIndexSet keyUseIndexSet, LockContext lockContext) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				bool result = await RunDbOperation((litedbDal, lc) => {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				bool result = await this.RunDbOperation((litedbDal, lc) => {
 					// lets check the last one inserted, make sure it was a lower key height than ours now
 					WalletAccountKeyLog entry = null;
 
 					if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
 						byte eventTypeCasted = (byte) eventType;
-						entry = litedbDal.Get<WalletAccountKeyLog>(k => k.EventId == eventId && k.EventType == eventTypeCasted).FirstOrDefault();
+						entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted)).FirstOrDefault();
 					}
 
 					if(entry == null) {
 						return Task.FromResult(false);
 					}
 
-					if(keyUseIndexSet != null && entry.KeyUseIndex != keyUseIndexSet) {
+					if((keyUseIndexSet != null) && (entry.KeyUseIndex != keyUseIndexSet)) {
 						throw new ApplicationException($"Failed to confirm keylog entry for event '{eventId}'. Expected key use index to be '{keyUseIndexSet}' but found '{entry.KeyUseIndex}' instead.");
 					}
 
@@ -131,7 +124,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				}, handle).ConfigureAwait(false);
 
 				if(result) {
-					await Save(handle).ConfigureAwait(false);
+					await this.Save(handle).ConfigureAwait(false);
 				}
 
 				return result;
@@ -157,7 +150,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 				byte eventTypeCasted = (byte) eventType;
 
-				return Task.FromResult(litedbDal.Exists<WalletAccountKeyLog>(k => k.EventId == eventId && k.EventType == eventTypeCasted));
+				return Task.FromResult(litedbDal.Exists<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted)));
 			}, lockContext);
 		}
 
@@ -179,7 +172,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
 
 					byte eventTypeCasted = (byte) eventType;
-					entry = litedbDal.Get<WalletAccountKeyLog>(k => k.EventId == eventId && k.EventType == eventTypeCasted).FirstOrDefault();
+					entry = litedbDal.Get<WalletAccountKeyLog>(k => (k.EventId == eventId) && (k.EventType == eventTypeCasted)).FirstOrDefault();
 				}
 
 				return Task.FromResult(entry?.ConfirmationBlockId != null);

@@ -1,5 +1,4 @@
-﻿using Neuralia.Blockchains.Tools;
-using Neuralia.Blockchains.Tools.Data;
+﻿using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols {

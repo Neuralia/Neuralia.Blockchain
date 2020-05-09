@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Logging;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
@@ -76,7 +77,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 					}
 				} catch(Exception ex) {
 					//TODO: what should we do here? we dont want to do much. log perhaps?
-					Log.Error(ex, "Exception occured while invoking the children task set completed action");
+					NLog.Default.Error(ex, "Exception occured while invoking the children task set completed action");
 				}
 
 				this.HasCompleted = true;
@@ -103,6 +104,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 			if(this.completed != null) {
 				this.completed(this.TaskExecutionResults);
 			}
+
 			this.HasCompleted = true;
 
 			this.owner.ExecutionStatus = RoutedTask.ExecutionStatuses.ChildrenCompleted;

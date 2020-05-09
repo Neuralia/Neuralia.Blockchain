@@ -18,16 +18,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 			return nodeList;
 		}
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
-			dehydrator.Write((byte)this.SecurityCategory);
+			dehydrator.Write(this.SecurityCategory);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-			
+
 			this.SecurityCategory = rehydrator.ReadByte();
 		}
 	}

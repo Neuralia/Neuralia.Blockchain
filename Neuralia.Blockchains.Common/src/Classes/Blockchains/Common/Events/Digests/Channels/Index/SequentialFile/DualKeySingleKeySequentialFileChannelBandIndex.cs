@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-
-using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
@@ -9,7 +7,6 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.SequentialFile {
 	public class DualKeySingleKeySequentialFileChannelBandIndex<CHANEL_BANDS> : SingleKeySequentialFileChannelBandIndex<CHANEL_BANDS, (long accountId, byte ordinal)>
@@ -33,7 +30,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public DualKeySingleKeySequentialFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, groupSize, enabledBands, fileSystem) {
 		}
 
-
 		public string GetL2expandedName(uint index) {
 			return this.GenerateFullPath(this.L2IndexProvider.NamingProvider.GeneratedExpandedFileName(this.ChannelBand.ToString().ToLower(), L2_FILE_NAME, this.scopeFolder, new object[] {index}));
 		}
@@ -43,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public override List<int> GetFileTypes() {
-			var fileTypes = base.GetFileTypes();
+			List<int> fileTypes = base.GetFileTypes();
 
 			// and now the second level index file
 			fileTypes.Add(SECOND_INDEX_FILE_ID);
@@ -52,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {
-			var results = base.HashFiles(groupIndex);
+			Dictionary<int, SafeArrayHandle> results = base.HashFiles(groupIndex);
 
 			// now the L2 index
 			string idnexArchivedFilename = this.GetL2archivedName((uint) groupIndex);
@@ -70,7 +66,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			return base.GetFileBytes(fileId, partIndex, offset, length);
 		}
-		
+
 		public override void WriteFileBytes(int fileId, uint partIndex, SafeArrayHandle data) {
 
 			if(fileId == SECOND_INDEX_FILE_ID) {
@@ -80,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 				return;
 			}
-			
+
 			base.WriteFileBytes(fileId, partIndex, data);
 		}
 
@@ -91,7 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		protected override List<string> EnsureIndexFilesetExtracted(uint index) {
-			var results = base.EnsureIndexFilesetExtracted(index);
+			List<string> results = base.EnsureIndexFilesetExtracted(index);
 
 			string archived = this.GetL2archivedName(index);
 			string expanded = this.GetL2expandedName(index);
@@ -105,7 +101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public override DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS> QueryCard((long accountId, byte ordinal) keySet) {
 			(uint adjustedAccountId, uint groupIndex) adjustedKey = this.AdjustAccountId(keySet.accountId);
 
-			var expanded = this.EnsureFilesetExtracted(adjustedKey.groupIndex);
+			List<string> expanded = this.EnsureFilesetExtracted(adjustedKey.groupIndex);
 
 			this.L1IndexProvider.SetActiveFilename(this.GetL1ExpandedName(adjustedKey.groupIndex));
 
@@ -159,7 +155,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				throw new InvalidOperationException("Ordinal was not found in the index");
 			}
 
-			var offsets = new DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS>();
+			DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS> offsets = new DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS>();
 
 			foreach(CHANEL_BANDS band in this.EnabledBands) {
 
@@ -178,7 +174,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			//TODO: this needs a good refactor with above
 			(uint adjustedAccountId, uint groupIndex) adjustedKey = this.AdjustAccountId(accountId);
 
-			var expanded = this.EnsureFilesetExtracted(adjustedKey.groupIndex);
+			List<string> expanded = this.EnsureFilesetExtracted(adjustedKey.groupIndex);
 
 			this.L1IndexProvider.SetActiveFilename(this.GetL1ExpandedName(adjustedKey.groupIndex));
 
@@ -205,7 +201,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			int offset = L2_INTRO_SIZE;
 			uint keyLength = 0;
 
-			var results = new Dictionary<byte, DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS>>();
+			Dictionary<byte, DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS>> results = new Dictionary<byte, DigestChannelBandEntries<SafeArrayHandle, CHANEL_BANDS>>();
 
 			bool found = false;
 
@@ -220,7 +216,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				TypeSerializer.Deserialize(l2data.Span.Slice(offset, length), out keyLength);
 				offset += length;
 
-				var subOffsets = new DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS>();
+				DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS> subOffsets = new DigestChannelBandEntries<(uint offset, uint length), CHANEL_BANDS>();
 
 				foreach(CHANEL_BANDS band in this.EnabledBands) {
 

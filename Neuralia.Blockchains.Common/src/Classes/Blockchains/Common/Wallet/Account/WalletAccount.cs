@@ -1,16 +1,15 @@
 using System;
 using System.Collections.Generic;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
@@ -35,10 +34,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		TransactionId PresentationTransactionId { get; set; }
 
 		/// <summary>
-		/// if the account has been correlated with an ID
+		///     if the account has been correlated with an ID
 		/// </summary>
-		bool Correlated  { get; set; }
-		
+		bool Correlated { get; set; }
+
 		string FriendlyName { get; set; }
 
 		/// <summary>
@@ -58,7 +57,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		Enums.PublicationStatus Status { get; set; }
 
 		DateTime? PresentationTransactionTimeout { get; set; }
-		
+
 		List<KeyInfo> Keys { get; set; }
 
 		IEncryptorParameters KeyLogFileEncryptionParameters { get; set; }
@@ -137,7 +136,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public TransactionId PresentationTransactionId { get; set; }
 
 		/// <summary>
-		/// If we have any correlation Id required, here it is set
+		///     If we have any correlation Id required, here it is set
 		/// </summary>
 		public bool Correlated { get; set; }
 
@@ -165,12 +164,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public Enums.PublicationStatus Status { get; set; }
 
 		public DateTime? PresentationTransactionTimeout { get; set; }
-		
+
 		public virtual void InitializeNew(string name, BlockchainServiceSet serviceSet, Enums.AccountTypes accountType) {
 			IBlockchainGuidService guidService = serviceSet.BlockchainGuidService;
 
 			this.AccountUuid = guidService.Create();
-			this.AccountUuidHash = guidService.CreateTemporaryAccountId(this.AccountUuid, accountType);
+			this.AccountUuidHash = guidService.CreateTemporaryAccountId(this.AccountUuid);
 
 			this.WalletAccountType = accountType;
 			this.FriendlyName = name;
@@ -239,7 +238,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public ByteArray TransactionCacheFileSecret { get; set; }
 
 		public AccountId GetAccountId() {
-			if(this.PublicAccountId == null || this.PublicAccountId == new AccountId()) {
+			if((this.PublicAccountId == default(AccountId)) || (this.PublicAccountId == new AccountId())) {
 				return this.AccountUuidHash;
 			}
 
@@ -280,7 +279,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			// create those no matter what
 			if(this.KeyLogFileEncryptionParameters == null) {
 				this.KeyLogFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
-				var secretKey = new byte[333];
+				byte[] secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
 				this.KeyLogFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
@@ -290,7 +289,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			// create those no matter what
 			if(this.KeyHistoryFileEncryptionParameters == null) {
 				this.KeyHistoryFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
-				var secretKey = new byte[333];
+				byte[] secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
 				this.KeyHistoryFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
@@ -300,7 +299,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			// create those no matter what
 			if(this.ChainStateFileEncryptionParameters == null) {
 				this.ChainStateFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
-				var secretKey = new byte[333];
+				byte[] secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
 				this.ChainStateFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
@@ -310,7 +309,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			// create those no matter what
 			if(this.TransactionCacheFileEncryptionParameters == null) {
 				this.TransactionCacheFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
-				var secretKey = new byte[333];
+				byte[] secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
 				this.TransactionCacheFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
@@ -320,7 +319,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			// create those no matter what
 			if(this.ElectionCacheFileEncryptionParameters == null) {
 				this.ElectionCacheFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
-				var secretKey = new byte[333];
+				byte[] secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
 				this.ElectionCacheFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}
@@ -330,7 +329,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			// create those no matter what
 			if(this.SnapshotFileEncryptionParameters == null) {
 				this.SnapshotFileEncryptionParameters = FileEncryptorUtils.GenerateEncryptionParameters(chainConfiguration);
-				var secretKey = new byte[333];
+				byte[] secretKey = new byte[333];
 				GlobalRandom.GetNextBytes(secretKey);
 				this.SnapshotFileSecret = ByteArray.WrapAndOwn(secretKey);
 			}

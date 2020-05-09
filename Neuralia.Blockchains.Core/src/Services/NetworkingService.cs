@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages;
@@ -38,6 +39,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		IConnectionsManager ConnectionsManagerBase { get; }
 
 		int CurrentPeerCount { get; }
+		int LocalPort  { get; }
 
 		GeneralSettings GeneralSettings { get; }
 
@@ -48,7 +50,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		Task Start();
 
 		Task Stop();
-		
+
 		void Pause(bool cutConnections = false);
 
 		void Resume();
@@ -87,16 +89,17 @@ namespace Neuralia.Blockchains.Core.Services {
 		void RegisterChain(BlockchainType chainType, ChainSettings chainSettings, INetworkRouter transactionchainNetworkRouting, R rehydrationFactory, IGossipMessageFactory<R> mainChainMessageFactory, Func<SoftwareVersion, bool> versionValidationCallback);
 	}
 
-
 	public static class NetworkingService {
 		public enum NetworkingStatuses {
-			Stoped, Active, Paused
+			Stoped,
+			Active,
+			Paused
 		}
 	}
+
 	public class NetworkingService<R> : INetworkingService<R>
 		where R : IRehydrationFactory {
-		
-		
+
 		protected readonly IDataAccessService dataAccessService;
 		protected readonly IFileFetchService fileFetchService;
 		protected readonly IGlobalsService globalsService;
@@ -111,10 +114,6 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		protected readonly ITimeService timeService;
 
-		public GeneralSettings GeneralSettings { get; private set; }
-
-		public NetworkingService.NetworkingStatuses NetworkingStatus { get; set; } = NetworkingService.NetworkingStatuses.Stoped;
-
 		public NetworkingService(IGuidService guidService, IHttpService httpService, IFileFetchService fileFetchService, IDataAccessService dataAccessService, IInstantiationService<R> instantiationService, IGlobalsService globalsService, ITimeService timeService) {
 			this.instantiationService = instantiationService;
 			this.globalsService = globalsService;
@@ -127,6 +126,12 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.ServiceSet = this.CreateServiceSet();
 		}
 
+		public int LocalPort => this.connectionStore.LocalPort;
+		
+		public GeneralSettings GeneralSettings { get; private set; }
+
+		public NetworkingService.NetworkingStatuses NetworkingStatus { get; set; } = NetworkingService.NetworkingStatuses.Stoped;
+
 		public event Func<LockContext, Task> IpAddressChanged;
 		public event Action Started;
 		public event Action<int> PeerConnectionsCountUpdated;
@@ -138,7 +143,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public Dictionary<BlockchainType, ChainSettings> ChainSettings {
 			get { return this.supportedChains.ToDictionary(t => t.Key, t => t.Value.ChainSettings); }
 		}
-		
+
 		/// <summary>
 		///     Return the list of confirmed and active peer connections we have
 		/// </summary>
@@ -166,7 +171,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.connectionListener.NewConnectionRequestReceived += connection => {
 
 				// when the server gets a new connection, register for this event to check their uuid
-				NodeAddressInfo nodeAddressInfo = ConnectionStore<R>.GetEndpointInfoNode(connection.EndPoint, (NodeInfo.Unknown));
+				NodeAddressInfo nodeAddressInfo = ConnectionStore<R>.GetEndpointInfoNode(connection.EndPoint, NodeInfo.Unknown);
 				this.connectionStore.SetConnectionUuidExistsCheck(connection, nodeAddressInfo);
 			};
 
@@ -174,30 +179,6 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		}
 
-		/// <summary>
-		/// triggered when we have an IP address change
-		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private void NetworkChangeOnNetworkAddressChanged(object sender, EventArgs e) {
-			if(this.IpAddressChanged != null) {
-				this.IpAddressChanged(null).WaitAndUnwrapException();
-			}
-		}
-
-		protected virtual void PrepareGeneralSettings() {
-			this.GeneralSettings = new GeneralSettings();
-
-			// set the public chain settingsBase
-			this.GeneralSettings.GossipEnabled = true;
-
-			if(GlobalSettings.ApplicationSettings.SynclessMode) {
-				
-				this.GeneralSettings.GossipEnabled = GlobalSettings.Instance.NodeInfo.GossipAccepted;
-			}
-		}
-
-		
 		public bool IsStarted { get; private set; }
 
 		public async Task Start() {
@@ -210,7 +191,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				// ensure we know when our IP changes
 				NetworkChange.NetworkAddressChanged += this.NetworkChangeOnNetworkAddressChanged;
-				
+
 				this.IsStarted = true;
 
 				if(this.Started != null) {
@@ -218,48 +199,48 @@ namespace Neuralia.Blockchains.Core.Services {
 				}
 			} else {
 
-				Log.Information("Peer to peer network disabled");
+				NLog.Default.Information("Peer to peer network disabled");
 			}
 		}
 
 		public async Task Stop() {
 			try {
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Stoped;
-				
+
 				try {
 					NetworkChange.NetworkAddressChanged -= this.NetworkChangeOnNetworkAddressChanged;
 				} catch(Exception ex) {
 
 				}
-				
+
 				this.connectionListener?.Dispose();
 
 				this.IsStarted = false;
 			} catch(Exception ex) {
-				Log.Error(ex, "failed to stop connetion listener");
+				NLog.Default.Error(ex, "failed to stop connetion listener");
 
 				throw;
 			} finally {
 				this.StopWorkers();
 			}
 		}
-		
+
 		public void Pause(bool cutConnections = false) {
-			if(GlobalSettings.ApplicationSettings.P2PEnabled && this.NetworkingStatus == NetworkingService.NetworkingStatuses.Active) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled && (this.NetworkingStatus == NetworkingService.NetworkingStatuses.Active)) {
 
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Paused;
 
 				if(cutConnections) {
 					this.connectionStore.DisconnectAll();
 				}
-			} 
+			}
 		}
 
 		public void Resume() {
-			if(GlobalSettings.ApplicationSettings.P2PEnabled && this.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
+			if(GlobalSettings.ApplicationSettings.P2PEnabled && (this.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused)) {
 
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
-			} 
+			}
 		}
 
 		public void PostNetworkMessage(SafeArrayHandle data, PeerConnection connection) {
@@ -275,7 +256,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			// redirect the received message into the message manager worker, who will know what to do with it in its own time
 			MessagingManager<R>.ForwardGossipMessageTask forwardTask = new MessagingManager<R>.ForwardGossipMessageTask(gossipMessageSet, connection);
 			this.messagingManager.ReceiveTask(forwardTask);
-			
+
 			return Task.CompletedTask;
 		}
 
@@ -288,7 +269,6 @@ namespace Neuralia.Blockchains.Core.Services {
 			MessagingManager<R>.PostNewGossipMessageTask forwardTask = new MessagingManager<R>.PostNewGossipMessageTask(gossipMessageSet);
 			this.messagingManager.ReceiveTask(forwardTask);
 		}
-		
 
 		/// <summary>
 		///     Register a new available transactionchain for the networking and routing purposes
@@ -298,7 +278,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public virtual void RegisterChain(BlockchainType chainType, ChainSettings chainSettings, INetworkRouter transactionchainNetworkRouting, R rehydrationFactory, IGossipMessageFactory<R> mainChainMessageFactory, Func<SoftwareVersion, bool> versionValidationCallback) {
 
 			// make sure we support this chain
-			var chainInfo = new ChainInfo<R>();
+			ChainInfo<R> chainInfo = new ChainInfo<R>();
 
 			chainInfo.ChainSettings = chainSettings;
 
@@ -314,6 +294,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			if(this.supportedChains.ContainsKey(chainType)) {
 				this.supportedChains.Remove(chainType);
 			}
+
 			this.supportedChains.Add(chainType, chainInfo);
 			this.messageFactory.RegisterChainMessageFactory(chainType, mainChainMessageFactory);
 		}
@@ -330,6 +311,29 @@ namespace Neuralia.Blockchains.Core.Services {
 			}
 
 			return this.supportedChains[blockchainType].versionValidationCallback(version);
+		}
+
+		/// <summary>
+		///     triggered when we have an IP address change
+		/// </summary>
+		/// <param name="sender"></param>
+		/// <param name="e"></param>
+		private void NetworkChangeOnNetworkAddressChanged(object sender, EventArgs e) {
+			if(this.IpAddressChanged != null) {
+				this.IpAddressChanged(null).WaitAndUnwrapException();
+			}
+		}
+
+		protected virtual void PrepareGeneralSettings() {
+			this.GeneralSettings = new GeneralSettings();
+
+			// set the public chain settingsBase
+			this.GeneralSettings.GossipEnabled = true;
+
+			if(GlobalSettings.ApplicationSettings.SynclessMode) {
+
+				this.GeneralSettings.GossipEnabled = GlobalSettings.Instance.NodeInfo.GossipAccepted;
+			}
 		}
 
 		protected virtual ServiceSet<R> CreateServiceSet() {
@@ -355,7 +359,7 @@ namespace Neuralia.Blockchains.Core.Services {
 				}
 
 			} catch(Exception exception) {
-				Log.Error(exception, "Invalid connection attempt");
+				NLog.Default.Error(exception, "Invalid connection attempt");
 
 				throw;
 			}
@@ -368,7 +372,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		protected virtual void InitializeComponents() {
 
 			this.connectionStore = new ConnectionStore<R>(this.ServiceSet);
-			this.connectionListener = new ConnectionListener(GlobalSettings.ApplicationSettings.Port, this.ServiceSet);
+			this.connectionListener = new ConnectionListener(this.connectionStore.LocalPort, this.ServiceSet);
 			this.workflowCoordinator = new WorkflowCoordinator<IWorkflow<R>, R>(this.ServiceSet);
 			this.messageFactory = new MainMessageFactory<R>(this.ServiceSet);
 		}
@@ -383,7 +387,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.ConnectionsManager.Error2 += (sender, exception) => {
 				if(sender.Task.Status == TaskStatus.Faulted) {
 					if(exception is AggregateException ae) {
-						Log.Error(ae.Flatten(), "Failed to run connections coordinator");
+						NLog.Default.Error(ae.Flatten(), "Failed to run connections coordinator");
 
 						throw ae.Flatten();
 					}
@@ -401,7 +405,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.messagingManager.Error2 += (sender, exception) => {
 				if(sender.Task.Status == TaskStatus.Faulted) {
 					if(exception is AggregateException ae) {
-						Log.Error(ae.Flatten(), "Failed to run messaging coordinator");
+						NLog.Default.Error(ae.Flatten(), "Failed to run messaging coordinator");
 
 						throw ae.Flatten();
 					}
@@ -443,13 +447,13 @@ namespace Neuralia.Blockchains.Core.Services {
 		public Task HandleDataReceivedEvent<TRIGGER>(SafeArrayHandle data, PeerConnection connection, IEnumerable<Type> acceptedTriggers = null) {
 
 			// redirect the received message into the message manager worker, who will know what to do with it in its own time
-			var acceptedTriggerTypes = acceptedTriggers != null ? acceptedTriggers.ToList() : new List<Type>();
+			List<Type> acceptedTriggerTypes = acceptedTriggers != null ? acceptedTriggers.ToList() : new List<Type>();
 
 			acceptedTriggerTypes.Add(typeof(TRIGGER));
 
 			MessagingManager<R>.MessageReceivedTask messageTask = new MessagingManager<R>.MessageReceivedTask(data, connection, acceptedTriggerTypes);
 			this.PostNetworkMessage(messageTask);
-			
+
 			return Task.CompletedTask;
 		}
 
@@ -543,44 +547,44 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		protected virtual void Dispose(bool disposing) {
 			if(disposing && !this.IsDisposed) {
-			
-				
+
 				try {
 					this.Stop().WaitAndUnwrapException();
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to stop");
+					NLog.Default.Error(ex, "Failed to stop");
 				}
 
 				try {
 					this.ConnectionsManager?.Dispose();
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to dispose of connections coordinator");
+					NLog.Default.Error(ex, "Failed to dispose of connections coordinator");
 				}
 
 				try {
 					this.messagingManager?.Dispose();
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to dispose of connections coordinator");
+					NLog.Default.Error(ex, "Failed to dispose of connections coordinator");
 				}
 
 				try {
 					this.workflowCoordinator?.Dispose();
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to dispose of workflow coordinator");
+					NLog.Default.Error(ex, "Failed to dispose of workflow coordinator");
 				}
 
 				try {
 					this.connectionListener?.Dispose();
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to dispose of connection listener");
+					NLog.Default.Error(ex, "Failed to dispose of connection listener");
 				}
 
 				try {
 					this.connectionStore?.Dispose();
 				} catch(Exception ex) {
-					Log.Error(ex, "Failed to dispose of connection manager");
+					NLog.Default.Error(ex, "Failed to dispose of connection manager");
 				}
 			}
+
 			this.IsDisposed = true;
 		}
 

@@ -3,7 +3,6 @@ using System.Linq;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Simple;
-using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Versions {
@@ -27,7 +26,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 		public ComponentVersion(string version) {
 
-			var entries = version.Replace("(", "").Replace(")", "").Split('.');
+			string[] entries = version.Replace("(", "").Replace(")", "").Split('.');
 
 			this.Major = ushort.Parse(entries[0]);
 			this.Minor = ushort.Parse(entries[1]);
@@ -68,6 +67,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 			return hashNodeList;
 		}
+
 		public static implicit operator ComponentVersion((ushort major, ushort minor) d) {
 			return new ComponentVersion(d.major, d.minor);
 		}
@@ -173,7 +173,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 		public ComponentVersion(string version) : base(version.Replace("(", "").Replace(")", "").Split('.').Skip(1).ToArray()) {
 
-			var entries = version.Replace("(", "").Replace(")", "").Split('.');
+			string[] entries = version.Replace("(", "").Replace(")", "").Split('.');
 
 			this.Type = new ComponentType<T> {Value = new T {Value = ushort.Parse(entries[0])}};
 		}

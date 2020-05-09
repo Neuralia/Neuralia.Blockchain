@@ -6,11 +6,9 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.Questions {
 	public interface IElectionQuestion : IVersionable<ElectionQuestionType> {
-
 	}
 
 	public abstract class ElectionQuestion : Versionable<ElectionQuestionType>, IElectionQuestion {
-		
 
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
@@ -18,7 +16,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-			
+
 		}
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -27,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
-			
+
 			return nodeList;
 		}
 	}

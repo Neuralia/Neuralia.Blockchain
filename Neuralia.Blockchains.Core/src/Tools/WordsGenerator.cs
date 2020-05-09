@@ -8,7 +8,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 		private static readonly char[] characters = "23456789abcdefghjkmnprstuvwxyz".ToCharArray();
 
 		public static List<string> GenerateRandomWords(int numWords = 5, int wordLengthsMin = 7, int wordLengthsMax = 13) {
-			var results = new List<string>();
+			List<string> results = new List<string>();
 
 			for(int i = 0; i < numWords; i++) {
 				// Make a word.

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils {
 	public class ChannelsEntries<T> {
@@ -22,7 +21,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public ChannelsEntries(ChannelsEntries<T> other, BlockChannelUtils.BlockChannelTypes eclusions) : this(other.Entries, eclusions) {
 		}
 
-		
 		public ChannelsEntries(IEnumerable<(BlockChannelUtils.BlockChannelTypes flag, T value)> entries) {
 			foreach((BlockChannelUtils.BlockChannelTypes flag, T value) entry in entries) {
 				this[entry.flag] = entry.value;
@@ -38,9 +36,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public ChannelsEntries(Dictionary<BlockChannelUtils.BlockChannelTypes, T> channels) : this(channels, BlockChannelUtils.BlockChannelTypes.None) {
 
 		}
-		
+
 		public ChannelsEntries(Dictionary<BlockChannelUtils.BlockChannelTypes, T> channels, BlockChannelUtils.BlockChannelTypes exlusions) {
-			foreach(var entry in channels) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, T> entry in channels) {
 				if(!entry.Key.HasFlag(exlusions)) {
 					this.Entries[entry.Key] = entry.Value;
 				}
@@ -106,7 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public ChannelsEntries<K> ConvertAll<K>(Func<T, K> action, BlockChannelUtils.BlockChannelTypes excludeFlags = BlockChannelUtils.BlockChannelTypes.None) {
 
-			var result = new ChannelsEntries<K>();
+			ChannelsEntries<K> result = new ChannelsEntries<K>();
 
 			this.RunForAll((flag, value) => {
 				result[flag] = action(value);
@@ -117,7 +115,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public ChannelsEntries<K> ConvertAll<K>(Func<BlockChannelUtils.BlockChannelTypes, T, K> action, BlockChannelUtils.BlockChannelTypes excludeFlags = BlockChannelUtils.BlockChannelTypes.None) {
 
-			var result = new ChannelsEntries<K>();
+			ChannelsEntries<K> result = new ChannelsEntries<K>();
 
 			this.RunForAll((flag, value) => {
 				result[flag] = action(flag, value);
@@ -128,7 +126,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public void RunForAll(Action<BlockChannelUtils.BlockChannelTypes, T> action, BlockChannelUtils.BlockChannelTypes excludeFlags = BlockChannelUtils.BlockChannelTypes.None) {
 
-			foreach(var entry in this.Entries.ToList()) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, T> entry in this.Entries.ToList()) {
 				if(!excludeFlags.HasFlag(entry.Key)) {
 					action(entry.Key, entry.Value);
 				}
@@ -166,7 +164,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public ChannelsEntries<T> GetSubset(IEnumerable<BlockChannelUtils.BlockChannelTypes> channels) {
-			var subset = new ChannelsEntries<T>(channels);
+			ChannelsEntries<T> subset = new ChannelsEntries<T>(channels);
 
 			foreach(BlockChannelUtils.BlockChannelTypes entry in channels) {
 				subset[entry] = this[entry];

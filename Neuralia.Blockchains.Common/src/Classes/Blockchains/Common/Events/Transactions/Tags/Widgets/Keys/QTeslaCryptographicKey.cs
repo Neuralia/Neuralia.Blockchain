@@ -43,16 +43,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("SecurityCategory", this.SecurityCategory);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.QTESLA;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
+		public override void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is IQTeslaWalletKey qTeslaWalletKey) {
 				this.SecurityCategory = (QTESLASecurityCategory.SecurityCategories) qTeslaWalletKey.SecurityCategory;
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.QTESLA;
 		}
 	}
 }

@@ -2,17 +2,17 @@ using System;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
-using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Cryptography.Encodings;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace Neuralia.Blockchains.Core.General.Types {
 	/// <summary>
@@ -22,23 +22,34 @@ namespace Neuralia.Blockchains.Core.General.Types {
 	public class AccountId : IBinarySerializable, ITreeHashable, IComparable<AccountId> {
 
 		private const long SEQUENCE_MASK = 0xFFFFFFFFFFFFFFL; // the maximum amount of accounts we support by type
-		private const byte ACCOUNT_TYPE_MASK = 0x7F; // up to 127 account types.
+		
+		public const string REGEX = @"^[{]?(?:(?:STANDARD|JOINT)\:|(?:ST|JT)\:|[SJ*][:]?)(?:[0-9A-Z][-]?)+[}]?$";
+		public const string REGEX_PRESENTATION = "[{]?[*]";
+		public const string REGEX_VALID_NO_PRESENTATION_CORE = @"[{]?(?:(?:STANDARD|JOINT)\:|(?:ST|JT)\:|[SJ][:]?)(?:[0-9A-Z][-]?)+[}]?";
+		public const string REGEX_VALID_NO_PRESENTATION = "^"+ REGEX_VALID_NO_PRESENTATION_CORE + "$";
+		
 
+		public const byte MAX_ACCOUNT_TYPE = 0x7F; // up to 127 account types.
+		private const byte ACCOUNT_TYPE_MASK = MAX_ACCOUNT_TYPE;
+		
 		private const int CHUNK_SIZE = 4;
-		public const string DIVIDER = "-";
+		public const char DIVIDER = '-';
 		public const char ACCOUNT_TYPE_DIVIDER = ':';
 
 		public const char DEFAULT_STANDARD_ACCOUNT_TOKEN = 'S';
 		public const char DEFAULT_JOINT_ACCOUNT_TOKEN = 'J';
+		public const char DEFAULT_PRESENTATION_TOKEN = '*';
 
 		public static readonly char[] STANDARD_ACCOUNT_TOKENS_CHAR = {DEFAULT_STANDARD_ACCOUNT_TOKEN, ((byte) Enums.AccountTypes.Standard).ToString()[0]};
 		public static readonly char[] JOINT_ACCOUNT_TOKENS_CHAR = {DEFAULT_JOINT_ACCOUNT_TOKEN, ((byte) Enums.AccountTypes.Joint).ToString()[0]};
-
+		public static readonly char[] PRESENTATION_CHAR = {DEFAULT_PRESENTATION_TOKEN, ((byte) Enums.AccountTypes.Presentation).ToString()[0]};
+		
 		public static readonly string[] STANDARD_ACCOUNT_TOKENS = {DEFAULT_STANDARD_ACCOUNT_TOKEN.ToString(), "ST", "STANDARD", ((byte) Enums.AccountTypes.Standard).ToString()};
 		public static readonly string[] JOINT_ACCOUNT_TOKENS = {DEFAULT_JOINT_ACCOUNT_TOKEN.ToString(), "JT", "JOINT", ((byte) Enums.AccountTypes.Joint).ToString()};
+		public static readonly string[] DEFAULT_PRESENTATION_TOKENS = {DEFAULT_PRESENTATION_TOKEN.ToString(), ((byte) Enums.AccountTypes.Presentation).ToString()};
 
 		private static readonly Regex ACCOUNT_ID_PATTERN = new Regex($"[\\{{\\}}\\[\\]{DIVIDER}]");
-		
+
 		private readonly AdaptiveLong2_9 sequenceId = new AdaptiveLong2_9();
 
 		static AccountId() {
@@ -83,27 +94,10 @@ namespace Neuralia.Blockchains.Core.General.Types {
 
 		public AccountId Clone => new AccountId(this);
 
-		public int CompareTo(AccountId other) {
-			if(ReferenceEquals(null, other)) {
-				return 1;
-			}
-			
-			if(this.AccountType == other.AccountType) {
-				return this.SequenceId.CompareTo(other.SequenceId);
-			}
+		public static AccountId LargestAddress => new AccountId(long.MaxValue & SEQUENCE_MASK, Enums.AccountTypes.Standard);
 
-			return this.AccountTypeRaw.CompareTo(other.AccountTypeRaw);
-		}
+		public bool IsPresentation => this.AccountType == Enums.AccountTypes.Presentation;
 		
-		public HashNodeList GetStructuresArray() {
-			HashNodeList hashNodeList = new HashNodeList();
-
-			hashNodeList.Add(this.SequenceId);
-			hashNodeList.Add(this.AccountType);
-
-			return hashNodeList;
-		}
-
 		public void Dehydrate(IDataDehydrator dehydrator) {
 
 			bool simpleType = this.AccountType == Enums.AccountTypes.Standard;
@@ -126,7 +120,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			if(rehydrator == null) {
 				throw new ArgumentNullException(nameof(rehydrator));
 			}
-			
+
 			bool simpleType = rehydrator.ReadBool();
 
 			if(!simpleType) {
@@ -134,6 +128,27 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			}
 
 			this.sequenceId.Rehydrate(rehydrator);
+		}
+
+		public int CompareTo(AccountId other) {
+			if(ReferenceEquals(null, other)) {
+				return 1;
+			}
+
+			if(this.AccountType == other.AccountType) {
+				return this.SequenceId.CompareTo(other.SequenceId);
+			}
+
+			return this.AccountTypeRaw.CompareTo(other.AccountTypeRaw);
+		}
+
+		public HashNodeList GetStructuresArray() {
+			HashNodeList hashNodeList = new HashNodeList();
+
+			hashNodeList.Add(this.SequenceId);
+			hashNodeList.Add(this.AccountType);
+
+			return hashNodeList;
 		}
 
 		public static explicit operator AccountId((long sequenceId, Enums.AccountTypes accountType) entry) {
@@ -147,12 +162,68 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		public static explicit operator (long sequenceId, Enums.AccountTypes accountType)(AccountId entry) {
 			return (entry.SequenceId, entry.AccountType);
 		}
+		
+		public static implicit operator AccountId(string value) {
+			return FromString(value);
+		}
 
+		/// <summary>
+		/// If the string is a presentation account
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static bool IsStringPresentation(string value) {
+			if (string.IsNullOrEmpty(value)) 
+				return false;
+			
+			try {
+				var regex = new Regex(REGEX_PRESENTATION, RegexOptions.IgnoreCase);
+				return regex.IsMatch(value);
+			}
+			catch {
+				// nothing to do
+			}
+			return false;
+		}
+		
+		/// <summary>
+		/// If the string is a valid account Id, but NOT a presentation account
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static bool IsStringValidNoPresentation(string value) {
+			if (string.IsNullOrEmpty(value)) 
+				return false;
+			
+			try {
+				var regex = new Regex(REGEX_VALID_NO_PRESENTATION, RegexOptions.IgnoreCase);
+				return regex.IsMatch(Base32.Prepare(value));
+			}
+			catch {
+				// nothing to do
+			}
+			return false;
+		}
+
+		public static bool IsValid(string value) {
+			if (string.IsNullOrEmpty(value)) 
+				return false;
+			
+			try {
+				var regex = new Regex(REGEX, RegexOptions.IgnoreCase);
+				return regex.IsMatch(Base32.Prepare(value));
+			}
+			catch {
+				// nothing to do
+			}
+			return false;
+		}
+		
 		public static AccountId FromString(string value) {
-			if(string.IsNullOrWhiteSpace(value)) {
+			if(!IsValid(value)) {
 				return null;
 			}
-			
+
 			string rawString = ACCOUNT_ID_PATTERN.Replace(value, "");
 
 			string accountSequence = "";
@@ -160,12 +231,14 @@ namespace Neuralia.Blockchains.Core.General.Types {
 
 			if(rawString.Contains(":")) {
 				// ok, we have a full size type token, let's split
-				var components = rawString.Split(ACCOUNT_TYPE_DIVIDER);
+				string[] components = rawString.Split(ACCOUNT_TYPE_DIVIDER);
 
 				if(STANDARD_ACCOUNT_TOKENS.Contains(components[0])) {
 					accountType = Enums.AccountTypes.Standard;
 				} else if(JOINT_ACCOUNT_TOKENS.Contains(components[0])) {
 					accountType = Enums.AccountTypes.Joint;
+				} else if(DEFAULT_PRESENTATION_TOKENS.Contains(components[0])) {
+					accountType = Enums.AccountTypes.Presentation;
 				} else {
 					throw new ApplicationException("Invalid account type");
 				}
@@ -178,6 +251,8 @@ namespace Neuralia.Blockchains.Core.General.Types {
 					accountType = Enums.AccountTypes.Standard;
 				} else if(JOINT_ACCOUNT_TOKENS_CHAR.Contains(firstChar)) {
 					accountType = Enums.AccountTypes.Joint;
+				}else if(PRESENTATION_CHAR.Contains(firstChar)) {
+					accountType = Enums.AccountTypes.Presentation;
 				} else {
 					throw new ApplicationException("Invalid account type");
 				}
@@ -185,7 +260,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 				accountSequence = rawString.Substring(1, rawString.Length - 1);
 			}
 
-			SafeArrayHandle array = ByteArray.FromBase30(accountSequence);
+			SafeArrayHandle array = ByteArray.FromBase32(accountSequence);
 
 			Span<byte> fullArray = stackalloc byte[sizeof(long)];
 			array.Span.CopyTo(fullArray);
@@ -198,27 +273,24 @@ namespace Neuralia.Blockchains.Core.General.Types {
 
 			return this.ToString(true, true);
 		}
-		
+
 		public string ToString(bool includeDividers, bool includeAccolades) {
-
-			Span<byte> bytes = stackalloc byte[sizeof(long)];
-			TypeSerializer.Serialize(this.SequenceId, bytes);
-
-			// display accountId as a base30 string, divided in groups of 4 characters
+			
+			// display accountId as a base32 string, divided in groups of 4 characters
 
 			// skip all high entries that are 0
-			ByteArray usefulSimpleBytes = ByteArray.WrapAndOwn(bytes.TrimEnd().ToArray());
-			string base30 = usefulSimpleBytes.ToBase30();
+			string base32 = NumberBaser.ToBase32(this.SequenceId);
 
-			var chars = base30.ToCharArray().ToArray();
-			string divider = "";
+			char[] chars = base32.ToCharArray().ToArray();
+			char? divider = null;
 
 			if(includeDividers) {
 				divider = DIVIDER;
 			}
-			string splitBase30 = string.Join(divider, Enumerable.Range(0, (int) Math.Ceiling((double) base30.Length / CHUNK_SIZE)).Select(i => new string(chars.Skip(i * CHUNK_SIZE).Take(CHUNK_SIZE).ToArray())));
 
-			string result = $"{this.GetAccountIdentifier()}{new string(splitBase30.ToCharArray().ToArray())}";
+			string splitBase32 = string.Join(divider==null?"":divider.ToString(), Enumerable.Range(0, (int) Math.Ceiling((double) base32.Length / CHUNK_SIZE)).Select(i => new string(chars.Skip(i * CHUNK_SIZE).Take(CHUNK_SIZE).ToArray())));
+
+			string result = $"{this.GetAccountIdentifier()}{new string(splitBase32.ToCharArray().ToArray())}";
 
 			if(includeAccolades) {
 				result = $"{{{result}}}";
@@ -228,7 +300,16 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		}
 
 		private string GetAccountIdentifier() {
-			return this.AccountType == Enums.AccountTypes.Standard ? DEFAULT_STANDARD_ACCOUNT_TOKEN.ToString( CultureInfo.InvariantCulture) : DEFAULT_JOINT_ACCOUNT_TOKEN.ToString(CultureInfo.InvariantCulture);
+			if(this.AccountType == Enums.AccountTypes.Standard) {
+				return DEFAULT_STANDARD_ACCOUNT_TOKEN.ToString(CultureInfo.InvariantCulture);
+			}
+			else if(this.AccountType == Enums.AccountTypes.Joint) {
+				return DEFAULT_JOINT_ACCOUNT_TOKEN.ToString(CultureInfo.InvariantCulture);
+			}
+			else if(this.AccountType == Enums.AccountTypes.Presentation) {
+				return DEFAULT_PRESENTATION_TOKEN.ToString(CultureInfo.InvariantCulture);
+			}
+			throw new ApplicationException("Invalid account type");
 		}
 
 		/// <summary>
@@ -237,11 +318,8 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		/// <remarks>since this is used for Id only, we do not include the extended components</remarks>
 		/// <returns></returns>
 		public string ToCompactString() {
-			//	this.Account.ToString()
-			Span<byte> buffer = stackalloc byte[sizeof(long)];
-			TypeSerializer.Serialize(this.SequenceId, buffer);
 
-			return $"{this.GetAccountIdentifier()}{ByteArray.Wrap(buffer.TrimEnd().ToArray()).ToBase94()}";
+			return $"{this.GetAccountIdentifier()}{NumberBaser.ToBase94(this.SequenceId)}";
 
 		}
 
@@ -264,6 +342,8 @@ namespace Neuralia.Blockchains.Core.General.Types {
 				accountType = Enums.AccountTypes.Standard;
 			} else if(JOINT_ACCOUNT_TOKENS_CHAR.Contains(firstChar)) {
 				accountType = Enums.AccountTypes.Joint;
+			} else if(PRESENTATION_CHAR.Contains(firstChar)) {
+				accountType = Enums.AccountTypes.Presentation;
 			} else {
 				throw new ApplicationException("Invalid account type");
 			}
@@ -295,6 +375,14 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			if(obj.GetType() != this.GetType()) {
 				return false;
 			}
+			
+			if(obj is string str) {
+				return this == str;
+			}
+			
+			if(obj is long longValue) {
+				return this == longValue;
+			}
 
 			return this.Equals((AccountId) obj);
 		}
@@ -320,7 +408,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		}
 
 		public static long? ToNLongRepresentation(AccountId accountId) {
-			if((accountId == null) || (accountId.SequenceId == 0)) {
+			if((accountId == default(AccountId)) || (accountId.SequenceId == 0)) {
 				return null;
 			}
 
@@ -379,6 +467,24 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		public static bool operator !=(AccountId c1, (long sequenceId, Enums.AccountTypes accountType) c2) {
 			return !(c1 == c2);
 		}
+		
+		public static bool operator ==(AccountId c1, long c2) {
+			
+			return (c1?.ToLongRepresentation()??0) == c2;
+		}
+
+		public static bool operator !=(AccountId c1,long c2) {
+			return !(c1 == c2);
+		}
+		
+		public static bool operator ==(AccountId c1, string c2) {
+
+			return c1 == FromString(c2);
+		}
+
+		public static bool operator !=(AccountId c1, string c2) {
+			return !(c1 == c2);
+		}
 
 		public static bool operator ==(AccountId c1, (int sequenceId, Enums.AccountTypes accountType) c2) {
 			if(ReferenceEquals(null, c1)) {
@@ -409,12 +515,9 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			return (a == b) || (a > b);
 		}
 
-		public static AccountId LargestAddress => new AccountId(long.MaxValue & SEQUENCE_MASK, Enums.AccountTypes.Standard);
-
-        public static (long sequenceId, Enums.AccountTypes accountType) To(AccountId left, AccountId right)
-        {
-            throw new NotImplementedException();
-        }
+		public static (long sequenceId, Enums.AccountTypes accountType) To(AccountId left, AccountId right) {
+			throw new NotImplementedException();
+		}
 	}
 
 	public static class AccountIdExtensions {

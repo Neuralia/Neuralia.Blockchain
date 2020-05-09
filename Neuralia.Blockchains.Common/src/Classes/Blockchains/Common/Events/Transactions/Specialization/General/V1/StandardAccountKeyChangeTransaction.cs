@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
+﻿using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -32,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			ICryptographicKey changeKey = null;
 
-			if(changeOrdinalId == GlobalsService.TRANSACTION_KEY_ORDINAL_ID || changeOrdinalId == GlobalsService.MESSAGE_KEY_ORDINAL_ID || changeOrdinalId == GlobalsService.CHANGE_KEY_ORDINAL_ID) {
+			if((changeOrdinalId == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || (changeOrdinalId == GlobalsService.MESSAGE_KEY_ORDINAL_ID) || (changeOrdinalId == GlobalsService.CHANGE_KEY_ORDINAL_ID)) {
 				changeKey = new XmssCryptographicKey();
 			} else {
 				changeKey = new SecretCryptographicKey();
@@ -78,6 +76,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("ChangeOrdinalId", this.ChangeOrdinalId);
 		}
 
+		public override ImmutableList<AccountId> TargetAccounts => new[] {this.TransactionId.Account}.ToImmutableList();
+
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 
@@ -93,7 +93,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.KEY_CHANGE, 1, 0);
 		}
-		
-		public override ImmutableList<AccountId> TargetAccounts => new [] {this.TransactionId.Account}.ToImmutableList();
 	}
 }

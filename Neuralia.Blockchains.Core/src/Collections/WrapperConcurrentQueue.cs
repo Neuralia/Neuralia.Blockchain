@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Neuralia.Blockchains.Core.Collections {
 	/// <summary>
-	/// A special version of the ConcurrentQueue which fixes the memory leak issue
+	///     A special version of the ConcurrentQueue which fixes the memory leak issue
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
 	public class WrapperConcurrentQueue<T> : ConcurrentQueue<WrapperConcurrentQueue<T>.Wrapper<T>> {
@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Collections {
 
 		public bool TryDequeue([MaybeNullWhen(false)] out T result) {
 
-			bool worked = base.TryDequeue(out var wrapper);
+			bool worked = base.TryDequeue(out Wrapper<T> wrapper);
 
 			result = worked ? wrapper.Retreive() : default;
 
@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Core.Collections {
 		public new T[] ToArray() {
 			return base.ToArray().Select(e => e.Entry).ToArray();
 		}
-		
+
 		public class Wrapper<T> {
 			public Wrapper(T entry) {
 				this.Entry = entry;
@@ -34,7 +34,7 @@ namespace Neuralia.Blockchains.Core.Collections {
 			public T Entry { get; private set; }
 
 			public T Retreive() {
-				var element = this.Entry;
+				T element = this.Entry;
 				this.Entry = default;
 
 				return element;

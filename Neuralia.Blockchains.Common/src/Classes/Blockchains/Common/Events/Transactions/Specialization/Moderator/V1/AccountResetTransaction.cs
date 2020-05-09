@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
@@ -15,8 +13,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		AccountId Account { get; set; }
 
-		SafeArrayHandle RecoverySecret { get;  }
-		SafeArrayHandle NextRecoveryHash { get;  }
+		SafeArrayHandle RecoverySecret { get; }
+		SafeArrayHandle NextRecoveryHash { get; }
 
 		XmssCryptographicKey TransactionCryptographicKey { get; }
 		XmssCryptographicKey MessageCryptographicKey { get; }
@@ -58,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public AccountId Account { get; set; }
 
 		public SafeArrayHandle RecoverySecret { get; } = SafeArrayHandle.Create();
-		public SafeArrayHandle NextRecoveryHash { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle NextRecoveryHash { get; } = SafeArrayHandle.Create();
 
 		public XmssCryptographicKey TransactionCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.TRANSACTION_KEY_ORDINAL_ID];
 		public XmssCryptographicKey MessageCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MESSAGE_KEY_ORDINAL_ID];
@@ -87,6 +85,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("NextRecoveryHash", this.NextRecoveryHash);
 		}
 
+		public override ImmutableList<AccountId> TargetAccounts => new[] {this.Account}.ToImmutableList();
+
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 
@@ -107,7 +107,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.MODERATION_ACCOUNT_RESET, 1, 0);
 		}
-
-		public override ImmutableList<AccountId> TargetAccounts => new [] {this.Account}.ToImmutableList();
 	}
 }

@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Collections;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools;
@@ -73,46 +75,47 @@ namespace Neuralia.Blockchains.Core.Workflows {
 			Task DisposeWorkflow(WORKFLOW disposeWorkflow) {
 				return Task.Run(disposeWorkflow.Dispose);
 			}
-				
+
 			async Task DisposeRemoveWorkflow(WORKFLOW disposeWorkflow) {
 				await DisposeWorkflow(disposeWorkflow).ConfigureAwait(false);
 				await this.RemoveWorkflow(false, disposeWorkflow).ConfigureAwait(false);
 			}
-			
+
 			lock(this.locker) {
 				this.CheckWorkflowPromotions();
 			}
 
 			if(workflow == null) {
-				Log.Verbose("A null workflow was provided.");
+				NLog.Default.Verbose("A null workflow was provided.");
 
 				return;
 			}
 
 			if(this.workflows.ContainsKey(workflow.Id)) {
 				//return, we dont run the SAME workflow twice
-				Log.Verbose($"A workflow of type '{workflow.GetType().FullName}' that was already added was being added again. ignoring.");
+				NLog.Default.Verbose($"A workflow of type '{workflow.GetType().FullName}' that was already added was being added again. ignoring.");
 
 				await DisposeWorkflow(workflow).ConfigureAwait(false);
+
 				return;
 			}
 
 			if(workflow.ExecutionMode.HasFlag(Workflow.ExecutingMode.Single)) {
-				var workingWorkflows = this.workflows.ToArray().Where(w => w.Value.VirtualMatch(workflow)).ToList();
-				
+				List<KeyValuePair<WorkflowId, WORKFLOW>> workingWorkflows = this.workflows.ToArray().Where(w => w.Value.VirtualMatch(workflow)).ToList();
+
 				if(workingWorkflows.Any()) {
 
 					if(workingWorkflows.Count > 1) {
-						Log.Verbose($"Multiple instances of a single workflow detected for type \"{workingWorkflows.First().Value.GetType().Name}\"");
+						NLog.Default.Verbose($"Multiple instances of a single workflow detected for type \"{workingWorkflows.First().Value.GetType().Name}\"");
 
 						// remove all the duplicates
-						foreach(var obsoleteWf in workingWorkflows) {
-							
+						foreach(KeyValuePair<WorkflowId, WORKFLOW> obsoleteWf in workingWorkflows) {
+
 							await DisposeRemoveWorkflow(obsoleteWf.Value).ConfigureAwait(false);
 						}
 					} else {
 
-						var active = workingWorkflows.Single();
+						KeyValuePair<WorkflowId, WORKFLOW> active = workingWorkflows.Single();
 
 						// we already have one, so we ignore it
 						if(active.Value.ExecutionMode != Workflow.ExecutingMode.SingleRepleacable) {
@@ -120,7 +123,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 							return;
 						}
-						
+
 						// ok, it is replaceable, lets do that and remove the current one so we can add it again
 						await DisposeRemoveWorkflow(active.Value).ConfigureAwait(false);
 					}
@@ -152,7 +155,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 				lock(this.locker) {
 
 					//TODO: see how we can improve this. for now i disable it.
-					canStartWorkflow = true;//(workflow.Priority == Workflow.Priority.High) || (this.executingWorkflows.Count < this.maximumParallelExecution);
+					canStartWorkflow = true; //(workflow.Priority == Workflow.Priority.High) || (this.executingWorkflows.Count < this.maximumParallelExecution);
 				}
 			}
 
@@ -177,7 +180,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 				bool canStart = true;
 
 				if(workflow.ExecutionMode.HasFlag(Workflow.ExecutingMode.Single)) {
-					var workingWorkflows = this.workflows.ToArray().Where(w => w.Value.VirtualMatch(workflow)).ToList();
+					List<KeyValuePair<WorkflowId, WORKFLOW>> workingWorkflows = this.workflows.ToArray().Where(w => w.Value.VirtualMatch(workflow)).ToList();
 
 					if(workingWorkflows.Any()) {
 						// thas too bad, we can't
@@ -194,13 +197,18 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 				if(canStart) {
 					await this.StartWorkflow(workflow).ConfigureAwait(false);
-if(					started != null){ 					started(workflow);}
+
+					if(started != null) {
+						started(workflow);
+					}
 
 					return true;
 				}
 			}
 
-if(			failed != null){ 			failed(workflow);}
+			if(failed != null) {
+				failed(workflow);
+			}
 
 			return false;
 		}
@@ -242,7 +250,7 @@ if(			failed != null){ 			failed(workflow);}
 		///     check for long running workflows and promote them in their own queue. free some space
 		/// </summary>
 		private void CheckWorkflowPromotions() {
-			foreach(var promoted in this.executingWorkflows.ToArray().Where(w => w.Value.workflow.IsLongRunning || ((w.Value.starttime + this.WORKFLOW_PROMOTION_TIME) < DateTime.UtcNow))) {
+			foreach(KeyValuePair<WorkflowId, (WORKFLOW workflow, DateTime starttime)> promoted in this.executingWorkflows.ToArray().Where(w => w.Value.workflow.IsLongRunning || ((w.Value.starttime + this.WORKFLOW_PROMOTION_TIME) < DateTimeEx.CurrentTime))) {
 				this.executingWorkflows.RemoveSafe(promoted.Key);
 				this.promotedWorkflows.AddSafe(promoted.Key, promoted.Value.workflow);
 			}
@@ -265,7 +273,7 @@ if(			failed != null){ 			failed(workflow);}
 		private async Task StartWorkflow(WORKFLOW workflow) {
 
 			if(!this.executingWorkflows.ContainsKey(workflow.Id)) {
-				this.executingWorkflows.AddSafe(workflow.Id, (workflow, DateTime.UtcNow));
+				this.executingWorkflows.AddSafe(workflow.Id, (workflow, DateTimeEx.CurrentTime));
 
 				// make sure we are alerted when it completes in any way
 				workflow.Completed += this.WorkflowCompleted;
@@ -285,7 +293,7 @@ if(			failed != null){ 			failed(workflow);}
 		/// </summary>
 		/// <param name="sender"></param>
 		protected async Task WorkflowCompleted(bool success, WORKFLOW workflow) {
-			
+
 			try {
 				await this.RemoveWorkflow(success, workflow).ConfigureAwait(false);
 			} finally {
@@ -298,16 +306,17 @@ if(			failed != null){ 			failed(workflow);}
 		}
 
 		protected async Task RemoveWorkflow(bool success, WORKFLOW workflow) {
-			
+
 			bool canStartNextWorkflow = false;
+
 			try {
 				workflow.Completed -= this.WorkflowCompleted;
 			} catch {
-					
+
 			}
 
 			// now we clean up the garbage
-			var Id = workflow.Id;
+			WorkflowId Id = workflow.Id;
 
 			if(this.workflows.ContainsKey(Id)) {
 				this.workflows.RemoveSafe(Id);
@@ -362,13 +371,14 @@ if(			failed != null){ 			failed(workflow);}
 					try {
 						entry.Dispose();
 					} catch(Exception ex) {
-						Log.Error(ex, "Failed to dispose of workflow task");
+						NLog.Default.Error(ex, "Failed to dispose of workflow task");
 					}
 				}
 
 				// wait for them to complete
 				Task.WaitAll(this.workflows.Values.Where(wf => wf.Task.IsCompleted == false).Select(wf => wf.Task).ToArray(), TimeSpan.FromSeconds(5));
 			}
+
 			this.IsDisposed = true;
 		}
 

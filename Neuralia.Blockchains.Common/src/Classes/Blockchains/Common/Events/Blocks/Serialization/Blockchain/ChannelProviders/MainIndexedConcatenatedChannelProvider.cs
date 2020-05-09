@@ -1,8 +1,6 @@
 using System.IO;
-
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Core.Tools;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders {
 	/// <summary>
@@ -14,11 +12,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		private const string DATA_FILE = "Data";
 		private const string FILE_NAME_TEMPLATE = "{0}.neuralia";
 
-		public string Filename { get; set; }
-
 		public MainIndexedConcatenatedChannelProvider(string filename, string folderPath, FileSystemWrapper fileSystem) : base(filename, folderPath, fileSystem) {
 			this.Filename = filename;
 		}
+
+		public string Filename { get; set; }
 
 		public FileSpecs DataFile => this.fileSpecs[DATA_FILE];
 

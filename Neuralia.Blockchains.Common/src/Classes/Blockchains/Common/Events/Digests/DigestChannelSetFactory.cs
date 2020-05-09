@@ -4,11 +4,10 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests {
 	public static class DigestChannelSetFactory {
 
-
 		public static BlockchainDigestSimpleChannelSetDescriptor ConvertToDigestSimpleChannelSetDescriptor(BlockchainDigestDescriptor blockchainDigestDescriptor) {
 			BlockchainDigestSimpleChannelSetDescriptor descriptor = new BlockchainDigestSimpleChannelSetDescriptor();
 
-			foreach(var channel in blockchainDigestDescriptor.Channels) {
+			foreach(KeyValuePair<ushort, BlockchainDigestChannelDescriptor> channel in blockchainDigestDescriptor.Channels) {
 				BlockchainDigestSimpleChannelDescriptor channelDescriptor = new BlockchainDigestSimpleChannelDescriptor();
 
 				channelDescriptor.SetVersion(channel.Value.Version);
@@ -23,11 +22,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 			return descriptor;
 		}
-		
+
 		public static DigestChannelSet CreateDigestChannelSet(string folder, Dictionary<DigestChannelType, BlockchainDigestSimpleChannelDescriptor> channels, IBlockchainDigestChannelFactory blockchainDigestChannelFactory) {
 			DigestChannelSet digestChannelSet = new DigestChannelSet();
 
-			foreach(var channelDescriptor in channels) {
+			foreach(KeyValuePair<DigestChannelType, BlockchainDigestSimpleChannelDescriptor> channelDescriptor in channels) {
 
 				IDigestChannel channel = blockchainDigestChannelFactory.CreateCreateDigestChannels(channelDescriptor.Value, folder);
 				channel.Initialize();
@@ -36,11 +35,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 			return digestChannelSet;
 		}
-		
+
 		public static DigestChannelSet CreateDigestChannelSet(string folder, BlockchainDigestSimpleChannelSetDescriptor blockchainDigestDescriptor, IBlockchainDigestChannelFactory blockchainDigestChannelFactory) {
 			DigestChannelSet digestChannelSet = new DigestChannelSet();
 
-			foreach(var channelDescriptor in blockchainDigestDescriptor.Channels) {
+			foreach(KeyValuePair<DigestChannelType, BlockchainDigestSimpleChannelDescriptor> channelDescriptor in blockchainDigestDescriptor.Channels) {
 
 				IDigestChannel channel = blockchainDigestChannelFactory.CreateCreateDigestChannels(channelDescriptor.Value, folder);
 				channel.Initialize();

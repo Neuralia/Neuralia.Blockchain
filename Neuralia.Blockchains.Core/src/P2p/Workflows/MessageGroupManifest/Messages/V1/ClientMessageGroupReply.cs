@@ -12,7 +12,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 		where R : IRehydrationFactory {
 
 		public List<SafeArrayHandle> gossipMessageSets = new List<SafeArrayHandle>();
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 

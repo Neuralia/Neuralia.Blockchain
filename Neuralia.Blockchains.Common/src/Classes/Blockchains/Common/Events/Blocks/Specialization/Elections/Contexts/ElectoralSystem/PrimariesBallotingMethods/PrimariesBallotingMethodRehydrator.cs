@@ -13,7 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public static T Rehydrate<T>(IDataRehydrator rehydrator)
 			where T : class, IPrimariesBallotingMethod {
 
-			var version = rehydrator.RehydrateRewind<ComponentVersion<PrimariesBallotingMethodType>>();
+			ComponentVersion<PrimariesBallotingMethodType> version = rehydrator.RehydrateRewind<ComponentVersion<PrimariesBallotingMethodType>>();
 
 			T ballotingMethod = null;
 

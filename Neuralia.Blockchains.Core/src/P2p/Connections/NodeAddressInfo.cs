@@ -19,12 +19,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     the IP, always in IPv6 format
 		/// </summary>
 		private IPAddress cacheAdjustedV6Address;
-		public bool Locked { get; set; }
-
-		/// <summary>
-		/// used for ad hoc time stamping
-		/// </summary>
-		public DateTime? Timestamp { get; set; }
 
 		public NodeAddressInfo(string ip, int port, NodeInfo peerType, bool locked = false) {
 			this.Ip = ip;
@@ -83,16 +77,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private NodeAddressInfo() {
 
 		}
-		
-		/// <summary>
-		/// Get the node type info for the selected blockchain
-		/// </summary>
-		/// <param name="blockchainType"></param>
-		/// <returns></returns>
-		public NodeType GetNodeShareType(BlockchainType blockchainType) {
 
-			return this.PeerInfo.GetNodeShareType(blockchainType);
-		}
+		public bool Locked { get; set; }
+
+		/// <summary>
+		///     used for ad hoc time stamping
+		/// </summary>
+		public DateTime? Timestamp { get; set; }
 
 		/// <summary>
 		///     is the node directly connectable? will be false if port is closed behind a firewall
@@ -100,7 +91,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public bool IsConnectable { get; set; }
 
 		public NetworkEndPoint NetworkEndPoint { get; private set; }
-
 
 		public string AdjustedIp => this.AdjustedAddress.ToString();
 
@@ -149,7 +139,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public bool IsIpv4MappedToIpV6 => IsAddressIpv4MappedToIpV6(this.address);
 
 		public NodeInfo PeerInfo { get; set; } = new NodeInfo();
-		
+
 		public bool IsPeerTypeKnown => this.PeerInfo.IsKnown;
 
 		/// <summary>
@@ -182,7 +172,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.PeerInfo.Dehydrate(dehydrator);
 			dehydrator.Write(this.IsConnectable);
 
-			
 		}
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
@@ -190,8 +179,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.Port = rehydrator.ReadNullableInt();
 			this.PeerInfo.Rehydrate(rehydrator);
 			this.IsConnectable = rehydrator.ReadBool();
-			
+
 			this.UpdateNetworkEndPoint();
+		}
+
+		/// <summary>
+		///     Get the node type info for the selected blockchain
+		/// </summary>
+		/// <param name="blockchainType"></param>
+		/// <returns></returns>
+		public NodeType GetNodeShareType(BlockchainType blockchainType) {
+
+			return this.PeerInfo.GetNodeShareType(blockchainType);
 		}
 
 		private void UpdateNetworkEndPoint() {

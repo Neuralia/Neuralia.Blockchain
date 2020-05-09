@@ -10,7 +10,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 	public class MessageGroupManifestServerReply<R> : NetworkMessage<R>
 		where R : IRehydrationFactory {
 		public readonly List<bool> messageApprovals = new List<bool>();
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 

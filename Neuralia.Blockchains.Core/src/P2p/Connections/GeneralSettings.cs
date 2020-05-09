@@ -1,4 +1,3 @@
-using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -12,7 +11,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
-			dehydrator.Write( this.GossipEnabled);
+			dehydrator.Write(this.GossipEnabled);
 		}
 
 		public HashNodeList GetStructuresArray() {
@@ -22,6 +21,5 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			return nodesList;
 		}
-		
 	}
 }

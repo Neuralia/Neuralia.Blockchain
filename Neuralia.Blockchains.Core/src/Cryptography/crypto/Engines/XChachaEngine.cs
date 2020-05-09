@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.Engines {
 			// ADD the next 64 bits of IV into enginestate instead of the counter variable
 			this.PreprareBytes(ivBytes, 8, this.engineState, 8, 2);
 
-			var hsalsa20OutBytes = new uint[this.engineState.Length];
+			uint[] hsalsa20OutBytes = new uint[this.engineState.Length];
 			SalsaCore(this.rounds, this.engineState, hsalsa20OutBytes);
 
 			// Set new key, removing addition in last round of salsaCore

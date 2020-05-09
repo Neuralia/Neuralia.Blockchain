@@ -1,7 +1,5 @@
-using System;
-
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI.Wallet {
-	
+
 	public class WalletTransactionHistoryHeaderAPI {
 		public string TransactionId { get; set; }
 

@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
@@ -22,20 +20,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 	public abstract class AccreditationCertificateDigestChannelCard : IAccreditationCertificateDigestChannelCard {
 
+		public ushort Major {
+			get => this.CertificateVersion.Major.Value;
+			set => this.CertificateVersion = new ComponentVersion(value, this.CertificateVersion.Minor.Value);
+		}
+
+		public ushort Minor {
+			get => this.CertificateVersion.Minor.Value;
+			set => this.CertificateVersion = new ComponentVersion(this.CertificateVersion.Major.Value, value);
+		}
+
 		public int Id {
 			get => this.CertificateId;
 			set => this.CertificateId = value;
 		}
 
-		public ushort Major {
-			get => this.CertificateVersion.Major.Value;
-			set => this.CertificateVersion = new ComponentVersion(value, this.CertificateVersion.Minor.Value);
-		}
-		
-		public ushort Minor {
-			get => this.CertificateVersion.Minor.Value;
-			set => this.CertificateVersion = new ComponentVersion(this.CertificateVersion.Major.Value, value);
-		}
 		public ComponentVersion CertificateVersion { get; set; } = new ComponentVersion();
 		public int CertificateId { get; set; }
 		public int CertificateType { get; set; }
@@ -58,7 +57,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public Enums.CertificateAccountPermissionTypes CertificateAccountPermissionType { get; set; }
 		public int PermittedAccountCount { get; set; }
 		public ImmutableList<IAccreditationCertificateSnapshotAccount> PermittedAccountsBase => this.PermittedAccounts.ToImmutableList();
-		public List<IAccreditationCertificateSnapshotAccount> PermittedAccounts { get; }= new List<IAccreditationCertificateSnapshotAccount>();
+		public List<IAccreditationCertificateSnapshotAccount> PermittedAccounts { get; } = new List<IAccreditationCertificateSnapshotAccount>();
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 

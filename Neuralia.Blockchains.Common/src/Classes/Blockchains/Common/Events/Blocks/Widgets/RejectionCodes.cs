@@ -32,12 +32,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.W
 
 		public readonly RejectionCode ACCOUNT_EMPTY;
 		public readonly RejectionCode ACCOUNT_TOO_YOUNG;
-		public readonly RejectionCode INVALID_ACCOUNT;
-		public readonly RejectionCode INVALID_RECIPIENT;
 		public readonly RejectionCode CORRELATION_ID_ALREADY_SET;
-		
+		public readonly RejectionCode INVALID_ACCOUNT;
+
 		public readonly RejectionCode INVALID_CERTIFICATE;
-		
+		public readonly RejectionCode INVALID_RECIPIENT;
 
 		public readonly RejectionCode NONE;
 

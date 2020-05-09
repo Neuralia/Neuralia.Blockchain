@@ -4,7 +4,6 @@ using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
-using Org.BouncyCastle.Crypto.Prng;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes {
 	public interface IEnvelope : ITreeHashable {
@@ -24,9 +23,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public abstract class Envelope<BLOCKCHAIN_EVENT_TYPE, T> : IEnvelope<BLOCKCHAIN_EVENT_TYPE>
 		where BLOCKCHAIN_EVENT_TYPE : class, IBinarySerializable, ITreeHashable
 		where T : SimpleUShort<T>, new() {
+		private readonly SafeArrayHandle dehydratedEnvelopeBytes = SafeArrayHandle.Create();
 
 		private BLOCKCHAIN_EVENT_TYPE contents;
-		private readonly SafeArrayHandle dehydratedEnvelopeBytes = SafeArrayHandle.Create();
 
 		protected Envelope() {
 			this.Version = this.SetIdentity();
@@ -95,7 +94,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 					throw new ApplicationException("Event bytes can not be null while rehydrating contents");
 				}
 
-				using var rehydrator = DataSerializationFactory.CreateRehydrator(this.EventBytes);
+				using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(this.EventBytes);
 
 				this.Contents = this.RehydrateContents(rehydrator);
 
@@ -115,7 +114,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		}
 
 		public void DehydrateContents() {
-			if(this.EventBytes == null || this.EventBytes.IsEmpty) {
+			if((this.EventBytes == null) || this.EventBytes.IsEmpty) {
 
 				if(!this.ContentsLoaded) {
 					throw new ApplicationException("Blockchain event must be loaded to dehydrate an envelope");

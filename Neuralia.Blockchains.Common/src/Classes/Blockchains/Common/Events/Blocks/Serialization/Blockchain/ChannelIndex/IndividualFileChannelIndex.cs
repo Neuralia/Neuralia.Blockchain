@@ -1,10 +1,8 @@
 using System;
-
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelIndex {
 	public class IndividualFileChannelIndex : ChannelIndex<IndependentFileChannelProvider> {
@@ -40,7 +38,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public override ChannelsEntries<(long start, int end)> QueryIndex(uint adjustedBlockId) {
-			var result = new ChannelsEntries<(long start, int end)>();
+			ChannelsEntries<(long start, int end)> result = new ChannelsEntries<(long start, int end)>();
 
 			result[this.ChannelType] = (0, (int) this.Provider.DataFile.FileSize);
 
@@ -48,7 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public override ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId) {
-			var result = new ChannelsEntries<SafeArrayHandle>();
+			ChannelsEntries<SafeArrayHandle> result = new ChannelsEntries<SafeArrayHandle>();
 
 			result[this.ChannelType] = this.Provider.DataFile.ReadAllBytes();
 
@@ -56,7 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public override ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets) {
-			var result = new ChannelsEntries<SafeArrayHandle>();
+			ChannelsEntries<SafeArrayHandle> result = new ChannelsEntries<SafeArrayHandle>();
 
 			(int offset, int length) index = offsets[this.ChannelType];
 			result[this.ChannelType] = this.Provider.DataFile.ReadBytes(index.offset, index.length);
@@ -69,7 +67,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public override ChannelsEntries<long> QueryProviderFileSizes() {
-			var result = new ChannelsEntries<long>();
+			ChannelsEntries<long> result = new ChannelsEntries<long>();
 
 			result[this.ChannelType] = this.Provider.DataFile.FileSize;
 

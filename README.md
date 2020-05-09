@@ -1,11 +1,13 @@
 # Neuralia.Blockchain
 
-##### Version:  Release Candidate IV
+##### Version:  Release Candidate V
 
 The essential blockchain components of the Neuralia Blockchain.
 
 ### Neuralia.Blockchains.Core
 The core components, tools and utilities used by the blockchain
+### Neuralia.Blockchains.Components
+Some basic building blocks for the blockchain constructs
 ### Neuralia.Blockchains.Common
 The base Blockchain implementation
 
@@ -15,11 +17,9 @@ The base Blockchain implementation
 
 #### The first step is to ensure that the dependencies have been built and copied into the local-source folder.
 
- - Neuralia.Data.HashFunction.xxHash
- - Neuralia.STUN
  - Neuralia.Blockchains.Tools
  - Neuralia.BouncyCastle
 
 Then, simply invoke pack.sh
 > ./pack.sh
-this will produce two packages named **Neuralia.Blockchains.Core.*[version]*.nupkg** and **Neuralia.Blockchains.Common.*[version]*.nupkg**
+this will produce two packages named **Neuralia.Blockchains.Core.*[version]*.nupkg**, **Neuralia.Blockchains.Components.*[version]*.nupkg** and **Neuralia.Blockchains.Common.*[version]*.nupkg**

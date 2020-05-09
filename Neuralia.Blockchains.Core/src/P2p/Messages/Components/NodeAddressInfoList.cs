@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-
 using Neuralia.Blockchains.Core.P2p.Connections;
-using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Messages.Components {
@@ -21,11 +19,11 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Components {
 		// public NodeAddressInfoList(NodeType peerType) {
 		// 	this.PeerType = peerType;
 		// }
-		
+
 		public NodeAddressInfoList() {
 
 		}
-		
+
 		public NodeAddressInfoList(IEnumerable<NodeAddressInfo> nodes) {
 			this.SetNodes(nodes);
 		}
@@ -36,7 +34,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Components {
 
 		public bool Any => this.Nodes.Any();
 		public bool Empty => !this.Any;
-		
+
 		public ImmutableList<NodeAddressInfo> Nodes => this.nodes.ToImmutableList();
 
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {

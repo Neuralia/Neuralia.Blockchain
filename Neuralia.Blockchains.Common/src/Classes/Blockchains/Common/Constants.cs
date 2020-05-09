@@ -9,7 +9,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		///     the id of the first account that will be publicly assigned.
 		/// </summary>
 		public const int FIRST_PUBLIC_ACCOUNT_NUMBER = 34;
-		
+
 		public static AccountId FirstStandardAccountId => new AccountId(FIRST_PUBLIC_ACCOUNT_NUMBER, Enums.AccountTypes.Standard);
 		public static AccountId FirstJointAccountId => new AccountId(FIRST_PUBLIC_ACCOUNT_NUMBER, Enums.AccountTypes.Standard);
 	}

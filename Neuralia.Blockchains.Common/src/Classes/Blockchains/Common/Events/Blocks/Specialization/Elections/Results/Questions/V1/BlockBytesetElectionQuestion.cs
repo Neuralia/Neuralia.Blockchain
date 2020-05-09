@@ -1,4 +1,4 @@
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -12,25 +12,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		AdaptiveLong1_9 Offset { get; set; }
 		byte Length { get; set; }
 	}
-	
+
 	public class BlockBytesetElectionQuestion : ElectionBlockQuestion, IBlockBytesetElectionQuestion {
 
 		public BlockId BlockId { get; set; } = new BlockId();
 
 		public AdaptiveLong1_9 Offset { get; set; } = new AdaptiveLong1_9();
-		
+
 		public byte Length { get; set; }
-		
+
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
 
 			jsonDeserializer.SetProperty(nameof(this.BlockId), this.BlockId.ToString());
 			jsonDeserializer.SetProperty(nameof(this.Offset), this.Offset.ToString());
 			jsonDeserializer.SetProperty(nameof(this.Length), this.Length.ToString());
-		}
-
-		protected override ComponentVersion<ElectionQuestionType> SetIdentity() {
-			return (ElectionQuestionTypes.Instance.BlockByteset, 1,0);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
@@ -49,6 +45,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			nodeList.Add(this.Length);
 
 			return nodeList;
+		}
+
+		protected override ComponentVersion<ElectionQuestionType> SetIdentity() {
+			return (ElectionQuestionTypes.Instance.BlockByteset, 1, 0);
 		}
 	}
 }

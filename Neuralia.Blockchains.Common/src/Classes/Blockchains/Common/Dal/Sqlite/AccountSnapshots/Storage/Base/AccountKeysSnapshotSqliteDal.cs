@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
 using Neuralia.Blockchains.Core.General.Types;
@@ -19,13 +18,11 @@ using Neuralia.Blockchains.Tools.Locking;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AccountSnapshots.Storage.Base {
 
 	public interface IAccountKeysSnapshotSqliteDal : IAccountKeysSnapshotDal {
-		
 	}
 
 	public interface IAccountKeysSnapshotSqliteDal<ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT> : IIndexedSqliteDal<IAccountKeysSnapshotSqliteContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT>>, IAccountKeysSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT>, IAccountKeysSnapshotSqliteDal
 		where ACCOUNT_SNAPSHOT_CONTEXT : class, IAccountKeysSnapshotSqliteContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT>
 		where STANDARD_ACCOUNT_KEYS_SNAPSHOT : class, IStandardAccountKeysSnapshotSqliteEntry, new() {
-		
 	}
 
 	public abstract class AccountKeysSnapshotSqliteDal<ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT> : IndexedSqliteDal<ACCOUNT_SNAPSHOT_CONTEXT>, IAccountKeysSnapshotSqliteDal<ACCOUNT_SNAPSHOT_CONTEXT, STANDARD_ACCOUNT_KEYS_SNAPSHOT>
@@ -37,12 +34,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 		public Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>> LoadAccountKeys(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>>> operation, List<(long accountId, byte ordinal)> accountIds) {
 
-			var longAccountIds = accountIds.Select(a => AccountId.FromLongRepresentation(a.accountId).SequenceId).ToList();
+			List<long> longAccountIds = accountIds.Select(a => AccountId.FromLongRepresentation(a.accountId).SequenceId).ToList();
 
 			return this.QueryAllAsync(operation, longAccountIds);
 
 		}
-		
 
 		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, STANDARD_ACCOUNT_KEYS_SNAPSHOT accountSnapshotEntry) {
 
@@ -52,9 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		public Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
 			return this.PerformProcessingSetHoldTransactions(actions);
 		}
-		
-		protected abstract ICardUtils GetCardUtils();
-		
+
 		public Task InsertNewAccountKey(AccountId accountId, byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId, long inceptionBlockId) {
 
 			return this.PerformOperationAsync(db => {
@@ -64,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 				accountKey.AccountId = accountId.ToLongRepresentation();
 				accountKey.OrdinalId = ordinal;
 
-				if(key == null || key.IsNull) {
+				if((key == null) || key.IsNull) {
 					accountKey.PublicKey = null;
 				} else {
 					accountKey.PublicKey = key.ToExactByteArray(); // accountId sequential key
@@ -83,10 +77,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 		public Task InsertUpdateAccountKey(AccountId accountId, byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId, long inceptionBlockId) {
 
-			var accountIdLong = accountId.ToLongRepresentation();
-			
+			long accountIdLong = accountId.ToLongRepresentation();
+
 			return this.PerformOperationAsync(async db => {
-				STANDARD_ACCOUNT_KEYS_SNAPSHOT accountKey = db.StandardAccountKeysSnapshots.SingleOrDefault(e => e.OrdinalId == ordinal && e.AccountId == accountIdLong);
+				STANDARD_ACCOUNT_KEYS_SNAPSHOT accountKey = db.StandardAccountKeysSnapshots.SingleOrDefault(e => (e.OrdinalId == ordinal) && (e.AccountId == accountIdLong));
 
 				if(accountKey == null) {
 					await this.InsertNewAccountKey(accountId, ordinal, key, declarationTransactionId, inceptionBlockId).ConfigureAwait(false);
@@ -94,7 +88,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 					return;
 				}
 
-				if(key == null || key.IsNull) {
+				if((key == null) || key.IsNull) {
 					accountKey.PublicKey = null;
 				} else {
 					accountKey.PublicKey = key.ToExactByteArray();
@@ -107,5 +101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			}, this.GetKeyGroup(accountId.SequenceId));
 
 		}
+
+		protected abstract ICardUtils GetCardUtils();
 	}
 }

@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 	public abstract class ElectionsRegistrationMessage : BlockchainMessage, IElectionsRegistrationMessage {
 
 		// an encrypted instance of MinerRegistrationInfo
-		public SafeArrayHandle EncryptedMessage { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle EncryptedMessage { get; } = SafeArrayHandle.Create();
 
 		/// <summary>
 		///     We want this to be public and unencrypted, so everybody can know this account requested to be registered for the
@@ -37,9 +37,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		///     If we are delegating our winnings to another account (such as a mining pool), we indicate it here
 		/// </summary>
 		public AccountId DelegateAccountId { get; set; }
-		
+
 		/// <summary>
-		/// requested mining tier
+		///     requested mining tier
 		/// </summary>
 		public Enums.MiningTiers MiningTier { get; set; }
 
@@ -53,8 +53,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			this.DelegateAccountId = rehydrator.ReadRehydratable<AccountId>();
 
-			this.MiningTier = (Enums.MiningTiers)rehydrator.ReadByte();
-			
+			this.MiningTier = (Enums.MiningTiers) rehydrator.ReadByte();
+
 			bool any = rehydrator.ReadBool();
 
 			if(any) {
@@ -82,7 +82,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			dehydrator.Write(this.DelegateAccountId);
 
-			dehydrator.Write((byte)this.MiningTier);
+			dehydrator.Write((byte) this.MiningTier);
 
 			bool any = this.Certificates?.Any() ?? false;
 			dehydrator.Write(any);

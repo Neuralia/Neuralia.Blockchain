@@ -42,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		/// <summary>
 		///     The status of the last block insertion
 		/// </summary>
-		public int BlockSyncStatus { get; set; } = (int)BlockSyncStatuses.FullySynced;
+		public int BlockSyncStatus { get; set; } = (int) BlockSyncStatuses.FullySynced;
 
 		public Dictionary<byte, IWalletAccountChainStateKey> Keys { get; set; } = new Dictionary<byte, IWalletAccountChainStateKey>();
 	}

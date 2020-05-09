@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
 using Neuralia.Blockchains.Common.Classes.Tools;
@@ -55,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 			entry = this.CreateNewEntry();
 			entry.Id = 1; // we only ever have 1
-			var dbEntry = db.Entry(entry);
+			EntityEntry<CHAIN_STATE_SNAPSHOT> dbEntry = db.Entry(entry);
 			db.ChainMetadatas.Add(entry);
 
 			db.SaveChanges();
@@ -73,7 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 			entry = this.CreateNewEntry();
 			entry.Id = 1; // we only ever have 1
-			var dbEntry = db.Entry(entry);
+			EntityEntry<CHAIN_STATE_SNAPSHOT> dbEntry = db.Entry(entry);
 			db.ChainMetadatas.Add(entry);
 
 			db.SaveChanges();

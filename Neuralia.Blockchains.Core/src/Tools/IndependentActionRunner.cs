@@ -11,13 +11,12 @@ namespace Neuralia.Blockchains.Core.Tools {
 	///     finally aggregated and thrown
 	/// </summary>
 	public static class IndependentActionRunner {
-		
-		
-		public static Task RunAsync(LockContext lockContext,IEnumerable<Func<LockContext, Task>> actions) {
+
+		public static Task RunAsync(LockContext lockContext, IEnumerable<Func<LockContext, Task>> actions) {
 
 			return RunAsync(lockContext, actions.Select(a => new ActionSetAsync(a)).ToArray());
 		}
-		
+
 		public static async Task RunAsync(LockContext lockContext, params ActionSetAsync[] actions) {
 
 			List<Exception> exceptions = null;
@@ -52,17 +51,17 @@ namespace Neuralia.Blockchains.Core.Tools {
 				throw new AggregateException(exceptions);
 			}
 		}
-		
+
 		public static void Run(List<Action> actions) {
 
 			Run(actions.Select(a => new ActionSet(a)).ToArray());
 		}
-		
+
 		public static void Run(params Action[] actions) {
 
 			Run(actions.Select(a => new ActionSet(a)).ToArray());
 		}
-		
+
 		public static Task RunAsync(LockContext lockContext, params Func<LockContext, Task>[] actions) {
 
 			return RunAsync(lockContext, actions.Select(a => new ActionSetAsync(a)).ToArray());
@@ -98,7 +97,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				throw new AggregateException(exceptions);
 			}
 		}
-		
+
 		public struct ActionSetAsync {
 
 			public ActionSetAsync(Func<LockContext, Task> action, Action<Exception> exception = null) {

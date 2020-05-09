@@ -25,9 +25,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public Dictionary<int, Dictionary<int, SafeArrayHandle>> HashIndexes(int groupIndex) {
 
-			var indicesResults = new Dictionary<int, Dictionary<int, SafeArrayHandle>>();
+			Dictionary<int, Dictionary<int, SafeArrayHandle>> indicesResults = new Dictionary<int, Dictionary<int, SafeArrayHandle>>();
 
-			foreach(var index in this.BandIndices) {
+			foreach(KeyValuePair<int, IDigestChannelBandIndex<CHANEL_BANDS, CARD_TYPE, KEY, INPUT_QUERY_KEY, QUERY_KEY>> index in this.BandIndices) {
 
 				indicesResults.Add(index.Key, index.Value.HashFiles(groupIndex));
 			}
@@ -36,9 +36,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public Dictionary<int, List<int>> GetFileTypes() {
-			var fileTypes = new Dictionary<int, List<int>>();
+			Dictionary<int, List<int>> fileTypes = new Dictionary<int, List<int>>();
 
-			foreach(var index in this.BandIndices) {
+			foreach(KeyValuePair<int, IDigestChannelBandIndex<CHANEL_BANDS, CARD_TYPE, KEY, INPUT_QUERY_KEY, QUERY_KEY>> index in this.BandIndices) {
 
 				fileTypes.Add(index.Key, index.Value.GetFileTypes());
 			}
@@ -48,11 +48,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> QueryCard(INPUT_QUERY_KEY key) {
 
-			var results = new DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS>();
+			DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> results = new DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS>();
 
-			foreach(var index in this.BandIndices.Values) {
+			foreach(IDigestChannelBandIndex<CHANEL_BANDS, CARD_TYPE, KEY, INPUT_QUERY_KEY, QUERY_KEY> index in this.BandIndices.Values) {
 
-				var subResults = index.QueryCard(key);
+				DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> subResults = index.QueryCard(key);
 
 				if(subResults != null) {
 					subResults.Entries.ForEach(entry => results[entry.Key] = entry.Value);

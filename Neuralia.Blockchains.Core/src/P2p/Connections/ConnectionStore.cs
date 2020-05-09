@@ -13,6 +13,7 @@ using MoreLinq;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.Network.Protocols;
@@ -40,6 +41,32 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		Dictionary<Guid, PeerConnection> AllConnections { get; }
 		int AllConnectionsCount { get; }
 
+		int BasicGossipConnectionsCount { get; }
+		List<PeerConnection> BasicGossipConnectionsList { get; }
+		Dictionary<Guid, PeerConnection> BasicGossipConnections { get; }
+
+		int FullGossipConnectionsCount { get; }
+		List<PeerConnection> FullGossipConnectionsList { get; }
+		Dictionary<Guid, PeerConnection> FullGossipConnections { get; }
+
+		bool GetIsNetworkAvailable { get; }
+		int ActiveConnectionsCount { get; }
+		bool ConnectionsSaturated { get; }
+		bool IsConnectable { get; }
+
+		bool IsConnecting { get; }
+
+		ImmutableList<IPAddress> OurAddresses { get; }
+
+		int LocalPort { get; }
+		IPAddress PublicIpv4 { get; }
+		IPAddress PublicIpv6 { get; }
+		IPMode PublicIpMode { get; }
+		
+		Func<PeerConnection, bool> FilterSyncingIp { get; set; }
+		bool LoopbackCheckEnabled { get; set; }
+		ImmutableList<NodeAddressInfo> HardcodedNodes { get; }
+
 		int SimpleConnectionsCount(BlockchainType blockchainType);
 		List<PeerConnection> SimpleConnectionsList(BlockchainType blockchainType);
 		Dictionary<Guid, PeerConnection> SimpleConnections(BlockchainType blockchainType);
@@ -48,30 +75,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		List<PeerConnection> SyncingConnectionsList(BlockchainType blockchainType);
 		Dictionary<Guid, PeerConnection> SyncingConnections(BlockchainType blockchainType);
 
-		int BasicGossipConnectionsCount { get; }
-		List<PeerConnection> BasicGossipConnectionsList { get; }
-		Dictionary<Guid, PeerConnection> BasicGossipConnections { get; }
-		
-		int FullGossipConnectionsCount { get; }
-		List<PeerConnection> FullGossipConnectionsList { get; }
-		Dictionary<Guid, PeerConnection> FullGossipConnections { get; }
-
-		bool GetIsNetworkAvailable { get; }
-		int ActiveConnectionsCount { get; }
-		bool ConnectionsSaturated { get; }
-
 		event Action<bool> IsConnectableChange;
-		bool IsConnectable { get; }
-
-		bool IsConnecting { get; }
-
-		ImmutableList<IPAddress> OurAddresses { get; }
-
-		int LocalPort { get; }
-		IPAddress PublicIp { get; }
-		Func<PeerConnection, bool> FilterSyncingIp { get; set; }
-		bool LoopbackCheckEnabled { get; set; }
-		ImmutableList<NodeAddressInfo> HardcodedNodes { get; }
 
 		bool PeerConnectionExists(ITcpConnection tcpConnection, PeerConnection.Directions direction);
 		bool PeerConnectionExists(NetworkEndPoint endpoint, PeerConnection.Directions direction);
@@ -84,7 +88,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		event Func<SafeArrayHandle, PeerConnection, IEnumerable<Type>, Task> DataReceived;
 		event Func<int, Task> PeerConnectionsCountUpdated;
 		event Func<int, Task> AvailablePeerNodesCountUpdated;
-		
+
 		PeerConnection GetNewConnection(IPAddress address, int port, IPMode mode);
 		PeerConnection GetNewConnection(NetworkEndPoint endpoint);
 
@@ -111,7 +115,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="connection"></param>
 		/// <param name="nodes"></param>
 		void UpdatePeerNodes(PeerConnection connection, NodeAddressInfoList nodes);
-		
+
 		/// <summary>
 		///     return our list of peer nodes for network messages
 		/// </summary>
@@ -133,7 +137,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		void AddPeerReportedPublicIp(IPAddress publicIp, ConnectionStore.PublicIpSource source);
 		void AddPeerReportedPublicIp(string publicIp, ConnectionStore.PublicIpSource source);
 		void AddPeerReportedConnectable(bool connectable, ConnectionStore.PublicIpSource source);
-		
 
 		bool IsNeuraliumHub(PeerConnection peerConnection);
 		bool IsNeuraliumHub(NodeAddressInfo nodes);
@@ -203,18 +206,20 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private readonly HashSet<string> promotedIgnoredNodes = new HashSet<string>();
 
 		private readonly HashSet<Guid> removingConnections = new HashSet<Guid>();
-
-		private readonly Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>> reportedPublicIps = new Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>>();
 		private readonly Dictionary<ConnectionStore.PublicIpSource, bool> reportedConnectable = new Dictionary<ConnectionStore.PublicIpSource, bool>();
+
+		private readonly Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>> reportedPublicIpsV4 = new Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>>();
+		private readonly Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>> reportedPublicIpsV6 = new Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>>();
 
 		protected readonly ITimeService timeService;
 
+		private bool addAvailablePeerNodeBatch;
+
 		private List<NodeAddressInfo> hardcodedNodes;
-
-		public bool IsConnectable { get; private set; }
 		private bool isChainSettingConsensusDirty;
+		private bool isNetworkAvailable;
 
-		public event Action<bool> IsConnectableChange;
+		private DateTime? lastNetworkCheck;
 
 		private ImmutableList<IPAddress> localIps;
 
@@ -227,7 +232,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			//generate our unique ID
 			this.MyClientUuid = ProtocolFactory.PROTOCOL_UUID;
 
-			Log.Verbose("Our network protocol UUID is {0}", this.MyClientUuid);
+			NLog.Connections.Verbose("Our network protocol UUID is {0}", this.MyClientUuid);
 
 			this.MyClientIdNonce = GlobalRandom.GetNextULong();
 
@@ -247,76 +252,99 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			int counter = 0;
 
 			long acting = 0;
-			
+
 			this.connectionPollingTimer = new Timer(state => {
 
-				try{
-					if (Interlocked.Read(ref acting) != 0){
+				try {
+					if(Interlocked.Read(ref acting) != 0) {
 						return;
 					}
 
 					Interlocked.Increment(ref acting);
 
-					try{
-						List<KeyValuePair<Guid, PeerConnection>> connections = null;
+					try {
+						try {
+							List<KeyValuePair<Guid, PeerConnection>> connections = null;
 
-						lock (this.locker){
-							connections = this.AllConnections.ToList();
+							lock(this.locker) {
+								connections = this.AllConnections.ToList();
+							}
+
+							foreach(KeyValuePair<Guid, PeerConnection> connection in connections) {
+								connection.Value.connection.CheckConnected();
+							}
+
+							counter++;
+
+							if(counter == 100) {
+								this.CleanIgnoredPeers();
+								counter = 0;
+							}
+						} catch {
+							
 						}
+						
+						try {
+							if(this.ConnectingConnections.Any()) {
+								// clear dead connecting connections
+								foreach(var timedout in this.ConnectingConnections.Where(c => c.Value.timestamp.AddSeconds(30) < DateTimeEx.CurrentTime)) {
 
-						foreach (var connection in connections){
-							connection.Value.connection.CheckConnected();
+									try {
+										this.ConnectingConnections.RemoveSafe(timedout.Key);
+
+										if(!timedout.Value.connection.connection.CheckConnected()) {
+											try {
+												timedout.Value.connection?.Dispose();
+											} catch {
+
+											}
+										}
+									} catch {
+
+									}
+								}
+							}
+						} catch {
+							
 						}
-
-						counter++;
-
-						if (counter == 100){
-							this.CleanIgnoredPeers();
-							counter = 0;
-						}
-					}
-					finally{
+					} finally {
 						Interlocked.Decrement(ref acting);
 					}
 
 					this.PoolLoop();
-				}
-				catch(Exception ex){
+				} catch(Exception ex) {
 					//TODO: do something?
-					Log.Error(ex, "Timer exception");
+					NLog.Connections.Error(ex, "Timer exception");
 				}
 			}, this, waitTime, waitTime);
 		}
-		
-		private DateTime? lastNetworkCheck = null;
-		private bool isNetworkAvailable;
-		
-		public bool GetIsNetworkAvailable  {
+
+		/// <summary>
+		///     this contains connections that are in the process of confirming their connection. they may be valid, or not. but
+		///     they are in the process of negociating
+		/// </summary>
+		public ConcurrentDictionary<Guid, (PeerConnection connection, DateTime timestamp)> ConnectingConnections { get; } = new ConcurrentDictionary<Guid, (PeerConnection connection, DateTime timestamp)>();
+
+		/// <summary>
+		///     This contains confirmed and active connections
+		/// </summary>
+		protected ConcurrentDictionary<Guid, PeerConnection> Connections { get; } = new ConcurrentDictionary<Guid, PeerConnection>();
+
+		public bool IsConnectable { get; private set; }
+
+		public event Action<bool> IsConnectableChange;
+
+		public bool GetIsNetworkAvailable {
 			get {
-				if(!this.lastNetworkCheck.HasValue || (DateTime.Now - this.lastNetworkCheck) > TimeSpan.FromSeconds(30)) {
+				if(!this.lastNetworkCheck.HasValue || ((DateTime.Now - this.lastNetworkCheck) > TimeSpan.FromSeconds(30))) {
 					this.lastNetworkCheck = DateTime.Now;
-					
+
 					this.isNetworkAvailable = NetworkInterface.GetIsNetworkAvailable();
 				}
 
 				return this.isNetworkAvailable;
 			}
 		}
-
-		protected virtual void PoolLoop() {
-			
-		}
-		
-		/// <summary>
-		///     this contains connections that are in the process of confirming their connection. they may be valid, or not. but
-		///     they are in the process of negociating
-		/// </summary>
-		public ConcurrentDictionary<Guid, PeerConnection> ConnectingConnections { get; } = new ConcurrentDictionary<Guid, PeerConnection>();
-
-		/// <summary>
-		///     This contains confirmed and active connections
-		/// </summary>
-		protected ConcurrentDictionary<Guid, PeerConnection> Connections { get; } = new ConcurrentDictionary<Guid, PeerConnection>();
 
 		/// <summary>
 		///     if true, the connection will check to avoid loopbacks
@@ -339,51 +367,69 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public int ActiveConnectionsCount => this.Connections.Count;
 
 		public virtual int SimpleConnectionsCount(BlockchainType blockchainType) {
-			return this.Connections.Count(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false);
+			return this.Connections.Count(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false);
 		}
+
 		public virtual List<PeerConnection> SimpleConnectionsList(BlockchainType blockchainType) {
-			return this.Connections.Values.Where(c => c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false).ToList();
+			return this.Connections.Values.Where(c => c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false).ToList();
 		}
+
 		public virtual Dictionary<Guid, PeerConnection> SimpleConnections(BlockchainType blockchainType) {
-			return this.Connections.Where(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares??false).ToDictionary();
+			return this.Connections.Where(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false).ToDictionary();
 		}
-		
+
 		public virtual int SyncingConnectionsCount(BlockchainType blockchainType) {
 			return this.Connections.Count(c => {
 
-				return c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp==null?true:this.FilterSyncingIp(c.Value));
+				return c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c.Value));
 			});
 
 		}
+
 		public virtual List<PeerConnection> SyncingConnectionsList(BlockchainType blockchainType) {
 			return this.Connections.Values.Where(c => {
 
-				return c.IsFullyConfirmed && (c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp ==null?true:this.FilterSyncingIp(c));
+				return c.IsFullyConfirmed && (c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c));
 			}).ToList();
 
 		}
+
 		public virtual Dictionary<Guid, PeerConnection> SyncingConnections(BlockchainType blockchainType) {
 			return this.Connections.Where(c => {
 
-				return c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp ==null?true:this.FilterSyncingIp(c.Value));
+				return c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c.Value));
 			}).ToDictionary(c => c.Key, c => c.Value);
 
 		}
-		
+
 		public virtual int BasicGossipConnectionsCount => this.Connections.Count(c => c.Value.NodeInfo.GossipAccepted);
-		
+
 		public virtual List<PeerConnection> BasicGossipConnectionsList => this.Connections.Values.Where(c => c.NodeInfo.GossipAccepted).ToList();
-		
+
 		public virtual Dictionary<Guid, PeerConnection> BasicGossipConnections => this.Connections.Where(c => c.Value.NodeInfo.GossipAccepted).ToDictionary();
-		
-		
+
 		public virtual int FullGossipConnectionsCount => this.Connections.Count(c => c.Value.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full);
-		
+
 		public virtual List<PeerConnection> FullGossipConnectionsList => this.Connections.Values.Where(c => c.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToList();
-		
+
 		public virtual Dictionary<Guid, PeerConnection> FullGossipConnections => this.Connections.Where(c => c.Value.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToDictionary(c => c.Key, c => c.Value);
 
-		public IPAddress PublicIp { get; private set; }
+		public IPAddress PublicIpv4 { get; private set; }
+		public IPAddress PublicIpv6 { get; private set; }
+		public IPMode PublicIpMode  {
+			get {
+				IPMode mode = IPMode.Unknown;
+
+				if(this.PublicIpv4 != null) {
+					mode |= IPMode.IPv4;
+				}
+				if(this.PublicIpv6 != null) {
+					mode |= IPMode.IPv6;
+				}
+
+				return mode;
+			}
+		}
 
 		/// <summary>
 		///     a method others can use to further filter syncing nodes
@@ -405,15 +451,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public event Func<SafeArrayHandle, PeerConnection, IEnumerable<Type>, Task> DataReceived;
 		public event Func<int, Task> PeerConnectionsCountUpdated;
 		public event Func<int, Task> AvailablePeerNodesCountUpdated;
-		
-		protected async Task TriggerPeerConnectionsCountUpdated(int connectionsCount) {
-if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdated(connectionsCount).ConfigureAwait(false); }
-		}
-		
-		protected Task TriggerPeerConnectionsCountUpdated() {
-			return this.TriggerPeerConnectionsCountUpdated(this.ActiveConnectionsCount);
-		}
-		
+
 		public PeerConnection GetNewConnection(IPAddress address, int port, IPMode mode) {
 			// lets check if we already have a connection to this peer
 			NetworkEndPoint endpoint = new NetworkEndPoint(address, port, mode);
@@ -450,9 +488,9 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 						this.AddIgnorePeerNode(node);
 						this.errorCounts.Remove(node.ScoppedIp);
 
-						Log.Error(e, $"An exception occured on the network connection for peer {node.ScoppedAdjustedIp}. Strike {errorCount} of {3}. we are now ignoring them");
+						NLog.Connections.Error(e, $"An exception occured on the network connection for peer {node.ScoppedAdjustedIp}. Strike {errorCount} of {3}. we are now ignoring them");
 					} else {
-						Log.Error(e, $"An exception occured on the network connection for peer {node.ScoppedAdjustedIp}. Strike {this.errorCounts[node.ScoppedIp]} of {3}");
+						NLog.Connections.Error(e, $"An exception occured on the network connection for peer {node.ScoppedAdjustedIp}. Strike {this.errorCounts[node.ScoppedIp]} of {3}");
 					}
 				}
 
@@ -467,15 +505,15 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 					// remove only nodes that are not locked
 					if(includeLocked || !this.availablePeerNodes[node.ScoppedIp].Node.Locked) {
 						nai = this.availablePeerNodes.RemoveSafe(node.ScoppedIp);
-						
-						if (!this.addAvailablePeerNodeBatch){
+
+						if(!this.addAvailablePeerNodeBatch) {
 							// alert that we added some peers
 							if(this.AvailablePeerNodesCountUpdated != null) {
 								this.AvailablePeerNodesCountUpdated(this.availablePeerNodes.Count).WaitAndUnwrapException();
 							}
 						}
 
-						Log.Verbose($"removing peer ip from available list: {node.ScoppedAdjustedIp}.");
+						NLog.Connections.Verbose($"removing peer ip from available list: {node.ScoppedAdjustedIp}.");
 					}
 				}
 			}
@@ -483,21 +521,21 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			return nai;
 		}
 
-		private bool addAvailablePeerNodeBatch;
-		public virtual bool AddAvailablePeerNode(NodeAddressInfo node, bool force){
+		public virtual bool AddAvailablePeerNode(NodeAddressInfo node, bool force) {
 			bool added = false;
+
 			lock(this.locker) {
-				var isLocal = this.IsIPLocalNode(node);
+				bool? isLocal = this.IsIPLocalNode(node);
 
 				if(!this.availablePeerNodes.ContainsKey(node.ScoppedIp) && !this.ignorePeerNodes.ContainsKey(node.ScoppedIp) && (force || !(isLocal.HasValue && isLocal.Value))) {
 					this.availablePeerNodes.AddSafe(node.ScoppedIp, new NodeActivityInfo(node, true));
 					added = true;
-					Log.Verbose($"accepting potential future peer ip: {node.ScoppedAdjustedIp}.");
+					NLog.Connections.Verbose($"accepting potential future peer ip: {node.ScoppedAdjustedIp}.");
 
 					this.CleanAvailablePeerNodes();
 				}
-				
-				if (added && !this.addAvailablePeerNodeBatch){
+
+				if(added && !this.addAvailablePeerNodeBatch) {
 					// alert that we added some peers
 					if(this.AvailablePeerNodesCountUpdated != null) {
 						this.AvailablePeerNodesCountUpdated(this.availablePeerNodes.Count).WaitAndUnwrapException();
@@ -514,29 +552,29 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		}
 
 		public virtual void AddAvailablePeerNodes(NodeAddressInfoList nodes, bool force) {
-			lock (this.locker){
-				
-				try{
+			lock(this.locker) {
+
+				try {
 					// make this batch mode (kind od a hack, can be improved.)
 					this.addAvailablePeerNodeBatch = true;
-					
+
 					// make sure none of the IPS are ours
 					bool added = false;
+
 					foreach(NodeAddressInfo node in this.FilterIps(nodes.Nodes.ToList())) {
 
-						if (this.AddAvailablePeerNode(node, force)){
+						if(this.AddAvailablePeerNode(node, force)) {
 							added = true;
 						}
 					}
 
-					if (added){
+					if(added) {
 						// alert that we added some peers
 						if(this.AvailablePeerNodesCountUpdated != null) {
 							this.AvailablePeerNodesCountUpdated(this.availablePeerNodes.Count).WaitAndUnwrapException();
 						}
 					}
-				}
-				finally{
+				} finally {
 					this.addAvailablePeerNodeBatch = false;
 				}
 			}
@@ -572,7 +610,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			lock(this.locker) {
 				if(!this.ignorePeerNodes.ContainsKey(nodeKey) && !this.promotedIgnoredNodes.Contains(nodeKey)) {
 					this.ignorePeerNodes.AddSafe(nodeKey, new IgnoreNodeActivityInfo(nai));
-					Log.Verbose($"setting peer {nodeAddressInfo.ScoppedAdjustedIp} to be ignored from now on.");
+					NLog.Connections.Verbose($"setting peer {nodeAddressInfo.ScoppedAdjustedIp} to be ignored from now on.");
 				} else {
 
 					// thats it, we remove this IP completely, we let it go!
@@ -588,7 +626,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		}
 
 		public void CleanIgnoredPeers() {
-			foreach(var peer in this.ignorePeerNodes.Where(p => p.Value.MaxReached).ToArray()) {
+			foreach(KeyValuePair<string, IgnoreNodeActivityInfo> peer in this.ignorePeerNodes.Where(p => p.Value.MaxReached).ToArray()) {
 				this.ignorePeerNodes.RemoveSafe(peer.Key);
 			}
 		}
@@ -604,9 +642,9 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 					int takeCount = (int) (this.ignorePeerNodes.Count * 0.10);
 
 					//take the oldest ones
-					var restoreNodes = this.ignorePeerNodes.OrderBy(n => n.Value.IgnoreTimestamp).Take(takeCount).ToArray();
+					KeyValuePair<string, IgnoreNodeActivityInfo>[] restoreNodes = this.ignorePeerNodes.OrderBy(n => n.Value.IgnoreTimestamp).Take(takeCount).ToArray();
 
-					foreach(var entry in restoreNodes) {
+					foreach(KeyValuePair<string, IgnoreNodeActivityInfo> entry in restoreNodes) {
 						this.PromoteIgnoredPeerNode(entry.Value.Node);
 					}
 				}
@@ -626,7 +664,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 				this.NewPeersReceived(connection);
 			}
 		}
-		
+
 		/// <summary>
 		///     return our list of peer nodes available for connection
 		/// </summary>
@@ -667,10 +705,6 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			return nodes.ToList();
 		}
 
-		protected virtual List<NodeAddressInfo> FilterAvailablePeerNodes(List<NodeAddressInfo> nodes) {
-			return nodes;
-		}
-		
 		/// <summary>
 		///     return our list of peer nodes for network messages
 		/// </summary>
@@ -679,6 +713,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		public NodeAddressInfoList GetPeerNodeList(NodeInfo nodeInfo, List<BlockchainType> blockchainTypes, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic, List<NodeAddressInfo> excludeAddresses, bool onlyConnectable = false, int? limit = null) {
 
 			List<NodeAddressInfo> nodes = null;
+
 			lock(this.locker) {
 				nodes = this.GetAvailablePeerNodes(excludeAddresses, true, false, onlyConnectable);
 			}
@@ -709,9 +744,9 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 				this.removingConnections.Add(connection.ClientUuid);
 
 				if(connection.ClientUuid == Guid.Empty) {
-					Log.Verbose("Removing connection for as of yet unidentified client");
+					NLog.Connections.Verbose("Removing connection for as of yet unidentified client");
 				} else {
-					Log.Verbose($"Removing connection for client {connection.ClientUuid}");
+					NLog.Connections.Verbose($"Removing connection for client {connection.ClientUuid}");
 				}
 
 				try {
@@ -805,7 +840,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 				// time we accepted this connection
 				connection.ConnectionTime = this.timeService.CurrentRealTime;
 
-				Log.Information($"accepting connection from peer {connection.ClientUuid} with scopped ip {connection.NodeAddressInfo.ScoppedAdjustedIp}");
+				NLog.Connections.Information($"accepting connection from peer {connection.ClientUuid} with scopped ip {connection.NodeAddressInfo.ScoppedAdjustedIp}");
 
 				NodeAddressInfo nodeInfo = GetEndpointInfoNode(connection);
 
@@ -814,7 +849,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 				// a new connection, lets make sure it will be in our list of known Connections
 				this.AddAvailablePeerNode(nodeInfo, false);
-				
+
 				//we got new peer nodes. lets do something with his/her peers. we collect them
 				this.NewPeersReceived(connection);
 			}
@@ -822,7 +857,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 		public void FullyConfirmConnection(PeerConnection connection) {
 			connection.ConnectionState = PeerConnection.ConnectionStates.FullyConfirmed;
-			
+
 			// alert the world we have a new peer!
 			this.TriggerPeerConnectionsCountUpdated().WaitAndUnwrapException();
 
@@ -870,41 +905,58 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		public void AddPeerReportedPublicIp(IPAddress publicIp, ConnectionStore.PublicIpSource source) {
 
 			// first, ensure its not a local IP, otherwise we wont use it
-			var result = this.IsIPLocalAddress(publicIp);
+			bool? result = this.IsIPLocalAddress(publicIp);
 
 			if(result.HasValue && result.Value) {
 				return;
 			}
 
 			lock(this.locker) {
+				NodeAddressInfo addressInfo = new NodeAddressInfo(publicIp, NodeInfo.Full);
 
-				if(!this.reportedPublicIps.ContainsKey(source)) {
-					this.reportedPublicIps.Add(source, new HashSet<IPAddress>());
+				Dictionary<ConnectionStore.PublicIpSource, HashSet<IPAddress>> reportedPublicIps = this.reportedPublicIpsV4;
+				if(addressInfo.IsIpV6) {
+					reportedPublicIps = this.reportedPublicIpsV6;
+				}
+				
+				if(!reportedPublicIps.ContainsKey(source)) {
+					reportedPublicIps.Add(source, new HashSet<IPAddress>());
 				}
 
-				if(!this.reportedPublicIps[source].Contains(publicIp)) {
-					this.reportedPublicIps[source].Add(publicIp);
+				if(!reportedPublicIps[source].Contains(publicIp)) {
+					reportedPublicIps[source].Add(publicIp);
 				}
 
-				(IPAddress result, ConsensusUtilities.ConsensusType concensusType) results = ConsensusUtilities.GetConsensus(this.reportedPublicIps.SelectMany(s => s.Value));
+				(IPAddress ipAddress, ConsensusUtilities.ConsensusType consensusType) = ConsensusUtilities.GetConsensus(reportedPublicIps.SelectMany(s => s.Value));
 
-				if((results.concensusType == ConsensusUtilities.ConsensusType.Undefined) || (results.concensusType == ConsensusUtilities.ConsensusType.Split)) {
+				IPAddress agreedPublicIP = null;
+				if((consensusType == ConsensusUtilities.ConsensusType.Undefined) || (consensusType == ConsensusUtilities.ConsensusType.Split)) {
 					// not good, we can't trust what we just received. lets see if we have a trustworthy source
-					if(this.reportedPublicIps.ContainsKey(ConnectionStore.PublicIpSource.Hub) && this.reportedPublicIps[ConnectionStore.PublicIpSource.Hub].Any()) {
-						this.PublicIp = this.reportedPublicIps[ConnectionStore.PublicIpSource.Hub].Shuffle().First();
-					} else if(this.reportedPublicIps.ContainsKey(ConnectionStore.PublicIpSource.STUN) && this.reportedPublicIps[ConnectionStore.PublicIpSource.STUN].Any()) {
-						this.PublicIp = this.reportedPublicIps[ConnectionStore.PublicIpSource.STUN].Shuffle().First();
+					if(reportedPublicIps.ContainsKey(ConnectionStore.PublicIpSource.Hub) && reportedPublicIps[ConnectionStore.PublicIpSource.Hub].Any()) {
+						agreedPublicIP = reportedPublicIps[ConnectionStore.PublicIpSource.Hub].Shuffle().First();
+					} else if(reportedPublicIps.ContainsKey(ConnectionStore.PublicIpSource.STUN) && reportedPublicIps[ConnectionStore.PublicIpSource.STUN].Any()) {
+						agreedPublicIP = reportedPublicIps[ConnectionStore.PublicIpSource.STUN].Shuffle().First();
 					} else {
-						this.PublicIp = null;
+						agreedPublicIP = null;
 					}
 				} else {
-					this.PublicIp = results.result;
+					agreedPublicIP = ipAddress;
 				}
+				
+				
 
 				this.ourAddresses.Clear();
 
-				if(this.PublicIp != null) {
-					NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(this.PublicIp, NodeInfo.Full);
+				if(agreedPublicIP != null) {
+					NodeAddressInfo nodeAddressInfo = new NodeAddressInfo(agreedPublicIP, NodeInfo.Full);
+					
+					if(nodeAddressInfo.IsIpV6) {
+						this.PublicIpv6 = agreedPublicIP;
+					}
+					else  {
+						this.PublicIpv4 = agreedPublicIP;
+					}
+					
 					this.OurAddresses.Add(nodeAddressInfo.Address);
 				}
 
@@ -929,9 +981,9 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 				this.reportedConnectable[source] = connectable;
 
-				(bool result, ConsensusUtilities.ConsensusType concensusType) results = ConsensusUtilities.GetConsensus(this.reportedConnectable.Select(s => s.Value));
+				(bool result, ConsensusUtilities.ConsensusType consensusType) results = ConsensusUtilities.GetConsensus(this.reportedConnectable.Select(s => s.Value));
 
-				if((results.concensusType == ConsensusUtilities.ConsensusType.Undefined) || (results.concensusType == ConsensusUtilities.ConsensusType.Split)) {
+				if((results.consensusType == ConsensusUtilities.ConsensusType.Undefined) || (results.consensusType == ConsensusUtilities.ConsensusType.Split)) {
 
 					results.result = false;
 				}
@@ -983,7 +1035,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 				}
 
 				// first thing we do it gather every possible list of peers we can find and add them to our peer list. we will need this to start
-				var startNodes = new NodeAddressInfoList();
+				NodeAddressInfoList startNodes = new NodeAddressInfoList();
 
 				//lets start with the hardcoded ones, best possible start
 				startNodes.AddNodes(this.HardcodedNodes.Distinct().Where(node => !this.IsOurAddress(node)));
@@ -991,6 +1043,10 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 				// lets collect the extra nodes provided by configuration
 				startNodes.AddNodes(GlobalSettings.ApplicationSettings.Nodes.Select(n => new NodeAddressInfo(n.Ip, n.Port, NodeInfo.Unknown)).Distinct().Where(node => !this.IsOurAddress(node)));
 
+				foreach(var node in startNodes.Nodes) {
+					node.IsConnectable = true;
+				}
+				
 				// here we go. just make sure we oursevles are not in this list and lets go forward
 				this.AddAvailablePeerNodes(startNodes, true);
 			}
@@ -1042,7 +1098,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			}
 
 			if(this.ConnectingConnections.ContainsKey(contendedConnection.InternalUuid)) {
-				existingConnection = this.ConnectingConnections[contendedConnection.InternalUuid];
+				existingConnection = this.ConnectingConnections[contendedConnection.InternalUuid].connection;
 			}
 
 			// first, make sure the other side is connected or they lose
@@ -1057,7 +1113,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 			// both are still connected. we will determine the lowest hash which will get to be the one connecting to the other
 			BigInteger challengerId = HashDifficultyUtils.GetBigInteger(contendedConnection.ReportedUuid.ToByteArray());
-			BigInteger localId =  HashDifficultyUtils.GetBigInteger(this.MyClientUuid.ToByteArray());
+			BigInteger localId = HashDifficultyUtils.GetBigInteger(this.MyClientUuid.ToByteArray());
 
 			// ok, let's apply our tie breaker
 			PeerConnection.Directions dominantDirection = localId < challengerId ? PeerConnection.Directions.Outgoing : PeerConnection.Directions.Incoming;
@@ -1084,22 +1140,61 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			}
 		}
 
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		public void DisconnectAll() {
+			// release other disposable objects  
+			foreach(PeerConnection connectionInfo in this.Connections.Values.ToArray()) {
+				connectionInfo.Dispose();
+			}
+		}
+
+		protected virtual void PoolLoop() {
+
+		}
+
+		protected async Task TriggerPeerConnectionsCountUpdated(int connectionsCount) {
+			if(this.PeerConnectionsCountUpdated != null) {
+				await this.PeerConnectionsCountUpdated(connectionsCount).ConfigureAwait(false);
+			}
+		}
+
+		protected Task TriggerPeerConnectionsCountUpdated() {
+			return this.TriggerPeerConnectionsCountUpdated(this.ActiveConnectionsCount);
+		}
+
+		protected virtual List<NodeAddressInfo> FilterAvailablePeerNodes(List<NodeAddressInfo> nodes) {
+			return nodes;
+		}
+
 		/// <summary>
 		///     Verify if the IP address is the same as ours. does not check for port
 		/// </summary>
 		/// <param name="publicIp"></param>
 		/// <returns></returns>
 		protected virtual bool? IsIPLocalAddress(IPAddress publicIp) {
+			
+			NodeAddressInfo node = new NodeAddressInfo(publicIp, NodeInfo.Unknown);
 
-			if(this.PublicIp != null) {
-				NodeAddressInfo node = new NodeAddressInfo(publicIp, NodeInfo.Unknown);
-				NodeAddressInfo ourNode = new NodeAddressInfo(this.PublicIp, NodeInfo.Unknown);
+			IPAddress publicIP = null;
+			if(node.IsIpV6) {
+				publicIP = this.PublicIpv6;
+			}
+			else {
+				publicIP = this.PublicIpv4;
+			}
+
+			if(publicIP != null) {
+				NodeAddressInfo ourNode = new NodeAddressInfo(publicIP, NodeInfo.Unknown);
 
 				if(ourNode == node) {
 					return true;
 				}
 			}
-
+			
 			return false;
 		}
 
@@ -1110,7 +1205,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		/// <returns></returns>
 		protected virtual bool? IsIPLocalNode(NodeAddressInfo node) {
 
-			var addressCheck = this.IsIPLocalAddress(node.Address);
+			bool? addressCheck = this.IsIPLocalAddress(node.Address);
 
 			return addressCheck.HasValue ? addressCheck.Value && (node.RealPort == this.LocalPort) : (bool?) null;
 		}
@@ -1150,14 +1245,15 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		protected void CleanAvailablePeerNodes() {
 			if(this.availablePeerNodes.Count > GlobalSettings.ApplicationSettings.MaximumIpCacheCount) {
 				// TODO: use the reliability index to weed out bad ips
-				try{
+				try {
 					bool removed = false;
-					foreach(var removing in this.availablePeerNodes.Where(n => !n.Value.Node.Locked).OrderByDescending(n => n.Value.Timestamp).Skip(GlobalSettings.ApplicationSettings.MaximumIpCacheCount)) {
+
+					foreach(KeyValuePair<string, NodeActivityInfo> removing in this.availablePeerNodes.Where(n => !n.Value.Node.Locked).OrderByDescending(n => n.Value.Timestamp).Skip(GlobalSettings.ApplicationSettings.MaximumIpCacheCount)) {
 						this.availablePeerNodes.RemoveSafe(removing.Key);
 						removed = true;
 					}
 
-					if (removed){
+					if(removed) {
 						if(this.AvailablePeerNodesCountUpdated != null) {
 							this.AvailablePeerNodesCountUpdated(this.availablePeerNodes.Count).WaitAndUnwrapException();
 						}
@@ -1195,7 +1291,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 					if(GlobalSettings.ApplicationSettings.EnableHubs) {
 
-						Log.Verbose("Query hubs IPs");
+						NLog.Connections.Verbose("Query hubs IPs");
 						IPHostEntry hosts = null;
 
 						try {
@@ -1203,46 +1299,47 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 							hosts = Dns.GetHostEntry(hubsAddress);
 						} catch(Exception ex) {
-							Log.Error(ex, "Failed to query neuralium hubs");
+							NLog.Connections.Error(ex, "Failed to query neuralium hubs");
 						}
 
 						if((hosts?.AddressList != null) && hosts.AddressList.Any()) {
-							var ips = hosts.AddressList.Select(a => new NodeAddressInfo(a, NodeInfo.Hub)).ToList();
+							List<NodeAddressInfo> ips = hosts.AddressList.Select(a => new NodeAddressInfo(a, NodeInfo.Hub)).ToList();
 
 							foreach(NodeAddressInfo entry in ips) {
-								Log.Verbose($"Adding hub IP address: {entry.ScoppedAdjustedIp}");
+								NLog.Connections.Verbose($"Adding hub IP address: {entry.ScoppedAdjustedIp}");
 							}
 
 							this.neuraliumHubAddresses.AddNodes(ips);
 						} else {
-							Log.Verbose("No hub IPs found");
+							NLog.Connections.Verbose("No hub IPs found");
 						}
 					}
 				}
 			}
 		}
-		
+
 		/// <summary>
 		///     Here we determine all the IPS that define US
 		/// </summary>
 		public void QueryLocalIPAddress() {
 			lock(this.locker) {
-				var ipList = new List<IPAddress>();
+				List<IPAddress> ipList = new List<IPAddress>();
 				ipList.AddRange(new[] {IPAddress.Parse("0.0.0.0"), IPAddress.Parse("127.0.0.1"), IPAddress.Parse("::1"), IPAddress.Parse("::")});
 
 				if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.LocalhostOnly && this.GetIsNetworkAvailable) {
 					if(GlobalSettings.ApplicationSettings.UseStunServer) {
-						try {
-							// a STUN server is the only way to get our address. otherwise, we will have to ask peers to tell us...
-							STUNClient stunClient = new STUNClient();
-							var result = stunClient.QueryAddressAsync().WaitAndUnwrapException();
-
-							if(result.SuccessResults != null) {
-								this.AddPeerReportedPublicIp(result.SuccessResults.PublicEndPoint.Address, ConnectionStore.PublicIpSource.STUN);
-							}
-						} catch(Exception ex) {
-
-						}
+						// try {
+						// 	// a STUN server is the only way to get our address. otherwise, we will have to ask peers to tell us...
+						// 	STUNClient stunClient = new STUNClient();
+						// 	STUNClient.QueryResult result = stunClient.QueryAddressAsync().WaitAndUnwrapException();
+						//
+						// 	if(result.SuccessResults != null) {
+						// 		this.AddPeerReportedPublicIp(result.SuccessResults.PublicEndPoint.Address, ConnectionStore.PublicIpSource.STUN);
+						// 	}
+						// } catch(Exception ex) {
+						//
+						// }
+						throw new NotImplementedException();
 					}
 
 					try {
@@ -1269,10 +1366,17 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 						}
 
 						// as a fallback, lets try this technique (will most probably return localhost though, so its not perfect)
-						IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
-						ipList.AddRange(host.AddressList);
+						try {
+							IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+
+							if(host.AddressList.Any()) {
+								ipList.AddRange(host.AddressList);
+							}
+						}catch(Exception ex) {
+							NLog.Connections.Verbose(ex, "Failed to query local IP by DNS Host name.");
+						}
 					} catch(Exception ex) {
-						Log.Verbose(ex, "Failed to query network interfaces ");
+						NLog.Connections.Verbose(ex, "Failed to query network interfaces ");
 					}
 
 					if(!ipList.Any()) {
@@ -1304,7 +1408,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 		protected virtual IEnumerable<NodeAddressInfo> FilterIps(List<NodeAddressInfo> nodes) {
 			lock(this.locker) {
-				var ips = this.FilterLocalIp(nodes);
+				IEnumerable<NodeAddressInfo> ips = this.FilterLocalIp(nodes);
 
 				if(this.neuraliumHubAddresses == null) {
 					this.GetHubNodes();
@@ -1340,21 +1444,22 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 		protected async Task TriggerDataReceived(SafeArrayHandle data, PeerConnection peer, IEnumerable<Type> triggerTypes) {
 			if(this.DataReceived != null) {
-				await DataReceived(data, peer, triggerTypes).ConfigureAwait(false);
+				await this.DataReceived(data, peer, triggerTypes).ConfigureAwait(false);
 			}
 		}
 
 		protected virtual ITcpConnection CreateTcpConnection(NetworkEndPoint remoteEndPoint, TcpConnection.ExceptionOccured exceptionCallback, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) {
-		
+
 			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Duplex) {
 				return new TcpDuplexConnection(remoteEndPoint, exceptionCallback);
 			}
+
 			if(GlobalSettings.ApplicationSettings.SocketType == AppSettingsBase.SocketTypes.Stream) {
 				return new TcpStreamConnection(remoteEndPoint, exceptionCallback);
 			}
-			
+
 			throw new ApplicationException("Invalid socket type");
-			
+
 		}
 
 		protected PeerConnection AddNewConnection(ITcpConnection tcpConnection, PeerConnection.Directions direction) {
@@ -1364,7 +1469,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 				PeerConnection peerConnection = this.WrapConnection(tcpConnection, direction);
 
 				// add it to the connecting state
-				this.ConnectingConnections.AddSafe(peerConnection.connection.InternalUuid, peerConnection);
+				this.ConnectingConnections.AddSafe(peerConnection.connection.InternalUuid, (peerConnection, DateTimeEx.CurrentTime));
 
 				peerConnection.ConnectionState = PeerConnection.ConnectionStates.Connecting;
 
@@ -1392,7 +1497,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 				// called if something wrong happens to the connection and we must delete it
 				connection.Disposed += this.InvalidatedConnection;
 
-				var acceptedTriggerList = new[] {typeof(WorkflowTriggerMessage<R>)}.ToList();
+				List<Type> acceptedTriggerList = new[] {typeof(WorkflowTriggerMessage<R>)}.ToList();
 
 				connection.connection.Connected += () => {
 					if(direction == PeerConnection.Directions.Outgoing) {
@@ -1438,10 +1543,10 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		/// <param name="nodes"></param>
 		protected virtual void NewPeersReceived(PeerConnection connection) {
 			lock(this.locker) {
-				var uniques = new NodeAddressInfoList();
+				NodeAddressInfoList uniques = new NodeAddressInfoList();
 
-				foreach(var entry in connection.PeerNodes.Nodes) {
-					if(!uniques.Nodes.Contains(entry)){
+				foreach(NodeAddressInfo entry in connection.PeerNodes.Nodes) {
+					if(!uniques.Nodes.Contains(entry)) {
 						uniques.AddNode(entry);
 					}
 				}
@@ -1451,11 +1556,6 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			}
 		}
 
-		public void Dispose() {
-			this.Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-		
 		private void Dispose(bool disposing) {
 			lock(this.locker) {
 				if(disposing && !this.IsDisposed) {
@@ -1466,16 +1566,9 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			}
 		}
 
-		public void DisconnectAll() {
-			// release other disposable objects  
-			foreach(PeerConnection connectionInfo in this.Connections.Values.ToArray()) {
-				connectionInfo.Dispose();
-			}
-		}
 		protected virtual void DisposeAll() {
 
 			this.connectionPollingTimer?.Dispose();
-
 
 			this.DisconnectAll();
 		}
@@ -1586,11 +1679,11 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 		/// </summary>
 		private void CalculateConsensus(BlockchainType chain) {
 
-			var allSettings = this.chainSettings.Values.Where(d => d.ContainsKey(chain)).Select(d => d[chain]).ToList();
+			List<ChainSettings> allSettings = this.chainSettings.Values.Where(d => d.ContainsKey(chain)).Select(d => d[chain]).ToList();
 
 			ChainSettings consensusSettings = new ChainSettings();
 
-			// ensure we get the concensus value
+			// ensure we get the consensus value
 			consensusSettings.ShareType = this.GetPropertyConsensus(allSettings, c => c.ShareType);
 
 			if(this.chainSettingsConsensus.ContainsKey(chain)) {
@@ -1602,7 +1695,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 		/// <summary>
 		///     this method will take a property and evaluate all instance, and select the value that is 51%+. the majority
-		///     concensus
+		///     consensus
 		/// </summary>
 		/// <param name="peerChainSettings"></param>
 		/// <param name="selector"></param>
@@ -1627,7 +1720,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 
 			lock(this.locker) {
 				// exclude the exact same connection, but return others with the same Uuid
-				return this.ConnectingConnections.Any(c => (c.Key != tcpConnection.InternalUuid) && (c.Value.ClientUuid == tcpConnection.ReportedUuid));
+				return this.ConnectingConnections.Any(c => (c.Key != tcpConnection.InternalUuid) && (c.Value.connection.ClientUuid == tcpConnection.ReportedUuid));
 			}
 		}
 
@@ -1635,7 +1728,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			if(GlobalSettings.ApplicationSettings.AllowMultipleConnectionsFromSameIp) {
 				lock(this.locker) {
 					return this.ConnectingConnections.Values.ToArray().Any(c => {
-						NetworkEndPoint currentEndpoint = GetEndpoint(c);
+						NetworkEndPoint currentEndpoint = GetEndpoint(c.connection);
 
 						return currentEndpoint.EndPoint.Equals(endpoint.EndPoint) && currentEndpoint.IPMode.Equals(endpoint.IPMode);
 					});
@@ -1650,7 +1743,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			//TODO: here the port is usually not the same, and could be a different  peer. how should we treat this? is it even useful?
 			lock(this.locker) {
 				return this.ConnectingConnections.Values.ToArray().Any(c => {
-					(IPAddress endpointAddress, var _) = GetEndpointInfo(c);
+					(IPAddress endpointAddress, _) = GetEndpointInfo(c.connection);
 
 					return endpointAddress.Equals(address);
 				});
@@ -1685,7 +1778,7 @@ if(			this.PeerConnectionsCountUpdated != null){await PeerConnectionsCountUpdate
 			lock(this.locker) {
 				return this.Connections.Values.ToArray().Any(c => {
 
-					(IPAddress endpointAddress, var _) = GetEndpointInfo(c);
+					(IPAddress endpointAddress, _) = GetEndpointInfo(c);
 
 					return endpointAddress.Equals(address);
 				});

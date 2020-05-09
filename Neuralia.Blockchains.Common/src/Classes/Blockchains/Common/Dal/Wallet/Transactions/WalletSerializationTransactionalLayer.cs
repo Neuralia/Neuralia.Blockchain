@@ -6,19 +6,17 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.FileProviders;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
-using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Extensions;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
 using Zio;
-using Zio.FileSystems;
-using SafeArrayHandle = Neuralia.Blockchains.Tools.Data.SafeArrayHandle;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Transactions {
 	/// <summary>
@@ -48,15 +46,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 		private const string BACKUP_PATH_NAME = "backup";
 
-		private const uint HRFileLocked          = 0x80070020;
+		private const uint HRFileLocked = 0x80070020;
 		private const uint HRPortionOfFileLocked = 0x80070021;
 
 		private readonly List<Task> cleaningTasks = new List<Task>();
 
 		private readonly List<(string name, FilesystemTypes type)> exclusions;
 
-		private readonly Dictionary<string, FileStatuses> fileStatuses         = new Dictionary<string, FileStatuses>();
-		private readonly HashSet<string>                  initialFileStructure = new HashSet<string>();
+		private readonly Dictionary<string, FileStatuses> fileStatuses = new Dictionary<string, FileStatuses>();
+		private readonly HashSet<string> initialFileStructure = new HashSet<string>();
 
 		protected readonly FileSystemWrapper physicalFileSystem;
 
@@ -70,9 +68,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		public WalletSerializationTransactionalLayer(string walletsPath, List<(string name, FilesystemTypes type)> exclusions, FileSystemWrapper fileSystem) {
 			// start with a physical filesystem
 			this.physicalFileSystem = fileSystem ?? FileSystemWrapper.CreatePhysical();
-			this.activeFileSystem   = this.physicalFileSystem;
-			this.walletsPath        = walletsPath;
-			this.exclusions         = exclusions;
+			this.activeFileSystem = this.physicalFileSystem;
+			this.walletsPath = walletsPath;
+			this.exclusions = exclusions;
 		}
 
 		public FileSystemWrapper FileSystem => this.activeFileSystem;
@@ -80,6 +78,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		private void Repeat(Action action) {
 			Repeater.Repeat(action, 5, () => {
 				Thread.Sleep(150);
+			});
+		}
+		
+		private Task RepeatAsync(Func<Task> action) {
+			return Repeater.RepeatAsync(action, 5, () => {
+				Thread.Sleep(150);
+				
+				return Task.CompletedTask;
 			});
 		}
 
@@ -103,67 +109,113 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 				}
 			}, 5);
 		}
+		
+		private Task RepeatFileOperationAsync(Func<Task> action) {
+
+			int attempt = 1;
+
+			return Repeater.RepeatAsync(async () => {
+
+				try {
+					await action().ConfigureAwait(false);
+				} catch(IOException e) {
+					if(this.IsFileLocked(e)) {
+						// file is locked, lets sleep a good amount of time then we try again
+						int delay = Math.Min(200 * attempt, 1000);
+						Thread.Sleep(delay);
+						attempt++;
+					}
+
+					throw;
+				}
+			}, 5);
+		}
 
 		private bool IsFileLocked(IOException ioex) {
 			uint errorCode = (uint) Marshal.GetHRForException(ioex);
 
-			return errorCode == HRFileLocked || errorCode == HRPortionOfFileLocked;
+			return (errorCode == HRFileLocked) || (errorCode == HRPortionOfFileLocked);
 		}
 
 		private void ClearCleaningTasks() {
 
-			foreach(Task task in this.cleaningTasks.Where(t => t.IsCompleted).ToArray()) {
-				this.cleaningTasks.Remove(task);
+			try {
+				foreach(Task task in this.cleaningTasks.Where(t => t.IsCompleted).ToArray()) {
+					this.cleaningTasks.Remove(task);
+				}
+			} catch(Exception ex) {
+				// nothing to do
 			}
 		}
 
-		public WalletSerializationTransaction BeginTransaction() {
-			this.WaitCleaningTasks();
-
+		private async Task WaitCleaningTasks() {
 			this.ClearCleaningTasks();
+
+			try {
+				if(this.cleaningTasks.Any()) {
+					try {
+						await Task.WhenAll(this.cleaningTasks.ToList()).HandleTimeout(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, "Failed to process cleaning tasks.");
+					}
+				}
+			} finally {
+				this.ClearCleaningTasks();
+			}
+		}
+
+		public bool IsInTransaction => this.walletSerializationTransaction != null;
+		
+		public async Task<WalletSerializationTransaction> BeginTransaction() {
+			await this.WaitCleaningTasks().ConfigureAwait(false);
+			
 			this.fileStatuses.Clear();
 			this.initialFileStructure.Clear();
 
-			if(this.walletSerializationTransaction != null) {
+			if(this.IsInTransaction) {
 				throw new ApplicationException("Transaction already in progress");
 			}
 
-			this.walletSerializationTransaction = new WalletSerializationTransaction(this);
-			this.activeFileSystem               = FileSystemWrapper.CreateMemory();
+			try {
+				this.walletSerializationTransaction = new WalletSerializationTransaction(this);
+				this.activeFileSystem = FileSystemWrapper.CreateMemory();
+				
+				await ImportFilesystems().ConfigureAwait(false);
+				
+				return this.walletSerializationTransaction;
+			} catch {
+				await this.RollbackTransaction().ConfigureAwait(false);
 
-			this.ImportFilesystems();
-
-			return this.walletSerializationTransaction;
+				throw;
+			}
 		}
 
-		private void DeleteFolderStructure(DirectoryEntry directory, FileSystemWrapper memoryFileSystem) {
+		private Task DeleteFolderStructure(DirectoryEntry directory, FileSystemWrapper memoryFileSystem) {
 			if(GlobalSettings.ApplicationSettings.WalletTransactionDeletionMode == AppSettingsBase.WalletTransactionDeletionModes.Safe) {
-				this.SafeDeleteFolderStructure(directory, memoryFileSystem);
+				return this.SafeDeleteFolderStructure(directory, memoryFileSystem);
 			} else {
-				this.FastDeleteFolderStructure(directory, memoryFileSystem);
+				return this.FastDeleteFolderStructure(directory, memoryFileSystem);
 			}
 		}
 
 		public async Task CommitTransaction() {
 
 			// wait for any remaining tasks if required
-			this.WaitCleaningTasks();
-
-			this.ClearCleaningTasks();
-
+			await this.WaitCleaningTasks().ConfigureAwait(false);
+			
 			try {
 				// this is important. let's try 3 times before we declare it a fail
-				if(!await Repeater.RepeatAsync(CommitDirectoryChanges, 2, WaitCleaningTasks).ConfigureAwait(false)) {
-					await RollbackTransaction().ConfigureAwait(false);
+				if(!await Repeater.RepeatAsync(this.CommitDirectoryChanges, 2, this.WaitCleaningTasks).ConfigureAwait(false)) {
+					await this.RollbackTransaction().ConfigureAwait(false);
 				}
 
 			} catch(Exception ex) {
-				await RollbackTransaction().ConfigureAwait(false);
+				await this.RollbackTransaction().ConfigureAwait(false);
 
 				throw ex;
 			}
 
-			this.walletSerializationTransaction.CommitTransaction();
+			await this.walletSerializationTransaction.CommitTransaction().ConfigureAwait(false);
 			this.walletSerializationTransaction = null;
 
 			FileSystemWrapper memoryFileSystem = this.activeFileSystem;
@@ -178,61 +230,66 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		public async Task RollbackTransaction() {
 			this.ClearCleaningTasks();
 
-			await walletSerializationTransaction.RollbackTransaction().ConfigureAwait(false);
-			this.walletSerializationTransaction = null;
+			try {
+				if(this.IsInTransaction) {
+					await this.walletSerializationTransaction.RollbackTransaction().ConfigureAwait(false);
+				}
+			} finally {
+				this.walletSerializationTransaction = null;
 
-			FileSystemWrapper memoryFileSystem = this.activeFileSystem;
+				FileSystemWrapper memoryFileSystem = this.activeFileSystem;
 
-			// let all changes go, we release it all
-			this.cleaningTasks.Add(Task.Run(() => this.DeleteFolderStructure(memoryFileSystem.GetDirectoryEntryUnconditional(this.walletsPath), memoryFileSystem)));
+				// let all changes go, we release it all
+				this.cleaningTasks.Add(Task.Run(() => this.DeleteFolderStructure(memoryFileSystem.GetDirectoryEntryUnconditional(this.walletsPath), memoryFileSystem)));
 
-			this.activeFileSystem = this.physicalFileSystem;
-			this.fileStatuses.Clear();
-			this.initialFileStructure.Clear();
+				this.activeFileSystem = this.physicalFileSystem;
+				this.fileStatuses.Clear();
+				this.initialFileStructure.Clear();
+			}
 		}
-
+		
 		private async Task CommitDirectoryChanges() {
 			//TODO: make this bullet proof
-			if(this.walletSerializationTransaction == null) {
+			if(!this.IsInTransaction) {
 				return;
 			}
 
 			// copy directory structure
-			DirectoryEntry activeDirectoryInfo   = this.activeFileSystem.GetDirectoryEntryUnconditional(this.walletsPath);
+			DirectoryEntry activeDirectoryInfo = this.activeFileSystem.GetDirectoryEntryUnconditional(this.walletsPath);
 			DirectoryEntry physicalDirectoryInfo = this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath);
-			string         backupPath            = Path.Combine(this.walletsPath, BACKUP_PATH_NAME);
+			string backupPath = Path.Combine(this.walletsPath, BACKUP_PATH_NAME);
 
-			var fileDeltas = new List<FileOperationInfo>();
+			List<FileOperationInfo> fileDeltas = new List<FileOperationInfo>();
 
 			try {
-				this.BuildDelta(activeDirectoryInfo, physicalDirectoryInfo, fileDeltas);
+				await this.BuildDelta(activeDirectoryInfo, physicalDirectoryInfo, fileDeltas).ConfigureAwait(false);
 
-				this.CreateSafetyBackup(backupPath, fileDeltas);
+				await this.CreateSafetyBackup(backupPath, fileDeltas).ConfigureAwait(false);
 
-				this.ApplyFileDeltas(fileDeltas);
+				await this.ApplyFileDeltas(fileDeltas).ConfigureAwait(false);
 
-				this.CompleteFileChanges(fileDeltas);
+				await this.CompleteFileChanges(fileDeltas).ConfigureAwait(false);
 
-				this.Repeat(() => {
+				await this.RepeatAsync(async () => {
 
-					foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+					foreach(string file in Narballer.GetPackageFilesList(backupPath)) {
 						FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file);
 
 						if(fileInfo?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+                            await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
 					}
-				});
+				}).ConfigureAwait(false);
 
 			} catch(Exception ex) {
 				// delete our temp work
-				Log.Error(ex, "Failed to write transaction data. Will attempt to undo");
+				NLog.Default.Error(ex, "Failed to write transaction data. Will attempt to undo");
 
-				if(this.UndoFileChanges(backupPath, fileDeltas)) {
+				if(await this.UndoFileChanges(backupPath, fileDeltas).ConfigureAwait(false)) {
 					// ok, at least we undid everything
-					Log.Error(ex, "Undo transaction was successful");
+					NLog.Default.Error(ex, "Undo transaction was successful");
 				} else {
-					Log.Error(ex, "Failed to undo transaction");
+					NLog.Default.Error(ex, "Failed to undo transaction");
 
 					throw new ApplicationException("Failed to undo transaction", ex);
 				}
@@ -241,19 +298,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		protected void CreateSafetyBackup(string backupPath, List<FileOperationInfo> fileDeltas) {
+		protected async Task CreateSafetyBackup(string backupPath, List<FileOperationInfo> fileDeltas) {
 
 			Narballer nar = new Narballer(this.walletsPath, this.physicalFileSystem);
 
-			this.Repeat(() => {
-				foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+			await this.RepeatAsync(async () => {
+				foreach(string file in Narballer.GetPackageFilesList(backupPath)) {
 					FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file);
 
 					if(fileInfo?.Exists ?? false) {
-						this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+						await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 					}
 				}
-			});
+			}).ConfigureAwait(false);
 
 			foreach(FileOperationInfo file in fileDeltas) {
 				if(file.FileOp == FileOps.Deleted) {
@@ -261,8 +318,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 					this.Repeat(() => {
 
 						string adjustedPath = file.originalName.Replace(this.walletsPath, "");
-						string separator1   = Path.DirectorySeparatorChar.ToString();
-						string separator2   = Path.AltDirectorySeparatorChar.ToString();
+						string separator1 = Path.DirectorySeparatorChar.ToString();
+						string separator2 = Path.AltDirectorySeparatorChar.ToString();
 
 						if(adjustedPath.StartsWith(separator1)) {
 							adjustedPath = adjustedPath.Substring(separator1.Length, adjustedPath.Length - separator1.Length);
@@ -283,8 +340,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 					this.Repeat(() => {
 
 						string adjustedPath = file.originalName.Replace(this.walletsPath, "");
-						string separator1   = Path.DirectorySeparatorChar.ToString();
-						string separator2   = Path.AltDirectorySeparatorChar.ToString();
+						string separator1 = Path.DirectorySeparatorChar.ToString();
+						string separator2 = Path.AltDirectorySeparatorChar.ToString();
 
 						if(adjustedPath.StartsWith(separator1)) {
 							adjustedPath = adjustedPath.Substring(separator1.Length, adjustedPath.Length - separator1.Length);
@@ -302,89 +359,89 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 
 			if(!nar.Package(backupPath)) {
-				Log.Verbose("No files were found to backup. no backup created.");
+				NLog.Default.Verbose("No files were found to backup. no backup created.");
 			}
 		}
 
-		protected void ApplyFileDeltas(List<FileOperationInfo> fileDeltas) {
+		protected async Task ApplyFileDeltas(List<FileOperationInfo> fileDeltas) {
 
 			foreach(FileOperationInfo file in fileDeltas) {
 
 				if(file.FileOp == FileOps.Deleted) {
 
-					this.RepeatFileOperation(() => {
+					await this.RepeatFileOperationAsync(async () => {
 						FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(file.temporaryName), this.physicalFileSystem);
 
 						FileSystemEntry fileInfoDest = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
 						if(fileInfoDest?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfoDest.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+							await this.FullyDeleteFile(fileInfoDest.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
 
 						this.physicalFileSystem.MoveFile(file.originalName, file.temporaryName);
-					});
+					}).ConfigureAwait(false);
 				}
 
 				if(file.FileOp == FileOps.Created) {
 
-					this.RepeatFileOperation(() => {
+					await this.RepeatFileOperationAsync(async () => {
 						FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(file.temporaryName), this.physicalFileSystem);
 
 						FileSystemEntry fileInfoSource = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
 						if(fileInfoSource?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+							await this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
 
-						this.physicalFileSystem.WriteAllBytes(file.temporaryName, this.activeFileSystem.ReadAllBytes(file.originalName));
-					});
+                        await this.physicalFileSystem.WriteAllBytesAsync(file.temporaryName, this.activeFileSystem.ReadAllBytes(file.originalName)).ConfigureAwait(false);
+					}).ConfigureAwait(false);
 				}
 
 				if(file.FileOp == FileOps.Modified) {
 
-					this.RepeatFileOperation(() => {
+					await this.RepeatFileOperationAsync(async () => {
 						FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(file.temporaryName), this.physicalFileSystem);
 
 						FileSystemEntry fileInfoDest = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
 						if(fileInfoDest?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfoDest.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+							await this.FullyDeleteFile(fileInfoDest.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
 
 						this.physicalFileSystem.MoveFile(file.originalName, file.temporaryName);
-					});
+					}).ConfigureAwait(false);
 
-					this.RepeatFileOperation(() => {
+					await this.RepeatFileOperationAsync(async () => {
 						FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(file.originalName), this.physicalFileSystem);
 
 						FileSystemEntry fileInfoSource = this.physicalFileSystem.GetFileEntryUnconditional(file.originalName);
 
 						if(fileInfoSource?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+							await this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
 
-						this.physicalFileSystem.WriteAllBytes(file.originalName, this.activeFileSystem.ReadAllBytes(file.originalName));
-					});
+                        await this.physicalFileSystem.WriteAllBytesAsync(file.originalName, this.activeFileSystem.ReadAllBytes(file.originalName)).ConfigureAwait(false);
+					}).ConfigureAwait(false);
 				}
 			}
 		}
 
-		protected bool UndoFileChanges(string backupPath, List<FileOperationInfo> fileDeltas) {
+		protected async Task<bool> UndoFileChanges(string backupPath, List<FileOperationInfo> fileDeltas) {
 
 			try {
-				this.RepeatFileOperation(() => {
+				await this.RepeatFileOperationAsync(async () => {
 
 					foreach(FileOperationInfo file in fileDeltas) {
 						if(file.FileOp == FileOps.Deleted) {
 
 							FileSystemEntry fileInfoSource = this.physicalFileSystem.GetFileEntryUnconditional(file.originalName);
 
-							this.RepeatFileOperation(() => {
+							await this.RepeatFileOperationAsync(async () => {
 
 								if(fileInfoSource?.Exists ?? false) {
-									this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+									await this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 								}
-							});
+							}).ConfigureAwait(false);
 
 							FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
@@ -400,10 +457,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 							FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
-							this.RepeatFileOperation(() => {
+							this.RepeatFileOperation(async () => {
 								if(fileInfo?.Exists ?? false) {
 
-									this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+									await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 								}
 							});
 						}
@@ -412,10 +469,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 							FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file.originalName);
 
-							this.RepeatFileOperation(() => {
+							this.RepeatFileOperation(async () => {
 								if(fileInfo?.Exists ?? false) {
 
-									this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+									await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 								}
 							});
 
@@ -429,17 +486,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 						}
 					}
 
-				});
+				}).ConfigureAwait(false);
 
 				// now confirm each original file is there and matches hash
-				var missingFileDeltas = new List<FileOperationInfo>();
+				List<FileOperationInfo> missingFileDeltas = new List<FileOperationInfo>();
 
 				foreach(FileOperationInfo file in fileDeltas) {
 					if(file.FileOp == FileOps.Deleted) {
 
 						FileSystemEntry fileInfoSource = this.physicalFileSystem.GetFileEntryUnconditional(file.originalName);
 
-						if(!fileInfoSource?.Exists ?? false || file.originalHash != this.HashFile(file.originalName)) {
+						if(!fileInfoSource?.Exists ?? (false || (file.originalHash != await this.HashFile(file.originalName).ConfigureAwait(false)))) {
 							missingFileDeltas.Add(file);
 						}
 					}
@@ -448,7 +505,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 						FileSystemEntry fileInfoSource = this.physicalFileSystem.GetFileEntryUnconditional(file.originalName);
 
-						if(!fileInfoSource?.Exists ?? false || file.originalHash != this.HashFile(file.originalName)) {
+						if(!fileInfoSource?.Exists ?? (false || (file.originalHash != await this.HashFile(file.originalName).ConfigureAwait(false)))) {
 							missingFileDeltas.Add(file);
 						}
 					}
@@ -458,55 +515,55 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 					this.RestoreFromBackup(backupPath, missingFileDeltas);
 				}
 
-				this.Repeat(() => {
-					foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+				await this.RepeatAsync(async () => {
+					foreach(string file in Narballer.GetPackageFilesList(backupPath)) {
 						FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file);
 
 						if(fileInfo?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+							await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
 					}
-				});
+				}).ConfigureAwait(false);
 
 				// clear remaining zomkbie directories
-				this.DeleteInnexistentDirectories(this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath));
+				await this.DeleteInnexistentDirectories(this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath)).ConfigureAwait(false);
 
 				return true;
 			} catch(Exception ex) {
 
 				if(Narballer.PackageFilesValid(backupPath, this.physicalFileSystem)) {
-					Log.Error(ex, "An exception occured in the transaction. attempting to restore from backup package");
+					NLog.Default.Error(ex, "An exception occured in the transaction. attempting to restore from backup package");
 
 					// ok, lets restore from the zip
 					try {
 						this.RestoreFromBackup(backupPath, fileDeltas);
 
 						try {
-							this.Repeat(() => {
-								foreach(var file in Narballer.GetPackageFilesList(backupPath)) {
+							await this.RepeatAsync(async () => {
+								foreach(string file in Narballer.GetPackageFilesList(backupPath)) {
 									FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file);
 
 									if(fileInfo?.Exists ?? false) {
-										this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+										await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 									}
 								}
-							});
+							}).ConfigureAwait(false);
 
 						} catch {
 							// nothing to do, its ok
 						}
 
-						Log.Error(ex, "restore from zip completed successfully");
+						NLog.Default.Error(ex, "restore from zip completed successfully");
 
 						return true;
 					} catch {
-						Log.Fatal(ex, "Failed to restore from zip. Exiting application to saveguard the wallet. please restore your wallet manually by extracting from zip file.");
+						NLog.Default.Fatal(ex, "Failed to restore from zip. Exiting application to saveguard the wallet. please restore your wallet manually by extracting from zip file.");
 
 						Process.GetCurrentProcess().Kill();
 
 					}
 				} else {
-					Log.Fatal(ex, "An exception occured in the transaction. wallet could be in an incomplete state and no backup could be found. possible corruption");
+					NLog.Default.Fatal(ex, "An exception occured in the transaction. wallet could be in an incomplete state and no backup could be found. possible corruption");
 
 					Process.GetCurrentProcess().Kill();
 				}
@@ -519,25 +576,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		///     delete directories that may be remaining in case of a rollback
 		/// </summary>
 		/// <param name="fileDeltas"></param>
-		private void DeleteInnexistentDirectories(DirectoryEntry physicalDirectoryInfo) {
+		private async Task DeleteInnexistentDirectories(DirectoryEntry physicalDirectoryInfo) {
 
-			var directories = physicalDirectoryInfo.EnumerateDirectories().Select(d => d.ToOsPath(this.physicalFileSystem)).ToArray();
+			string[] directories = physicalDirectoryInfo.EnumerateDirectories().Select(d => d.ToOsPath(this.physicalFileSystem)).ToArray();
 
 			foreach(string directory in directories) {
 				if(!this.initialFileStructure.Any(s => s.StartsWith(directory, StringComparison.InvariantCultureIgnoreCase))) {
 					DirectoryEntry directoryInfo = this.physicalFileSystem.GetDirectoryEntryUnconditional(directory);
 
-					this.RepeatFileOperation(() => {
+					await this.RepeatFileOperationAsync(async () => {
 						if(directoryInfo.Exists) {
-							this.SafeDeleteFolderStructure(directoryInfo, this.physicalFileSystem);
+							await this.SafeDeleteFolderStructure(directoryInfo, this.physicalFileSystem).ConfigureAwait(false);
 						}
-					});
+					}).ConfigureAwait(false);
 				}
 			}
 
 			foreach(DirectoryEntry subdirectory in physicalDirectoryInfo.EnumerateDirectories()) {
 
-				this.DeleteInnexistentDirectories(subdirectory);
+				await this.DeleteInnexistentDirectories(subdirectory).ConfigureAwait(false);
 			}
 		}
 
@@ -557,29 +614,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		protected void CompleteFileChanges(List<FileOperationInfo> fileDeltas) {
+		protected async Task CompleteFileChanges(List<FileOperationInfo> fileDeltas) {
 
 			foreach(FileOperationInfo file in fileDeltas) {
 				if(file.FileOp == FileOps.Deleted) {
 
 					FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
-					this.RepeatFileOperation(() => {
+					await this.RepeatFileOperationAsync(async () => {
 						if(fileInfo?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+							await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
-					});
+					}).ConfigureAwait(false);
 				}
 
 				if(file.FileOp == FileOps.Created) {
 
 					FileSystemEntry fileInfoSource = this.physicalFileSystem.GetFileEntryUnconditional(file.originalName);
 
-					this.RepeatFileOperation(() => {
+					await this.RepeatFileOperationAsync(async () => {
 						if(fileInfoSource?.Exists ?? false) {
-							this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+							await this.FullyDeleteFile(fileInfoSource.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 						}
-					});
+					}).ConfigureAwait(false);
 
 					FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
@@ -595,7 +652,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 					FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file.temporaryName);
 
 					if(fileInfo?.Exists ?? false) {
-						this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
+						await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
 					}
 				}
 			}
@@ -607,17 +664,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		/// <param name="activeDirectoryInfo"></param>
 		/// <param name="physicalDirectoryInfo"></param>
 		/// <exception cref="ApplicationException"></exception>
-		private void BuildDelta(DirectoryEntry activeDirectoryInfo, DirectoryEntry physicalDirectoryInfo, List<FileOperationInfo> fileDeltas) {
+		private async Task BuildDelta(DirectoryEntry activeDirectoryInfo, DirectoryEntry physicalDirectoryInfo, List<FileOperationInfo> fileDeltas) {
 			// skip any exclusions
 			//TODO: make this more powerful with regexes
 			if(this.exclusions?.Any(e => string.Equals(e.name, activeDirectoryInfo.Name, StringComparison.CurrentCultureIgnoreCase)) ?? false) {
 				return;
 			}
 
-			var               activeFiles = activeDirectoryInfo.Exists ? activeDirectoryInfo.EnumerateFiles().ToArray() : new FileSystemEntry[0];
+			FileSystemEntry[] activeFiles = activeDirectoryInfo.Exists ? activeDirectoryInfo.EnumerateFiles().ToArray() : new FileSystemEntry[0];
 			FileSystemEntry[] physicalFiles;
 
-			if(physicalDirectoryInfo == null || !physicalDirectoryInfo.Exists) {
+			if((physicalDirectoryInfo == null) || !physicalDirectoryInfo.Exists) {
 				physicalFiles = new FileSystemEntry[0];
 			} else {
 				physicalFiles = physicalDirectoryInfo.EnumerateFiles().ToArray();
@@ -626,20 +683,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			//TODO: this is due to a bug where the temp files remain. fix the bug instead of this hack
 			physicalFiles = physicalFiles.Where(f => !f.ToOsPath(this.physicalFileSystem).EndsWith("transaction-delete") && !f.ToOsPath(this.physicalFileSystem).EndsWith("transaction-new") && !f.ToOsPath(this.physicalFileSystem).EndsWith("transaction-modified")).ToArray();
 
-			var activeFileNames   = activeFiles.Select(f => f.ToOsPath(this.physicalFileSystem)).ToList();
-			var physicalFileNames = physicalFiles.Select(f => f.ToOsPath(this.physicalFileSystem)).ToList();
+			List<string> activeFileNames = activeFiles.Select(f => f.ToOsPath(this.physicalFileSystem)).ToList();
+			List<string> physicalFileNames = physicalFiles.Select(f => f.ToOsPath(this.physicalFileSystem)).ToList();
 
 			//  prepare the delta
-			var deleteFiles = physicalFiles.Where(f => !activeFileNames.Contains(f.ToOsPath(this.physicalFileSystem))).ToList();
-			var newFiles    = activeFiles.Where(f => !physicalFileNames.Contains(f.ToOsPath(this.physicalFileSystem))).ToList();
+			List<FileSystemEntry> deleteFiles = physicalFiles.Where(f => !activeFileNames.Contains(f.ToOsPath(this.physicalFileSystem))).ToList();
+			List<FileSystemEntry> newFiles = activeFiles.Where(f => !physicalFileNames.Contains(f.ToOsPath(this.physicalFileSystem))).ToList();
 
 			// TODO: this can be made faster by filtering fileStatuses, not query the whole set
-			var modifiedFiles = activeFiles.Where(f => physicalFileNames.Contains(f.ToOsPath(this.physicalFileSystem)) && this.fileStatuses.ContainsKey(f.ToOsPath(this.physicalFileSystem)) && this.fileStatuses[f.ToOsPath(this.physicalFileSystem)] == FileStatuses.Modified).ToList();
+			List<FileSystemEntry> modifiedFiles = activeFiles.Where(f => physicalFileNames.Contains(f.ToOsPath(this.physicalFileSystem)) && this.fileStatuses.ContainsKey(f.ToOsPath(this.physicalFileSystem)) && (this.fileStatuses[f.ToOsPath(this.physicalFileSystem)] == FileStatuses.Modified)).ToList();
 
 			foreach(FileSystemEntry file in deleteFiles) {
 
 				string clearableFileName = file.ToOsPath(this.physicalFileSystem) + "-transaction-delete";
-				fileDeltas.Add(new FileOperationInfo {temporaryName = clearableFileName, originalName = file.ToOsPath(this.physicalFileSystem), FileOp = FileOps.Deleted, originalHash = this.HashFile(file.ToOsPath(this.physicalFileSystem))});
+				fileDeltas.Add(new FileOperationInfo {temporaryName = clearableFileName, originalName = file.ToOsPath(this.physicalFileSystem), FileOp = FileOps.Deleted, originalHash = await this.HashFile(file.ToOsPath(this.physicalFileSystem)).ConfigureAwait(false) });
 			}
 
 			foreach(FileSystemEntry file in newFiles) {
@@ -649,44 +706,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			foreach(FileSystemEntry file in modifiedFiles) {
 				string clearableFileName = file.ToOsPath(this.physicalFileSystem) + "-transaction-modified";
-				fileDeltas.Add(new FileOperationInfo {temporaryName = clearableFileName, originalName = file.ToOsPath(this.physicalFileSystem), FileOp = FileOps.Modified, originalHash = this.HashFile(file.ToOsPath(this.physicalFileSystem))});
+				fileDeltas.Add(new FileOperationInfo {temporaryName = clearableFileName, originalName = file.ToOsPath(this.physicalFileSystem), FileOp = FileOps.Modified, originalHash = await this.HashFile(file.ToOsPath(this.physicalFileSystem)).ConfigureAwait(false) });
 			}
 
 			// and recurse into its sub directories
 			foreach(DirectoryEntry subdirectory in activeDirectoryInfo.EnumerateDirectories()) {
 
 				DirectoryEntry directoryEntry = null;
-				var            directoryPath  = Path.Combine(physicalDirectoryInfo.ToOsPath(this.physicalFileSystem), subdirectory.Name);
+				string directoryPath = Path.Combine(physicalDirectoryInfo.ToOsPath(this.physicalFileSystem), subdirectory.Name);
 
 				if(this.physicalFileSystem.DirectoryExists(directoryPath)) {
 					directoryEntry = this.physicalFileSystem.GetDirectoryEntryUnconditional(directoryPath);
 				}
 
-				this.BuildDelta(subdirectory, directoryEntry, fileDeltas);
+				await this.BuildDelta(subdirectory, directoryEntry, fileDeltas).ConfigureAwait(false);
 			}
 		}
 
-		private long HashFile(string filename) {
-			var fileEntry = this.physicalFileSystem.GetFileEntryUnconditional(filename);
+		private Task<long> HashFile(string filename) {
+			FileEntry fileEntry = this.physicalFileSystem.GetFileEntryUnconditional(filename);
 
 			return this.HashFile(fileEntry);
 		}
 
-		private long HashFile(FileSystemEntry file) {
-			if((file?.Exists ?? false) && file.GetFileLength() != 0) {
+		private Task<long> HashFile(FileSystemEntry file) {
+			if((file?.Exists ?? false) && (file.GetFileLength() != 0)) {
 				return HashingUtils.XxHashFile(file.ToOsPath(this.physicalFileSystem), this.physicalFileSystem);
 			}
 
-			return 0;
+			return Task.FromResult(0L);
 		}
 
-		private void FullyDeleteFile(string fileName, FileSystemWrapper fileSystem) {
-			this.RepeatFileOperation(() => {
+		private Task FullyDeleteFile(string fileName, FileSystemWrapper fileSystem) {
+			return this.RepeatFileOperationAsync(() => {
 				if(GlobalSettings.ApplicationSettings.WalletTransactionDeletionMode == AppSettingsBase.WalletTransactionDeletionModes.Safe) {
-					SecureWipe.WipeFile(fileName, 5, fileSystem);
+					return SecureWipe.WipeFile(fileName, 5, fileSystem);
 				} else {
 					fileSystem.DeleteFile(fileName);
 				}
+				
+				return Task.CompletedTask;
 			});
 
 		}
@@ -695,20 +754,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		///     Reasonably safely clear files from the physical disk
 		/// </summary>
 		/// <param name="directoryInfo"></param>
-		private void SafeDeleteFolderStructure(DirectoryEntry directoryInfo, FileSystemWrapper fileSystem) {
+		private async Task SafeDeleteFolderStructure(DirectoryEntry directoryInfo, FileSystemWrapper fileSystem) {
 			if(!directoryInfo.Exists) {
 				return;
 			}
 
-			foreach(FileSystemEntry file in directoryInfo.EnumerateFiles().ToArray()) {
-				this.RepeatFileOperation(() => {
-					SecureWipe.WipeFile(file.ToOsPath(this.physicalFileSystem), 5, fileSystem);
-				});
+			foreach(FileEntry file in directoryInfo.EnumerateFiles().ToArray()) {
+				await this.RepeatFileOperationAsync(() => {
+					return SecureWipe.WipeFile(file.ToOsPath(this.physicalFileSystem), 5, fileSystem);
+				}).ConfigureAwait(false);
 			}
 
 			foreach(DirectoryEntry subdirectory in directoryInfo.EnumerateDirectories()) {
 
-				this.SafeDeleteFolderStructure(subdirectory, fileSystem);
+				await this.SafeDeleteFolderStructure(subdirectory, fileSystem).ConfigureAwait(false);
 			}
 
 			this.RepeatFileOperation(() => {
@@ -721,12 +780,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		/// </summary>
 		/// <param name="directoryInfo"></param>
 		/// <param name="fileSystem"></param>
-		private void FastDeleteFolderStructure(DirectoryEntry directoryInfo, FileSystemWrapper fileSystem) {
+		private async Task FastDeleteFolderStructure(DirectoryEntry directoryInfo, FileSystemWrapper fileSystem) {
 			if(!directoryInfo.Exists) {
 				return;
 			}
 
-			foreach(FileSystemEntry file in directoryInfo.EnumerateFiles().ToArray()) {
+			foreach(FileEntry file in directoryInfo.EnumerateFiles().ToArray()) {
 				this.RepeatFileOperation(() => {
 					fileSystem.DeleteFile(file.ToOsPath(this.physicalFileSystem));
 				});
@@ -734,7 +793,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			foreach(DirectoryEntry subdirectory in directoryInfo.EnumerateDirectories()) {
 
-				this.DeleteFolderStructure(subdirectory, fileSystem);
+				await this.DeleteFolderStructure(subdirectory, fileSystem).ConfigureAwait(false);
 			}
 
 			this.RepeatFileOperation(() => {
@@ -742,32 +801,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			});
 		}
 
-		private void ImportFilesystems() {
-			if(this.walletSerializationTransaction == null) {
+		private async Task ImportFilesystems() {
+			if(!this.IsInTransaction) {
 				return;
 			}
 
 			// copy directory structure
 			DirectoryEntry directoryInfo = this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath);
 
-			this.Repeat(() => {
+			await RepeatAsync(async () => {
 
-				this.fileStatuses.Clear();
+                fileStatuses.Clear();
 
-				this.CloneDirectory(directoryInfo);
+                await CloneDirectory(directoryInfo).ConfigureAwait(false);
 
-				if(!this.activeFileSystem.IsMemory) {
+				if(!activeFileSystem.IsMemory) {
 					return;
 				}
 
-				if(!this.activeFileSystem.AllFiles().Any()) {
+				if(!activeFileSystem.AllFiles().Any()) {
 					throw new ApplicationException("Failed to read wallet files from disk");
 				}
-			});
+			}).ConfigureAwait(false);
 
 		}
 
-		private void CloneDirectory(DirectoryEntry directory) {
+		private async Task CloneDirectory(DirectoryEntry directory) {
 
 			// skip any exclusions
 			//TODO: make this stronger with regexes
@@ -777,7 +836,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			this.CreateDirectory(directory.ToOsPath(this.physicalFileSystem));
 
-			foreach(FileSystemEntry file in directory.EnumerateFiles().ToArray()) {
+			foreach(FileEntry file in directory.EnumerateFiles().ToArray()) {
 				this.Create(file.ToOsPath(this.physicalFileSystem));
 				this.fileStatuses.Add(file.ToOsPath(this.physicalFileSystem), FileStatuses.Untouched);
 				this.initialFileStructure.Add(file.ToOsPath(this.physicalFileSystem));
@@ -786,7 +845,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			// and its sub directories
 			foreach(DirectoryEntry subdirectory in directory.EnumerateDirectories()) {
 
-				this.CloneDirectory(subdirectory);
+				await CloneDirectory(subdirectory).ConfigureAwait(false);
 			}
 		}
 
@@ -829,7 +888,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		}
 
 		/// <summary>
-		/// We check If something has changed on the physical file system that may not reflect in the memory one
+		///     We check If something has changed on the physical file system that may not reflect in the memory one
 		/// </summary>
 		/// <param name="file"></param>
 		public void RefreshFile(string file) {
@@ -838,7 +897,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			//TODO: right now it only adds missing files. should we handle deletes and udpates too?
 
 			bool physicalExists = this.physicalFileSystem.FileExists(path);
-			bool activeExists   = this.activeFileSystem.FileExists(path);
+			bool activeExists = this.activeFileSystem.FileExists(path);
 
 			if(physicalExists && !activeExists) {
 				// it was added on the physical
@@ -875,7 +934,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		public void FileMove(string src, string dest) {
 
 			// complete the path if it is relative
-			string srcpath  = this.CompletePath(src);
+			string srcpath = this.CompletePath(src);
 			string destPath = this.CompletePath(dest);
 			this.CompleteFile(srcpath);
 
@@ -906,7 +965,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		/// </summary>
 		/// <param name="path"></param>
 		private void CompleteFile(string path) {
-			if(this.fileStatuses.ContainsKey(path) && this.fileStatuses[path] == FileStatuses.Untouched) {
+			if(this.fileStatuses.ContainsKey(path) && (this.fileStatuses[path] == FileStatuses.Untouched)) {
 				this.activeFileSystem.WriteAllBytes(path, this.physicalFileSystem.ReadAllBytes(path));
 
 			}
@@ -934,7 +993,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			this.CompleteFile(path);
 
-			await FileExtensions.OpenWriteAsync(path, bytes, activeFileSystem).ConfigureAwait(false);
+			await FileExtensions.OpenWriteAsync(path, bytes, this.activeFileSystem).ConfigureAwait(false);
 
 			// mark it as modified
 			if(this.fileStatuses.ContainsKey(path)) {
@@ -966,7 +1025,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			this.CompleteFile(path);
 
-			await FileExtensions.OpenWriteAsync(path, text, activeFileSystem).ConfigureAwait(false);
+			await FileExtensions.OpenWriteAsync(path, text, this.activeFileSystem).ConfigureAwait(false);
 
 			// mark it as modified
 			if(this.fileStatuses.ContainsKey(path)) {
@@ -1006,23 +1065,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(file), this.activeFileSystem);
 
-			using(this.activeFileSystem.CreateFile(path)) {
-				// nothing to do
-			}
+			this.activeFileSystem.CreateEmptyFile(path);
 		}
 
-		private void WaitCleaningTasks() {
-			if(this.cleaningTasks.Any()) {
-				Task.WaitAll(this.cleaningTasks.ToArray(), TimeSpan.FromSeconds(5));
-			}
-		}
 
 		protected class FileOperationInfo {
 			public FileSystemEntry FileInfo;
-			public FileOps         FileOp;
-			public long            originalHash;
-			public string          originalName;
-			public string          temporaryName;
+			public FileOps FileOp;
+			public long originalHash;
+			public string originalName;
+			public string temporaryName;
 		}
 
 	#region disposable
@@ -1044,7 +1096,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 				// lets wait for all cleaning tasks to complete before we go any further
 				this.ClearCleaningTasks();
 
-				this.WaitCleaningTasks();
+				this.WaitCleaningTasks().WaitAndUnwrapException();
 
 				this.ClearCleaningTasks();
 			}

@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public List<BlockChannelUtils.BlockChannelTypes> ChannelTypes {
 			get {
-				var items = new List<BlockChannelUtils.BlockChannelTypes>();
+				List<BlockChannelUtils.BlockChannelTypes> items = new List<BlockChannelUtils.BlockChannelTypes>();
 
 				this.ChannelIndices.ForEach(entries => {
 					items.AddRange(entries.ChannelTypes);
@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public void Reset(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
-			if(this.adjustedBlockId == adjustedBlockId && this.blockIndex == blockIndex) {
+			if((this.adjustedBlockId == adjustedBlockId) && (this.blockIndex == blockIndex)) {
 				return;
 			}
 
@@ -60,13 +60,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			ChannelsEntries<(long start, int end)> result = null;
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
-				var subResults = index.QueryIndex(adjustedBlockId);
+				ChannelsEntries<(long start, int end)> subResults = index.QueryIndex(adjustedBlockId);
 
 				if(subResults != null) {
 					if(result == null) {
 						result = new ChannelsEntries<(long start, int end)>();
 					}
-					
+
 					subResults.Entries.ForEach(entry => result[entry.Key] = entry.Value);
 				}
 			}
@@ -79,21 +79,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			try {
 				foreach(IChannelIndex index in this.ChannelIndices) {
-					var subResults = index.QueryBytes(adjustedBlockId);
+					ChannelsEntries<SafeArrayHandle> subResults = index.QueryBytes(adjustedBlockId);
 
 					if(subResults != null) {
 						if(result == null) {
 							result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
 						}
 
-						var result1 = result;
+						ChannelsEntries<SafeArrayHandle> result1 = result;
 						subResults.Entries.ForEach(entry => result1[entry.Key] = entry.Value);
 					}
 				}
 			} catch(BlockLoadException blex) {
 				//TODO: do anything or just retunr null?
 			}
-			
+
 			return result;
 		}
 
@@ -102,14 +102,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			try {
 				foreach(IChannelIndex index in this.ChannelIndices) {
-					var subResults = index.QueryPartialBlockBytes(adjustedBlockId, offsets.GetSubset(index.ChannelTypes));
+					ChannelsEntries<SafeArrayHandle> subResults = index.QueryPartialBlockBytes(adjustedBlockId, offsets.GetSubset(index.ChannelTypes));
 
 					if(subResults != null) {
 						if(result == null) {
 							result = new ChannelsEntries<SafeArrayHandle>(this.ChannelTypes);
 						}
 
-						var result1 = result;
+						ChannelsEntries<SafeArrayHandle> result1 = result;
 						subResults.Entries.ForEach(entry => result1[entry.Key] = entry.Value);
 					}
 				}
@@ -121,9 +121,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int masterTransactionIndex) {
-			
+
 			return this.MainChannelIndex.QueryMasterTransactionOffsets(adjustedBlockId, masterTransactionIndex);
-			
+
 		}
 
 		public ChannelsEntries<long> QueryProviderFileSizes() {
@@ -131,14 +131,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			foreach(IChannelIndex index in this.ChannelIndices) {
 				try {
-					var subResults = index.QueryProviderFileSizes();
+					ChannelsEntries<long> subResults = index.QueryProviderFileSizes();
 
 					if(subResults != null) {
 						if(result == null) {
 							result = new ChannelsEntries<long>(this.ChannelTypes);
 						}
 
-						var result1 = result;
+						ChannelsEntries<long> result1 = result;
 						subResults.Entries.ForEach(entry => result1[entry.Key] = entry.Value);
 					}
 				} catch(BlockLoadException blex) {

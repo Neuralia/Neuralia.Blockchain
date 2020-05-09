@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
-
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
@@ -13,24 +13,22 @@ using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Zio;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
 	public static class HashingUtils {
-
 
 		public static SafeArrayHandle Hash2(IHashNodeList sliceHashNodeList) {
 			using(Sha2SakuraTree Hasher2 = new Sha2SakuraTree(512)) {
 				return Hasher2.Hash(sliceHashNodeList);
 			}
 		}
-		
+
 		public static SafeArrayHandle Hash3(IHashNodeList sliceHashNodeList) {
 			using(Sha3SakuraTree Hasher3 = new Sha3SakuraTree(512)) {
 				return Hash3(sliceHashNodeList, Hasher3);
 			}
 		}
-		
+
 		public static SafeArrayHandle Hash3(IHashNodeList sliceHashNodeList, Sha3SakuraTree hasher) {
 			return hasher.Hash(sliceHashNodeList);
 		}
@@ -40,7 +38,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				return XxhasherTree.HashLong(sliceHashNodeList);
 			}
 		}
-		
+
 		public static int HashxxTree32(IHashNodeList sliceHashNodeList) {
 			using(xxHashSakuraTree32 XxhasherTree32 = new xxHashSakuraTree32()) {
 				return XxhasherTree32.HashInt(sliceHashNodeList);
@@ -58,34 +56,36 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				return XxHasher32.Hash(data);
 			}
 		}
-			
+
 		/// <summary>
-		/// a special hashing method to hash a file in a buffered manner
+		///     a special hashing method to hash a file in a buffered manner
 		/// </summary>
 		/// <param name="sliceHashNodeList"></param>
 		/// <returns></returns>
-		public static long XxHashFile(string filename, FileSystemWrapper fileSystem) {
+		public static async Task<long> XxHashFile(string filename, FileSystemWrapper fileSystem) {
 			using(xxHasher64 XxHasher64 = new xxHasher64()) {
 
 				long hash = 0;
-				ByteArray buffer = ByteArray.Create(4096);
+				using ByteArray buffer = ByteArray.Create(4096);
 
-				using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
-					using(BufferedStream bs = new BufferedStream(fs)) {
+				await using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
+					await using(BufferedStream bs = new BufferedStream(fs)) {
 						long bytesLeft = bs.Length;
 
 						while(bytesLeft > 0) {
 							// Read may return anything from 0 to numBytesToRead.
-							int bytesRead = bs.Read(buffer.Bytes, buffer.Offset, buffer.Length);
+							int bytesRead = await bs.ReadAsync(buffer.Bytes, buffer.Offset, buffer.Length).ConfigureAwait(false);
 
 							// The end of the file is reached.
-							if(bytesRead == 0)
+							if(bytesRead == 0) {
 								break;
+							}
 
 							bytesLeft -= bytesRead;
-
-							long current = XxHasher64.Hash(buffer.Span.Slice(0, bytesRead));
-							hash = XxHasher64.HashTwo(hash, current);
+							
+							// this methods avoids a large allocation and should thus be very fast
+							long newHash = XxHasher64.Hash(buffer.Span.Slice(0, bytesRead));
+							hash = XxHasher64.HashTwo(hash, newHash);
 						}
 					}
 				}
@@ -95,10 +95,10 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		}
 
 		public static bool ValidateGossipMessageSetHash(IGossipMessageSet gossipMessageSet) {
-			
+
 			using(HashNodeList structure = gossipMessageSet.GetStructuresArray()) {
 				long ownHash = HashxxTree(structure);
-				
+
 				return ownHash == gossipMessageSet.BaseHeader.Hash;
 			}
 		}
@@ -110,7 +110,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			}
 
 			using(HashNodeList structure = gossipMessageSet.GetStructuresArray()) {
-				
+
 				((IGossipMessageRWSet) gossipMessageSet).RWBaseHeader.Hash = HashxxTree(structure);
 			}
 		}
@@ -120,11 +120,11 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			SafeArrayHandle sha2 = null;
 			SafeArrayHandle sha3 = null;
 
-
 			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(ByteArray.Wrap(publicKey));
+
 			// sha2
-			sha2 =Hash2(sliceHashNodeList);
-			
+			sha2 = Hash2(sliceHashNodeList);
+
 			// sha3
 			sha3 = Hash3(sliceHashNodeList);
 
@@ -142,17 +142,15 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			using(HashNodeList hashNodeList = new HashNodeList()) {
 
 				SafeArrayHandle hash2 = Hash2(sliceHashNodeList);
-				
+
 				hashNodeList.Add(hash2);
 				hashNodeList.Add(promisedNonce1);
 				hashNodeList.Add(promisedNonce2);
-
 
 				sha2 = Hash2(hashNodeList);
 
 				hash2.Return();
 			}
-
 
 			SafeArrayHandle sha3 = null;
 
@@ -160,7 +158,6 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			using(HashNodeList hashNodeList = new HashNodeList()) {
 
 				SafeArrayHandle hash3 = Hash3(sliceHashNodeList);
-				
 
 				hashNodeList.Add(hash3);
 				hashNodeList.Add(promisedNonce1);
@@ -170,7 +167,6 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 				hash3.Return();
 			}
-
 
 			int nonceHash = 0;
 
@@ -182,7 +178,6 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			}
 
 			return (sha2, sha3, nonceHash);
-		
 
 		}
 
@@ -193,7 +188,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			using(HashNodeList structure = hashable.GetStructuresArray()) {
 
 				hash3 = Hash3(structure);
-				
+
 				//TODO: make sure that reusing the structure is non destructive. otherwise this could be an issue
 				hash2 = Hash2(structure);
 			}
@@ -232,7 +227,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			(SafeArrayHandle newsha2, SafeArrayHandle newsha3) = GetCombinedHash(hash, sha2, sha3);
 
 			bool result = VerifyCombinedHash(hash, sha2, sha3, newsha2, newsha3);
-			
+
 			newsha2.Return();
 			newsha3.Return();
 
@@ -248,7 +243,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			return newSha3.Equals(sha3);
 		}
-		
+
 		public static SafeArrayHandle GenerateHash(ITreeHashable hashable) {
 
 			using(HashNodeList structure = hashable.GetStructuresArray()) {
@@ -267,7 +262,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 		public static long Generate_xxHash(ITreeHashable hashable) {
 			using(HashNodeList structure = hashable.GetStructuresArray()) {
-				
+
 				return HashxxTree(structure);
 			}
 		}
@@ -275,7 +270,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		public static ImmutableList<SafeArrayHandle> GenerateMd5Hash(List<SafeArrayHandle> data) {
 
 			using(MD5 md5Hash = MD5.Create()) {
-				return data.Select(h => (SafeArrayHandle)ByteArray.WrapAndOwn(md5Hash.ComputeHash(h.ToExactByteArray()))).ToImmutableList();
+				return data.Select(h => (SafeArrayHandle) ByteArray.WrapAndOwn(md5Hash.ComputeHash(h.ToExactByteArray()))).ToImmutableList();
 			}
 		}
 
@@ -316,7 +311,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 		public static int GenerateBlockDataSliceHash(List<SafeArrayHandle> channels) {
 
-			var hashes = new List<int>();
+			List<int> hashes = new List<int>();
 
 			foreach(SafeArrayHandle channelslice in channels) {
 				hashes.Add(XxHash32(channelslice));
@@ -328,7 +323,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				foreach(int hash in hashes.OrderBy(h => h)) {
 					nodes.Add(hash);
 				}
-				
+
 				return HashxxTree32(nodes);
 			}
 		}
@@ -338,26 +333,23 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				return hash(sha512Hasher);
 			}
 		}
-		
+
 		public static SafeArrayHandle HashSha256(Func<Sha256Hasher, SafeArrayHandle> hash) {
 			using(Sha256Hasher sha256Hasher = new Sha256Hasher()) {
 				return hash(sha256Hasher);
 			}
 		}
 
-		
 		public static SafeArrayHandle HashSha3_512(Func<Sha3_512Hasher, SafeArrayHandle> hash) {
 			using(Sha3_512Hasher sha3512Hasher = new Sha3_512Hasher()) {
 				return hash(sha3512Hasher);
 			}
 		}
-		
+
 		public static SafeArrayHandle HashBlake2_512(Func<Blake2_512Hasher, SafeArrayHandle> hash) {
 			using(Blake2_512Hasher blake2512Hasher = new Blake2_512Hasher()) {
 				return hash(blake2512Hasher);
 			}
 		}
-		
-		
 	}
 }

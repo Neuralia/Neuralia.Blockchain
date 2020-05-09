@@ -1,6 +1,8 @@
 using System;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
+using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.System {
 	public class SystemMessageTask : ColoredTask {
@@ -9,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		public BlockchainSystemEventType message;
 		public object[] parameters;
-		public DateTime timestamp = DateTime.UtcNow;
+		public DateTime timestamp = DateTimeEx.CurrentTime;
 
 		public SystemMessageTask(BlockchainSystemEventType eventType) {
 			this.message = eventType;

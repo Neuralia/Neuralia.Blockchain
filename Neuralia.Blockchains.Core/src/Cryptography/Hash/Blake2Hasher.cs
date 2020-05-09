@@ -1,4 +1,3 @@
-using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Crypto.Digests;
@@ -15,12 +14,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Hash {
 
 		public override SafeArrayHandle Hash(SafeArrayHandle message) {
 			Blake2bDigest blake2Digest = (Blake2bDigest) this.digest;
-			
+
 			blake2Digest.BlockUpdate(message.Bytes, message.Offset, message.Length);
-			
-			var result = ByteArray.Create(blake2Digest.GetDigestSize());
+
+			ByteArray result = ByteArray.Create(blake2Digest.GetDigestSize());
 			blake2Digest.DoFinal(result.Bytes, result.Offset);
-			
+
 			return result;
 		}
 	}

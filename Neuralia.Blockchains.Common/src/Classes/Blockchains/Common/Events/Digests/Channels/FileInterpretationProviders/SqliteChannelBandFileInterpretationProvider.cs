@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +7,6 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Tools;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders {
 
@@ -21,6 +19,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected readonly Expression<Func<CARD_TYPE, object>> keyDeclaration;
 
+		protected ChannelBandSqliteProviderDal<CARD_TYPE, KEY> channelBandSqliteProviderDal;
+
 		public SqliteChannelBandFileInterpretationProvider(NAMING_PROVIDER namingProvider, FileSystemWrapper fileSystem) : this(namingProvider, fileSystem, null, null) {
 
 		}
@@ -31,14 +31,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			this.indexer = indexer;
 
 		}
-		
-		public void InitModel(Action<ModelBuilder> builder) {
-			this.ChannelBandSqliteProviderDal.ModelBuilder = builder;
-		}
-
-
-		protected ChannelBandSqliteProviderDal<CARD_TYPE, KEY> channelBandSqliteProviderDal = null;
-
 
 		protected ChannelBandSqliteProviderDal<CARD_TYPE, KEY> ChannelBandSqliteProviderDal {
 			get {
@@ -52,6 +44,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		protected string ExtractedFileName => "";
 
+		public void InitModel(Action<ModelBuilder> builder) {
+			this.ChannelBandSqliteProviderDal.ModelBuilder = builder;
+		}
+
 		public CARD_TYPE QueryCard(QUERY_KEY value) {
 
 			//Func<CARD_TYPE, object[]>
@@ -64,7 +60,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public List<CARD_TYPE> QueryCards() {
 
-			
 			return this.ChannelBandSqliteProviderDal.PerformOperation(db => db.ChannelBandCards.ToList());
 		}
 

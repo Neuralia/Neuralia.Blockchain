@@ -31,14 +31,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 	public class AccreditationCertificateTypes : UShortConstantSet<AccreditationCertificateType> {
 
 		public readonly AccreditationCertificateType DELEGATE;
+		public readonly AccreditationCertificateType ESCROW;
+
+		public readonly AccreditationCertificateType GATED_VERIFIER;
+		public readonly AccreditationCertificateType LICENSE;
 		public readonly AccreditationCertificateType MINING_CLUSTER;
 		public readonly AccreditationCertificateType SDK_PROVIDER;
 		public readonly AccreditationCertificateType THIRD_PARTY;
-		public readonly AccreditationCertificateType LICENSE;
-		
-		public readonly AccreditationCertificateType GATED_VERIFIER;
-		public readonly AccreditationCertificateType ESCROW;
-		
+
 		static AccreditationCertificateTypes() {
 		}
 
@@ -49,10 +49,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 			this.SDK_PROVIDER = this.CreateBaseConstant();
 			this.MINING_CLUSTER = this.CreateBaseConstant();
 			this.LICENSE = this.CreateBaseConstant();
-			
+
 			this.GATED_VERIFIER = this.CreateBaseConstant();
 			this.ESCROW = this.CreateBaseConstant();
-			
+
 		}
 
 		public static AccreditationCertificateTypes Instance { get; } = new AccreditationCertificateTypes();

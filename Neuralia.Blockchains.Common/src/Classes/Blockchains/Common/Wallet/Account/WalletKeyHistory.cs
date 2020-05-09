@@ -1,20 +1,21 @@
 using System;
 using System.Text;
 using LiteDB;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Compression;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using System.Text.Json;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
 	public interface IWalletKeyHistory {
 		[BsonId]
 		public ObjectId DbId { get; set; }
-		
+
 		Guid Id { get; set; }
 
 		long DecommissionedTime { get; set; }
@@ -33,10 +34,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		[BsonId]
 		public ObjectId DbId { get; set; } = ObjectId.NewObjectId();
-		
+
 		public Guid Id { get; set; } = Guid.NewGuid();
 
-		public long DecommissionedTime { get; set; } = DateTime.UtcNow.Ticks;
+		public long DecommissionedTime { get; set; } = DateTimeEx.CurrentTime.Ticks;
 
 		public Guid AccountUuid { get; set; }
 		public int Ordinal { get; set; }

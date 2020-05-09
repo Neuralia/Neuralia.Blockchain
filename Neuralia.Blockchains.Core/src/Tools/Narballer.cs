@@ -1,26 +1,31 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 using System.Linq;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
-using Zio;
 
 namespace Neuralia.Blockchains.Core.Tools {
-	
+
 	/// <summary>
-	/// This class ensures a custum "tarball" like format (Neuralia ARchive == 'nar') to ensure very fast and sohrt lived backups. 
+	///     This class ensures a custum "tarball" like format (Neuralia ARchive == 'nar') to ensure very fast and sohrt lived
+	///     backups.
 	/// </summary>
-	/// <remarks>this file format is not designed for long term backups. It is meant to be very fast and short lived, with a single restore in a very short time frame in case of emergency restore. This file has NO data corruption recovery!</remarks>
+	/// <remarks>
+	///     this file format is not designed for long term backups. It is meant to be very fast and short lived, with a
+	///     single restore in a very short time frame in case of emergency restore. This file has NO data corruption recovery!
+	/// </remarks>
 	public class Narballer {
 
 		public const string EXTENSION = "nar";
@@ -38,7 +43,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 		}
 
 		public void AddFile(string filepath) {
-			
+
 			this.files.Add(Path.GetRelativePath(this.basepath, filepath));
 		}
 
@@ -73,7 +78,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			// now write the body
 			long offset = 0;
 
-			using(Stream fs = this.fileSystem.OpenFile(bodyFilePath ,FileMode.Open, FileAccess.Write, FileShare.Write)) {
+			using(Stream fs = this.fileSystem.OpenFile(bodyFilePath, FileMode.Open, FileAccess.Write, FileShare.Write)) {
 
 				fs.Seek(fullSize - 1, SeekOrigin.Begin);
 				fs.WriteByte(0);
@@ -107,7 +112,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 		public void Restore(string outpath, string sourcepath, List<string> filter, bool clearSource = true) {
 
 			(string headerFilePath, string bodyFilePath) = GetPackageFiles(sourcepath);
-			
+
 			if(!this.fileSystem.DirectoryExists(sourcepath)) {
 				throw new ApplicationException($"Package directory {sourcepath} did not exist.");
 			}
@@ -128,7 +133,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			SafeArrayHandle headerBytes = FileExtensions.ReadAllBytes(headerFilePath, this.fileSystem);
 			NarballHeader header = new NarballHeader();
-			
+
 			using(IDataRehydrator headerRehydrator = DataSerializationFactory.CreateRehydrator(headerBytes)) {
 				header.Rehydrate(headerRehydrator);
 			}
@@ -139,13 +144,14 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			using(BinaryReader br = new BinaryReader(this.fileSystem.OpenFile(bodyFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))) {
 
-				var actions = new List<Action>();
+				List<Action> actions = new List<Action>();
+
 				foreach(NarballHeader.NarballHeaderEntry file in header.Files) {
 
 					actions.Add(() => {
 						try {
-							
-							if(filter == null || filter.Any(f => f.EndsWith(file.Name))) {
+
+							if((filter == null) || filter.Any(f => f.EndsWith(file.Name))) {
 								br.BaseStream.Seek(file.Offset, SeekOrigin.Begin);
 								ByteArray bytes = ByteArray.WrapAndOwn(br.ReadBytes(file.Length));
 
@@ -168,13 +174,13 @@ namespace Neuralia.Blockchains.Core.Tools {
 								FileExtensions.WriteAllBytes(fullname, bytes, this.fileSystem);
 							}
 						} catch(Exception ex) {
-							Log.Fatal(ex, $"Failed to restore wallet file {file.Name} from nar package.");
+							NLog.Default.Fatal(ex, $"Failed to restore wallet file {file.Name} from nar package.");
 
 							throw;
 						}
 					});
 				}
-				
+
 				IndependentActionRunner.Run(actions.ToArray());
 			}
 		}
@@ -187,7 +193,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		public static bool PackageFilesValid(string packagePath, FileSystemWrapper fileSystem) {
 			(string headerFilePath, string bodyFilePath) = GetPackageFiles(packagePath);
-			
+
 			if(!fileSystem.DirectoryExists(packagePath)) {
 				return false;
 			}
@@ -207,18 +213,18 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			(string headerFile, string bodyFile) = GetPackageFiles(packagePath);
 
-			return new [] { headerFile, bodyFile};
+			return new[] {headerFile, bodyFile};
 		}
-		
+
 		public static (string headerFile, string bodyFile) GetPackageFiles(string packagePath) {
 			(string headerFile, string bodyFile) = MakeFileNames(PACKAGE_NAME);
 
 			string headerFilePath = Path.Combine(packagePath, headerFile);
 			string bodyFilePath = Path.Combine(packagePath, bodyFile);
-			
+
 			return (headerFilePath, bodyFilePath);
 		}
-		
+
 		private int HashBytes(SafeArrayHandle fileBytes) {
 
 			using(HashNodeList nodes = new HashNodeList()) {
@@ -240,7 +246,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			public long FullSize => this.Files.Sum(f => f.Length);
 
-			public DateTime Timestamp { get; private set; } = DateTime.UtcNow;
+			public DateTime Timestamp { get; private set; } = DateTimeEx.CurrentTime;
 
 			public List<NarballHeaderEntry> Files { get; } = new List<NarballHeaderEntry>();
 
@@ -276,15 +282,6 @@ namespace Neuralia.Blockchains.Core.Tools {
 				}
 			}
 
-			public void RebuildOffsets() {
-				long offset = 0;
-				foreach(NarballHeaderEntry file in this.Files) {
-
-					file.Offset = offset;
-					offset += file.Length;
-				}
-			}
-
 			public HashNodeList GetStructuresArray() {
 				throw new NotImplementedException();
 			}
@@ -294,6 +291,16 @@ namespace Neuralia.Blockchains.Core.Tools {
 			}
 
 			public ComponentVersion<SimpleUShort> Version { get; } = new ComponentVersion<SimpleUShort>(1, 1, 1);
+
+			public void RebuildOffsets() {
+				long offset = 0;
+
+				foreach(NarballHeaderEntry file in this.Files) {
+
+					file.Offset = offset;
+					offset += file.Length;
+				}
+			}
 
 			public void AddFile(string name, int length) {
 
@@ -319,12 +326,11 @@ namespace Neuralia.Blockchains.Core.Tools {
 					dehydrator.Write(this.Length);
 					dehydrator.Write(this.Hash);
 				}
-				
+
 				public override string ToString() {
 					return this.Name;
 				}
 			}
-
 		}
 	}
 

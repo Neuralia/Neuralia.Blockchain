@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		public DigestChannelBandEntries(Dictionary<CHANEL_BANDS, T> channels) {
-			foreach(var entry in channels) {
+			foreach(KeyValuePair<CHANEL_BANDS, T> entry in channels) {
 				this.Entries[entry.Key] = entry.Value;
 			}
 		}
@@ -65,7 +65,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public DigestChannelBandEntries<K, CHANEL_BANDS> ConvertAll<K>(Func<T, K> action, CHANEL_BANDS excludeFlags) {
 
-			var result = new DigestChannelBandEntries<K, CHANEL_BANDS>();
+			DigestChannelBandEntries<K, CHANEL_BANDS> result = new DigestChannelBandEntries<K, CHANEL_BANDS>();
 
 			this.RunForAll((bands, value) => {
 				result[bands] = action(value);
@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public void RunForAll(Action<CHANEL_BANDS, T> action, CHANEL_BANDS excludeFlags) {
 
-			foreach(var entry in this.Entries.ToList()) {
+			foreach(KeyValuePair<CHANEL_BANDS, T> entry in this.Entries.ToList()) {
 				if(!excludeFlags.HasFlag(entry.Key)) {
 					action(entry.Key, entry.Value);
 				}
@@ -131,7 +131,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		//		}
 
 		public DigestChannelBandEntries<T, CHANEL_BANDS> GetSubset(IEnumerable<CHANEL_BANDS> channels) {
-			var subset = new DigestChannelBandEntries<T, CHANEL_BANDS>(channels);
+			DigestChannelBandEntries<T, CHANEL_BANDS> subset = new DigestChannelBandEntries<T, CHANEL_BANDS>(channels);
 
 			foreach(CHANEL_BANDS entry in channels) {
 				subset[entry] = this[entry];

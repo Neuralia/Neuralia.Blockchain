@@ -4,18 +4,19 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
-namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
+namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
-	public interface IEncryptorParameters : ITreeHashable{
+	public interface IEncryptorParameters : ITreeHashable {
 		int Iterations { get; set; }
 		int KeyBitLength { get; set; }
+
 		/// <summary>
-		/// 
 		/// </summary>
 		/// <remarks>is serialized by LiteDB, needs to be get;set;</remarks>
-		SafeArrayHandle Salt { get; set;} 
+		SafeArrayHandle Salt { get; set; }
+
 		EncryptorParameters.SymetricCiphers cipher { get; set; }
-		
+
 		SafeArrayHandle Dehydrate();
 		void Dehydrate(IDataDehydrator dehydrator);
 		void Rehydrate(SafeArrayHandle data);
@@ -24,13 +25,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 	}
 
 	/// <summary>
-	/// 
 	/// </summary>
 	/// <remarks>is serialized by LiteDB</remarks>
 	public abstract class EncryptorParameters : IEncryptorParameters {
 
 		public enum SymetricCiphers : byte {
-			
+
 			XCHACHA_20 = 1,
 			XCHACHA_40 = 2,
 			AES_256 = 3,
@@ -39,13 +39,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 
 		public int Iterations { get; set; }
 		public int KeyBitLength { get; set; }
-		
+
 		/// <summary>
-		/// 
 		/// </summary>
 		/// <remarks>is serialized by LiteDB, needs to be get;set;</remarks>
-		public SafeArrayHandle Salt { get; set;} = new SafeArrayHandle();
-		
+		public SafeArrayHandle Salt { get; set; } = new SafeArrayHandle();
+
 		public SymetricCiphers cipher { get; set; }
 
 		public virtual HashNodeList GetStructuresArray() {
@@ -64,13 +63,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
 
 				this.Dehydrate(dehydrator);
-				
+
 				return dehydrator.ToArray();
 			}
 		}
-		
+
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {
-			
+
 			dehydrator.Write((byte) this.cipher);
 			dehydrator.Write(this.Iterations);
 			dehydrator.Write(this.KeyBitLength);
@@ -93,44 +92,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 			this.Salt.Entry = rehydrator.ReadNonNullableArray();
 		}
 
-		public static IEncryptorParameters RehydrateEncryptor(SafeArrayHandle data) {
-
-			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
-
-				return RehydrateEncryptor(rehydrator);
-			}
-		}
-
-		public static IEncryptorParameters RehydrateEncryptor(IDataRehydrator rehydrator) {
-
-			SymetricCiphers cipher = SymetricCiphers.XCHACHA_40;
-			
-			rehydrator.RehydrateRewind((dr) => {
-				cipher = (SymetricCiphers) dr.ReadByte();
-			});
-
-			IEncryptorParameters parameters = null;
-			
-			if(cipher == SymetricCiphers.AES_256) {
-				parameters = new AesEncryptorParameters();
-			}
-			else if(cipher == SymetricCiphers.AES_GCM_256) {
-				parameters = new AesGcmEncryptorParameters();
-			}
-			else if(cipher == SymetricCiphers.XCHACHA_20) {
-				parameters = new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_20);
-			}
-			else if(cipher == SymetricCiphers.XCHACHA_40) {
-				parameters = new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_40);
-			} else {
-				throw new ArgumentException();
-			}
-
-			parameters.Rehydrate(rehydrator);
-
-			return parameters;
-		}
-
 		public virtual IEncryptorParameters Clone() {
 			IEncryptorParameters clone = this.CreateEncryptorParameter();
 
@@ -142,9 +103,44 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 			return clone;
 		}
 
+		public static IEncryptorParameters RehydrateEncryptor(SafeArrayHandle data) {
+
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data)) {
+
+				return RehydrateEncryptor(rehydrator);
+			}
+		}
+
+		public static IEncryptorParameters RehydrateEncryptor(IDataRehydrator rehydrator) {
+
+			SymetricCiphers cipher = SymetricCiphers.XCHACHA_40;
+
+			rehydrator.RehydrateRewind(dr => {
+				cipher = (SymetricCiphers) dr.ReadByte();
+			});
+
+			IEncryptorParameters parameters = null;
+
+			if(cipher == SymetricCiphers.AES_256) {
+				parameters = new AesEncryptorParameters();
+			} else if(cipher == SymetricCiphers.AES_GCM_256) {
+				parameters = new AesGcmEncryptorParameters();
+			} else if(cipher == SymetricCiphers.XCHACHA_20) {
+				parameters = new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_20);
+			} else if(cipher == SymetricCiphers.XCHACHA_40) {
+				parameters = new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_40);
+			} else {
+				throw new ArgumentException();
+			}
+
+			parameters.Rehydrate(rehydrator);
+
+			return parameters;
+		}
+
 		protected abstract IEncryptorParameters CreateEncryptorParameter();
 	}
-	
+
 	public class XChachaEncryptorParameters : EncryptorParameters {
 
 		public XChachaEncryptorParameters() : this(SymetricCiphers.XCHACHA_40) {
@@ -152,9 +148,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 		}
 
 		public XChachaEncryptorParameters(SymetricCiphers symetricCiphers) {
-			if(!(symetricCiphers == SymetricCiphers.XCHACHA_20 || symetricCiphers == SymetricCiphers.XCHACHA_40)) {
+			if(!((symetricCiphers == SymetricCiphers.XCHACHA_20) || (symetricCiphers == SymetricCiphers.XCHACHA_40))) {
 				throw new ArgumentException("Invalid cypher type");
 			}
+
 			this.cipher = symetricCiphers;
 		}
 
@@ -162,9 +159,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 			return new XChachaEncryptorParameters(SymetricCiphers.XCHACHA_40);
 		}
 	}
-	
+
 	public class AesEncryptorParameters : EncryptorParameters {
-		
+
 		public AesEncryptorParameters() {
 			this.cipher = SymetricCiphers.AES_256;
 		}
@@ -173,24 +170,24 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 			return new AesEncryptorParameters();
 		}
 	}
-	
+
 	public class AesGcmEncryptorParameters : EncryptorParameters {
-		
-		public ByteArray Nonce { get; set; }
-		public ByteArray Tag { get; set; }
-		
+
 		public AesGcmEncryptorParameters() {
 			this.cipher = SymetricCiphers.AES_GCM_256;
 		}
-		
+
+		public ByteArray Nonce { get; set; }
+		public ByteArray Tag { get; set; }
+
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = base.GetStructuresArray();
-			
+
 			hashNodeList.Add(this.Nonce);
 
 			return hashNodeList;
 		}
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 
 			base.Dehydrate(dehydrator);
@@ -198,21 +195,21 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical{
 			dehydrator.WriteNonNullable(this.Nonce);
 			dehydrator.WriteNonNullable(this.Tag);
 		}
-		
+
 		public override void Rehydrate(IDataRehydrator rehydrator) {
-			
+
 			base.Rehydrate(rehydrator);
-			
+
 			this.Nonce = rehydrator.ReadNonNullableArray();
 			this.Tag = rehydrator.ReadNonNullableArray();
 		}
 
 		public override IEncryptorParameters Clone() {
-			AesGcmEncryptorParameters clone = (AesGcmEncryptorParameters)base.Clone();
-			
+			AesGcmEncryptorParameters clone = (AesGcmEncryptorParameters) base.Clone();
+
 			clone.Nonce = this.Nonce.Clone();
 			clone.Tag = this.Tag.Clone();
-			
+
 			return clone;
 		}
 

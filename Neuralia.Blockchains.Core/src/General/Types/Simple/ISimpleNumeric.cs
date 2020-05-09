@@ -42,10 +42,13 @@ namespace Neuralia.Blockchains.Core.General.Types.Simple {
 		bool GreaterEqualThan(T b);
 	}
 
-	public interface ISimpleNumeric<T, U> : ISimpleNumeric<T>
+	public interface ISimpleNumericValue<U>
+		where U : struct, IComparable, IConvertible, IFormattable, IComparable<U>, IEquatable<U> {
+		U Value { get; set; }
+	}
+
+	public interface ISimpleNumeric<T, U> : ISimpleNumeric<T>, ISimpleNumericValue<U>
 		where T : ISimpleNumeric<T, U>
 		where U : struct, IComparable, IConvertible, IFormattable, IComparable<U>, IEquatable<U> {
-
-		U Value { get; set; }
 	}
 }

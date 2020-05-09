@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
 	public class NodeActivityInfo {
@@ -26,8 +28,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public NodeAddressInfo Node { get; }
 		public bool Shareable { get; }
-		public DateTime Timestamp { get; } = DateTime.UtcNow;
-		
+		public DateTime Timestamp { get; } = DateTimeEx.CurrentTime;
 
 		private Queue<NodeActivityEvent> Events { get; } = new Queue<NodeActivityEvent>();
 
@@ -42,7 +43,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		private void RebuildReliabilityIndex() {
 
-			var events = this.Events.ToImmutableList();
+			ImmutableList<NodeActivityEvent> events = this.Events.ToImmutableList();
 
 			this.ReliabilityIndex = 0;
 		}
@@ -56,7 +57,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			public NodeActivityEvent(NodeActivityEventTypes type) : this() {
 				this.Type = type;
-				this.Timestamp = DateTime.UtcNow;
+				this.Timestamp = DateTimeEx.CurrentTime;
 			}
 
 			public DateTime Timestamp { get; }
@@ -73,8 +74,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public IgnoreNodeActivityInfo(NodeAddressInfo node, bool shareable) : base(node, shareable) {
 		}
 
-		public DateTime IgnoreTimestamp { get; } = DateTime.UtcNow;
+		public DateTime IgnoreTimestamp { get; } = DateTimeEx.CurrentTime;
 		public int IgnoreCounts { get; set; } = 1;
-		public bool MaxReached => (this.IgnoreCounts >= 3) || (this.IgnoreTimestamp < DateTime.UtcNow.AddMinutes(30));
+		public bool MaxReached => (this.IgnoreCounts >= 3) || (this.IgnoreTimestamp < DateTimeEx.CurrentTime.AddMinutes(30));
 	}
 }

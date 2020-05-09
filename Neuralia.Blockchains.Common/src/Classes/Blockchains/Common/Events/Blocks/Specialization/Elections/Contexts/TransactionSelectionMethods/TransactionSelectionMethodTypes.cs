@@ -39,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		static TransactionSelectionMethodTypes() {
 		}
 
-		public TransactionSelectionMethodTypes() : base(100) {
+		public TransactionSelectionMethodTypes() : base((ushort) 100) {
 			this.CreationTime = this.CreateBaseConstant();
 			this.TransationTypes = this.CreateBaseConstant();
 			this.Size = this.CreateBaseConstant();

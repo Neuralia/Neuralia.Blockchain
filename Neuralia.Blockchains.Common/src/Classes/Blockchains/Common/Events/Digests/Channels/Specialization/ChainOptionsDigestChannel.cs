@@ -1,13 +1,11 @@
 using System;
-using System.Collections.Generic;
-
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
-using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization {
 	public interface IChainOptionsDigestChannel : IDigestChannel {
@@ -37,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public CHAIN_OPTIONS_CARD GetChainOptions(int id) {
 
-			var results = this.channelBandIndexSet.QueryCard(id);
+			DigestChannelBandEntries<CHAIN_OPTIONS_CARD, ChainOptionsDigestChannel.ChainOptionsDigestChannelBands> results = this.channelBandIndexSet.QueryCard(id);
 
 			if(results.IsEmpty) {
 				return null;
@@ -48,16 +46,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public CHAIN_OPTIONS_CARD[] GetChainOptionss() {
 			// this works because we have only one channel for now
-			var castedIndex = (SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int>) this.channelBandIndexSet.BandIndices.Values.Single();
+			SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int> castedIndex = (SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int>) this.channelBandIndexSet.BandIndices.Values.Single();
 
 			return castedIndex.QueryCards().ToArray();
 		}
 
 		protected override void BuildBandsIndices() {
 
-			var index = new SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int>(CHAIN_OPTIONS_BAND_NAME, this.baseFolder, this.scopeFolder, ChainOptionsDigestChannel.ChainOptionsDigestChannelBands.ChainOptions, FileSystemWrapper.CreatePhysical(), key => key);
+			SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int> index = new SingleSqliteChannelBandIndex<ChainOptionsDigestChannel.ChainOptionsDigestChannelBands, CHAIN_OPTIONS_CARD, int, int, int>(CHAIN_OPTIONS_BAND_NAME, this.baseFolder, this.scopeFolder, ChainOptionsDigestChannel.ChainOptionsDigestChannelBands.ChainOptions, FileSystemWrapper.CreatePhysical(), key => key);
 			this.InitIndexGenerator(index);
-			
+
 			this.channelBandIndexSet.AddIndex(1, index);
 		}
 
@@ -65,14 +63,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			generator.ModelBuilder = builder => {
 
 				builder.Entity<CHAIN_OPTIONS_CARD>(o => {
-					
-					
+
 				});
 
 				builder.Entity<CHAIN_OPTIONS_CARD>().ToTable(CHAIN_OPTIONS_CHANNEL);
 			};
 		}
-		
+
 		protected override ComponentVersion<DigestChannelType> SetIdentity() {
 			return (DigestChannelTypes.Instance.ChainOptions, 1, 0);
 		}

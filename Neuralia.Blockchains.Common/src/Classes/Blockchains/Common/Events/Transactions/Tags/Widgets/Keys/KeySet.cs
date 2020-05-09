@@ -5,7 +5,6 @@ using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.Serialization;
-using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
@@ -15,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public void Dehydrate(IDataDehydrator dehydrator) {
 			dehydrator.Write((byte) this.Keys.Count);
 
-			foreach(var key in this.Keys.OrderBy(k => k.Key)) {
+			foreach(KeyValuePair<byte, ICryptographicKey> key in this.Keys.OrderBy(k => k.Key)) {
 				key.Value.Dehydrate(dehydrator);
 			}
 		}
@@ -49,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			jsonDeserializer.SetArray("Keys", this.Keys.OrderBy(k => k.Key), (deserializer, serializable) => {
 
-				deserializer.WriteObject((s) => {
+				deserializer.WriteObject(s => {
 					s.SetProperty("id", serializable.Key);
 					s.SetProperty("key", serializable.Value);
 				});
@@ -60,7 +59,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
 
-			foreach(var key in this.Keys.OrderBy(k => k.Key)) {
+			foreach(KeyValuePair<byte, ICryptographicKey> key in this.Keys.OrderBy(k => k.Key)) {
 				nodeList.Add(key.Value.GetStructuresArray());
 			}
 
@@ -147,6 +146,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			return this.Keys[id].Key != null;
 		}
-		
 	}
 }

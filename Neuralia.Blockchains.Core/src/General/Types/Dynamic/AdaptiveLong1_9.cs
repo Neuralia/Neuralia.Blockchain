@@ -39,14 +39,16 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			if(value == null) {
 				return null;
 			}
+
 			return value.Value;
 		}
-		
+
 		public static implicit operator long(AdaptiveLong1_9 value) {
-			
+
 			if(value == null) {
 				return 0;
 			}
+
 			return value.Value;
 		}
 

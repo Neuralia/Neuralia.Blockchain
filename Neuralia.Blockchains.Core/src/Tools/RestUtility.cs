@@ -6,11 +6,12 @@ using RestSharp;
 namespace Neuralia.Blockchains.Core.Tools {
 	public class RestUtility {
 
-		private readonly AppSettingsBase appSettingsBase;
-
 		public enum Modes {
-			FormData, XwwwFormUrlencoded
+			FormData,
+			XwwwFormUrlencoded
 		}
+
+		private readonly AppSettingsBase appSettingsBase;
 
 		private readonly Modes mode;
 
@@ -24,7 +25,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			//			ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
 			//#endif
 		}
-		
+
 		public RestUtility() {
 
 		}
@@ -40,27 +41,26 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return this.PerformCall(url, action, Method.POST, parameters, files);
 		}
 
-		public Task<IRestResponse> Get(string url, string action)
-		{
+		public Task<IRestResponse> Get(string url, string action) {
 
-			return this.PerformCall(url, action, Method.GET, null, null);
+			return this.PerformCall(url, action, Method.GET, null);
 		}
 
 		private Task<IRestResponse> PerformCall(string url, string action, Method method, Dictionary<string, object> parameters, Dictionary<string, byte[]> files = null) {
 
 			RestClient client = new RestClient(url);
 			client.FollowRedirects = true;
-			
+
 			RestRequest request = new RestRequest(action, method);
-			
+
 			request.AddHeader("Cache-control", "no-cache");
-			
+
 			if(this.mode == Modes.FormData) {
 				request.AlwaysMultipartFormData = true;
 			} else {
 				request.AddHeader("Content-Type", "application/x-www-form-urlencoded");
 			}
-			
+
 			if(parameters != null) {
 				foreach((string key, object value) in parameters) {
 					if(this.mode == Modes.FormData) {
@@ -68,12 +68,12 @@ namespace Neuralia.Blockchains.Core.Tools {
 					} else {
 						request.AddParameter(key, value);
 					}
-					
+
 				}
 			}
-			
+
 			if(files != null) {
-				foreach((string key, var value) in files) {
+				foreach((string key, byte[] value) in files) {
 					request.AddFile(key, value, key, "application/octet-stream");
 				}
 			}

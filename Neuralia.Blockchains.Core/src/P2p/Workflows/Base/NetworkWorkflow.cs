@@ -6,7 +6,6 @@ using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
@@ -37,7 +36,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 				// this is our own workflow, we ensure the client is always 0. (no client, but rather us)
 				this.ClientId = this.GetClientId();
 
-				this.dataDispatcher = new DataDispatcher(serviceSet.TimeService, (faultyConnection) => {
+				this.dataDispatcher = new DataDispatcher(serviceSet.TimeService, faultyConnection => {
 					// just in case, attempt to remove the connection if it was not already
 					this.networkingService.ConnectionStore.RemoveConnection(faultyConnection);
 				});

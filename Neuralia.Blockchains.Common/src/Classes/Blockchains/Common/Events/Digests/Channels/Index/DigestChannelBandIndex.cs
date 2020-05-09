@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileNamingProviders;
@@ -11,7 +10,6 @@ using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index {
 
@@ -122,43 +120,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public string GetExpandedBandName(CHANEL_BANDS band, object[] parameters) {
 			string bandName = band.ToString().ToLower();
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName,bandName, this.scopeFolder, parameters));
+
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName, bandName, this.scopeFolder, parameters));
 
 		}
 
 		public string GetArchivedBandName(CHANEL_BANDS band, object[] parameters) {
 			string bandName = band.ToString().ToLower();
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName,bandName, this.scopeFolder, parameters));
+
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName, bandName, this.scopeFolder, parameters));
 		}
 
 		public string GetExpandedBandName(CHANEL_BANDS band, uint index) {
 			string bandName = band.ToString().ToLower();
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName,bandName, this.scopeFolder, new object[] {index}));
+
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName, bandName, this.scopeFolder, new object[] {index}));
 
 		}
 
 		public string GetArchivedBandName(CHANEL_BANDS band, uint index) {
 			string bandName = band.ToString().ToLower();
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName,bandName, this.scopeFolder, new object[] {index}));
+
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName, bandName, this.scopeFolder, new object[] {index}));
 		}
 
 		public string GetExpandedBandName(CHANEL_BANDS band) {
 			string bandName = band.ToString().ToLower();
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName,bandName, this.scopeFolder, new object[] { }));
+
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedExpandedFileName(bandName, bandName, this.scopeFolder, new object[] { }));
 
 		}
 
 		public string GetArchivedBandName(CHANEL_BANDS band) {
 			string bandName = band.ToString().ToLower();
-			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName,bandName, this.scopeFolder, new object[] { }));
+
+			return this.GenerateFullPath(this.Providers[band].NamingProvider.GeneratedArchivedFileName(bandName, bandName, this.scopeFolder, new object[] { }));
 		}
 
 		protected List<(string extractedName, CHANEL_BANDS band)> EnsureFilesetExtracted((string bandName, object[] parameters, CHANEL_BANDS band)[] bandNames) {
 
-			var results = new List<(string extractedName, CHANEL_BANDS band)>();
+			List<(string extractedName, CHANEL_BANDS band)> results = new List<(string extractedName, CHANEL_BANDS band)>();
 
 			// ensure each band is extracted, otherwise do so
-			foreach(var bandName in bandNames) {
+			foreach((string bandName, object[] parameters, CHANEL_BANDS band) bandName in bandNames) {
 				string expandedFilename = this.GetExpandedBandName(bandName.band, bandName.parameters);
 				string archivedFilename = this.GetArchivedBandName(bandName.band, bandName.parameters);
 
@@ -175,7 +179,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				return new SafeArrayHandle();
 			}
 
-			using var sliceHashNodes = new FileStreamSliceHashNodeList(filename, this.fileSystem);
+			using FileStreamSliceHashNodeList sliceHashNodes = new FileStreamSliceHashNodeList(filename, this.fileSystem);
 
 			return HashingUtils.Hash3(sliceHashNodes);
 

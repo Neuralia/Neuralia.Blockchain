@@ -22,6 +22,14 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks {
 	/// </summary>
 	public class BasicTask<T> : DelegatedTask<T>, IBasicTask<T> {
 
+		public BasicTask() {
+			
+		}
+		
+		public BasicTask(Action<T> action) {
+			this.SetAction(action);
+		}
+		
 		public void SetAction(Action<T> action) {
 			this.Action = action;
 		}
@@ -34,7 +42,9 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks {
 		public virtual Action<T> Action { get; set; }
 
 		public virtual void TriggerAction(T sender) {
-if(			this.Action != null){			this.Action(sender);}
+			if(this.Action != null) {
+				this.Action(sender);
+			}
 		}
 	}
 }

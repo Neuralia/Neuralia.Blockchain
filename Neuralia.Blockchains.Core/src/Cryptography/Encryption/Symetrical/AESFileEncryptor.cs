@@ -23,8 +23,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			// get a random salt
 			salt.FillSafeRandom();
 
-			var entry = new AesEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_256, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
+			AesEncryptorParameters entry = new AesEncryptorParameters {cipher = EncryptorParameters.SymetricCiphers.AES_256, Iterations = rnd.Next(1000, short.MaxValue), KeyBitLength = 256};
 			entry.Salt.Entry = salt;
+
 			return entry;
 		}
 

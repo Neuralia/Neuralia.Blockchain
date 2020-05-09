@@ -6,7 +6,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 		CHAIN_COMPONENT_PROVIDER ChainComponentProvider { get; set; }
-		
+
 		IGossipManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> gossipManager { get; set; }
 		IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainManager { get; set; }
 		IBlockChainInterface<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> chainInterface { get; set; }

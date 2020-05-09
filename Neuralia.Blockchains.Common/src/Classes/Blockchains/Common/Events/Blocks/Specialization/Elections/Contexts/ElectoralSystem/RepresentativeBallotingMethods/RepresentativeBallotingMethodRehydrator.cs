@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public static IRepresentativeBallotingRules RehydrateActiveRules(IDataRehydrator rehydrator) {
 
-			var version = rehydrator.RehydrateRewind<ComponentVersion<ActiveRepresentativeBallotingMethodType>>();
+			ComponentVersion<ActiveRepresentativeBallotingMethodType> version = rehydrator.RehydrateRewind<ComponentVersion<ActiveRepresentativeBallotingMethodType>>();
 
 			IRepresentativeBallotingRules representativeBallotingRules = null;
 
@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			if(isActive) {
 				if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-					if(version.Major == 1 && version.Minor == 0) {
+					if((version.Major == 1) && (version.Minor == 0)) {
 						representativeBallotingRules = new EncryptedSecretRepresentativeBallotingRules();
 					}
 				}
@@ -38,12 +38,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public static IRepresentativeBallotingRules RehydratePassiveRules(IDataRehydrator rehydrator) {
 
-			var version = rehydrator.RehydrateRewind<ComponentVersion<PassiveRepresentativeBallotingMethodType>>();
+			ComponentVersion<PassiveRepresentativeBallotingMethodType> version = rehydrator.RehydrateRewind<ComponentVersion<PassiveRepresentativeBallotingMethodType>>();
 
 			IPassiveRepresentativeBallotingRules representativeBallotingRules = null;
 
 			if(version.Type == PassiveRepresentativeBallotingMethodTypes.Instance.TopLowestHashes) {
-				if(version.Major == 1 && version.Minor == 0) {
+				if((version.Major == 1) && (version.Minor == 0)) {
 					representativeBallotingRules = new TopLowestHashesRepresentativeBallotingRules();
 				}
 			}
@@ -59,12 +59,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public static IActiveRepresentativeBallotingApplication RehydrateActiveApplication(IDataRehydrator rehydrator) {
 
-			var version = rehydrator.RehydrateRewind<ComponentVersion<ActiveRepresentativeBallotingMethodType>>();
+			ComponentVersion<ActiveRepresentativeBallotingMethodType> version = rehydrator.RehydrateRewind<ComponentVersion<ActiveRepresentativeBallotingMethodType>>();
 
 			IActiveRepresentativeBallotingApplication representativeBallotingApplication = null;
 
 			if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-				if(version.Major == 1 && version.Minor == 0) {
+				if((version.Major == 1) && (version.Minor == 0)) {
 					representativeBallotingApplication = new EncryptedSecretRepresentativeBallotingApplication();
 				}
 			}
@@ -86,12 +86,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				return null;
 			}
 
-			var version = rehydrator.RehydrateRewind<ComponentVersion<ActiveRepresentativeBallotingMethodType>>();
+			ComponentVersion<ActiveRepresentativeBallotingMethodType> version = rehydrator.RehydrateRewind<ComponentVersion<ActiveRepresentativeBallotingMethodType>>();
 
 			IActiveRepresentativeBallotingProof representativeBallotingProof = null;
 
 			if(version.Type == ActiveRepresentativeBallotingMethodTypes.Instance.EncryptedSecret) {
-				if(version.Major == 1 && version.Minor == 0) {
+				if((version.Major == 1) && (version.Minor == 0)) {
 					representativeBallotingProof = new EncryptedSecretRepresentativeBallotingProof();
 				}
 			}

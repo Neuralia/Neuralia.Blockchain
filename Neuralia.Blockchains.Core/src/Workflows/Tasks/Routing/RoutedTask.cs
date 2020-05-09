@@ -17,10 +17,10 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 	public interface IRoutedTask<out T> : IRoutedTask
 		where T : IRoutedTaskRoutingHandler {
 
-		void SetAction(Func<T,TaskRoutingContext, LockContext,  Task> newAction);
+		void SetAction(Func<T, TaskRoutingContext, LockContext, Task> newAction);
 		void SetCompleted(Action<TaskExecutionResults, TaskRoutingContext> newAction);
-		void Set(Func<T,TaskRoutingContext, LockContext,  Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted);
-		void SetAction(Func<T,TaskRoutingContext, LockContext,  Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted);
+		void Set(Func<T, TaskRoutingContext, LockContext, Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted);
+		void SetAction(Func<T, TaskRoutingContext, LockContext, Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted);
 	}
 
 	public interface IRoutedTask<out T, KResults> : IRoutedTask<T>, IRoutedTaskResult<KResults>
@@ -76,22 +76,22 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 	/// </summary>
 	public class RoutedTask<T, KResults> : DelegatedTask<T>, InternalRoutedTask<T, KResults>
 		where T : IRoutedTaskRoutingHandler {
-		private Func<T,TaskRoutingContext, LockContext,  Task> action;
+		private Func<T, TaskRoutingContext, LockContext, Task> action;
 		private IRoutedTaskRoutingHandler caller;
 		private TaskChildrenContext childrenContext;
-		
+
 		private Action<TaskExecutionResults, TaskRoutingContext> dispatchReturned;
 		private Action<TaskExecutionResults, TaskRoutingContext> stashCompleted;
 
-		public RoutedTask() : this(null, null) {
+		public RoutedTask() : this(null) {
 
 		}
 
-		public RoutedTask(Func<T,TaskRoutingContext, LockContext,  Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) : this("", newAction, newCompleted) {
+		public RoutedTask(Func<T, TaskRoutingContext, LockContext, Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) : this("", newAction, newCompleted) {
 
 		}
 
-		public RoutedTask(string destination, Func<T,TaskRoutingContext, LockContext,  Task> newAction = null, Action<TaskExecutionResults, TaskRoutingContext> newCompleted = null) {
+		public RoutedTask(string destination, Func<T, TaskRoutingContext, LockContext, Task> newAction = null, Action<TaskExecutionResults, TaskRoutingContext> newCompleted = null) {
 			this.Destination = destination;
 			this.Set(newAction, newCompleted);
 		}
@@ -158,7 +158,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 			}
 		}
 
-		public void SetAction(Func<T,TaskRoutingContext, LockContext,  Task> newAction) {
+		public void SetAction(Func<T, TaskRoutingContext, LockContext, Task> newAction) {
 			this.action = newAction;
 		}
 
@@ -166,12 +166,12 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 			this.dispatchReturned = newAction;
 		}
 
-		public void Set(Func<T,TaskRoutingContext, LockContext,  Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) {
+		public void Set(Func<T, TaskRoutingContext, LockContext, Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) {
 			this.SetAction(newAction);
 			this.SetCompleted(newCompleted);
 		}
 
-		public void SetAction(Func<T,TaskRoutingContext, LockContext,  Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) {
+		public void SetAction(Func<T, TaskRoutingContext, LockContext, Task> newAction, Action<TaskExecutionResults, TaskRoutingContext> newCompleted) {
 			this.Set(newAction, newCompleted);
 		}
 
@@ -222,7 +222,6 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 			if(this.action != null) {
 				await this.action(service, taskRoutingContext, lockContext).ConfigureAwait(false);
 			}
-			
 
 			this.ClearActiveTaskRoutingContext();
 		}

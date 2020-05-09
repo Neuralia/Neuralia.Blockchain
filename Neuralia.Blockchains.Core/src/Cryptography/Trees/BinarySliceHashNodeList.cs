@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
@@ -12,7 +11,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		private readonly SafeArrayHandle content = SafeArrayHandle.Create();
 		private readonly int sizeSize = 64;
 
-		
 		public BinarySliceHashNodeList(SafeArrayHandle content, int sizeSize = 64) {
 			this.content.Entry = content.Entry;
 			this.sizeSize = sizeSize;

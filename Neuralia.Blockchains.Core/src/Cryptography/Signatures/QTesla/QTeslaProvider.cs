@@ -6,7 +6,6 @@ using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 	public class QTeslaProvider : SignatureProviderBase {
@@ -65,9 +64,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Signatures.QTesla {
 
 			return ByteArray.WrapAndOwn(signer.generateSignature(content.ToExactByteArray()));
 		}
-		
+
 		public override async Task<bool> Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
-			
+
 			QTESLASigner signer = new QTESLASigner();
 
 			signer.init(false, QTESLAPublicKeyParameters.Rehydrate(publicKey));

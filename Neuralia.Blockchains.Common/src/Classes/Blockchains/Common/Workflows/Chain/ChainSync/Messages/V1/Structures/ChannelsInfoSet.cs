@@ -16,6 +16,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}, rehydrator => {
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
 			adaptiveSet.Rehydrate(rehydrator);
+
 			return (BlockChannelUtils.BlockChannelTypes) adaptiveSet.Value;
 		}) {
 		}
@@ -35,6 +36,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
 			adaptiveSet.Rehydrate(rehydrator);
+
 			return (int) adaptiveSet.Value;
 		}) {
 			this.SlicesInfo.Add(1, new T());
@@ -76,10 +78,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9(this.FileId);
 			adaptiveSet.Dehydrate(dehydrator);
-			
+
 			dehydrator.Write((byte) this.SlicesInfo.Count);
 
-			foreach(var entry in this.SlicesInfo) {
+			foreach(KeyValuePair<KEY, T> entry in this.SlicesInfo) {
 
 				this.dehydrateKey(entry.Key, dehydrator);
 
@@ -91,7 +93,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
 			adaptiveSet.Rehydrate(rehydrator);
-			this.FileId = (ushort)adaptiveSet.Value;
+			this.FileId = (ushort) adaptiveSet.Value;
 
 			byte count = rehydrator.ReadByte();
 
@@ -113,14 +115,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			nodesList.Add(this.FileId);
 
-			foreach(var entry in this.SlicesInfo) {
+			foreach(KeyValuePair<KEY, T> entry in this.SlicesInfo) {
 				nodesList.Add(entry.Key);
 				nodesList.Add(entry.Value);
 			}
 
 			return nodesList;
 		}
-		
+
 	#region disposable
 
 		public bool IsDisposed { get; private set; }
@@ -145,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected virtual void DisposeAll() {
 
-			foreach(var entry in SlicesInfo.Values) {
+			foreach(T entry in this.SlicesInfo.Values) {
 				if(entry is IDisposable disposable) {
 					disposable.Dispose();
 				}
@@ -153,6 +155,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 	#endregion
+
 	}
 
 	public static class ChannelsInfoSet {
@@ -165,11 +168,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			where CHANNEL_INFO_SET : ChannelsInfoSet<KEY, T>
 			where T : DataSliceSize, new() {
 
-			var result = new Dictionary<KEY, List<(Guid peerId, T entry)>>();
+			Dictionary<KEY, List<(Guid peerId, T entry)>> result = new Dictionary<KEY, List<(Guid peerId, T entry)>>();
 
-			foreach(var peerSet in peerEntries) {
+			foreach(KeyValuePair<Guid, CHANNEL_INFO_SET> peerSet in peerEntries) {
 
-				foreach(var sliceInfo in peerSet.Value.SlicesInfo) {
+				foreach(KeyValuePair<KEY, T> sliceInfo in peerSet.Value.SlicesInfo) {
 
 					if(!result.ContainsKey(sliceInfo.Key)) {
 						result.Add(sliceInfo.Key, new List<(Guid peerId, T entry)>());

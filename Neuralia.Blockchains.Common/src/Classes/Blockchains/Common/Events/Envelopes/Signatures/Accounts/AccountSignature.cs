@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public class AccountSignature : IAccountSignature {
 
 		public byte Version { get; private set; } = 1;
-		public SafeArrayHandle Autograph { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle Autograph { get; } = SafeArrayHandle.Create();
 
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList nodelist = new HashNodeList();

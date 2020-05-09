@@ -16,6 +16,5 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 			return list;
 		}
-
 	}
 }

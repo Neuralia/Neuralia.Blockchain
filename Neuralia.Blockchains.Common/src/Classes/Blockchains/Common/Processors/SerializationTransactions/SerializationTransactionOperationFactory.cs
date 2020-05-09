@@ -1,5 +1,4 @@
 using System;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions.Operations;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -15,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 
 			switch(type) {
 				case SerializationTransactionOperationTypes.FastKeys:
-					entry = new SerializationFastKeysOperations( chainDataWriteProvider);
+					entry = new SerializationFastKeysOperations(chainDataWriteProvider);
 
 					break;
 				default:

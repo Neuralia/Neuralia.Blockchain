@@ -1,9 +1,9 @@
 ﻿using System;
 using System.IO;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Security;
-using Zio;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
 	public static class SecureWipe {
@@ -13,7 +13,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		/// </summary>
 		/// <param name="filename">Full path of the file to be deleted</param>
 		/// <param name="timesToWrite">Specifies the number of times the file should be overwritten</param>
-		public static void WipeFile(string filename, int timesToWrite, FileSystemWrapper fileSystem) {
+		public static async Task WipeFile(string filename, int timesToWrite, FileSystemWrapper fileSystem) {
 			try {
 				if(fileSystem.FileExists(filename)) {
 					// Calculate the total number of sectors in the file.
@@ -23,11 +23,11 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 					fileSystem.SetAttributes(filename, FileAttributes.Normal);
 
 					// Buffer the size of a sector.
-					var buffer = new byte[1024];
+					byte[] buffer = new byte[1024];
 
 					SecureRandom random = new BetterSecureRandom();
 
-					using Stream inputStream = fileSystem.CreateFile(filename);
+					await using Stream inputStream = fileSystem.CreateFile(filename);
 
 					for(int currentPass = 0; currentPass < timesToWrite; currentPass++) {
 
@@ -39,7 +39,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 							// Fill the buffer with random data
 							random.NextBytes(buffer);
 
-							inputStream.Write(buffer, 0, buffer.Length);
+							await inputStream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
 						}
 					}
 

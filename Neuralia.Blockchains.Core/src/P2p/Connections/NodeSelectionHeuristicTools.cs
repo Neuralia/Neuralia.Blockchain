@@ -9,20 +9,29 @@ using Neuralia.Blockchains.Core.P2p.Messages.Components;
 namespace Neuralia.Blockchains.Core.Types {
 
 	/// <summary>
-	/// This class is meant to be a helper for heuristics application
+	///     This class is meant to be a helper for heuristics application
 	/// </summary>
 	public static class NodeSelectionHeuristicTools {
+
+		public enum HeuristicsChainSharingTypes : byte {
+			None = 1,
+			BlockOnly = 2,
+			DigestThenBlocks = 3,
+			DigestAndBlocks = 4,
+			Rest = 5
+		}
+
 		public enum NodeSelectionHeuristics {
 			Default
 		}
 
 		private static readonly ConcurrentDictionary<Enums.ChainSharingTypes, List<(HeuristicsChainSharingTypes type, double percentage)>> DefaultTypeMaps = new ConcurrentDictionary<Enums.ChainSharingTypes, List<(HeuristicsChainSharingTypes, double)>>();
 
-		private static readonly HeuristicsChainSharingTypes[] AllTypes = new[] {HeuristicsChainSharingTypes.None, HeuristicsChainSharingTypes.BlockOnly, HeuristicsChainSharingTypes.DigestThenBlocks, HeuristicsChainSharingTypes.DigestAndBlocks};
+		private static readonly HeuristicsChainSharingTypes[] AllTypes = {HeuristicsChainSharingTypes.None, HeuristicsChainSharingTypes.BlockOnly, HeuristicsChainSharingTypes.DigestThenBlocks, HeuristicsChainSharingTypes.DigestAndBlocks};
 
 		static NodeSelectionHeuristicTools() {
 
-			var map = new List<(HeuristicsChainSharingTypes, double)>();
+			List<(HeuristicsChainSharingTypes, double)> map = new List<(HeuristicsChainSharingTypes, double)>();
 			DefaultTypeMaps.AddSafe(Enums.ChainSharingTypes.DigestAndBlocks, map);
 			map.Add((HeuristicsChainSharingTypes.DigestAndBlocks, 0.5));
 			map.Add((HeuristicsChainSharingTypes.BlockOnly, 0.2));
@@ -49,14 +58,6 @@ namespace Neuralia.Blockchains.Core.Types {
 			map.Add((HeuristicsChainSharingTypes.Rest, 0));
 		}
 
-		public enum HeuristicsChainSharingTypes : byte {
-			None = 1,
-			BlockOnly = 2,
-			DigestThenBlocks = 3,
-			DigestAndBlocks = 4,
-			Rest = 5
-		}
-
 		//Enums.ChainSharingTypes
 
 		private static Enums.ChainSharingTypes Convert(HeuristicsChainSharingTypes type) {
@@ -80,7 +81,7 @@ namespace Neuralia.Blockchains.Core.Types {
 		}
 
 		/// <summary>
-		/// select a list of nodes with a somewhat reasonably itnelligent routine
+		///     select a list of nodes with a somewhat reasonably itnelligent routine
 		/// </summary>
 		/// <param name="nodes"></param>
 		/// <param name="blockchainTypes"></param>
@@ -101,30 +102,31 @@ namespace Neuralia.Blockchains.Core.Types {
 			nodes = nodes.Shuffle().ToList();
 
 			// we may want a certain limited amount
-			var nodesFiltered = new List<NodeAddressInfo>();
+			List<NodeAddressInfo> nodesFiltered = new List<NodeAddressInfo>();
 
 			if(heuristics == NodeSelectionHeuristics.Default) {
 
 				if(blockchainTypes != null) {
 
 					bool foundBlockchains = false;
+
 					// lets filter by blockchain
 					foreach(BlockchainType bc in blockchainTypes) {
 
 						int remaining = 10;
 
-						var chainSettings = targetNode.GetChainSettings();
+						Dictionary<BlockchainType, ChainSettings> chainSettings = targetNode.GetChainSettings();
 
 						if(!chainSettings.ContainsKey(bc)) {
 							continue;
 						}
 
 						foundBlockchains = true;
-						var targetChainShareType = chainSettings[bc].ShareType;
+						NodeShareType targetChainShareType = chainSettings[bc].ShareType;
 
-						var usableList = nodes.Where(n => n.PeerInfo.GetSupportedBlockchains().Any(c => c == bc)).ToList();
+						List<NodeAddressInfo> usableList = nodes.Where(n => n.PeerInfo.GetSupportedBlockchains().Any(c => c == bc)).ToList();
 
-						var map = DefaultTypeMaps[targetChainShareType];
+						List<(HeuristicsChainSharingTypes type, double percentage)> map = DefaultTypeMaps[targetChainShareType];
 
 						foreach((HeuristicsChainSharingTypes type, double percentage) in map) {
 
@@ -133,10 +135,10 @@ namespace Neuralia.Blockchains.Core.Types {
 
 							if(type == HeuristicsChainSharingTypes.Rest) {
 
-								var restTypes = AllTypes.Where(e => !map.Select(r => r.type).Where(d => d != HeuristicsChainSharingTypes.Rest).Contains(e)).Select(w => Convert(w)).ToList();
+								List<Enums.ChainSharingTypes> restTypes = AllTypes.Where(e => !map.Select(r => r.type).Where(d => d != HeuristicsChainSharingTypes.Rest).Contains(e)).Select(w => Convert(w)).ToList();
 
 								double rest = 0.1;
-								var restList = map.Where(e => !restTypes.Contains(Convert(e.type))).ToList();
+								List<(HeuristicsChainSharingTypes type, double percentage)> restList = map.Where(e => !restTypes.Contains(Convert(e.type))).ToList();
 
 								if(restList.Any()) {
 									rest = restList.Sum(e => e.percentage);
@@ -144,7 +146,7 @@ namespace Neuralia.Blockchains.Core.Types {
 
 								need = (int) Math.Ceiling(remaining * (1 - rest));
 
-								var sublist = usableList.Where(n => n.PeerInfo.GetSupportedBlockchains().Any(c => c == bc) && restTypes.Contains(n.PeerInfo.GetChainSettings()[bc].ShareType));
+								IEnumerable<NodeAddressInfo> sublist = usableList.Where(n => n.PeerInfo.GetSupportedBlockchains().Any(c => c == bc) && restTypes.Contains(n.PeerInfo.GetChainSettings()[bc].ShareType));
 
 								picked = sublist.Take(need).ToList();
 

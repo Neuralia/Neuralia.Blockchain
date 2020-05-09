@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
@@ -9,11 +7,12 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Base;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Locking;
-using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation {
@@ -54,60 +53,60 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected override async Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext1) {
 
 			LockContext lockContext = null;
+
 			try {
-				await centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(async (provider, token, lc) => {
+				await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(async (provider, token, lc) => {
 
 					token.ThrowIfCancellationRequested();
 
-                    await PreTransaction(lc).ConfigureAwait(false);
+					await this.PreTransaction(lc).ConfigureAwait(false);
 
 					try {
-                        await this.PreProcess(lc).ConfigureAwait(false);
+						await this.PreProcess(lc).ConfigureAwait(false);
 
 						token.ThrowIfCancellationRequested();
 
-                        envelope = await AssembleEvent(lc).ConfigureAwait(false);
+						this.envelope = await this.AssembleEvent(lc).ConfigureAwait(false);
 
-                        ProcessEnvelope(envelope);
+						this.ProcessEnvelope(this.envelope);
 
 						token.ThrowIfCancellationRequested();
 
-						ValidationResult result = ValidateContents(envelope);
+						ValidationResult result = this.ValidateContents(this.envelope);
 
 						if(result.Invalid) {
 							throw result.GenerateException();
 						}
 
 						token.ThrowIfCancellationRequested();
-						
-						try{
 
-                            await centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(envelope, false, validationResult => {
+						try {
+
+							await this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(this.envelope, false, validationResult => {
 								result = validationResult;
 							}).ConfigureAwait(false);
-							
+
 							if(result.Invalid) {
 
 								throw result.GenerateException();
 							}
 
-						}catch(Exception ex) {
-							Log.Error(ex, "Failed to validate event");
+						} catch(Exception ex) {
+							NLog.Default.Error(ex, "Failed to validate event");
 
 							throw;
 						}
 
-
-                        await this.PostProcess(lc).ConfigureAwait(false);
+						await this.PostProcess(lc).ConfigureAwait(false);
 
 					} catch(Exception e) {
-						throw new EventGenerationException(envelope, e);
+						throw new EventGenerationException(this.envelope, e);
 					}
-					
+
 					// we just validated and is completed, lets see if we want to do anything
 					await this.EventGenerationCompleted(this.envelope, lc).ConfigureAwait(false);
 
-				}, null, Timeout).ConfigureAwait(false);
+				}, null, this.Timeout).ConfigureAwait(false);
 			} catch(EventValidationException vex) {
 				this.ValidationFailed(this.envelope, vex.Result);
 
@@ -116,7 +115,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		}
 
 		protected virtual void ProcessEnvelope(ENVELOPE_TYPE envelope) {
-			
+
 		}
 
 		protected override async Task Initialize(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
@@ -137,7 +136,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 			await this.CheckSyncStatus(lockContext).ConfigureAwait(false);
 
-			await CheckAccounyStatus(lockContext).ConfigureAwait(false);
+			await this.CheckAccounyStatus(lockContext).ConfigureAwait(false);
 		}
 
 		private async Task WaitForSync(Action<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, LockContext> syncAction, LockContext lockContext, Action<Func<LockContext, Task>> register, Action<Func<LockContext, Task>> unregister, string name) {
@@ -152,7 +151,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			register(Catcher);
 
 			try {
-				var blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
+				BlockchainTask<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, bool, CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> blockchainTask = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.TaskFactoryBase.CreateBlockchainTask<bool>();
 
 				blockchainTask.SetAction(async (service, taskRoutingContext2, lc) => {
 					syncAction(service, lc);
@@ -178,7 +177,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 				await this.WaitForSync((service, lc) => service.SynchronizeBlockchain(false, lc), lockContext, catcher => this.centralCoordinator.BlockchainSynced += catcher, catcher => this.centralCoordinator.BlockchainSynced -= catcher, "blockchain").ConfigureAwait(false);
 			}
 
-			var walletSynned = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait(lockContext).ConfigureAwait(false);
+			bool? walletSynned = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SyncedNoWait(lockContext).ConfigureAwait(false);
 
 			if(!walletSynned.HasValue || !walletSynned.Value) {
 
@@ -187,14 +186,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		}
 
 		protected virtual Task ExceptionOccured(Exception ex) {
-			Log.Error(ex, "Failed to create event");
+			NLog.Default.Error(ex, "Failed to create event");
 
 			return Task.CompletedTask;
 		}
 
 		protected virtual async Task CheckAccounyStatus(LockContext lockContext) {
 			// now we ensure our account is not presented or repsenting
-			Enums.PublicationStatus accountStatus = (await centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
+			Enums.PublicationStatus accountStatus = (await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false)).Status;
 
 			if(accountStatus != Enums.PublicationStatus.Published) {
 				throw new EventGenerationException("The account has not been published and can not be used.");

@@ -20,20 +20,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 				eb.HasIndex(b => b.AccountId).IsUnique();
 
 				eb.Ignore(b => b.AppliedAttributes);
-				
+
 				eb.ToTable("AccountSnapshot");
 			});
 
 			modelBuilder.Entity<ACCOUNT_ATTRIBUTE_SNAPSHOT>(eb => {
 				eb.HasKey(c => new {c.CorrelationId, FeatureType = c.AttributeType, c.AccountId});
-				
+
 				eb.HasIndex(c => c.CorrelationId);
 				eb.HasIndex(c => c.AttributeType);
 				eb.HasIndex(c => c.AccountId);
-				
-				eb.Property(b => b.AttributeType).HasConversion(v => (ushort) v.Value, v => (AccountAttributeType)v);
 
-				
+				eb.Property(b => b.AttributeType).HasConversion(v => v.Value, v => (AccountAttributeType) v);
+
 				eb.ToTable("AccountAttributes");
 			});
 

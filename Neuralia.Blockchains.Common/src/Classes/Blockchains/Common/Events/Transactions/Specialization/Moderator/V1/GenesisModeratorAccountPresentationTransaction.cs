@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
@@ -145,6 +143,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("ModeratorAccountId", this.ModeratorAccountId);
 		}
 
+		public override ImmutableList<AccountId> TargetAccounts => new[] {this.ModeratorAccountId}.ToImmutableList();
+
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 
@@ -162,7 +162,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override ComponentVersion<TransactionType> SetIdentity() {
 			return (TransactionTypes.Instance.GENESIS, 1, 0);
 		}
-		
-		public override ImmutableList<AccountId> TargetAccounts => new [] {this.ModeratorAccountId}.ToImmutableList();
 	}
 }

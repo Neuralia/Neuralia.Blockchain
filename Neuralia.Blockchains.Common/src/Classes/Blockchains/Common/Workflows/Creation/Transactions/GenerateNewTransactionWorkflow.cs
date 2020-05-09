@@ -1,16 +1,14 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
-using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
@@ -31,10 +29,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
+		protected readonly byte expiration;
 
 		protected readonly string note;
 		protected ITransaction transaction;
-		protected readonly byte expiration;
+
 		public GenerateNewTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, string note, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
 			this.note = note;
 			this.expiration = expiration;
@@ -42,23 +41,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		protected override Task EventGenerationCompleted(ITransactionEnvelope envelope, LockContext lockContext) {
 
-            return this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertLocalTransaction(envelope, this.note, this.correlationContext, lockContext);
+			return this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertLocalTransaction(envelope, this.note, this.correlationContext, lockContext);
 
 		}
 
 		protected override async Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
-			
+
 			try {
 				await base.PerformWork(workflow, taskRoutingContext, lockContext).ConfigureAwait(false);
-				
-				Log.Information("Insertion of transaction into blockchain completed");
+
+				NLog.Default.Information("Insertion of transaction into blockchain completed");
 			} catch(Exception ex) {
 				string message = "Failed to insert transaction into blockchain";
-				Log.Error(ex, message);
-				
+				NLog.Default.Error(ex, message);
+
 				throw;
 			}
-			
+
 		}
 
 		protected override void ProcessEnvelope(ITransactionEnvelope envelope) {
@@ -79,10 +78,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 					envelope = envelope2;
 				}
 			}
+
 			if(ex is EventGenerationException evex && evex.Envelope is ITransactionEnvelope envelope3) {
 				envelope = envelope3;
 			}
-			
+
 			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.TransactionError(envelope?.Contents.Uuid, null), this.correlationContext);
 		}
 

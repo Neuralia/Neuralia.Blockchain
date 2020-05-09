@@ -50,7 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			AdaptiveLong1_9 adaptiveSet = new AdaptiveLong1_9();
 			adaptiveSet.Rehydrate(rehydrator);
-			this.Id = (int)adaptiveSet.Value;
+			this.Id = (int) adaptiveSet.Value;
 
 			this.RequestAttempt = rehydrator.ReadByte();
 

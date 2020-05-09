@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
@@ -15,8 +16,7 @@ using Serilog;
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 	public interface IIndexedSqliteDal<DBCONTEXT> : ISqliteDal<DBCONTEXT>
-		where DBCONTEXT : IIndexedSqliteDbContext{
-
+		where DBCONTEXT : IIndexedSqliteDbContext {
 	}
 
 	public abstract class IndexedSqliteDal<DBCONTEXT> : SqliteDal<DBCONTEXT>, IIndexedSqliteDal<DBCONTEXT>
@@ -59,6 +59,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			if(!Directory.Exists(this.folderPath)) {
 				return new List<string>();
 			}
+
 			return Directory.GetFiles(this.folderPath).Where(f => Path.GetFileName(f).StartsWith(this.GroupRoot)).ToList();
 		}
 
@@ -69,7 +70,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 				}
 			}
 
-			var type = this.GetType();
+			Type type = this.GetType();
 
 			if(DbCreatedCache.ContainsKey(type)) {
 				DbCreatedCache[type].Clear();
@@ -78,7 +79,6 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return Task.CompletedTask;
 		}
 
-		
 		protected long GetKeyGroup(long key) {
 			return this.FindIndex(key).index;
 		}
@@ -95,11 +95,11 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			// group them by keyGroups
 
-			var groups = operations.GroupBy(e => this.GetKeyGroup(e.Key));
+			IEnumerable<IGrouping<long, KeyValuePair<long, List<Action<DBCONTEXT>>>>> groups = operations.GroupBy(e => this.GetKeyGroup(e.Key));
 
-			foreach(var group in groups) {
+			foreach(IGrouping<long, KeyValuePair<long, List<Action<DBCONTEXT>>>> group in groups) {
 
-				foreach(var operation in group.Select(g => g.Value)) {
+				foreach(List<Action<DBCONTEXT>> operation in group.Select(g => g.Value)) {
 					this.PerformOperations(operation, group.Key);
 				}
 			}
@@ -108,12 +108,16 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		public Task<List<(DBCONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSetHoldTransactions(Dictionary<long, List<Func<DBCONTEXT, LockContext, Task>>> operations) {
 
 			LockContext lockContext = null;
+
 			Dictionary<long, List<Func<DBCONTEXT, Task>>> wrappedOperations = operations.ToDictionary(e => e.Key, e => e.Value.Select(o => {
 
-				Task Func(DBCONTEXT db) => o(db, lockContext);
+				Task Func(DBCONTEXT db) {
+					return o(db, lockContext);
+				}
 
 				return (Func<DBCONTEXT, Task>) Func;
 			}).ToList());
+
 			return this.PerformProcessingSetHoldTransactions(wrappedOperations);
 		}
 
@@ -125,18 +129,18 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		public async Task<List<(DBCONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSetHoldTransactions(Dictionary<long, List<Func<DBCONTEXT, Task>>> operations) {
 
 			// group them by keyGroups
-			var transactions = new List<(DBCONTEXT db, IDbContextTransaction transaction)>();
+			List<(DBCONTEXT db, IDbContextTransaction transaction)> transactions = new List<(DBCONTEXT db, IDbContextTransaction transaction)>();
 
 			try {
 
-				var groups = operations.GroupBy(e => this.GetKeyGroup(e.Key), d => d.Value);
+				IEnumerable<IGrouping<long, List<Func<DBCONTEXT, Task>>>> groups = operations.GroupBy(e => this.GetKeyGroup(e.Key), d => d.Value);
 
-				foreach(var group in groups) {
+				foreach(IGrouping<long, List<Func<DBCONTEXT, Task>>> group in groups) {
 
-					(DBCONTEXT db, IDbContextTransaction transaction) transaction = await this.BeginHoldingTransaction(@group.Key).ConfigureAwait(false);
+					(DBCONTEXT db, IDbContextTransaction transaction) transaction = await this.BeginHoldingTransaction(group.Key).ConfigureAwait(false);
 					transactions.Add(transaction);
 
-					foreach(var operation in group.SelectMany(e => e)) {
+					foreach(Func<DBCONTEXT, Task> operation in group.SelectMany(e => e)) {
 
 						await operation(transaction.db).ConfigureAwait(false);
 					}
@@ -155,7 +159,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 					}
 
 					try {
-						db?.Dispose();
+						if(db != null) {
+							await db.DisposeAsync().ConfigureAwait(false);
+						}
 					} catch {
 
 					}
@@ -167,7 +173,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 		public List<T> QueryAll<T>(Func<DBCONTEXT, List<T>> operation) {
 
-			var results = new List<T>();
+			List<T> results = new List<T>();
 
 			foreach(string file in this.GetAllFileGroups()) {
 
@@ -176,10 +182,10 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			return results;
 		}
-		
+
 		public async Task<List<T>> QueryAllAsync<T>(Func<DBCONTEXT, Task<List<T>>> operation) {
 
-			var results = new List<T>();
+			List<T> results = new List<T>();
 
 			foreach(string file in this.GetAllFileGroups()) {
 
@@ -188,10 +194,10 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			return results;
 		}
-		
+
 		public bool AnyAll(Func<DBCONTEXT, bool> operation, List<long> ids) {
 
-			var groups = ids.GroupBy(this.GetKeyGroup);
+			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
 
 			foreach(long index in groups.Select(g => g.Key)) {
 
@@ -202,10 +208,10 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			return false;
 		}
-		
+
 		public async Task<bool> AnyAllAsync(Func<DBCONTEXT, Task<bool>> operation, List<long> ids) {
 
-			var groups = ids.GroupBy(this.GetKeyGroup);
+			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
 
 			foreach(long index in groups.Select(g => g.Key)) {
 
@@ -219,9 +225,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 		public List<T> QueryAll<T>(Func<DBCONTEXT, List<T>> operation, List<long> ids) {
 
-			var groups = ids.GroupBy(this.GetKeyGroup);
+			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
 
-			var results = new List<T>();
+			List<T> results = new List<T>();
 
 			foreach(long index in groups.Select(g => g.Key)) {
 
@@ -230,12 +236,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			return results;
 		}
-		
+
 		public async Task<List<T>> QueryAllAsync<T>(Func<DBCONTEXT, Task<List<T>>> operation, List<long> ids) {
 
-			var groups = ids.GroupBy(this.GetKeyGroup);
+			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
 
-			var results = new List<T>();
+			List<T> results = new List<T>();
 
 			foreach(long index in groups.Select(g => g.Key)) {
 
@@ -252,7 +258,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 				await this.PerformOperation(operation, file).ConfigureAwait(false);
 			}
 		}
-		
+
 		protected void InitContext(DBCONTEXT db, string filename) {
 
 			db.SetGroupFile(filename);
@@ -278,7 +284,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		protected virtual void PerformOperations(IEnumerable<Action<DBCONTEXT>> processes, int index) {
 			base.PerformOperations(processes, index);
 		}
-		
+
 		protected virtual Task PerformOperationsAsync(IEnumerable<Func<DBCONTEXT, Task>> processes, int index) {
 			return base.PerformOperationsAsync(processes, index);
 		}
@@ -298,12 +304,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		protected virtual Task<T> PerformOperationsAsync<T>(Func<DBCONTEXT, Task<T>> process, int index) {
 			return base.PerformOperationAsync(process, index);
 		}
-		
+
 		protected virtual List<T> PerformOperation<T>(Func<DBCONTEXT, List<T>> process, int index) {
 			return base.PerformOperation(process, index);
 		}
-		
-		protected virtual  Task<List<T>> PerformOperationsAsync<T>(Func<DBCONTEXT,  Task<List<T>>> process, int index) {
+
+		protected virtual Task<List<T>> PerformOperationsAsync<T>(Func<DBCONTEXT, Task<List<T>>> process, int index) {
 			return base.PerformOperationAsync(process, index);
 		}
 
@@ -322,7 +328,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 						action(db);
 					}
 				} catch(Exception ex) {
-					Log.Error(ex, "exception occured during an indexed Entity Framework action");
+					NLog.Default.Error(ex, "exception occured during an indexed Entity Framework action");
 
 					throw;
 				}

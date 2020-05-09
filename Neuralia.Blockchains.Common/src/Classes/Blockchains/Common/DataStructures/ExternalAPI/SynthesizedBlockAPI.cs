@@ -1,14 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
 
-using System.Text.Json.Serialization;
-
-
-
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
-	
+
 	public abstract class SynthesizedBlockAPI {
 
 		public long BlockId { get; set; }
@@ -17,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public string AccountId { get; set; }
 		public string AccountHash { get; set; }
 
-		public Dictionary<string, byte[]> ConfirmedGeneralTransactions { get; set;} = new Dictionary<string, byte[]>();
+		public Dictionary<string, byte[]> ConfirmedGeneralTransactions { get; set; } = new Dictionary<string, byte[]>();
 		public Dictionary<string, byte[]> ConfirmedTransactions { get; set; } = new Dictionary<string, byte[]>();
 		public Dictionary<string, int> RejectedTransactions { get; set; } = new Dictionary<string, int>();
 

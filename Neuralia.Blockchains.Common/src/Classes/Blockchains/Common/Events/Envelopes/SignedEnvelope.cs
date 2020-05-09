@@ -13,7 +13,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		IEnvelopeSignature SignatureBase { get; }
 		bool IsSecretSignature { get; }
 		List<int> AccreditationCertificates { get; }
-
 	}
 
 	public interface ISignedEnvelope<BLOCKCHAIN_EVENT_TYPE, SIGNATURE_TYPE> : ISignedEnvelope, IEnvelope<BLOCKCHAIN_EVENT_TYPE>
@@ -27,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		where BLOCKCHAIN_EVENT_TYPE : class, IBinarySerializable, ITreeHashable
 		where SIGNATURE_TYPE : IEnvelopeSignature {
 
-		public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
 		public SIGNATURE_TYPE Signature { get; set; }
 		public IEnvelopeSignature SignatureBase => this.Signature;
 
@@ -45,13 +44,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 				nodeList.Add(entry);
 			}
+
 			return nodeList;
 		}
 
 		protected override void Dehydrate(IDataDehydrator dehydrator) {
 			dehydrator.WriteNonNullable(this.Hash);
 			this.Signature.Dehydrate(dehydrator);
-			
+
 			bool any = this.AccreditationCertificates.Any();
 			dehydrator.Write(any);
 
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			this.Hash.Entry = rehydrator.ReadNonNullableArray();
 
 			this.Signature = (SIGNATURE_TYPE) EnvelopeSignatureFactory.Rehydrate(rehydrator);
-			
+
 			this.AccreditationCertificates.Clear();
 			bool any = rehydrator.ReadBool();
 

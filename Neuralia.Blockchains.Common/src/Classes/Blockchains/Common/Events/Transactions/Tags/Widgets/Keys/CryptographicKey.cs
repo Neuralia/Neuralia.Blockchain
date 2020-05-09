@@ -4,7 +4,6 @@ using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.Serialization;
-using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -37,9 +36,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public byte Version { get; } = 1;
 		public byte Id { get; set; }
 
-		public virtual bool IsEmpty => this.Key == null || this.Key.IsEmpty || this.Key.IsZero;
+		public virtual bool IsEmpty => (this.Key == null) || this.Key.IsEmpty || this.Key.IsZero;
 
-		public  SafeArrayHandle Key { get; } = SafeArrayHandle.Create();
+		public SafeArrayHandle Key { get; } = SafeArrayHandle.Create();
 
 		public Enums.KeyTypes Type { get; protected set; } = Enums.KeyTypes.Unknown;
 
@@ -51,18 +50,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			dehydrator.WriteNonNullable(this.Key);
 		}
 
-		public SafeArrayHandle Dehydrate(){
-			using(var dehydrator = DataSerializationFactory.CreateDehydrator()) {
+		public SafeArrayHandle Dehydrate() {
+			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
 				this.Dehydrate(dehydrator);
+
 				return dehydrator.ToArray();
 			}
 		}
-		public void Rehydrate(SafeArrayHandle bytes){
-			using(var rehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
+
+		public void Rehydrate(SafeArrayHandle bytes) {
+			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
 				this.Rehydrate(rehydrator);
 			}
 		}
-		
+
 		public void Rehydrate(IDataRehydrator rehydrator) {
 			Enums.KeyTypes type = (Enums.KeyTypes) rehydrator.ReadByte();
 
@@ -108,15 +109,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("type", this.Type);
 		}
 
-		protected abstract void SetType();
-		
-		
 		public virtual void SetFromWalletKey(IWalletKey walletKey) {
 
 			this.Id = walletKey.KeyAddress.OrdinalId;
 			this.Key.Entry = ByteArray.CreateClone(walletKey.PublicKey);
 
 		}
+
+		protected abstract void SetType();
 	}
 
 }

@@ -1,4 +1,3 @@
-using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -22,10 +21,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 			return nodeList;
 		}
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
-			
+
 			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
 			entry.Value = this.TreeLayers;
 			entry.Dehydrate(dehydrator);
@@ -33,10 +32,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-			
+
 			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
 			entry.Rehydrate(rehydrator);
-			this.TreeLayers = (int)entry.Value;
+			this.TreeLayers = (int) entry.Value;
 		}
 	}
 }

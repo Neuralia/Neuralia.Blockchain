@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return values.GroupBy(g => g).Select(g => (Value: g.Key, Count: g.Count())).ToList();
 		}
 
-		public static (T result, ConsensusType concensusType) GetConsensus<T, U>(IEnumerable<U> values, Func<U, T> selector) {
+		public static (T result, ConsensusType consensusType) GetConsensus<T, U>(IEnumerable<U> values, Func<U, T> selector) {
 
 			return GetConsensus(values.Select(selector));
 		}
@@ -35,12 +35,12 @@ namespace Neuralia.Blockchains.Core.Tools {
 		/// <typeparam name="K"></typeparam>
 		/// <typeparam name="U"></typeparam>
 		/// <returns></returns>
-		public static (T result, ConsensusType concensusType) GetConsensus<T, K, U>(IEnumerable<U> values, Func<U, (K, T)> selector) {
+		public static (T result, ConsensusType consensusType) GetConsensus<T, K, U>(IEnumerable<U> values, Func<U, (K, T)> selector) {
 
 			return GetConsensus(values.Select(selector));
 		}
 
-		public static (T result, ConsensusType concensusType) GetConsensus<T>(IEnumerable<T> values, Func<T, T> selector) {
+		public static (T result, ConsensusType consensusType) GetConsensus<T>(IEnumerable<T> values, Func<T, T> selector) {
 
 			//TODO: create unit tests for these methods
 			if(selector != null) {
@@ -55,7 +55,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return (values.Single(), ConsensusType.Single);
 			}
 
-			var groups = GetConsensusGroupings(values);
+			List<(T Value, int Count)> groups = GetConsensusGroupings(values);
 
 			int groupsTotal = groups.Count;
 			int entriesTotal = values.Count();
@@ -75,7 +75,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			}
 
 			// now, we got at least a couple. lets see if anything is above 50% which is the majority
-			var above50group = groups.Where(e => ((double) e.Count / entriesTotal) > 0.5).Select(g => g.Value).ToArray();
+			T[] above50group = groups.Where(e => ((double) e.Count / entriesTotal) > 0.5).Select(g => g.Value).ToArray();
 
 			if(above50group.Any()) {
 				return (above50group.Single(), ConsensusType.ClearMajority);
@@ -90,7 +90,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 		/// <summary>
 		///     Here we group on a certain key, but return another value. VEry useful for hashes of byte arrays
 		/// </summary>
-		public static (T result, ConsensusType concensusType) GetConsensus<T, K>(IEnumerable<(K, T)> values, Func<(K, T), (K, T)> selector) {
+		public static (T result, ConsensusType consensusType) GetConsensus<T, K>(IEnumerable<(K, T)> values, Func<(K, T), (K, T)> selector) {
 
 			//TODO: unify what we can with the other version of the similar method. right now its duplicated, not very nice.
 			//TODO: create unit tests for these methods
@@ -106,7 +106,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return (values.Single().Item2, ConsensusType.Single);
 			}
 
-			var groups = values.GroupBy(g => g.Item1).Select(g => (Value: g.Key, Other: g.First().Item2, Count: g.Count(), Entries: g)).ToList();
+			List<(K Value, T Other, int Count, IGrouping<K, (K, T)> Entries)> groups = values.GroupBy(g => g.Item1).Select(g => (Value: g.Key, Other: g.First().Item2, Count: g.Count(), Entries: g)).ToList();
 
 			int total = groups.Count;
 
@@ -125,7 +125,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			}
 
 			// now, we got at least a couple. lets see if anything is above 50% which is the majority
-			var above50group = groups.Where(e => ((double) e.Count / total) > 0.5).Select(g => g.Other).ToArray();
+			T[] above50group = groups.Where(e => ((double) e.Count / total) > 0.5).Select(g => g.Other).ToArray();
 
 			if(above50group.Any()) {
 				return (above50group.Single(), ConsensusType.ClearMajority);
@@ -137,7 +137,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return (groups.Where(e => e.Count == max).Select(g => g.Other).First(), ConsensusType.Split);
 		}
 
-		public static (T result, ConsensusType concensusType) GetConsensus<T>(IEnumerable<T> values) {
+		public static (T result, ConsensusType consensusType) GetConsensus<T>(IEnumerable<T> values) {
 
 			return GetConsensus(values, null);
 		}
@@ -145,7 +145,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 		/// <summary>
 		///     Here we group on a certain key, but return another value. VEry useful for hashes of byte arrays
 		/// </summary>
-		public static (T result, ConsensusType concensusType) GetConsensus<T, K>(IEnumerable<(K, T)> values) {
+		public static (T result, ConsensusType consensusType) GetConsensus<T, K>(IEnumerable<(K, T)> values) {
 
 			return GetConsensus(values, null);
 		}

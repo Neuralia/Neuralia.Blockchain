@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		void ITypedCollectionExposure<IJointMemberAccount>.ClearCollection() {
 			this.MemberAccounts.Clear();
 		}
-		
+
 		public void ConvertToSnapshotEntry(IJointAccountSnapshot other, ICardUtils cardUtils) {
 			cardUtils.Copy(this, other);
 		}

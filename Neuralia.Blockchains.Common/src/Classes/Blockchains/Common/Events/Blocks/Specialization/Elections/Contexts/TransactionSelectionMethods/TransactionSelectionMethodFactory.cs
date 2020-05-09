@@ -3,8 +3,6 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Speci
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Tools;
-using Neuralia.Blockchains.Core.Configuration;
-using Neuralia.Blockchains.Core.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.TransactionSelectionMethods {
 
@@ -22,7 +20,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 				type = TransactionSelectionMethodTypes.Instance.Random;
 			}
-
 
 			if(type == TransactionSelectionMethodTypes.Instance.CreationTime) {
 

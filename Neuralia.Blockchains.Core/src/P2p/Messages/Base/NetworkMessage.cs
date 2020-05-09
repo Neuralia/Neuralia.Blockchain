@@ -3,7 +3,6 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
-using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
@@ -49,7 +48,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
 		public virtual void Rehydrate(IDataRehydrator dr, R rehydrationFactory) {
 			int readWorkflowType = dr.ReadShort();
-			var version = dr.Rehydrate<ComponentVersion<SimpleUShort>>();
+			ComponentVersion<SimpleUShort> version = dr.Rehydrate<ComponentVersion<SimpleUShort>>();
 
 			if(this.WorkflowType != readWorkflowType) {
 				throw new ApplicationException("The rehydrated workflow type is different from the one we have");
@@ -72,6 +71,5 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 		protected abstract ComponentVersion<SimpleUShort> SetIdentity();
 
 		protected abstract short SetWorkflowType();
-		
 	}
 }

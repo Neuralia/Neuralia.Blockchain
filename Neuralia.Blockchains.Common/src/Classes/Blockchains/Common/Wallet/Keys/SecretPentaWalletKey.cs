@@ -28,47 +28,47 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 		public QTeslaWalletKey ThirdKey { get; set; }
 		public QTeslaWalletKey FourthKey { get; set; }
 		public XmssMTWalletKey FifthKey { get; set; }
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
-			
+
 			dehydrator.Write(this.ThirdKey == null);
 
-			if(this.ThirdKey !=  null) {
+			if(this.ThirdKey != null) {
 				this.ThirdKey.Dehydrate(dehydrator);
 			}
-			
+
 			dehydrator.Write(this.FourthKey == null);
 
-			if(this.FourthKey !=  null) {
+			if(this.FourthKey != null) {
 				this.FourthKey.Dehydrate(dehydrator);
 			}
-			
+
 			dehydrator.Write(this.FifthKey == null);
 
-			if(this.FifthKey !=  null) {
+			if(this.FifthKey != null) {
 				this.FifthKey.Dehydrate(dehydrator);
 			}
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-			
+
 			WalletKeyHelper walletKeyHelper = this.CreateWalletKeyHelper();
 			bool isNull = rehydrator.ReadBool();
-			
+
 			if(isNull == false) {
 				this.ThirdKey = walletKeyHelper.CreateKey<QTeslaWalletKey>(rehydrator);
 				this.ThirdKey.Rehydrate(rehydrator);
 			}
-			
+
 			isNull = rehydrator.ReadBool();
 
 			if(isNull == false) {
 				this.FourthKey = walletKeyHelper.CreateKey<QTeslaWalletKey>(rehydrator);
 				this.FourthKey.Rehydrate(rehydrator);
 			}
-			
+
 			isNull = rehydrator.ReadBool();
 
 			if(isNull == false) {

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -44,7 +43,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificates(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>>> operation, List<int> certificateIds) {
 			return this.QueryAllAsync(operation, certificateIds.Cast<long>().ToList());
 		}
-		
+
 		public Task UpdateSnapshotDigestFromDigest(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task> operation, ACCREDITATION_CERTIFICATE_SNAPSHOT accountSnapshotEntry) {
 
 			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.CertificateId));

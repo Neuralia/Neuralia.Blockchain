@@ -1,15 +1,11 @@
 using System.Collections.Generic;
 using System.IO;
 using Neuralia.Blockchains.Core.Tools;
-using Zio;
-
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils {
 	public abstract class ChannelFilesHandler {
 		protected readonly Dictionary<string, FileSpecs> fileSpecs = new Dictionary<string, FileSpecs>();
 		protected readonly FileSystemWrapper fileSystem;
-
-		public string FolderPath { get; set; }
 
 		protected uint? adjustedBlockId;
 		protected (long index, long startingBlockId, long endingBlockId) blockIndex;
@@ -18,6 +14,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.FolderPath = folderPath;
 			this.fileSystem = fileSystem;
 		}
+
+		public string FolderPath { get; set; }
 
 		public void ResetFileSpecs(uint adjustedBlockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 

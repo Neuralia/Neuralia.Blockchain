@@ -7,7 +7,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Serialization {
 
 	public interface IDehydratedBlockchainDigest : IDehydrateBlockchainEvent {
-		SafeArrayHandle Hash { get;  }
+		SafeArrayHandle Hash { get; }
 		int DigestId { get; set; }
 		SafeArrayHandle Contents { get; }
 		IBlockchainDigest RehydratedDigest { get; }
@@ -17,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	public class DehydratedBlockchainDigest : IDehydratedBlockchainDigest {
 
 		public int DigestId { get; set; }
-		public SafeArrayHandle Contents { get;  } = SafeArrayHandle.Create();
+		public SafeArrayHandle Contents { get; } = SafeArrayHandle.Create();
 		public IBlockchainDigest RehydratedDigest { get; private set; }
 
 		public SafeArrayHandle Dehydrate() {
@@ -68,8 +68,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			return this.RehydratedDigest;
 		}
 
-		public SafeArrayHandle Hash { get;  } = SafeArrayHandle.Create();
-		
+		public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
+
 	#region Disposable
 
 		public void Dispose() {
@@ -81,20 +81,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			if(this.IsDisposed) {
 				return;
 			}
-			
+
 			if(disposing) {
 				this.Contents?.Dispose();
 				this.Hash?.Dispose();
 			}
+
 			this.IsDisposed = true;
 		}
 
 		~DehydratedBlockchainDigest() {
 			this.Dispose(false);
 		}
-		
+
 		public bool IsDisposed { get; private set; }
 
 	#endregion
+
 	}
 }

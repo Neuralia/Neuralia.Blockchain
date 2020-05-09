@@ -1,12 +1,11 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
-using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
@@ -20,6 +19,7 @@ using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Tools.Locking;
@@ -47,6 +47,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		protected readonly IClientWorkflowFactory<R> clientWorkflowFactory;
 
+		protected readonly IConnectionStore connectionStore;
+
 		private readonly IDataAccessService dataAccessService;
 
 		protected readonly DataDispatcher dataDispatcher;
@@ -54,9 +56,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected readonly IGlobalsService globalsService;
 
 		protected readonly INetworkingService<R> networkingService;
-		
-		protected readonly IConnectionStore connectionStore;
-
 
 		/// <summary>
 		///     The receiver that allows us to act as a task endpoint mailbox
@@ -88,14 +87,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			this.RoutedTaskReceiver = new ColoredRoutedTaskReceiver(this.HandleTask);
 			this.RoutedTaskReceiver.TaskReceived += this.RoutedTaskReceiverOnTaskReceived;
-			this.dataDispatcher = new DataDispatcher(serviceSet.TimeService, (faultyConnection) => {
+
+			this.dataDispatcher = new DataDispatcher(serviceSet.TimeService, faultyConnection => {
 				// just in case, attempt to remove the connection if it was not already
 				this.networkingService.ConnectionStore.RemoveConnection(faultyConnection);
 			});
-		}
-
-		private void RoutedTaskReceiverOnTaskReceived() {
-			this.ClearWait();
 		}
 
 		/// <summary>
@@ -106,6 +102,38 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.RoutedTaskReceiver.ReceiveTask(task);
 		}
 
+		public override Task Stop() {
+
+			this.groupManifestWorkflow?.Stop();
+			this.groupManifestWorkflow = null;
+
+			return base.Stop();
+		}
+
+		public override async Task Start() {
+
+			this.groupManifestWorkflow = this.clientWorkflowFactory.CreateMessageGroupManifest();
+
+			this.groupManifestWorkflow.Success += w => {
+				return Task.CompletedTask;
+
+			};
+
+			this.groupManifestWorkflow.Error += (e, ex) => {
+				// lets make sure it will be attempted again
+
+				return Task.CompletedTask;
+			};
+
+			await this.networkingService.WorkflowCoordinator.AddWorkflow(this.groupManifestWorkflow).ConfigureAwait(false);
+
+			await base.Start().ConfigureAwait(false);
+		}
+
+		private void RoutedTaskReceiverOnTaskReceived() {
+			this.ClearWait();
+		}
+
 		/// <summary>
 		///     handle any message (task) that we may have recived
 		/// </summary>
@@ -113,9 +141,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected virtual async Task HandleTask(IColoredTask task) {
 			try {
 				if(task is MessageReceivedTask messageReceivedTask) {
-					
+
 					await this.HandleMessageReceived(messageReceivedTask).ConfigureAwait(false);
-					
+
 				} else if(task is ForwardGossipMessageTask forwardGossipMessageTask) {
 					await this.HandleForwardGossipMessageTask(forwardGossipMessageTask).ConfigureAwait(false);
 				} else if(task is PostNewGossipMessageTask postNewGossipMessageTask) {
@@ -123,7 +151,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 
 			} catch(Exception ex) {
-				Log.Error(ex, "failed to handle task");
+				NLog.Messages.Error(ex, "failed to handle task");
 			}
 		}
 
@@ -131,7 +159,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			try {
 				await this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemStorageDirectoryPath(), this.serviceSet).CleanMessageCache().ConfigureAwait(false);
 			} catch(Exception ex) {
-				Log.Error(ex, "failed to clean the message cache.");
+				NLog.Messages.Error(ex, "failed to clean the message cache.");
 			}
 		}
 
@@ -139,7 +167,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		///     here we handle the forwarding of a valid gossip message we have received, and will move ahead
 		/// </summary>
 		/// <param name="forwardGossipMessageTask"></param>
-		protected Task HandleForwardGossipMessageTask(ForwardGossipMessageTask forwardGossipMessageTask){
+		protected Task HandleForwardGossipMessageTask(ForwardGossipMessageTask forwardGossipMessageTask) {
 			// ok, this is a valid message, it went through our hoops. so lets be nice and forward it to whoever will want it
 			return this.ForwardValidGossipMessage(forwardGossipMessageTask.gossipMessageSet);
 		}
@@ -166,34 +194,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			// ok, now we can forward it to our peers
 			await this.ForwardValidGossipMessage(sendGossipMessageTask.gossipMessageSet).ConfigureAwait(false);
-		}
-
-		public override Task Stop() {
-			
-			this.groupManifestWorkflow?.Stop();
-			this.groupManifestWorkflow = null;
-			
-			return base.Stop();
-		}
-
-		public override async Task Start() {
-			
-			this.groupManifestWorkflow = this.clientWorkflowFactory.CreateMessageGroupManifest();
-	
-			this.groupManifestWorkflow.Success += w => {
-				return Task.CompletedTask;
-
-			};
-
-			this.groupManifestWorkflow.Error += (e, ex) => {
-				// lets make sure it will be attempted again
-
-				return Task.CompletedTask;
-			};
-
-			await this.networkingService.WorkflowCoordinator.AddWorkflow(this.groupManifestWorkflow).ConfigureAwait(false);
-			
-			await base.Start().ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -273,7 +273,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			return this.groupManifestWorkflow.ForwardValidGossipMessage(gossipMessageSet);
 		}
 
-		
 		protected virtual IRoutingHeader RehydrateHeader(MessageReceivedTask task) {
 
 			try {
@@ -285,7 +284,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				return header;
 			} catch(Exception ex) {
-				Log.Error(ex, "Fail to rehydrate message set header.");
+				NLog.Messages.Error(ex, "Fail to rehydrate message set header.");
 
 				throw;
 			}
@@ -297,136 +296,126 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="task"></param>
 		protected virtual async Task HandleMessageReceived(MessageReceivedTask task) {
 
-			try {
-				// lets see what we just received
-				IRoutingHeader header = this.RehydrateHeader(task);
-				
-				// set the client Scope of the client who sent us this message
-				header.ClientId = task.Connection.ClientUuid;
+			// lets see what we just received
+			IRoutingHeader header = this.RehydrateHeader(task);
 
-				// first, for gossip messages, we must forward them to other peers, so lets do that
-				if(header is GossipHeader gossipHeader) {
+			// set the client Scope of the client who sent us this message
+			header.ClientId = task.Connection.ClientUuid;
 
-					try{
-						if(!task.Connection.IsConfirmed) {
-							throw new ApplicationException("An unconfirmed connection cannot send us a gossip message");
-						}
+			// first, for gossip messages, we must forward them to other peers, so lets do that
+			if(header is GossipHeader gossipHeader) {
 
-						if(header.ChainId == BlockchainTypes.Instance.None) {
-							// we do not allow null chain gossip messages, so lets end here
-							throw new ApplicationException("A null chain gossip message is not allowed");
-						}
-
-						if(!header.IsWorkflowTrigger) {
-							// we do not allow null chain gossip messages, so lets end here
-							throw new ApplicationException("A gossip message is not marked as a workflow trigger, which is not allowed");
-						}
-
-						bool messageInCache = false;
-						IGossipMessageSet gossipMessageSet = null;
-						(messageInCache, _, gossipMessageSet) = await this.ProcessReceivedGossipMessage(gossipHeader, task).ConfigureAwait(false);
-
-						if(messageInCache) {
-							return; // we do not process any further
-						}
-
-						// now the message will be sent to the chains for validation, and if valid, will come back for a forward
-						((NetworkingService<R>) this.networkingService).RouteNetworkGossipMessage(gossipMessageSet, task.Connection);
-
-						return;
-					} finally {
-				
-					}
+				if(!task.Connection.IsConfirmed) {
+					throw new ApplicationException("An unconfirmed connection cannot send us a gossip message");
 				}
 
-				// if we get any further, then they are targeted messages
 				if(header.ChainId == BlockchainTypes.Instance.None) {
-					// this is a null chain, this is our message
-
-					if(header is TargettedHeader targettedHeader) {
-						try {
-							// this is a targeted header, its meant only for us
-
-							var messageSet = this.networkingService.MessageFactory.RehydrateMessage(task.data, targettedHeader, this.chainlessBlockchainEventsRehydrationFactory);
-
-							var workflowTracker = new WorkflowTracker<IWorkflow<R>, R>(task.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.WorkflowSessionId, messageSet.Header.OriginatorId, this.networkingService.ConnectionStore.MyClientUuid, this.networkingService.WorkflowCoordinator);
-
-							if(messageSet.Header.IsWorkflowTrigger && messageSet is ITriggerMessageSet<R> triggeMessageSet) {
-								// route the message
-								Type messageType = triggeMessageSet.BaseMessage.GetType();
-
-								if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage) != t.IsAssignableFrom(messageType))) {
-									throw new ApplicationException("Jetbrains refactoring error, the suggested fix is not equal to the previous");
-								}
-
-								if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage))) {
-
-									// let's check if a workflow already exists for this trigger
-									if(!workflowTracker.WorkflowExists()) {
-										// create a new workflow
-										var workflow = (ITargettedNetworkingWorkflow<R>) this.serverWorkflowFactory.CreateResponseWorkflow(triggeMessageSet, task.Connection);
-
-										if(!task.Connection.IsConfirmed && !(workflow is IServerHandshakeWorkflow)) {
-											throw new ApplicationException("An unconfirmed connection must initiate a handshake");
-										}
-
-										await this.networkingService.WorkflowCoordinator.AddWorkflow(workflow).ConfigureAwait(false);
-									}
-								} else {
-									if(triggeMessageSet.BaseMessage is WorkflowTriggerMessage<R>) {
-										// this means we did not pass the trigger filter above, it could be an evil trigger and we default
-										throw new ApplicationException("An invalid trigger was sent");
-									}
-								}
-							} else {
-
-								if(messageSet.BaseMessage is WorkflowTriggerMessage<R>) {
-									//messageSet.BaseMessage?.Dispose();
-
-									throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is not set, but the message type is a workflow trigger");
-								}
-
-								if(messageSet.Header.IsWorkflowTrigger) {
-									//messageSet.BaseMessage?.Dispose();
-
-									throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
-								}
-
-								// forward the message to the right correlated workflow
-								// this method will ensure we get the right workflow id for our connection
-
-								//----------------------------------------------------
-								
-								if(workflowTracker.GetActiveWorkflow() is ITargettedNetworkingWorkflow<R> workflow) {
-
-									if(!task.Connection.IsConfirmed && !(workflow is IHandshakeWorkflow)) {
-										throw new ApplicationException("An unconfirmed connection must initiate a handshake");
-									}
-
-									workflow.ReceiveNetworkMessage(messageSet);
-								} else {
-									//messageSet.BaseMessage?.Dispose();
-									Log.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' and session ID '{messageSet.Header.WorkflowSessionId}' which does not exist");
-								}
-							}
-						} finally {
-							
-						}
-						
-					}
-				} else {
-					if(!task.Connection.IsConfirmed) {
-
-						throw new ApplicationException("An unconfirmed connection cannot send us a chain scopped targeted message");
-					}
-
-					// this message is targeted at a specific chain, so we route it over there
-					// first confirm that we support this chain
-					((NetworkingService<R>) this.networkingService).RouteNetworkMessage(header, task.data.Branch(), task.Connection);
+					// we do not allow null chain gossip messages, so lets end here
+					throw new ApplicationException("A null chain gossip message is not allowed");
 				}
-			} finally {
+
+				if(!header.IsWorkflowTrigger) {
+					// we do not allow null chain gossip messages, so lets end here
+					throw new ApplicationException("A gossip message is not marked as a workflow trigger, which is not allowed");
+				}
+
+				bool messageInCache = false;
+				IGossipMessageSet gossipMessageSet = null;
+				(messageInCache, _, gossipMessageSet) = await this.ProcessReceivedGossipMessage(gossipHeader, task).ConfigureAwait(false);
+
+				if(messageInCache) {
+					return; // we do not process any further
+				}
+
+				// now the message will be sent to the chains for validation, and if valid, will come back for a forward
+				((NetworkingService<R>) this.networkingService).RouteNetworkGossipMessage(gossipMessageSet, task.Connection);
+
+				return;
 
 			}
+
+			// if we get any further, then they are targeted messages
+			if(header.ChainId == BlockchainTypes.Instance.None) {
+				// this is a null chain, this is our message
+
+				if(header is TargettedHeader targettedHeader) {
+					// this is a targeted header, its meant only for us
+
+					ITargettedMessageSet<R> messageSet = this.networkingService.MessageFactory.RehydrateMessage(task.data, targettedHeader, this.chainlessBlockchainEventsRehydrationFactory);
+
+					WorkflowTracker<IWorkflow<R>, R> workflowTracker = new WorkflowTracker<IWorkflow<R>, R>(task.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.WorkflowSessionId, messageSet.Header.OriginatorId, this.networkingService.ConnectionStore.MyClientUuid, this.networkingService.WorkflowCoordinator);
+
+					if(messageSet.Header.IsWorkflowTrigger && messageSet is ITriggerMessageSet<R> triggeMessageSet) {
+						// route the message
+						Type messageType = triggeMessageSet.BaseMessage.GetType();
+
+						if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage) != t.IsAssignableFrom(messageType))) {
+							throw new ApplicationException("Jetbrains refactoring error, the suggested fix is not equal to the previous");
+						}
+
+						if(task.acceptedTriggers.Any(t => t.IsInstanceOfType(triggeMessageSet.BaseMessage))) {
+
+							// let's check if a workflow already exists for this trigger
+							if(!workflowTracker.WorkflowExists()) {
+								// create a new workflow
+								ITargettedNetworkingWorkflow<R> workflow = (ITargettedNetworkingWorkflow<R>) this.serverWorkflowFactory.CreateResponseWorkflow(triggeMessageSet, task.Connection);
+
+								if(!task.Connection.IsConfirmed && !(workflow is IServerHandshakeWorkflow)) {
+									throw new ApplicationException("An unconfirmed connection must initiate a handshake");
+								}
+
+								await this.networkingService.WorkflowCoordinator.AddWorkflow(workflow).ConfigureAwait(false);
+							}
+						} else {
+							if(triggeMessageSet.BaseMessage is WorkflowTriggerMessage<R>) {
+								// this means we did not pass the trigger filter above, it could be an evil trigger and we default
+								throw new ApplicationException("An invalid trigger was sent");
+							}
+						}
+					} else {
+
+						if(messageSet.BaseMessage is WorkflowTriggerMessage<R>) {
+							//messageSet.BaseMessage?.Dispose();
+
+							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is not set, but the message type is a workflow trigger");
+						}
+
+						if(messageSet.Header.IsWorkflowTrigger) {
+							//messageSet.BaseMessage?.Dispose();
+
+							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
+						}
+
+						// forward the message to the right correlated workflow
+						// this method will ensure we get the right workflow id for our connection
+
+						//----------------------------------------------------
+
+						if(workflowTracker.GetActiveWorkflow() is ITargettedNetworkingWorkflow<R> workflow) {
+
+							if(!task.Connection.IsConfirmed && !(workflow is IHandshakeWorkflow)) {
+								throw new ApplicationException("An unconfirmed connection must initiate a handshake");
+							}
+
+							workflow.ReceiveNetworkMessage(messageSet);
+						} else {
+							//messageSet.BaseMessage?.Dispose();
+							NLog.Messages.Verbose($"The message references a workflow correlation ID '{messageSet.Header.WorkflowCorrelationId}' and session ID '{messageSet.Header.WorkflowSessionId}' which does not exist");
+						}
+					}
+
+				}
+			} else {
+				if(!task.Connection.IsConfirmed) {
+
+					throw new ApplicationException("An unconfirmed connection cannot send us a chain scopped targeted message");
+				}
+
+				// this message is targeted at a specific chain, so we route it over there
+				// first confirm that we support this chain
+				((NetworkingService<R>) this.networkingService).RouteNetworkMessage(header, task.data.Branch(), task.Connection);
+			}
+
 		}
 
 		protected override async Task ProcessLoop(LockContext lockContext) {
@@ -438,7 +427,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				this.CheckShouldCancel();
 
-				
 				if(this.ShouldAct(ref this.nextDatabaseClean)) {
 					this.CheckShouldCancel();
 
@@ -454,12 +442,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// done, lets sleep for a while
 
 					// lets act again in X seconds
-					this.nextDatabaseClean = DateTime.UtcNow.AddSeconds(secondsToWait);
+					this.nextDatabaseClean = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
 				}
 			} catch(OperationCanceledException) {
 				throw;
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to process connections");
+				NLog.Messages.Error(ex, "Failed to process connections");
 			}
 		}
 
@@ -469,7 +457,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="lockContext"></param>
 		/// <param name="Process">returns true if satisfied to end the loop, false if it still needs to wait</param>
 		/// <returns></returns>
-		protected Task<List<Guid>> CheckTasks(){
+		protected Task<List<Guid>> CheckTasks() {
 			return this.RoutedTaskReceiver.CheckTasks(async () => {
 				// check this every loop, for responsiveness
 				this.CheckShouldCancel();
@@ -483,7 +471,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				throw new NetworkInformationException();
 			}
 		}
-		
+
 		public class MessageReceivedTask : ColoredTask {
 			public readonly List<Type> acceptedTriggers;
 			public readonly PeerConnection Connection;
@@ -493,7 +481,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.data = data.Branch();
 				this.Connection = connection;
 				this.acceptedTriggers = acceptedTriggers;
-				
+
 			}
 
 			public MessageReceivedTask(SafeArrayHandle data, PeerConnection connection) : this(data, connection, new List<Type>(new[] {typeof(WorkflowTriggerMessage<R>)})) {
@@ -523,7 +511,5 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.gossipMessageSet = gossipMessageSet;
 			}
 		}
-
-		
 	}
 }

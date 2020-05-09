@@ -110,7 +110,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			}
 
 			if(this.performWorkOverriden.Value) {
-				var task = new RoutedTask<IChainWorkflow, bool>();
+				RoutedTask<IChainWorkflow, bool> task = new RoutedTask<IChainWorkflow, bool>();
 
 				task.SetAction((workflow, taskRoutingContext, lc) => this.PerformWork(workflow, taskRoutingContext, lc));
 
@@ -123,7 +123,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			await base.Initialize(lockContext).ConfigureAwait(false);
 
 			if(this.IsOverride(nameof(Initialize), new[] {typeof(IChainWorkflow), typeof(TaskRoutingContext), typeof(LockContext)})) {
-				var task = new RoutedTask<IChainWorkflow, bool>();
+				RoutedTask<IChainWorkflow, bool> task = new RoutedTask<IChainWorkflow, bool>();
 
 				task.SetAction((workflow, taskRoutingContext, lc) => this.Initialize(workflow, taskRoutingContext, lc));
 
@@ -135,7 +135,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			await base.Terminate(clean, lockContext).ConfigureAwait(false);
 
 			if(this.IsOverride(nameof(Terminate), new[] {typeof(bool), typeof(IChainWorkflow), typeof(TaskRoutingContext), typeof(LockContext)})) {
-				var task = new RoutedTask<IChainWorkflow, bool>();
+				RoutedTask<IChainWorkflow, bool> task = new RoutedTask<IChainWorkflow, bool>();
 
 				task.SetAction((workflow, taskRoutingContext, lc) => this.Terminate(clean, workflow, taskRoutingContext));
 

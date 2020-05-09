@@ -8,28 +8,27 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.DataAccess {
 
-	
-	
 	public interface IEntityFrameworkContext : IDisposableExtended, IAsyncDisposable, IInfrastructure<IServiceProvider>, IDbContextDependencies, IDbSetCache, IDbContextPoolable {
 
 		DbContext Context { get; }
 
 		AppSettingsBase.SerializationTypes SerializationType { get; set; }
+
+		DbSet<DBVersion> Versions { get; set; }
 		void EnsureCreated();
 		void ForceFieldModified(object entity, string property);
 
-		DbSet<DBVersion> Versions { get; set; }
-		
 		int SaveChanges();
 		Task<int> SaveChangesAsync();
 	}
 
-	public interface IEntityFrameworkContextInternal: IEntityFrameworkContext {
+	public interface IEntityFrameworkContextInternal : IEntityFrameworkContext {
 		void EnsureVersionCreated(SoftwareVersion softwareVersion);
 	}
 
@@ -56,11 +55,10 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		}
 	}
 
-	public abstract class EntityFrameworkContext<TContext> : DbContext, IEntityFrameworkContext,IEntityFrameworkContextInternal
+	public abstract class EntityFrameworkContext<TContext> : DbContext, IEntityFrameworkContext, IEntityFrameworkContextInternal
 		where TContext : DbContext {
 
 		private readonly object locker = new object();
-		public DbSet<DBVersion> Versions { get; set; }
 
 		public EntityFrameworkContext() {
 		}
@@ -69,6 +67,7 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		}
 
 		private bool CanSave => this.SerializationType == AppSettingsBase.SerializationTypes.Master;
+		public DbSet<DBVersion> Versions { get; set; }
 
 		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Master;
 
@@ -102,7 +101,7 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 					databaseCreator.EnsureCreated();
 				}
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to create database schema");
+				NLog.Default.Error(ex, "Failed to create database schema");
 
 				throw;
 			}
@@ -123,6 +122,22 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 
 		public DbContext Context => this;
 		public bool IsDisposed { get; }
+
+		public void EnsureVersionCreated(SoftwareVersion softwareVersion) {
+			if(!this.Versions.Any()) {
+				DBVersion version = new DBVersion();
+
+				version.Id = 1;
+				version.Major = softwareVersion.Major;
+				version.Minor = softwareVersion.Minor;
+				version.Revision = softwareVersion.Revision;
+				version.LastUpdate = DateTimeEx.CurrentTime;
+
+				this.Versions.Add(version);
+
+				this.SaveChanges();
+			}
+		}
 
 		public override int SaveChanges(bool acceptAllChangesOnSuccess) {
 			if(!this.CanSave) {
@@ -149,22 +164,6 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			}
 
 			return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-		}
-
-		public void EnsureVersionCreated(SoftwareVersion softwareVersion) {
-			if(!this.Versions.Any()) {
-				var version = new DBVersion();
-
-				version.Id = 1;
-				version.Major = softwareVersion.Major;
-				version.Minor = softwareVersion.Minor;
-				version.Revision = softwareVersion.Revision;
-				version.LastUpdate = DateTime.UtcNow;
-
-				this.Versions.Add(version);
-
-				this.SaveChanges();
-			}
 		}
 	}
 }

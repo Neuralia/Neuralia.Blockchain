@@ -5,8 +5,8 @@ using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
@@ -40,13 +40,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			// this one must ALWAYS be first
 			this.AccountType = rehydrator.ReadByte();
-			
-			BlockId inceptionBlockId  = new BlockId();
+
+			BlockId inceptionBlockId = new BlockId();
 			inceptionBlockId.Rehydrate(rehydrator);
 			this.InceptionBlockId = inceptionBlockId.Value;
-			
+
 			this.Correlated = rehydrator.ReadBool();
-			
+
 			this.TrustLevel = rehydrator.ReadByte();
 
 			this.AppliedAttributes.Clear();
@@ -60,12 +60,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 					AdaptiveLong1_9 certificate = new AdaptiveLong1_9();
 					certificate.Rehydrate(rehydrator);
-					attribute.CorrelationId = (uint)certificate.Value;
-					
+					attribute.CorrelationId = (uint) certificate.Value;
+
 					certificate = new AdaptiveLong1_9();
 					certificate.Rehydrate(rehydrator);
-					attribute.AttributeType = (AccountAttributeType)certificate.Value;
-					
+					attribute.AttributeType = (AccountAttributeType) certificate.Value;
+
 					attribute.Start = rehydrator.ReadNullableDateTime();
 					attribute.Expiration = rehydrator.ReadNullableDateTime();
 
@@ -88,7 +88,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 			inceptionBlockId.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.Correlated);
-			
+
 			dehydrator.Write(this.TrustLevel);
 
 			bool any = this.AppliedAttributes.Any();
@@ -100,15 +100,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 				foreach(IAccountAttribute entry in this.AppliedAttributes) {
 
 					AdaptiveLong1_9 certificate = new AdaptiveLong1_9();
-					certificate.Value =	entry.CorrelationId;
+					certificate.Value = entry.CorrelationId;
 					certificate.Dehydrate(dehydrator);
-					
-					certificate.Value =	entry.AttributeType.Value;
+
+					certificate.Value = entry.AttributeType.Value;
 					certificate.Dehydrate(dehydrator);
-					
+
 					dehydrator.Write(entry.Start);
 					dehydrator.Write(entry.Expiration);
-					
+
 					dehydrator.Write(entry.Context);
 				}
 			}

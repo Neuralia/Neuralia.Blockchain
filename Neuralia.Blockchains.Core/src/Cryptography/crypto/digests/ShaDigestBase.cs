@@ -63,7 +63,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 				hash.Return();
 			} else {
-				var hash2 = this.DoFinalReturn();
+				byte[] hash2 = this.DoFinalReturn();
 
 				Buffer.BlockCopy(hash2, 0, output, outOff, hash2.Length);
 
@@ -151,7 +151,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 						this.data.Entry.CopyFrom(block.Entry, 0, offset, block.Length);
 						offset += block.Length;
 					} else if(item is ValueTuple<byte[], int, int> array) {
-						var buffer = array.Item1;
+						byte[] buffer = array.Item1;
 						this.data.Entry.CopyFrom(ref buffer, array.Item2, offset, array.Item3);
 						offset += array.Item3;
 					} else if(item is byte smallByte) {
@@ -188,6 +188,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 				this.data?.Return();
 				this.data = null;
 			}
+
 			this.IsDisposed = true;
 		}
 

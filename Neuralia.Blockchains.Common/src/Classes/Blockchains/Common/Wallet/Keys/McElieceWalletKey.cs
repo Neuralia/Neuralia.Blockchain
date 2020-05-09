@@ -23,40 +23,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
 
-			nodeList.Add((byte)this.McElieceCipherMode);
+			nodeList.Add((byte) this.McElieceCipherMode);
 			nodeList.Add(this.M);
 			nodeList.Add(this.T);
-			nodeList.Add((byte)this.McElieceHashMode);
+			nodeList.Add((byte) this.McElieceHashMode);
 
 			return nodeList;
 		}
-		
+
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
-			
+
 			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
 			entry.Value = this.M;
 			entry.Dehydrate(dehydrator);
-			
+
 			entry.Value = this.T;
 			entry.Dehydrate(dehydrator);
-			
-			dehydrator.Write((byte)this.McElieceCipherMode);
-			dehydrator.Write((byte)this.McElieceHashMode);
+
+			dehydrator.Write((byte) this.McElieceCipherMode);
+			dehydrator.Write((byte) this.McElieceHashMode);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-			
+
 			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
 			entry.Rehydrate(rehydrator);
-			this.M = (int)entry.Value;
-			
-			entry.Rehydrate(rehydrator);
-			this.T = (int)entry.Value;
+			this.M = (int) entry.Value;
 
-			this.McElieceCipherMode = (McElieceEncryptor.McElieceCipherModes)rehydrator.ReadByte();
-			this.McElieceHashMode = (McElieceEncryptor.McElieceHashModes)rehydrator.ReadByte();
+			entry.Rehydrate(rehydrator);
+			this.T = (int) entry.Value;
+
+			this.McElieceCipherMode = (McElieceEncryptor.McElieceCipherModes) rehydrator.ReadByte();
+			this.McElieceHashMode = (McElieceEncryptor.McElieceHashModes) rehydrator.ReadByte();
 		}
 	}
 }

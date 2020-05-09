@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 		SafeArrayHandle Compress(SafeArrayHandle data);
 		void Compress(Stream input, Stream output, CompressionLevelByte level);
 		void Compress(string inputFile, string outputFile, CompressionLevelByte level);
-		
+
 		SafeArrayHandle Decompress(SafeArrayHandle data, Action<Stream> preProcessInput = null);
 		SafeArrayHandle Decompress(Stream input, Action<Stream> preProcessInput = null);
 		void Decompress(Stream input, Stream output);
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		public SafeArrayHandle Compress(string text) {
-			SafeArrayHandle data = ByteArray.WrapAndOwn( Encoding.UTF8.GetBytes(text));
+			SafeArrayHandle data = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(text));
 			SafeArrayHandle result = null;
 
 			lock(this.locker) {
@@ -93,7 +93,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 		public SafeArrayHandle Decompress(Stream input, Action<Stream> preProcessInput = null) {
 			lock(this.locker) {
-				return this.DecompressData(input,preProcessInput);
+				return this.DecompressData(input, preProcessInput);
 			}
 		}
 
@@ -154,9 +154,9 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		protected CompressionLevel ConvertCompression(CompressionLevelByte level) {
-			return (CompressionLevel) (int)level;
+			return (CompressionLevel) (int) level;
 		}
-		
+
 		// protected Ionic.Zlib.CompressionLevel ConvertCompression2(CompressionLevelByte level) {
 		// 	
 		// 	switch(level) {

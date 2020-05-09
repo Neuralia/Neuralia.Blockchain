@@ -12,14 +12,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			return this.GeneratedExpandedFolderName(Path.Combine(scopeFolder, scoppedName));
 		}
-		
+
 		public override string GeneratedArchivedFolderName(string bandName, string scopeFolder, object[] parameters) {
 
 			string scoppedName = string.Format(GROUP_MASK, bandName.ToLower(), parameters[0]);
 
 			return this.GeneratedArchivedFolderName(Path.Combine(scopeFolder, scoppedName));
 		}
-		
+
 		public override string GeneratedExpandedFileName(string bandName, string filename, string scopeFolder, object[] parameters) {
 
 			string scoppedName = string.Format(GROUP_FILE_MASK, bandName.ToLower(), filename, parameters[0]);

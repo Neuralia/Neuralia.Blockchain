@@ -41,7 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			};
 
 			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
-				this.dataDispatcher = new DataDispatcher(centralCoordinator.BlockchainServiceSet.TimeService, (faultyConnection) => {
+				this.dataDispatcher = new DataDispatcher(centralCoordinator.BlockchainServiceSet.TimeService, faultyConnection => {
 					// just in case, attempt to remove the connection if it was not already
 					this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RemoveConnection(faultyConnection);
 				});

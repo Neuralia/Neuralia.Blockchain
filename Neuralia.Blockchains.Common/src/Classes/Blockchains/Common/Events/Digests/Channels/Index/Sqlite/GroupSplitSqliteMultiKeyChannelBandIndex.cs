@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-
 using System.Linq.Expressions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite;
@@ -8,7 +7,6 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Chan
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Utils;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Tools;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Index.Sqlite {
 
@@ -42,7 +40,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			this.InterpretationProvider.SetActiveFilename(Path.GetFileName(extractedFilename), Path.GetDirectoryName(extractedFilename));
 
-			var results = new DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS>(this.BandType);
+			DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS> results = new DigestChannelBandEntries<CARD_TYPE, CHANEL_BANDS>(this.BandType);
 			results[this.BandType] = this.InterpretationProvider.QueryCard((adjustedKey.adjustedAccountId, key.ordinal));
 
 			return results;

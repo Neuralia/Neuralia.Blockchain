@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
-using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			try {
 				task.TriggerAction(this.parameter);
 			} catch(Exception ex) {
-				Log.Error(ex, "Processing loop error");
+				NLog.Default.Error(ex, "Processing loop error");
 			}
 
 			return true;

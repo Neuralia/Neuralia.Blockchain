@@ -2,7 +2,7 @@ using System;
 using System.Runtime.Serialization;
 
 namespace Neuralia.Blockchains.Core.Workflows.Base {
-	public class MessageReceptionException : WorkflowException{
+	public class MessageReceptionException : WorkflowException {
 
 		public MessageReceptionException() {
 		}

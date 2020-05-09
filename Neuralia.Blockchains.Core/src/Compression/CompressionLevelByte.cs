@@ -17,7 +17,7 @@
 		Level11 = 11,
 		Maximum = Level11
 	}
-	
+
 	public enum CompressionLevelByte2 : byte {
 		None = 0,
 		Level1 = 1,

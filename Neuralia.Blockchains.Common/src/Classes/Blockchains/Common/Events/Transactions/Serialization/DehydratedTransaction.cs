@@ -1,10 +1,11 @@
-﻿using System;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -50,11 +51,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public void Dehydrate(IDataDehydrator dehydrator) {
 
 			// we dont use the high header with transactions. we can remove it
-			var essentialEntries = this.DataChannels.Entries.Where(e => e.Key != BlockChannelUtils.BlockChannelTypes.HighHeader).ToList();
+			List<KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle>> essentialEntries = this.DataChannels.Entries.Where(e => e.Key != BlockChannelUtils.BlockChannelTypes.HighHeader).ToList();
 
 			dehydrator.Write(essentialEntries.Count);
 
-			foreach(var entry in essentialEntries) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle> entry in essentialEntries) {
 				dehydrator.Write((ushort) entry.Key);
 
 				dehydrator.WriteNonNullable(entry.Value);
@@ -63,7 +64,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public void Dehydrate(ChannelsEntries<IDataDehydrator> channelDehydrators) {
 
-			foreach(var entry in this.DataChannels.Entries) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle> entry in this.DataChannels.Entries) {
 				channelDehydrators[entry.Key].WriteNonNullable(entry.Value);
 			}
 		}
@@ -81,7 +82,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
-			var dataChannels = new ChannelsEntries<SafeArrayHandle>();
+			ChannelsEntries<SafeArrayHandle> dataChannels = new ChannelsEntries<SafeArrayHandle>();
 
 			int count = rehydrator.ReadInt();
 
@@ -106,7 +107,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			// peek in the header, extract the transaction id
 			this.Uuid = new TransactionId();
-			var rehydratedVersion = Transaction.RehydrateTopHeader(rehydrator, this.Uuid, accountId, timestamp);
+			ComponentVersion<TransactionType> rehydratedVersion = Transaction.RehydrateTopHeader(rehydrator, this.Uuid, accountId, timestamp);
 		}
 
 		public ITransaction RehydrateTransaction(IBlockchainEventsRehydrationFactory rehydrationFactory, AccountId accountId, TransactionTimestamp timestamp) {
@@ -114,7 +115,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 				this.RehydratedTransaction = rehydrationFactory.CreateTransaction(this);
 
-				if(accountId == null && timestamp == null) {
+				if((accountId == default(AccountId)) && (timestamp == null)) {
 					this.RehydratedTransaction.Rehydrate(this, rehydrationFactory);
 				} else {
 					this.RehydratedTransaction.RehydrateForBlock(this, rehydrationFactory, accountId, timestamp);
@@ -143,7 +144,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			this.DataChannels.Entries.Clear();
 
-			foreach(var entry in dataChannels.Entries) {
+			foreach(KeyValuePair<BlockChannelUtils.BlockChannelTypes, SafeArrayHandle> entry in dataChannels.Entries) {
 				this.DataChannels.Entries.Add(entry.Key, entry.Value.Branch());
 			}
 
@@ -166,9 +167,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 					return ByteArray.Empty();
 				}
 
-				return (SafeArrayHandle)rehydrator.ReadNonNullableArray();
+				return (SafeArrayHandle) rehydrator.ReadNonNullableArray();
 			}, BlockChannelUtils.BlockChannelTypes.HighHeader | BlockChannelUtils.BlockChannelTypes.Keys), accountId, timestamp);
 		}
-		
 	}
 }

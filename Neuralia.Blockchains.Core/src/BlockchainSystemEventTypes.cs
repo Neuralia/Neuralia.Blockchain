@@ -43,10 +43,6 @@ namespace Neuralia.Blockchains.Core {
 
 		public readonly BlockchainSystemEventType AccountPublicationStarted;
 		public readonly BlockchainSystemEventType AccountPublicationStep;
-		
-		public readonly BlockchainSystemEventType ImportantWalletUpdate;
-
-		
 
 		public readonly BlockchainSystemEventType Alert;
 		public readonly BlockchainSystemEventType BlockchainSyncEnded;
@@ -57,24 +53,19 @@ namespace Neuralia.Blockchains.Core {
 
 		public readonly BlockchainSystemEventType BlockInserted;
 		public readonly BlockchainSystemEventType BlockInterpreted;
+		public readonly BlockchainSystemEventType ConnectableStatusChanged;
 
 		public readonly BlockchainSystemEventType DefaultEvent = 0;
 		public readonly BlockchainSystemEventType DigestInserted;
 		public readonly BlockchainSystemEventType Error;
+
+		public readonly BlockchainSystemEventType ImportantWalletUpdate;
 		public readonly BlockchainSystemEventType KeyGenerationEnded;
 		public readonly BlockchainSystemEventType KeyGenerationError;
 		public readonly BlockchainSystemEventType KeyGenerationMessage;
 		public readonly BlockchainSystemEventType KeyGenerationPercentageUpdate;
-		
-		public readonly BlockchainSystemEventType KeyGenerationStarted;
-		public readonly BlockchainSystemEventType ConnectableStatusChanged;
-		
-		/// <summary>
-		/// this event is triggered when we find an element that we dont recognize. this signifies our node is surely out of date and should be upgraded. 
-		/// </summary>
-		public readonly BlockchainSystemEventType RequireNodeUpdate;
 
-		
+		public readonly BlockchainSystemEventType KeyGenerationStarted;
 
 		/// <summary>
 		///     used for log window messages
@@ -85,7 +76,7 @@ namespace Neuralia.Blockchains.Core {
 		public readonly BlockchainSystemEventType MiningEnded;
 		public readonly BlockchainSystemEventType MiningPrimeElected;
 		public readonly BlockchainSystemEventType MiningPrimeElectedMissed;
-		
+
 		public readonly BlockchainSystemEventType MiningStarted;
 		public readonly BlockchainSystemEventType MiningStatusChanged;
 
@@ -94,10 +85,21 @@ namespace Neuralia.Blockchains.Core {
 		public readonly BlockchainSystemEventType RequestCopyWallet;
 		public readonly BlockchainSystemEventType RequestKeyPassphrase;
 		public readonly BlockchainSystemEventType RequestWalletPassphrase;
+
+		/// <summary>
+		///     this event is triggered when we find an element that we dont recognize. this signifies our node is surely out of
+		///     date and should be upgraded.
+		/// </summary>
+		public readonly BlockchainSystemEventType RequireNodeUpdate;
+
 		public readonly BlockchainSystemEventType TransactionConfirmed;
 
 		public readonly BlockchainSystemEventType TransactionCreated;
 		public readonly BlockchainSystemEventType TransactionError;
+
+		public readonly BlockchainSystemEventType ElectionContextCached;
+		public readonly BlockchainSystemEventType ElectionProcessingCompleted;
+		public readonly BlockchainSystemEventType TransactionHistoryUpdated;
 		public readonly BlockchainSystemEventType TransactionMessage;
 		public readonly BlockchainSystemEventType TransactionReceived;
 		public readonly BlockchainSystemEventType TransactionRefused;
@@ -108,19 +110,21 @@ namespace Neuralia.Blockchains.Core {
 
 		public readonly BlockchainSystemEventType WalletCreationStarted;
 		public readonly BlockchainSystemEventType WalletCreationStep;
-		
+
 		public readonly BlockchainSystemEventType WalletLoadingEnded;
-		public readonly BlockchainSystemEventType WalletLoadingStarted;
 		public readonly BlockchainSystemEventType WalletLoadingError;
-		
-		
+		public readonly BlockchainSystemEventType WalletLoadingStarted;
+
 		public readonly BlockchainSystemEventType WalletSyncEnded;
 		public readonly BlockchainSystemEventType WalletSyncError;
 
 		public readonly BlockchainSystemEventType WalletSyncStarted;
 		public readonly BlockchainSystemEventType WalletSyncUpdate;
 		
-		public readonly BlockchainSystemEventType TransactionHistoryUpdated;
+		
+		public readonly BlockchainSystemEventType RequestShutdown;
+		
+
 		static BlockchainSystemEventTypes() {
 		}
 
@@ -198,12 +202,17 @@ namespace Neuralia.Blockchains.Core {
 
 			this.Alert = this.CreateBaseConstant();
 			this.ConnectableStatusChanged = this.CreateBaseConstant();
-			
+
 			this.RequireNodeUpdate = this.CreateBaseConstant();
 
 			this.ImportantWalletUpdate = this.CreateBaseConstant();
 
 			this.TransactionHistoryUpdated = this.CreateBaseConstant();
+			
+			this.ElectionContextCached = this.CreateBaseConstant();
+			this.ElectionProcessingCompleted = this.CreateBaseConstant();
+			
+			this.RequestShutdown = this.CreateBaseConstant();
 		}
 
 		public static BlockchainSystemEventTypes Instance { get; } = new BlockchainSystemEventTypes();

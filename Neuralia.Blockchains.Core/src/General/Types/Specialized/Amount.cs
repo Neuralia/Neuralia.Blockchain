@@ -1,9 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
-using LiteDB;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Types.Specialized {
 	/// <summary>
@@ -32,7 +29,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Specialized {
 
 		public Amount(Amount other) : base((AdaptiveDecimal) other) {
 		}
-		
+
 	#region opeartor overloads
 
 		public static implicit operator Amount(int value) {

@@ -1,6 +1,5 @@
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
-using Neuralia.Blockchains.Core.General.Types.Specialized;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -8,12 +7,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 	public class MinerResponse : IMinerResponse {
 
 		public byte Version => 1;
-		
-		public AccountId AccountId { get; set; } = new AccountId();
-		public ResponseType Response { get; set; }
 
 		public AdaptiveLong1_9 SecondTierAnswer { get; set; }
 		public AdaptiveLong1_9 FirstTierAnswer { get; set; }
+
+		public AccountId AccountId { get; set; } = new AccountId();
+		public ResponseType Response { get; set; }
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
@@ -28,7 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 				this.SecondTierAnswer = new AdaptiveLong1_9();
 				this.SecondTierAnswer.Rehydrate(rehydrator);
 			}
-			
+
 			this.FirstTierAnswer = null;
 			isAnswerSet = rehydrator.ReadBool();
 
@@ -52,13 +51,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 			if(this.SecondTierAnswer != null) {
 				this.SecondTierAnswer.Dehydrate(dehydrator);
 			}
-			
+
 			dehydrator.Write(this.FirstTierAnswer != null);
 
 			if(this.FirstTierAnswer != null) {
 				this.FirstTierAnswer.Dehydrate(dehydrator);
 			}
-			
+
 			return dehydrator.ToArray();
 		}
 	}

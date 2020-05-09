@@ -5,17 +5,15 @@ using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainPool;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
-	public interface IEventPoolProvider: IChainProvider {
+	public interface IEventPoolProvider : IChainProvider {
 		AppSettingsBase.TransactionPoolHandling TransactionPoolHandlingMode { get; }
 
 		bool EventPoolEnabled { get; }
@@ -91,12 +89,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					string publicPath = this.GetPublicPath();
 
 					if(!Directory.Exists(publicPath)) {
-						//Log.Information($"Creating new wallet baseFolder in path: {this.chainWalletDirectoryPath}");
+						//NLog.Default.Information($"Creating new wallet baseFolder in path: {this.chainWalletDirectoryPath}");
 						Directory.CreateDirectory(publicPath);
 					}
 
 					// save it for future use
-					FileExtensions.OpenWrite(Path.Combine(publicPath, transactionEnvelope.Contents.Uuid.ToString()), envelope);
+					await FileExtensions.OpenWriteAsync(Path.Combine(publicPath, transactionEnvelope.Contents.Uuid.ToString()), envelope).ConfigureAwait(false);
 				}
 			}
 		}
@@ -115,9 +113,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return new List<(ITransactionEnvelope envelope, TransactionId transactionId)>(); // if disabled, we return nothing
 			}
 
-			var poolTransactions = await this.GetTransactionIds().ConfigureAwait(false);
+			List<TransactionId> poolTransactions = await this.GetTransactionIds().ConfigureAwait(false);
 
-			var results = new ConcurrentBag<(ITransactionEnvelope envelope, TransactionId transactionId)>();
+			ConcurrentBag<(ITransactionEnvelope envelope, TransactionId transactionId)> results = new ConcurrentBag<(ITransactionEnvelope envelope, TransactionId transactionId)>();
 			string publicPath = this.GetPublicPath();
 
 			Parallel.ForEach(poolTransactions, trx => {
@@ -128,14 +126,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(this.SaveTransactionEnvelopes && File.Exists(trxfile)) {
 					SafeArrayHandle trxBytes = ByteArray.WrapAndOwn(File.ReadAllBytes(trxfile));
 
-					try {
-						envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(trxBytes);
-					}
-					catch(UnrecognizedElementException urex) {
-						
+					envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(trxBytes);
 
-						throw;
-					}
 				}
 
 				results.Add((envelope, trx));
@@ -165,14 +157,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="isMining"></param>
 		/// <returns></returns>
-		public bool EventPoolEnabled => this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull || this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysMetadata || this.miningStatusProvider.MiningEnabled && (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningMetadata || this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull);
+		public bool EventPoolEnabled => (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull) || (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysMetadata) || (this.miningStatusProvider.MiningEnabled && ((this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningMetadata) || (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull)));
 
 		/// <summary>
 		///     Do we save entire envelope bodies on disk?
 		/// </summary>
 		/// <param name="isMining"></param>
 		/// <returns></returns>
-		public bool SaveTransactionEnvelopes => this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull || this.miningStatusProvider.MiningEnabled && this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull;
+		public bool SaveTransactionEnvelopes => (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.AlwaysFull) || (this.miningStatusProvider.MiningEnabled && (this.TransactionPoolHandlingMode == AppSettingsBase.TransactionPoolHandling.MiningFull));
 
 		protected string GetEventPoolPath() {
 			return Path.Combine(this.WalletDirectoryPath, EVENT_POOL_PATH);

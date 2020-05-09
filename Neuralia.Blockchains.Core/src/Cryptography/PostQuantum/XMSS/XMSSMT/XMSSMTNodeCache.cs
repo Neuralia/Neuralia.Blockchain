@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
@@ -7,7 +8,6 @@ using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
-using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -50,9 +50,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 		}
 
-		public void Clear() {
-			this.CachesTree.Clear();
-		}
 		public void Dehydrate(IDataDehydrator dehydrator) {
 
 			dehydrator.Write(this.Major);
@@ -63,13 +60,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			dehydrator.Write(this.Layers);
 			dehydrator.Write(this.DigestSize);
 
-			var layerGroups = this.CachesTree.GroupBy(e => e.Key.Layer);
+			IEnumerable<IGrouping<int, KeyValuePair<XMSSMTreeId, XMSSNodeCache>>> layerGroups = this.CachesTree.GroupBy(e => e.Key.Layer);
 
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 			adaptiveLong.Value = layerGroups.Count();
 			adaptiveLong.Dehydrate(dehydrator);
 
-			foreach(var layerGroup in layerGroups) {
+			foreach(IGrouping<int, KeyValuePair<XMSSMTreeId, XMSSNodeCache>> layerGroup in layerGroups) {
 
 				adaptiveLong.Value = layerGroup.Key;
 				adaptiveLong.Dehydrate(dehydrator);
@@ -118,6 +115,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 					this.CachesTree.AddSafe((tree, layer), xmssNodeCache);
 				}
 			}
+		}
+
+		public void Clear() {
+			this.CachesTree.Clear();
 		}
 
 		public virtual void Load(ByteArray publicKey) {

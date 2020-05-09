@@ -2,6 +2,8 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.BouncyCastle.extra.security;
@@ -49,8 +51,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 		}
 
 		public bool VerifyHash(SafeArrayHandle message, SafeArrayHandle signature, X509Certificate2 certificate) {
-			
-			SafeArrayHandle hash = HashingUtils.HashSha3_512(hasher => hasher.Hash(message));;
+
+			SafeArrayHandle hash = HashingUtils.HashSha3_512(hasher => hasher.Hash(message));
+			;
 
 			using(RSA csp = certificate.GetRSAPublicKey()) {
 				// verify the hash
@@ -80,7 +83,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 		}
 
 		public static X509Certificate2 LoadCertificate(string certificate, string key) {
-			var x509 = new X509Certificate2(File.ReadAllBytes(certificate));
+			X509Certificate2 x509 = new X509Certificate2(File.ReadAllBytes(certificate));
 
 			if(!string.IsNullOrWhiteSpace(key)) {
 				x509 = x509.CopyWithPrivateKey(DotNetUtilitiesExtensions.LoadParameters(key));
@@ -88,7 +91,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 
 			return x509;
 		}
-		
+
 		public (X509Certificate2 rootCertificate, X509Certificate2 localCertificate) Build() {
 
 			AsymmetricKeyParameter myCAprivateKey = null;
@@ -124,7 +127,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 			certificateGenerator.SetSubjectDN(subjectDN);
 
 			// Valid For
-			DateTime notBefore = DateTime.UtcNow.Date;
+			DateTime notBefore = DateTimeEx.CurrentTime.Date;
 			DateTime notAfter = notBefore.AddYears(2);
 
 			certificateGenerator.SetNotBefore(notBefore);
@@ -157,7 +160,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 
 			RsaPrivateKeyStructure rsa = new RsaPrivateKeyStructure(seq);
 			RsaPrivateCrtKeyParameters rsaparams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1, rsa.Exponent2, rsa.Coefficient);
-			
+
 			return x509.CopyWithPrivateKey(DotNetUtilitiesExtensions.ToRSA(rsaparams));
 		}
 
@@ -180,7 +183,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 			certificateGenerator.SetSubjectDN(subjectDN);
 
 			// Valid For
-			DateTime notBefore = DateTime.UtcNow.Date;
+			DateTime notBefore = DateTimeEx.CurrentTime.Date;
 			DateTime notAfter = notBefore.AddYears(2);
 
 			certificateGenerator.SetNotBefore(notBefore);

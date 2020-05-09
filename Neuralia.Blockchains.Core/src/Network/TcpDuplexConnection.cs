@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Network.ReadingContexts;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Pipelines.Sockets.Unofficial;
-using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
 	public class TcpDuplexConnection : TcpConnection<PipelineReadingContext> {
@@ -41,7 +40,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			PipeOptions receivePipeOptions = new PipeOptions(null, null, null, defaultPauseWriterThreshold, defaultResumeWriterThreshold, minimumSegmentSize);
 			PipeOptions sendPipeOptions = new PipeOptions(null, null, null, PipeOptions.Default.PauseWriterThreshold, PipeOptions.Default.ResumeWriterThreshold, PipeOptions.Default.MinimumSegmentSize, PipeOptions.Default.UseSynchronizationContext);
-			const SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.ZeroLengthReads; 
+			const SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.ZeroLengthReads;
 			this.clientPipe = SocketConnection.Create(this.socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions);
 		}
 
@@ -50,9 +49,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// </summary>
 		/// <param name="message"></param>
 		protected override void WritePart(in ReadOnlySpan<byte> message) {
-			if(this.IsDisposed || this.clientPipe == null) {
+			if(this.IsDisposed || (this.clientPipe == null)) {
 				return;
 			}
+
 			this.clientPipe.Output.Write(message);
 		}
 
@@ -62,9 +62,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <returns></returns>
 		protected override Task<bool> CompleteWrite() {
 
-			if(this.IsDisposed || this.clientPipe == null) {
+			if(this.IsDisposed || (this.clientPipe == null)) {
 				return Task.FromResult(false);
 			}
+
 			return Flush(this.clientPipe.Output).AsTask();
 		}
 
@@ -77,7 +78,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				return GetResult(await incomplete.ConfigureAwait(false));
 			}
 
-			var flushTask = writer.FlushAsync();
+			ValueTask<FlushResult> flushTask = writer.FlushAsync();
 
 			return flushTask.IsCompletedSuccessfully ? new ValueTask<bool>(GetResult(flushTask.Result)) : Awaited(flushTask);
 		}
@@ -95,7 +96,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			try {
 				// ReSharper disable once AsyncConverter.AsyncWait
 				this.CompleteWrite().Wait(TimeSpan.FromSeconds(3));
-			}catch {
+			} catch {
 				// do nothing, we tried
 			}
 
@@ -113,5 +114,4 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 	}
 
-	
 }

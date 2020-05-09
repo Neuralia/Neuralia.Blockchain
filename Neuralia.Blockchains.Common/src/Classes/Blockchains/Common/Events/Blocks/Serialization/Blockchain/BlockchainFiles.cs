@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
-
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelIndex;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.ChannelProviders;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
-using Zio;
-using Zio.FileSystems;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain {
 	/// <summary>
@@ -81,7 +78,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			// make sure the flags they ask for are enabled at the blockchain level
 			BlockChannelUtils.RunForFlags(channels, type => {
-				if(!this.enabledChannels.Contains(type) && type != BlockChannelUtils.BlockChannelTypes.Keys) {
+				if(!this.enabledChannels.Contains(type) && (type != BlockChannelUtils.BlockChannelTypes.Keys)) {
 					throw new InvalidOperationException("A requested channel type is not activated in this blockchain");
 				}
 			});
@@ -91,7 +88,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			// select the providers we will be using
 			ChannelsProviderSet activeProviderSet = new ChannelsProviderSet(channels, type => BlockChannelUtils.GetProviderFactory(type, this.folderPath, this.fileSystem)());
 
-			var mainIndexedConcatenatedChannelProviders = activeProviderSet.SelectAllMainIndexedConcatenatedChannelProviders.ToList();
+			List<(BlockChannelUtils.BlockChannelTypes channelType, MainIndexedConcatenatedChannelProvider provider)> mainIndexedConcatenatedChannelProviders = activeProviderSet.SelectAllMainIndexedConcatenatedChannelProviders.ToList();
 
 			if(mainIndexedConcatenatedChannelProviders.Any()) {
 				// lets prepare our channel indices collection
@@ -104,7 +101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 				// we artificially add the keys channel
 				if(!mainChannelIndex.ActiveChannelTypes.Contains(BlockChannelUtils.BlockChannelTypes.Keys)) {
-					var keysFactory = BlockChannelUtils.GetProviderFactory(BlockChannelUtils.BlockChannelTypes.Keys, this.folderPath, this.fileSystem);
+					Func<ChannelProvider> keysFactory = BlockChannelUtils.GetProviderFactory(BlockChannelUtils.BlockChannelTypes.Keys, this.folderPath, this.fileSystem);
 					mainChannelIndex.RegisterChannel(BlockChannelUtils.BlockChannelTypes.Keys, (MainIndexedConcatenatedChannelProvider) keysFactory());
 				}
 
@@ -127,7 +124,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		protected uint PrepareContext(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
 			// now we adjust the id, 0 based blockId
-			var returnedId = this.AdjustBlockId(blockId, blockIndex, channelIndexSet);
+			uint? returnedId = this.AdjustBlockId(blockId, blockIndex, channelIndexSet);
 
 			if(!returnedId.HasValue) {
 				throw new InvalidOperationException("Block id must be set");
@@ -179,7 +176,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public (SafeArrayHandle high, SafeArrayHandle low) QueryBlockWholeHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
-			var channels = this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader | BlockChannelUtils.BlockChannelTypes.LowHeader));
+			ChannelsEntries<SafeArrayHandle> channels = this.QueryBlockBytes(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader | BlockChannelUtils.BlockChannelTypes.LowHeader));
 
 			return (channels.HighHeaderData, channels.LowHeaderData);
 		}
@@ -233,13 +230,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public bool BlockExists(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
-			if(channelIndexSet.ChannelTypes.Count > 1 || channelIndexSet.ChannelTypes.First() != BlockChannelUtils.BlockChannelTypes.HighHeader) {
+			if((channelIndexSet.ChannelTypes.Count > 1) || (channelIndexSet.ChannelTypes.First() != BlockChannelUtils.BlockChannelTypes.HighHeader)) {
 				channelIndexSet = this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader);
 			}
 
-			var result = this.QueryBlockIndex(blockId, blockIndex, channelIndexSet);
+			ChannelsEntries<(long blockStart, int blockEnd)> result = this.QueryBlockIndex(blockId, blockIndex, channelIndexSet);
 
-			return result?.Entries.Any()??false;
+			return result?.Entries.Any() ?? false;
 		}
 
 		private uint? AdjustBlockId(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
@@ -256,7 +253,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				startingId = channelIndexSet.MainChannelIndex.StartingId.Value;
 			}
 
-			if(startingId != blockIndex.startingBlockId - 1) {
+			if(startingId != (blockIndex.startingBlockId - 1)) {
 				//throw new ApplicationException($"block file starting Id '{startingId + 1}' does not match block index starting id '{blockIndex.startingBlockId}'");
 				//TODO: does this even matter?
 			}
@@ -276,9 +273,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <param name="l3ContentsFileSize"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		public SafeArrayHandle QueryPartialBlockHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length){
+		public SafeArrayHandle QueryPartialBlockHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length) {
 
-			var channels = this.QueryPartialBlockBytes(blockId, blockIndex, new ChannelsEntries<(int offset, int length)>(BlockChannelUtils.BlockChannelTypes.HighHeader, (offset, length)), this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader));
+			ChannelsEntries<SafeArrayHandle> channels = this.QueryPartialBlockBytes(blockId, blockIndex, new ChannelsEntries<(int offset, int length)>(BlockChannelUtils.BlockChannelTypes.HighHeader, (offset, length)), this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.HighHeader));
 
 			return channels?.HighHeaderData;
 		}
@@ -326,7 +323,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public int? QueryBlockWholeHeaderSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
-			var results = this.QueryBlockSize(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Headers));
+			ChannelsEntries<int> results = this.QueryBlockSize(blockId, blockIndex, this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Headers));
 
 			return results.HighHeaderData + results.LowHeaderData;
 		}
@@ -352,7 +349,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// <exception cref="ApplicationException"></exception>
 		public (ChannelsEntries<int> sizes, SafeArrayHandle hash)? QueryFullBlockSizeAndHash(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int hashOffset, int hashLength, ChannelIndexSet channelIndexSet) {
 
-			var sizes = this.QueryBlockSize(blockId, blockIndex, channelIndexSet);
+			ChannelsEntries<int> sizes = this.QueryBlockSize(blockId, blockIndex, channelIndexSet);
 
 			SafeArrayHandle hashBytes = this.QueryPartialBlockHighHeaderBytes(blockId, blockIndex, hashOffset, hashLength);
 
@@ -366,9 +363,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public ChannelsEntries<int> QueryBlockSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelIndexSet channelIndexSet) {
 
-			var entries = new ChannelsEntries<int>(channelIndexSet.ChannelTypes);
+			ChannelsEntries<int> entries = new ChannelsEntries<int>(channelIndexSet.ChannelTypes);
 
-			var indices = this.QueryBlockIndex(blockId, blockIndex, channelIndexSet);
+			ChannelsEntries<(long blockStart, int blockEnd)> indices = this.QueryBlockIndex(blockId, blockIndex, channelIndexSet);
 
 			if(indices != null) {
 				entries.RunForAll((key, index) => {

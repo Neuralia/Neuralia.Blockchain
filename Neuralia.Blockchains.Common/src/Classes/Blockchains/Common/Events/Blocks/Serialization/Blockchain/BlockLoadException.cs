@@ -2,7 +2,7 @@ using System;
 using System.Runtime.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain {
-	public class BlockLoadException : ApplicationException{
+	public class BlockLoadException : ApplicationException {
 
 		public BlockLoadException() {
 		}

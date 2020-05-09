@@ -1,6 +1,7 @@
 using System;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
@@ -78,7 +79,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages {
 						messageSet.Header = header; // set the header explicitely
 						messageSet.RehydrateRest(dr, rehydrationFactory);
 					} catch(Exception ex) {
-						Log.Error(ex, "Invalid data sent");
+						NLog.Default.Error(ex, "Invalid data sent");
 					}
 
 					return messageSet;
@@ -94,13 +95,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages {
 		/// <param name="workflowCorrelationId"></param>
 		/// <returns></returns>
 		public TriggerMessageSet<PeerListRequestTrigger<R>, R> CreatePeerListRequestWorkflowTriggerSet(uint workflowCorrelationId) {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<PeerListRequestTrigger<R>, R>, PeerListRequestTrigger<R>>(workflowCorrelationId);
+			TriggerMessageSet<PeerListRequestTrigger<R>, R> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<PeerListRequestTrigger<R>, R>, PeerListRequestTrigger<R>>(workflowCorrelationId);
 
 			return messageSet;
 		}
 
 		private TriggerMessageSet<PeerListRequestTrigger<R>, R> CreatePeerListRequestWorkflowTriggerSet(TargettedHeader triggerHeader = null) {
-			var messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<PeerListRequestTrigger<R>, R>, PeerListRequestTrigger<R>>(triggerHeader);
+			TriggerMessageSet<PeerListRequestTrigger<R>, R> messageSet = this.MainMessageFactory.CreateTriggerMessageSet<TriggerMessageSet<PeerListRequestTrigger<R>, R>, PeerListRequestTrigger<R>>(triggerHeader);
 
 			return messageSet;
 		}

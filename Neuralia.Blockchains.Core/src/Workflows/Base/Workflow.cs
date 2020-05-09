@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
@@ -65,9 +66,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 	public abstract class Workflow<R> : ThreadBase<Workflow<R>>, IWorkflow<R>
 		where R : IRehydrationFactory {
-
-		//TODO: restore these values since they are changed for debugging purposes
-		public static readonly TimeSpan DEFAULT_HIBERNATE_TIMEOUT = TimeSpan.FromSeconds(20 * 1); //60 // in seconds
+		
+		public static readonly TimeSpan DEFAULT_HIBERNATE_TIMEOUT = TimeSpan.FromSeconds(60 * 1);
 		protected readonly ServiceSet<R> serviceSet;
 
 		protected readonly ITimeService timeService;
@@ -77,13 +77,18 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			this.serviceSet = serviceSet;
 
 			this.WorkflowId = GlobalRandom.GetNextUInt();
-			
+
 			this.Id = new WorkflowId(this.WorkflowId);
 
 			// how long do we wait for an operation until we declare this workflow as dead?
 			// this can happen if the peers on the other side stop responding and go mute.
 			this.hibernateTimeoutSpan = DEFAULT_HIBERNATE_TIMEOUT;
 		}
+
+		/// <summary>
+		///     Workflows are usually much shorter
+		/// </summary>
+		protected override TaskCreationOptions TaskCreationOptions => TaskCreationOptions.None;
 
 		/// <summary>
 		///     A special variable we can set to put ourselves in unit test mode and override some annoying behaviors like
@@ -158,11 +163,6 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 			return (int) this.WorkflowId;
 		}
 
-		/// <summary>
-		/// Workflows are usually much shorter
-		/// </summary>
-		protected override TaskCreationOptions TaskCreationOptions => TaskCreationOptions.None;
-
 		protected override async Task TriggerError(Exception ex) {
 			await base.TriggerError(ex).ConfigureAwait(false);
 
@@ -170,8 +170,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		}
 
 		protected virtual void LogWorkflowException(Exception ex) {
-			Log.Verbose(ex, $"Workflow of type '{this.GetType().Name}' ended in error");
+			NLog.Default.Verbose(ex, $"Workflow of type '{this.GetType().Name}' ended in error");
 		}
-
 	}
 }

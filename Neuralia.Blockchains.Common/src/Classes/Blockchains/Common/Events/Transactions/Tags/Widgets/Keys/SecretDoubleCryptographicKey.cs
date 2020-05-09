@@ -2,9 +2,7 @@
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
-using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Neuralia.BouncyCastle.extra.pqc.crypto.qtesla;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys {
 	public interface ISecretDoubleCryptographicKey : ISecretComboCryptographicKey {
@@ -25,7 +23,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.SecondKey.Dehydrate(dehydrator);
 		}
 
-		public override bool IsEmpty => base.IsEmpty || (this.SecondKey?.IsEmpty??true);
+		public override bool IsEmpty => base.IsEmpty || (this.SecondKey?.IsEmpty ?? true);
 
 		public override void Rehydrate(byte id, IDataRehydrator rehydrator) {
 			base.Rehydrate(id, rehydrator);
@@ -49,18 +47,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("SecondKey", this.SecondKey);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.SecretDouble;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
+		public override void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is ISecretDoubleWalletKey secretDoubleWalletKey) {
-				
+
 				this.SecondKey.SetFromWalletKey(secretDoubleWalletKey.SecondKey);
 				this.SecondKey.Id = secretDoubleWalletKey.KeyAddress.OrdinalId;
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.SecretDouble;
 		}
 	}
 }

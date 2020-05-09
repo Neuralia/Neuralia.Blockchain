@@ -1,14 +1,12 @@
 using System;
-using System.Linq;
 using System.Numerics;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
-using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
-using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -26,17 +24,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public override SafeArrayHandle PerformBallot(SafeArrayHandle candidature, BlockElectionDistillate blockElectionDistillate, Enums.MiningTiers miningTier, AccountId miningAccount) {
-			
+
 			if(!this.MiningTierDifficulties.ContainsKey(miningTier)) {
 				throw new ArgumentOutOfRangeException(nameof(miningTier));
 			}
-			
+
 			long difficulty = this.MiningTierDifficulties[miningTier];
 
 			BigInteger hashTarget = HashDifficultyUtils.GetHash512TargetByIncrementalDifficulty(difficulty);
 			BigInteger currentBallotHash = HashDifficultyUtils.GetBigInteger(candidature);
 
-			Log.Verbose($"Comparing our candidacy ballot {currentBallotHash} in the {miningTier} tier with difficulty {difficulty} to election target {hashTarget}");
+			NLog.Default.Verbose($"Comparing our candidacy ballot {currentBallotHash} in the {miningTier} tier with difficulty {difficulty} to election target {hashTarget}");
 
 			if(currentBallotHash < hashTarget) {
 				// wow, we got in! :D
@@ -56,10 +54,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			return nodeList;
 		}
-		
+
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
-			
+
 			jsonDeserializer.SetProperty("Name", "HashTarget");
 		}
 	}

@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 
 				// this is our own workflow, we ensure the client is always 0. (no client, but rather us)
-				this.ClientId = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.MyclientUuid;
+				this.ClientId = this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.MyClientUuid;
 			}
 		}
 	}

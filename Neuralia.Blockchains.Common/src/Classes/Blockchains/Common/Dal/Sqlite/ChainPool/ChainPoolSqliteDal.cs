@@ -5,12 +5,15 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainPool;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
 using Neuralia.Blockchains.Common.Classes.Tools;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Tools;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.ChainPool {
@@ -23,8 +26,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		where CHAIN_STATE_CONTEXT : DbContext, IChainPoolSqliteContext<CHAIN_POOL_PUBLIC_TRANSACTIONS>
 		where CHAIN_POOL_PUBLIC_TRANSACTIONS : ChainPoolSqlitePublicTransactions<CHAIN_POOL_PUBLIC_TRANSACTIONS>, new() {
 
+		private readonly ITimeService timeService;
 		public ChainPoolSqliteDal(string folderPath, BlockchainServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateChainPoolContext<CHAIN_STATE_CONTEXT>, serializationType) {
 
+			this.timeService = serviceSet.TimeService;
 		}
 
 		public async Task InsertTransactionEntry(ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
@@ -69,14 +74,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		public async Task ClearExpiredTransactions() {
 			try {
 				await this.PerformOperationAsync(db => {
-
-					db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => t.Expiration < DateTime.UtcNow));
+					DateTime time = DateTimeEx.CurrentTime;
+					db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => t.Expiration < time));
 
 					return db.SaveChangesAsync();
 				}).ConfigureAwait(false);
 			} catch(Exception ex) {
 				//TODO: what to do?
-				Log.Error("Failed to clear expired transactions", ex);
+				NLog.Default.Error("Failed to clear expired transactions", ex);
 			}
 		}
 
@@ -90,7 +95,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		}
 
 		public async Task ClearTransactions(List<TransactionId> transactionIds) {
-			var stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
+			List<string> stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
 
 			await this.PerformOperationAsync(db => {
 				db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => stringTransactionIds.Contains(t.TransactionId)));
@@ -106,7 +111,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
 			if(transactionIds.Any()) {
-				var stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
+				List<string> stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
 
 				await this.PerformOperationAsync(db => {
 
@@ -121,7 +126,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		protected virtual void PrepareTransactionEntry(CHAIN_POOL_PUBLIC_TRANSACTIONS entry, ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
 			entry.TransactionId = transactionEnvelope.Contents.Uuid.ToCompactString();
-			entry.Timestamp = DateTime.UtcNow;
+			entry.Timestamp = DateTimeEx.CurrentTime;
 			entry.Expiration = transactionEnvelope.GetExpirationTime(this.timeService, chainInception);
 		}
 	}

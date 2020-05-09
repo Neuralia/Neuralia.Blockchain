@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
+	[SuppressMessage("ReSharper", "All")]
 	public class MessageEntrySqlite : IMessageEntry {
-		//private set is used to fix the "missing parameter name: frameworkName" error.
+		//private set is used to fix the "missing parameter name: frameworkName" error in EF Core.
 		public List<MessagePeerSqlite> Peers { get; private set; } = new List<MessagePeerSqlite>();
+		//this method is to make sure ReSharper does not remove the private set of Peers.
+		public void SetPeers(List<MessagePeerSqlite> peers) => this.Peers = peers;
 
 		[Key]
 		public long Hash { get; set; }

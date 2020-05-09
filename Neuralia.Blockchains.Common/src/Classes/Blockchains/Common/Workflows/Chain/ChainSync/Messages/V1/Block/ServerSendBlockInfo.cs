@@ -1,8 +1,8 @@
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Structures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Tags;
+using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Simple;
@@ -14,7 +14,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1.Block {
 	public class ServerSendBlockInfo : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncInfoResponse<BlockChannelsInfoSet<DataSliceSize>, DataSliceSize, BlockId, BlockChannelUtils.BlockChannelTypes> {
-		public SafeArrayHandle BlockHash { get;} = SafeArrayHandle.Create();
+		public SafeArrayHandle BlockHash { get; } = SafeArrayHandle.Create();
 
 		/// <summary>
 		///     The last block we have in our chain. we send it every time, as this number changes as we sync locally
@@ -58,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			nodesList.Add(this.ChainBlockHeight);
 			nodesList.Add(this.PublicBlockHeight);
-			
+
 			nodesList.Add(this.HasBlockDetails);
 
 			if(this.HasBlockDetails) {
@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.Id.Rehydrate(rehydrator);
 
 			this.ChainBlockHeight.Rehydrate(rehydrator);
-			
+
 			AdaptiveLong1_9 delta = new AdaptiveLong1_9();
 			delta.Rehydrate(rehydrator);
 			this.PublicBlockHeight = this.ChainBlockHeight + delta.Value;

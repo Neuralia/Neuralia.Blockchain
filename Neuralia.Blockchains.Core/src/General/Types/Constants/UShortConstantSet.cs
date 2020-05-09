@@ -7,6 +7,9 @@ namespace Neuralia.Blockchains.Core.General.Types.Constants {
 
 		protected UShortConstantSet(T baseOffset) : base(baseOffset) {
 		}
+
+		protected UShortConstantSet(ushort baseOffset) : base(baseOffset) {
+		}
 	}
 
 	public abstract class UShortConstantSet : UShortConstantSet<SimpleUShort> {

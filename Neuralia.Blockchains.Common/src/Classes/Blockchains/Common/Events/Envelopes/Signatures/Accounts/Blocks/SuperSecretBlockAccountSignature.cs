@@ -1,6 +1,5 @@
 using System;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
@@ -13,7 +12,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		long PromisedNonce1 { get; set; }
 		long PromisedNonce2 { get; set; }
-		SafeArrayHandle PromisedPublicKey { get;  }
+		SafeArrayHandle PromisedPublicKey { get; }
 
 		Guid ConfirmationUuid { get; set; }
 	}

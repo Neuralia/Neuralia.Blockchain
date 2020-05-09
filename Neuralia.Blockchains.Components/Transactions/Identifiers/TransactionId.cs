@@ -1,22 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
-using Neuralia.Blockchains.Common.Classes.General.Json.Converters;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using LiteDB;
+using Neuralia.Blockchains.Components.Converters.old;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General;
-using Neuralia.Blockchains.Core.General.Json.Converters;
 using Neuralia.Blockchains.Core.General.Types;
-using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
-namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers {
+namespace Neuralia.Blockchains.Components.Transactions.Identifiers {
 
 	/// <summary>
 	///     The unique id of a transaction on the chain
@@ -24,11 +21,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	[JsonConverter(typeof(TransactionIdJsonConverter))]
 	public class TransactionId : IBinarySerializable, ITreeHashable, IComparable<TransactionId> {
 
+		/// <summary>
+		/// careful, these do not consider possible base32 swapping
+		/// </summary>
+		public const string REGEX_VALID_CORE = AccountId.REGEX_VALID_NO_PRESENTATION_CORE + @"\:" + TransactionTimestamp.REGEX_VALID_CORE + @"(?:(?:\:[:]?)" + TransactionScope.REGEX_VALID_CORE + @")?";
+		public const string REGEX_VALID = "^"+ REGEX_VALID_CORE + "$";
+
 		public const char SEPARATOR = ':';
 		public const char COMPACT_SEPARATOR = ' ';
 
 		static TransactionId() {
-			LiteDBMappers.RegisterTransactionId();
+			RegisterTransactionId();
+		}
+		
+		public static void RegisterTransactionId() {
+			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => new TransactionId(bson.AsString));
 		}
 
 		public TransactionId() : this(0, 0) {
@@ -74,8 +81,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public TransactionTimestamp Timestamp { get; set; }
 
 		public TransactionScope Scope { get; set; }
-		
+
 		public static TransactionId Empty => new TransactionId();
+
+		public void Dehydrate(IDataDehydrator dehydrator) {
+
+			this.Dehydrateheader(dehydrator);
+			this.DehydrateTail(dehydrator);
+		}
+
+		public void Rehydrate(IDataRehydrator rehydrator) {
+			this.RehydrateHeader(rehydrator);
+			this.RehydrateTail(rehydrator);
+		}
 
 		public int CompareTo(TransactionId other) {
 			if(ReferenceEquals(this, other)) {
@@ -102,30 +120,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			return scopeComparison;
 		}
-		
-		public void Dehydrateheader(IDataDehydrator dehydrator) {
-
-			this.Account.Dehydrate(dehydrator);
-			this.Timestamp.Dehydrate(dehydrator);
-
-		}
-
-		public void RehydrateHeader(IDataRehydrator rehydrator) {
-			this.Account.Rehydrate(rehydrator);
-			this.Timestamp.Rehydrate(rehydrator);
-
-		}
-
-		public void Dehydrate(IDataDehydrator dehydrator) {
-
-			this.Dehydrateheader(dehydrator);
-			this.DehydrateTail(dehydrator);
-		}
-
-		public void Rehydrate(IDataRehydrator rehydrator) {
-			this.RehydrateHeader(rehydrator);
-			this.RehydrateTail(rehydrator);
-		}
 
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
@@ -136,21 +130,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			return nodeList;
 		}
-		protected virtual string[] GetTransactionIdComponents(string transactionId) {
+
+		private void Dehydrateheader(IDataDehydrator dehydrator) {
+
+			this.Account.Dehydrate(dehydrator);
+			this.Timestamp.Dehydrate(dehydrator);
+
+		}
+
+		private void RehydrateHeader(IDataRehydrator rehydrator) {
+			this.Account.Rehydrate(rehydrator);
+			this.Timestamp.Rehydrate(rehydrator);
+
+		}
+
+		private static string[] GetTransactionIdComponents(string transactionId) {
 
 			return transactionId.Split(new[] {SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
 		}
 
-		public void Parse(string transactionId) {
+		private void Parse(string transactionId) {
 
-			var items = this.GetTransactionIdComponents(transactionId);
+			string[] items = GetTransactionIdComponents(transactionId);
 
 			this.Account = new AccountId(items[0]);
 			this.Timestamp = new TransactionTimestamp(items[1]);
 
 			this.Scope = new TransactionScope();
 
-			if(items.Length == 3 && !string.IsNullOrWhiteSpace(items[2])) {
+			if((items.Length == 3) && !string.IsNullOrWhiteSpace(items[2])) {
 				this.Scope = new TransactionScope(items[2]);
 			}
 		}
@@ -160,9 +168,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		public string ToCompositeKey() {
-			return this.Account.ToLongRepresentation().ToString(CultureInfo.InvariantCulture) + "_" +  this.Timestamp + "_" + this.Scope;
+			return this.Account.ToLongRepresentation().ToString(CultureInfo.InvariantCulture) + "_" + this.Timestamp + "_" + this.Scope;
 		}
-		
+
 		protected virtual void DehydrateTail(IDataDehydrator dehydrator) {
 			this.Scope.Dehydrate(dehydrator);
 		}
@@ -219,7 +227,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public override int GetHashCode() {
 			unchecked {
-				int hashCode = this.Account != null ? this.Account.GetHashCode() : 0;
+				int hashCode = this.Account != default(AccountId) ? this.Account.GetHashCode() : 0;
 				hashCode = (hashCode * 397) ^ (this.Timestamp != null ? this.Timestamp.GetHashCode() : 0);
 				hashCode = (hashCode * 397) ^ (this.Scope != null ? this.Scope.GetHashCode() : 0);
 
@@ -259,7 +267,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			if(this.Scope.IsNotZero) {
 				buffer = stackalloc byte[sizeof(short)];
 				TypeSerializer.Serialize(this.Scope.Value, buffer);
-				
+
 				string scope = ByteArray.Wrap(buffer.TrimEnd().ToArray()).ToBase94();
 				transactionId += $"{COMPACT_SEPARATOR}{scope}";
 			}
@@ -278,7 +286,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				return null;
 			}
 
-			var items = compact.Split(new[] {COMPACT_SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
+			string[] items = compact.Split(new[] {COMPACT_SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
 
 			AccountId accountId = AccountId.FromCompactString(items[0]);
 
@@ -290,7 +298,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			short scope = 0;
 
-			if(items.Length == 3 && !string.IsNullOrWhiteSpace(items[2])) {
+			if((items.Length == 3) && !string.IsNullOrWhiteSpace(items[2])) {
 				buffer = ByteArray.FromBase94(items[2]);
 				fullbuffer = stackalloc byte[sizeof(short)];
 				buffer.Entry.CopyTo(fullbuffer);
@@ -301,7 +309,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			return new TransactionId(accountId, timestamp, scope);
 		}
 
-
 		/// <summary>
 		///     Parse a transction Guid and return a transaction Scope object
 		/// </summary>
@@ -309,12 +316,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// <returns></returns>
 		public static TransactionId FromGuid(Guid transactionGuid) {
 			Span<byte> guidSpan = stackalloc byte[16];
-			
+
 			transactionGuid.TryWriteBytes(guidSpan);
 			Span<byte> span = stackalloc byte[8];
 			guidSpan.Slice(0, 8).CopyTo(span);
 			TypeSerializer.Deserialize(span, out long accountSequenceId);
-			
+
 			span = stackalloc byte[8];
 			guidSpan.Slice(8, 6).CopyTo(span);
 			TypeSerializer.Deserialize(span, out long timestamp);
@@ -332,17 +339,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// <param name="transactionId"></param>
 		/// <returns></returns>
 		public static Guid TransactionIdToGuid(TransactionId transactionId) {
-			
+
 			if(transactionId == null) {
 				return Guid.Empty;
 			}
-			
+
 			Span<byte> guidSpan = stackalloc byte[16];
 
 			Span<byte> span = stackalloc byte[8];
 			TypeSerializer.Serialize(transactionId.Account.ToLongRepresentation(), span);
 			span.CopyTo(guidSpan.Slice(0, 8));
-			
+
 			span = stackalloc byte[8];
 			TypeSerializer.Serialize(transactionId.Timestamp.Value, span);
 			span.Slice(0, 6).CopyTo(guidSpan.Slice(8, 6));
@@ -350,13 +357,37 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			span = stackalloc byte[2];
 			TypeSerializer.Serialize(transactionId.Scope.Value, span);
 			span.CopyTo(guidSpan.Slice(14, 2));
-			
+
 			return new Guid(guidSpan);
 
 		}
 
 		public Guid ToGuid() {
 			return TransactionIdToGuid(this);
+		}
+		
+		public static bool IsValid(string value) {
+			if (string.IsNullOrEmpty(value)) 
+				return false;
+
+			// we have to split by components, becase each one has special processing for base32 for example
+			string[] components = GetTransactionIdComponents(value);
+
+			if(components.Length != 2 && components.Length != 3) {
+				return false;
+			}
+
+			if(!AccountId.IsValid(components[0])) {
+				return false;
+			}
+			if(!TransactionTimestamp.IsValid(components[1])) {
+				return false;
+			}
+
+			if(components.Length == 3 && !TransactionScope.IsValid(components[2])) {
+				return false;
+			}
+			return true;
 		}
 	}
 }

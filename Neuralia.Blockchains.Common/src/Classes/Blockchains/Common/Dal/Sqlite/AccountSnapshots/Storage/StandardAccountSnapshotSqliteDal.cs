@@ -1,18 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AccountSnapshots.Storage.Base;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Identifiers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Types;
-using Neuralia.Blockchains.Core.General.Types.Specialized;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
@@ -36,12 +34,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 		protected StandardAccountSnapshotSqliteDal(int groupSize, string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(groupSize, folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateStandardAccountSnapshotContext<ACCOUNT_SNAPSHOT_CONTEXT>, serializationType) {
 		}
-		
+
 		public Task<List<STANDARD_ACCOUNT_SNAPSHOT>> LoadAccounts(List<AccountId> accountIds) {
 
-			var longAccountIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard).Select(a => a.ToLongRepresentation()).ToList();
-			var sequenceIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard).Select(a => a.SequenceId).ToList();
-			
+			List<long> longAccountIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard).Select(a => a.ToLongRepresentation()).ToList();
+			List<long> sequenceIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard).Select(a => a.SequenceId).ToList();
+
 			return this.QueryAllAsync(db => {
 
 				return db.StandardAccountSnapshots.Where(s => longAccountIds.Contains(s.AccountId)).ToListAsync();
@@ -58,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId().SequenceId));
 		}
-		
+
 		public Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
 			return this.PerformProcessingSetHoldTransactions(actions);
 		}
@@ -71,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			return this.PerformOperationAsync(db => {
 				STANDARD_ACCOUNT_SNAPSHOT accountEntry = new STANDARD_ACCOUNT_SNAPSHOT();
-				
+
 				accountEntry.AccountId = accountId.ToLongRepresentation();
 				accountEntry.InceptionBlockId = inceptionBlockId;
 				accountEntry.Correlated = correlated;
@@ -82,6 +80,5 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			}, this.GetKeyGroup(accountId.SequenceId));
 		}
-		
 	}
 }

@@ -1,13 +1,13 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Collections;
-using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
-using Nito.AsyncEx;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
 
@@ -30,7 +30,10 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		///     answer
 		/// </summary>
 		/// <returns></returns>
-		/// <remarks>ConcurrentQueue has a weird behavior, it stores references to entries in its slot field. This means big objects stay referenced even if dequeued. We use a wrapper to eliminate this.</remarks>
+		/// <remarks>
+		///     ConcurrentQueue has a weird behavior, it stores references to entries in its slot field. This means big
+		///     objects stay referenced even if dequeued. We use a wrapper to eliminate this.
+		/// </remarks>
 		private readonly WrapperConcurrentQueue<T> entryTaskQueue = new WrapperConcurrentQueue<T>();
 
 		/// <summary>
@@ -61,7 +64,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		/// <param name="Process">returns true if satisfied to end the loop, false if it still needs to wait</param>
 		/// <returns>The guid of the tasks that were processesd</returns>
 		public virtual async Task<List<Guid>> CheckTasks(Func<Task> loopItemAction = null) {
-			var processedTasks = new List<Guid>();
+			List<Guid> processedTasks = new List<Guid>();
 
 			this.TransferAvailableTasks();
 
@@ -79,7 +82,8 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 					await this.ProcessTask(task).ConfigureAwait(false);
 
 					processedTasks.Add(task.Id);
-					using(await this.locker.LockAsync().ConfigureAwait(false)){
+
+					using(await this.locker.LockAsync().ConfigureAwait(false)) {
 						if(this.reinsertedTasks.ContainsKey(task.Id)) {
 							this.reinsertedTasks.Remove(task.Id);
 						}
@@ -89,7 +93,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 
 					ReinsertedTaskInfo existingTask = null;
 
-					using(await this.locker.LockAsync().ConfigureAwait(false)){
+					using(await this.locker.LockAsync().ConfigureAwait(false)) {
 						if(!this.reinsertedTasks.ContainsKey(task.Id)) {
 							this.reinsertedTasks.Add(task.Id, new ReinsertedTaskInfo(task));
 						} else {
@@ -109,7 +113,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		protected virtual async Task<T> GetNextQueuedTask() {
 			T task = null;
 
-			using(await this.locker.LockAsync().ConfigureAwait(false)){
+			using(await this.locker.LockAsync().ConfigureAwait(false)) {
 				task = this.selectedTaskQueue.FirstOrDefault(t => !this.excludedTasks.Contains(t.Id));
 
 				if(task == null) {
@@ -129,7 +133,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 		protected void TransferAvailableTasks() {
 			//First, we remove the messages from the shared queue and transfer them into our own personal queue
 			while(this.entryTaskQueue.TryDequeue(out T task)) {
-				using(this.locker.Lock()){
+				using(this.locker.Lock()) {
 					if(!this.selectedTaskIds.Contains(task.Id)) {
 						this.selectedTaskQueue.Add(task);
 						this.selectedTaskIds.Add(task.Id);
@@ -140,7 +144,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			// now the tasks to be reinserted
 			T[] tasks = null;
 
-			using(this.locker.Lock()){
+			using(this.locker.Lock()) {
 				if(this.reinsertedTasks.Any()) {
 					tasks = this.reinsertedTasks.Values.Where(t => t.CanRun).OrderBy(t => t.timestamp).Select(t => t.task).ToArray();
 				}
@@ -148,7 +152,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 
 			if(tasks != null) {
 				foreach(T reinsertTask in tasks) {
-					using(this.locker.Lock()){
+					using(this.locker.Lock()) {
 						if(!this.selectedTaskIds.Contains(reinsertTask.Id)) {
 							this.selectedTaskQueue.Add(reinsertTask);
 							this.selectedTaskIds.Add(reinsertTask.Id);
@@ -165,7 +169,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			try {
 				this.entryTaskQueue.Enqueue(task);
 			} catch(Exception ex) {
-				Log.Error(ex, "Failed to post task");
+				NLog.Default.Error(ex, "Failed to post task");
 			} finally {
 				// now lets wakeup our thread and continue
 				this.TriggerTaskReceived();
@@ -201,13 +205,13 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 			}
 
 			public T task { get; }
-			public DateTime timestamp { get; } = DateTime.UtcNow;
-			public DateTime nexttry { get; private set; } = DateTime.UtcNow;
+			public DateTime timestamp { get; } = DateTimeEx.CurrentTime;
+			public DateTime nexttry { get; private set; } = DateTimeEx.CurrentTime;
 			public int attempt { get; private set; }
 
 			public TimeSpan Delay { get; private set; }
 
-			public bool CanRun => this.nexttry < DateTime.UtcNow;
+			public bool CanRun => this.nexttry < DateTimeEx.CurrentTime;
 
 			public void IncrementAttempt() {
 
@@ -219,7 +223,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Receivers {
 				}
 
 				// every try wait a little longer before we are reinserted.
-				this.nexttry = DateTime.UtcNow + this.Delay;
+				this.nexttry = DateTimeEx.CurrentTime + this.Delay;
 
 				if(this.attempt == int.MaxValue) {
 					this.attempt = 0;

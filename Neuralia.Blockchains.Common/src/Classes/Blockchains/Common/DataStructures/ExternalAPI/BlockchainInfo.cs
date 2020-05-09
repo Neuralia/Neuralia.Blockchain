@@ -1,7 +1,5 @@
-using System;
-
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI {
-	
+
 	public class BlockchainInfo {
 		public long DownloadBlockId { get; set; }
 		public long DiskBlockId { get; set; }

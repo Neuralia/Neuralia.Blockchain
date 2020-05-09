@@ -146,7 +146,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 			int endIndex = length;
 
 			int index = 1;
-			var slices = new Dictionary<int, Slice>();
+			Dictionary<int, Slice> slices = new Dictionary<int, Slice>();
 
 			do {
 				// check if the remaining buffer is smaller than the maximum size

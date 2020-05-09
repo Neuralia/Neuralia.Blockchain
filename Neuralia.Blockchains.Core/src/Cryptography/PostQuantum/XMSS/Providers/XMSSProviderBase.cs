@@ -7,31 +7,34 @@ using Org.BouncyCastle.Crypto.Digests;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 	public abstract class XMSSProviderBase : SignatureProviderBase {
-		protected XMSSExecutionContext excutionContext;
-		protected Enums.ThreadMode threadMode;
 
-		public enum hashAlgos{Sha2,Sha3,Blake2}
-		protected int treeHeight;
+		public enum hashAlgos {
+			Sha2,
+			Sha3,
+			Blake2
+		}
 
 		public const int BITS_256 = 256;
 		public const int BITS_512 = 512;
-		
+		protected XMSSExecutionContext excutionContext;
+		protected Enums.ThreadMode threadMode;
+		protected int treeHeight;
+
 		protected XMSSProviderBase(Enums.KeyHashBits hashBits, int treeHeight, Enums.ThreadMode threadMode) {
 			this.HashBitsEnum = hashBits;
 			this.threadMode = threadMode;
 
-			if(hashBits.HasFlag((Enums.KeyHashBits)Enums.SHA2)) {
+			if(hashBits.HasFlag((Enums.KeyHashBits) Enums.SHA2)) {
 				this.hashAlgo = hashAlgos.Sha2;
-			}
-			else if(hashBits.HasFlag((Enums.KeyHashBits)Enums.SHA3)) {
+			} else if(hashBits.HasFlag((Enums.KeyHashBits) Enums.SHA3)) {
 				this.hashAlgo = hashAlgos.Sha3;
-			}
-			else if(hashBits.HasFlag((Enums.KeyHashBits)Enums.BLAKE2)) {
+			} else if(hashBits.HasFlag((Enums.KeyHashBits) Enums.BLAKE2)) {
 				this.hashAlgo = hashAlgos.Blake2;
 			}
-			
+
 			this.HashBits = BITS_256;
-			if(hashBits.HasFlag((Enums.KeyHashBits)Enums.HASH512)) {
+
+			if(hashBits.HasFlag((Enums.KeyHashBits) Enums.HASH512)) {
 				this.HashBits = BITS_512;
 			}
 
@@ -41,8 +44,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		public abstract int MaximumHeight { get; }
 
 		public int HashBits { get; } = BITS_256;
-		private hashAlgos hashAlgo { get; }= hashAlgos.Sha3;
-		
+		private hashAlgos hashAlgo { get; } = hashAlgos.Sha3;
+
 		public Enums.KeyHashBits HashBitsEnum { get; } = Enums.KeyHashBits.SHA3_256;
 
 		public int TreeHeight {
@@ -55,7 +58,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		}
 
 		protected IDigest GenerateNewDigest() {
-			
+
 			if(this.hashAlgo == hashAlgos.Sha2) {
 				if(this.HashBits == BITS_256) {
 					return new Sha256DotnetDigest();
@@ -81,7 +84,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 
 		protected override void DisposeAll() {
 			base.DisposeAll();
-			
+
 		}
 
 		public abstract int GetMaxMessagePerKey();

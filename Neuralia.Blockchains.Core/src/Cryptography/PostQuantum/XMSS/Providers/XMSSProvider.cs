@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Serilog;
@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 
 		//TODO: reset the default values for production :  height 13
 
-		public const int DEFAULT_XMSS_TREE_HEIGHT = 12; //13;
+		public const int DEFAULT_XMSS_TREE_HEIGHT = 13;
 		public const Enums.KeyHashBits DEFAULT_HASH_BITS = Enums.KeyHashBits.SHA2_512;
 
 		protected XMSSEngine xmss;
@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			//TODO: make modes configurable
 			this.xmss = new XMSSEngine(XMSSOperationModes.Both, this.threadMode, null, this.excutionContext, this.TreeHeight);
 		}
-		
+
 		public XMSSPrivateKey CreatePrivateKey() {
 			return new XMSSPrivateKey(this.excutionContext);
 		}
@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 
 			return loadedPrivateKey;
 		}
-		
+
 		public async Task<(ByteArray privateKey, ByteArray publicKey)> GenerateKeys(Func<int, Task> progressCallback = null) {
 			(XMSSPrivateKey xmssPrivateKey, XMSSPublicKey xmssPublicKey) = await this.xmss.GenerateKeys(progressCallback).ConfigureAwait(false);
 
@@ -63,7 +63,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		}
 
 		public async Task<(ByteArray signature, ByteArray nextPrivateKey)> Sign(ByteArray content, ByteArray privateKey) {
-			
+
 			XMSSPrivateKey loadedPrivateKey = this.LoadPrivateKey(privateKey);
 
 			ByteArray result = await this.Sign(content, loadedPrivateKey).ConfigureAwait(false);
@@ -79,10 +79,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		public Task<(ByteArray signature, ByteArray nextPrivateKey)> Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
 			return this.Sign(content.Entry, privateKey.Entry);
 		}
-		
+
 		public async Task<ByteArray> Sign(ByteArray content, XMSSPrivateKey privateKey) {
 
-			Log.Verbose($"Singing message using XMSS (Key index: {privateKey.Index} of {this.MaximumHeight}, Tree height: {this.TreeHeight}, Hash bits: {this.HashBits})");
+			NLog.Default.Verbose($"Singing message using XMSS (Key index: {privateKey.Index} of {this.MaximumHeight}, Tree height: {this.TreeHeight}, Hash bits: {this.HashBits})");
 
 			ByteArray signature = await this.xmss.Sign(content, privateKey).ConfigureAwait(false);
 
@@ -96,10 +96,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 
 			return this.Verify(message.Entry, signature.Entry, publicKey.Entry);
 		}
-		
-		
+
 		public Task<bool> Verify(ByteArray message, ByteArray signature, ByteArray publicKey) {
-			
+
 			return this.xmss.Verify(signature, message, publicKey);
 		}
 

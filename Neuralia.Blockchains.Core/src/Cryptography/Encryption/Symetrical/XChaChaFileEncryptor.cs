@@ -9,12 +9,10 @@ using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
-using Neuralia.BouncyCastle.extra.Security;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Macs;
 using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 
 //TODO: refactor this class so that it looks different, different from java bouncycastle source
 namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
@@ -49,7 +47,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 
 			try {
 				using(Rfc2898DeriveBytes rfc2898DeriveBytes = new Rfc2898DeriveBytes(password.ToExactByteArrayCopy(), this.parameters.Salt.ToExactByteArrayCopy(), this.parameters.Iterations)) {
-					
+
 					cipher.Init(forEncryption, new ParametersWithIV(new KeyParameter(rfc2898DeriveBytes.GetBytes(256 / 8)), rfc2898DeriveBytes.GetBytes(192 / 8)));
 				}
 			} finally {
@@ -71,7 +69,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		}
 
 		public static XChachaEncryptorParameters GenerateEncryptionParameters(int saltLength = 500, ChachaRounds rounds = ChachaRounds.XCHACHA_40) {
-			
+
 			ByteArray salt = ByteArray.Create(saltLength);
 
 			// get a random salt
@@ -82,9 +80,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			if(rounds == ChachaRounds.XCHACHA_20) {
 				cipherType = EncryptorParameters.SymetricCiphers.XCHACHA_20;
 			}
-			
-			var entry = new XChachaEncryptorParameters(cipherType) {Iterations = GlobalRandom.GetNext(1000, short.MaxValue), KeyBitLength = 256};
+
+			XChachaEncryptorParameters entry = new XChachaEncryptorParameters(cipherType) {Iterations = GlobalRandom.GetNext(1000, short.MaxValue), KeyBitLength = 256};
 			entry.Salt.Entry = salt;
+
 			return entry;
 		}
 
@@ -205,7 +204,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			 * additional_data = seq_num + TLSCompressed.type + TLSCompressed.version +
 			 * TLSCompressed.length
 			 */
-			SafeArrayHandle additional_data = ByteArray.Create(0);
+			SafeArrayHandle additional_data = ByteArray.Create();
 
 			//		TlsUtils.writeUint64(seqNo, additional_data, 0);
 			//		TlsUtils.writeUint8(type, additional_data, 8);

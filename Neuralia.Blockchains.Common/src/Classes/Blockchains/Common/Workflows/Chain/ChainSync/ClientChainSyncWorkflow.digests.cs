@@ -2,13 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages.V1;
@@ -18,6 +16,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.Cha
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
 using Neuralia.Blockchains.Core.Compression;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Data;
@@ -45,7 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected PeerDigestSpecs GetDigestInfoConsensus(Dictionary<Guid, PeerDigestSpecs> peerBlockSpecs) {
 			// ok, we have the previous block details provider, but if new peers were added since, we will take their trigger connection and add it here
-			var existingIds = peerBlockSpecs.Keys.ToList();
+			List<Guid> existingIds = peerBlockSpecs.Keys.ToList();
 
 			PeerDigestSpecs consensusSpecs = new PeerDigestSpecs();
 
@@ -62,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					try {
 						(consensusSpecs.digestId, nextBlockHeightConsensusType) = ConsensusUtilities.GetConsensus(peerBlockSpecs.Values.Where(v => v.digestId > 0), a => a.digestId);
 					} catch(SplitDecisionException e2) {
-						// lets do nothing, since we will try again concensus below with more data
+						// lets do nothing, since we will try again consensus below with more data
 						consensusSpecs.digestId = int.MaxValue;
 					}
 				}
@@ -85,7 +84,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			//this.TestConsensus(nextBlockHeightConsensusType, nameof(nextBlockHash));
 
-			var consensusSet = ChannelsInfoSet.RestructureConsensusBands<int, DigestChannelsInfoSet<DataSliceSize>, DataSliceSize>(peerBlockSpecs.ToDictionary(c => c.Key, c => c.Value.DigestSize));
+			Dictionary<int, List<(Guid peerId, DataSliceSize entry)>> consensusSet = ChannelsInfoSet.RestructureConsensusBands<int, DigestChannelsInfoSet<DataSliceSize>, DataSliceSize>(peerBlockSpecs.ToDictionary(c => c.Key, c => c.Value.DigestSize));
 			ConsensusUtilities.ConsensusType consensusType;
 
 			// now the various channel sizes
@@ -120,7 +119,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			singleEntryContext.syncManifest = this.LoadDigestSyncManifest();
 			singleEntryContext.syncManifestFiles = this.LoadDigestFileSyncManifest();
 
-			if(singleEntryContext.syncManifest != null && singleEntryContext.syncManifest.IsComplete && singleEntryContext.syncManifestFiles != null && singleEntryContext.syncManifestFiles.IsComplete) {
+			if((singleEntryContext.syncManifest != null) && singleEntryContext.syncManifest.IsComplete && (singleEntryContext.syncManifestFiles != null) && singleEntryContext.syncManifestFiles.IsComplete) {
 
 				// we are done it seems. move on to the next
 				this.ClearDigestSyncManifest();
@@ -143,7 +142,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					await Repeater.RepeatAsync(async () => {
 
 						// no choice, we must fetch the connection
-						var peerBlockSpecs = await this.FetchPeerDigestInfo(singleEntryContext).ConfigureAwait(false);
+						(Dictionary<Guid, PeerDigestSpecs> results, ResultsState state) peerBlockSpecs = await this.FetchPeerDigestInfo(singleEntryContext).ConfigureAwait(false);
 
 						if(peerBlockSpecs.state != ResultsState.OK) {
 							resultState = peerBlockSpecs.state;
@@ -175,9 +174,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			if(singleEntryContext.details.digestId <= this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestHeight) {
 				this.ClearDigestSyncManifest();
 				this.ClearDigestFileSyncManifest();
-				
-				throw new NoDigestInfoException(); 
+
+				throw new NoDigestInfoException();
 			}
+
 			// now we will build the list of connections that will be used during this turn
 
 			if(singleEntryContext.syncManifest.IsDigestFileCompleted() == false) {
@@ -205,11 +205,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					} catch(NoSyncingConnectionsException e) {
 						throw;
 					} catch(Exception e) {
-						Log.Error(e, "Failed to fetch digest files data. might try again...");
+						NLog.Default.Error(e, "Failed to fetch digest files data. might try again...");
 					}
 
 					if(!success) {
-						Log.Fatal("Failed to fetch block digest files. we tried all the attempts we could and it still failed. this is critical. we may try again.");
+						NLog.Default.Fatal("Failed to fetch block digest files. we tried all the attempts we could and it still failed. this is critical. we may try again.");
 
 						// well, thats not great, we have to try again if we can
 						singleEntryContext.blockFetchAttempt += 1;
@@ -228,7 +228,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 
 			// now build the files structure
-			if(singleEntryContext.syncManifest.IsDigestFileCompleted() && (singleEntryContext.syncManifestFiles == null || singleEntryContext.syncManifestFiles.Files.Count == 0)) {
+			if(singleEntryContext.syncManifest.IsDigestFileCompleted() && ((singleEntryContext.syncManifestFiles == null) || (singleEntryContext.syncManifestFiles.Files.Count == 0))) {
 
 				// ok, we are ready to move on
 				singleEntryContext.syncManifestFiles = new ChannelsFilesetSyncManifest();
@@ -236,10 +236,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// generate the file map
 				IBlockchainDigest digest = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestHeader(int.Parse(singleEntryContext.syncManifest.Id));
 
-				foreach(var channel in digest.DigestDescriptor.Channels) {
-					foreach(var index in channel.Value.DigestChannelIndexDescriptors) {
-						foreach(var file in index.Value.Files) {
-							foreach(var part in file.Value.DigestChannelIndexFilePartDescriptors) {
+				foreach(KeyValuePair<ushort, BlockchainDigestChannelDescriptor> channel in digest.DigestDescriptor.Channels) {
+					foreach(KeyValuePair<int, BlockchainDigestChannelDescriptor.DigestChannelIndexDescriptor> index in channel.Value.DigestChannelIndexDescriptors) {
+						foreach(KeyValuePair<int, BlockchainDigestChannelDescriptor.DigestChannelIndexDescriptor.DigestChannelIndexFileDescriptor> file in index.Value.Files) {
+							foreach(KeyValuePair<uint, BlockchainDigestChannelDescriptor.DigestChannelIndexDescriptor.DigestChannelIndexFileDescriptor.DigestChannelIndexFilePartDescriptor> part in file.Value.DigestChannelIndexFilePartDescriptors) {
 								singleEntryContext.syncManifestFiles.Files.Add((channel.Key, index.Key, file.Key, part.Key), new DataSlice {Length = part.Value.FileSize});
 							}
 						}
@@ -269,7 +269,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						this.ResetDigestFileSyncManifest(singleFileEntryContext.syncManifest);
 					}
 
-					Log.Verbose($"Fetching digest files data, attempt {singleEntryContext.blockFetchAttemptCounter}");
+					NLog.Default.Verbose($"Fetching digest files data, attempt {singleEntryContext.blockFetchAttemptCounter}");
 
 					await this.FetchPeerDigestFileData(singleFileEntryContext).ConfigureAwait(false);
 
@@ -282,11 +282,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				} catch(NoSyncingConnectionsException e) {
 					throw;
 				} catch(Exception e) {
-					Log.Error(e, "Failed to fetch digest files data. might try again...");
+					NLog.Default.Error(e, "Failed to fetch digest files data. might try again...");
 				}
 
 				if(!success) {
-					Log.Fatal("Failed to fetch block digest files. we tried all the attempts we could and it still failed. this is critical. we may try again.");
+					NLog.Default.Fatal("Failed to fetch block digest files. we tried all the attempts we could and it still failed. this is critical. we may try again.");
 
 					// well, thats not great, we have to try again if we can
 					singleEntryContext.blockFetchAttempt += 1;
@@ -302,7 +302,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					break;
 				}
 			}
-			
+
 			this.ClearDigestSyncManifest();
 			this.ClearDigestFileSyncManifest();
 
@@ -313,19 +313,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				//TODO: add some higher level analytics
 			}
 
-			//			Log.Information($"Block {digestId} has been synced successfully");
+			//			NLog.Default.Information($"Block {digestId} has been synced successfully");
 			return ResultsState.OK;
 		}
 
 		protected Task<(Dictionary<Guid, PeerDigestSpecs> results, ResultsState state)> FetchPeerDigestInfo(DigestSingleEntryContext singleEntryContext) {
-			var infoParameters = new FetchInfoParameter<DigestChannelsInfoSet<DataSliceSize>, DataSliceSize, int, int, PeerDigestSpecs, REQUEST_DIGEST_INFO, SEND_DIGEST_INFO, DigestFilesetSyncManifest, DigestSingleEntryContext, DigestFilesetSyncManifest.DigestSyncingDataSlice>();
+			FetchInfoParameter<DigestChannelsInfoSet<DataSliceSize>, DataSliceSize, int, int, PeerDigestSpecs, REQUEST_DIGEST_INFO, SEND_DIGEST_INFO, DigestFilesetSyncManifest, DigestSingleEntryContext, DigestFilesetSyncManifest.DigestSyncingDataSlice> infoParameters = new FetchInfoParameter<DigestChannelsInfoSet<DataSliceSize>, DataSliceSize, int, int, PeerDigestSpecs, REQUEST_DIGEST_INFO, SEND_DIGEST_INFO, DigestFilesetSyncManifest, DigestSingleEntryContext, DigestFilesetSyncManifest.DigestSyncingDataSlice>();
 
 			infoParameters.id = singleEntryContext.details.digestId;
 			infoParameters.singleEntryContext = singleEntryContext;
 
 			infoParameters.generateInfoRequestMessage = () => {
 				// its small enough, we will ask a single peer
-				var requestMessage = (BlockchainTargettedMessageSet<REQUEST_DIGEST_INFO>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestDigestInfo(this.trigger.BaseHeader);
+				BlockchainTargettedMessageSet<REQUEST_DIGEST_INFO> requestMessage = (BlockchainTargettedMessageSet<REQUEST_DIGEST_INFO>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestDigestInfo(this.trigger.BaseHeader);
 
 				return requestMessage;
 			};
@@ -371,7 +371,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					nextPeerDetails.Add(peerConnection.PeerConnection.ClientUuid, nextBlockSpecs);
 				}
 
-				var blockInfo = missingRequestInfos.Single(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid);
+				PeerRequestInfo<int, REQUEST_DIGEST_INFO, SEND_DIGEST_INFO> blockInfo = missingRequestInfos.Single(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid);
 
 				// all good, keep the reply for later
 				blockInfo.responseMessage = peerReply.Message;
@@ -381,7 +381,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			infoParameters.selectUsefulConnections = connections => {
 
-				return connections.GetSyncingConnections().Where(c => c.TriggerResponse.Message.ShareType.HasDigests && c.ReportedDigestHeight != 0).ToList();
+				return connections.GetSyncingConnections().Where(c => c.TriggerResponse.Message.ShareType.HasDigests && (c.ReportedDigestHeight != 0)).ToList();
 
 			};
 
@@ -390,13 +390,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected Task FetchPeerDigestData(DigestSingleEntryContext singleBlockContext) {
 
-			var parameters = new FetchDataParameter<DigestChannelsInfoSet<DataSliceInfo>, DataSliceInfo, DigestChannelsInfoSet<DataSlice>, DataSlice, int, int, PeerDigestSpecs, REQUEST_DIGEST, SEND_DIGEST, DigestFilesetSyncManifest, DigestSingleEntryContext, object, DigestFilesetSyncManifest.DigestSyncingDataSlice>();
+			FetchDataParameter<DigestChannelsInfoSet<DataSliceInfo>, DataSliceInfo, DigestChannelsInfoSet<DataSlice>, DataSlice, int, int, PeerDigestSpecs, REQUEST_DIGEST, SEND_DIGEST, DigestFilesetSyncManifest, DigestSingleEntryContext, object, DigestFilesetSyncManifest.DigestSyncingDataSlice> parameters = new FetchDataParameter<DigestChannelsInfoSet<DataSliceInfo>, DataSliceInfo, DigestChannelsInfoSet<DataSlice>, DataSlice, int, int, PeerDigestSpecs, REQUEST_DIGEST, SEND_DIGEST, DigestFilesetSyncManifest, DigestSingleEntryContext, object, DigestFilesetSyncManifest.DigestSyncingDataSlice>();
 
 			parameters.id = singleBlockContext.details.digestId;
-			
+
 			parameters.generateMultiSliceDataRequestMessage = () => {
 				// its small enough, we will ask a single peer
-				var requestMessage = (BlockchainTargettedMessageSet<REQUEST_DIGEST>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestDigest(this.trigger.BaseHeader);
+				BlockchainTargettedMessageSet<REQUEST_DIGEST> requestMessage = (BlockchainTargettedMessageSet<REQUEST_DIGEST>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestDigest(this.trigger.BaseHeader);
 
 				requestMessage.Message.Id = parameters.singleEntryContext.details.digestId;
 
@@ -410,14 +410,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			parameters.validSlicesFunc = (peerReply, nextPeerDetails, dispatchingSlices, peersWithNoNextEntry, peerConnection) => {
 
 				// in this case, peer is valid if it has a more advanced blockchain than us and can share it back.
-				if(peerReply.Message.Slices.FileInfo.Data == null || peerReply.Message.Slices.FileInfo.Data.IsEmpty) {
+				if((peerReply.Message.Slices.FileInfo.Data == null) || peerReply.Message.Slices.FileInfo.Data.IsEmpty) {
 					return ResponseValidationResults.Invalid; // no block data is a major issue
 				}
 
 				// ReSharper disable once AccessToModifiedClosure
-				var slice = dispatchingSlices.Single(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid);
+				PeerRequestInfo<int, REQUEST_DIGEST, SEND_DIGEST> slice = dispatchingSlices.Single(s => s.connection.PeerConnection.ClientUuid == peerConnection.PeerConnection.ClientUuid);
 
-				foreach(var sliceInfo in peerReply.Message.Slices.SlicesInfo) {
+				foreach(KeyValuePair<int, DataSlice> sliceInfo in peerReply.Message.Slices.SlicesInfo) {
 					if(sliceInfo.Value.Data.Length != sliceInfo.Value.Length) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
@@ -452,7 +452,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			parameters.clearManifest = () => {
 
-				if(parameters.singleEntryContext.syncManifest.IsComplete && parameters.singleEntryContext.syncManifestFiles != null && parameters.singleEntryContext.syncManifestFiles.IsComplete) {
+				if(parameters.singleEntryContext.syncManifest.IsComplete && (parameters.singleEntryContext.syncManifestFiles != null) && parameters.singleEntryContext.syncManifestFiles.IsComplete) {
 					this.ClearDigestSyncManifest();
 					this.ClearDigestFileSyncManifest();
 				}
@@ -472,14 +472,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				if(valid) {
 					try {
 						dehydratedDigest.RehydrateDigest(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
-					}
-					catch(UnrecognizedElementException urex) {
-						
+					} catch(UnrecognizedElementException urex) {
 
 						throw;
-					}
-					catch(Exception ex) {
-						Log.Error(ex, $"Failed to rehydrate digest {parameters.singleEntryContext.details.digestId} while syncing.");
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, $"Failed to rehydrate digest {parameters.singleEntryContext.details.digestId} while syncing.");
 
 						valid = false;
 					}
@@ -488,7 +485,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				this.CheckShouldStopThrow();
 
 				if(valid) {
-					
+
 					valid = (await this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateDigest(dehydratedDigest.RehydratedDigest, false).ConfigureAwait(false)).Valid;
 
 					this.CheckShouldStopThrow();
@@ -499,11 +496,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					try {
 						this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveDigestHeader(parameters.singleEntryContext.details.digestId, digestHeaderFile);
-					}
-					catch(Exception ex){
-						Log.Error(ex, "Failed to insert digest into the local blockchain. we may try again...");
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, "Failed to insert digest into the local blockchain. we may try again...");
 						valid = false;
-						
+
 						// thats bad, we failed to add our transaction
 						if(parameters.singleEntryContext.blockFetchAttemptCounter == 3) {
 
@@ -526,12 +522,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		protected Task FetchPeerDigestFileData(DigestFilesSingleEntryContext singleBlockContext) {
 
-			var parameters = new FetchDataParameter<DigestFilesInfoSet<DataSliceInfo>, DataSliceInfo, DigestFilesInfoSet<DataSlice>, DataSlice, int, ChannelFileSetKey, PeerDigestFileSpecs, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, ChannelsFilesetSyncManifest, DigestFilesSingleEntryContext, object, ChannelsFilesetSyncManifest.ChannelsSyncingDataSlice>();
+			FetchDataParameter<DigestFilesInfoSet<DataSliceInfo>, DataSliceInfo, DigestFilesInfoSet<DataSlice>, DataSlice, int, ChannelFileSetKey, PeerDigestFileSpecs, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, ChannelsFilesetSyncManifest, DigestFilesSingleEntryContext, object, ChannelsFilesetSyncManifest.ChannelsSyncingDataSlice> parameters = new FetchDataParameter<DigestFilesInfoSet<DataSliceInfo>, DataSliceInfo, DigestFilesInfoSet<DataSlice>, DataSlice, int, ChannelFileSetKey, PeerDigestFileSpecs, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, ChannelsFilesetSyncManifest, DigestFilesSingleEntryContext, object, ChannelsFilesetSyncManifest.ChannelsSyncingDataSlice>();
 			parameters.id = singleBlockContext.details.digestId;
-			
+
 			parameters.generateMultiSliceDataRequestMessage = () => {
 				// its small enough, we will ask a single peer
-				var requestMessage = (BlockchainTargettedMessageSet<REQUEST_DIGEST_FILE>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestDigestFile(this.trigger.BaseHeader);
+				BlockchainTargettedMessageSet<REQUEST_DIGEST_FILE> requestMessage = (BlockchainTargettedMessageSet<REQUEST_DIGEST_FILE>) this.chainSyncMessageFactory.CreateSyncWorkflowRequestDigestFile(this.trigger.BaseHeader);
 
 				requestMessage.Message.Id = 1;
 
@@ -547,9 +543,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			parameters.validSlicesFunc = (peerReply, nextPeerDetails, dispatchingSlices, peersWithNoNextEntry, peerConnection) => {
 
 				// ReSharper disable once AccessToModifiedClosure
-				var slice = dispatchingSlices.SingleOrDefault(s => s.requestMessage.Message.SlicesInfo.FileId == peerReply.Message.Slices.FileId);
-				
-				foreach(var sliceInfo in peerReply.Message.Slices.SlicesInfo) {
+				PeerRequestInfo<int, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE> slice = dispatchingSlices.SingleOrDefault(s => s.requestMessage.Message.SlicesInfo.FileId == peerReply.Message.Slices.FileId);
+
+				foreach(KeyValuePair<ChannelFileSetKey, DataSlice> sliceInfo in peerReply.Message.Slices.SlicesInfo) {
 					if(sliceInfo.Value.Data.Length != sliceInfo.Value.Length) {
 						return ResponseValidationResults.Invalid; // bad block data is a major issue, they lie to us
 					}
@@ -585,13 +581,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			parameters.clearManifest = this.ClearDigestFileSyncManifest;
 
 			parameters.downloadCompleted = async data => {
-				
+
 				// recreate the digest files from the parts
 				this.RecreateDigestFiles(parameters.singleEntryContext.syncManifest);
-				
+
 				// thats it, we have it all, now we fully validate the digest and install it!
 				await this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InstallDigest(parameters.singleEntryContext.details.digestId, null).ConfigureAwait(false);
-				
+
 				return true;
 			};
 
@@ -602,22 +598,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			return this.FetchPeerData(parameters);
 		}
-		
+
 		protected void RecreateDigestFiles(ChannelsFilesetSyncManifest syncManifest) {
 
 			int digestId = syncManifest.Key;
-			
-			IBlockchainDigest digest = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestHeader(digestId);
-			
-			BlockchainDigestSimpleChannelSetDescriptor descriptor = DigestChannelSetFactory.ConvertToDigestSimpleChannelSetDescriptor(digest.DigestDescriptor);
- 
-			DigestChannelSet digestChannelSet = this.centralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RecreateDigestChannelSet(syncManifest.Key, descriptor);
-			
-			var dataChannels = new ChannelsEntries<SafeArrayHandle>();
 
-			foreach(var file in syncManifest.Files) {
-				var data = this.LoadDigestFileSyncManifestFile(syncManifest, file.Key);
-				
+			IBlockchainDigest digest = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestHeader(digestId);
+
+			BlockchainDigestSimpleChannelSetDescriptor descriptor = DigestChannelSetFactory.ConvertToDigestSimpleChannelSetDescriptor(digest.DigestDescriptor);
+
+			DigestChannelSet digestChannelSet = this.centralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.RecreateDigestChannelSet(syncManifest.Key, descriptor);
+
+			ChannelsEntries<SafeArrayHandle> dataChannels = new ChannelsEntries<SafeArrayHandle>();
+
+			foreach(KeyValuePair<ChannelFileSetKey, DataSlice> file in syncManifest.Files) {
+				SafeArrayHandle data = this.LoadDigestFileSyncManifestFile(syncManifest, file.Key);
+
 				// now write the concents to the digest file 
 				this.centralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.WriteDigestFile(digestChannelSet, file.Key.ChannelId, file.Key.IndexId, file.Key.FileId, file.Key.FilePart, data);
 			}

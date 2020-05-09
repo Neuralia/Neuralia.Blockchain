@@ -4,7 +4,6 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Nito.AsyncEx.Synchronous;
-using Zio;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Transactions {
 
@@ -16,10 +15,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 	}
 
 	public interface IWalletSerializationTransactionExtension : IWalletSerializationTransaction {
-		void CommitTransaction();
+		Task CommitTransaction();
 
 		Task RollbackTransaction();
 
+		bool IsInTransaction { get; }
+		
 		// called when the element is disposed.
 		event Func<long, Task> Disposed;
 	}
@@ -27,34 +28,64 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 	public class WalletSerializationTransaction : IWalletSerializationTransactionExtension {
 
 		private readonly WalletSerializationTransactionalLayer walletSerializationTransactionalLayer;
-		private          bool                                  completed;
+		private bool completed;
 
 		public WalletSerializationTransaction(WalletSerializationTransactionalLayer walletSerializationTransactionalLayer) {
 			this.walletSerializationTransactionalLayer = walletSerializationTransactionalLayer;
-			this.SessionId                             = GlobalRandom.GetNextLong();
+			this.SessionId = GlobalRandom.GetNextLong();
 		}
 
 		public FileSystemWrapper FileSystem => this.walletSerializationTransactionalLayer.FileSystem;
-		public long              SessionId  { get; private set; }
+		public long SessionId { get; private set; }
 
-		public void CommitTransaction() {
+		public async Task CommitTransaction() {
 			if(!this.completed) {
-				this.completed = true;
-				this.walletSerializationTransactionalLayer?.CommitTransaction();
-				this.SessionId = 0;
+				this.completed = true; // set here to prevent recursive loops
+
+				try {
+					if(walletSerializationTransactionalLayer != null) {
+
+						await (walletSerializationTransactionalLayer.CommitTransaction()).ConfigureAwait(false);
+					}
+
+					this.SessionId = 0;
+				} catch {
+					this.completed = false;
+
+					throw;
+				}
 			}
 		}
 
 		public async Task RollbackTransaction() {
+			try {
+				await this.RollbackTransactionInternal().ConfigureAwait(false);
+			} finally {
+				this.Dispose();
+			}
+		}
+
+		public bool IsInTransaction => this.walletSerializationTransactionalLayer?.IsInTransaction ?? false;
+
+		private async Task RollbackTransactionInternal() {
 			if(!this.completed) {
-				this.completed = true;
-				this.walletSerializationTransactionalLayer?.RollbackTransaction();
+				try {
+					this.completed = true;
 
-				if(this.Disposed != null) {
-					await this.Disposed(this.SessionId).ConfigureAwait(false);
+					if(this.walletSerializationTransactionalLayer != null) {
+						await walletSerializationTransactionalLayer.RollbackTransaction().ConfigureAwait(false);
+					}
+
+					if(this.Disposed != null) {
+						await this.Disposed(this.SessionId).ConfigureAwait(false);
+					}
+
+					this.SessionId = 0;
+				}catch {
+					this.completed = false;
+
+					throw;
 				}
-
-				this.SessionId = 0;
 			}
 		}
 
@@ -82,7 +113,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		private void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				this.RollbackTransaction().WaitAndUnwrapException();
+				this.RollbackTransactionInternal().WaitAndUnwrapException();
 			}
 
 			this.IsDisposed = true;

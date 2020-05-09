@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	public class XmssCryptographicKey : CryptographicKey, IXmssCryptographicKey {
 
 		public XmssCryptographicKey() {
-			this.BitSize =  Enums.KeyHashBits.SHA3_256;
+			this.BitSize = Enums.KeyHashBits.SHA3_256;
 			this.TreeHeight = XMSSProvider.DEFAULT_XMSS_TREE_HEIGHT;
 		}
 
@@ -24,14 +24,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
-			dehydrator.Write((byte)this.BitSize);
+			dehydrator.Write((byte) this.BitSize);
 			dehydrator.Write(this.TreeHeight);
 		}
 
 		public override void Rehydrate(byte id, IDataRehydrator rehydrator) {
 			base.Rehydrate(id, rehydrator);
 
-			this.BitSize = (Enums.KeyHashBits)rehydrator.ReadByte();
+			this.BitSize = (Enums.KeyHashBits) rehydrator.ReadByte();
 			this.TreeHeight = rehydrator.ReadByte();
 		}
 
@@ -53,17 +53,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("TreeHeight", this.TreeHeight);
 		}
 
-		protected override void SetType() {
-			this.Type = Enums.KeyTypes.XMSS;
-		}
-		
-		public override  void SetFromWalletKey(IWalletKey walletKey) {
+		public override void SetFromWalletKey(IWalletKey walletKey) {
 			base.SetFromWalletKey(walletKey);
 
 			if(walletKey is IXmssWalletKey xmssWalletKey) {
 				this.BitSize = xmssWalletKey.HashBits;
-				this.TreeHeight = (byte)xmssWalletKey.TreeHeight;
+				this.TreeHeight = (byte) xmssWalletKey.TreeHeight;
 			}
+		}
+
+		protected override void SetType() {
+			this.Type = Enums.KeyTypes.XMSS;
 		}
 	}
 }

@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Exceptions;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
@@ -26,18 +27,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	}
 
 	public interface IWalletFileInfo {
-		string                  Filename              { get; }
-		SafeArrayHandle         Filebytes             { get; }
+		string Filename { get; }
+		SafeArrayHandle Filebytes { get; }
 		WalletPassphraseDetails WalletSecurityDetails { get; }
-		int?                    FileCacheTimeout      { get; }
-		void                    SetFileCacheTimeout(int? value, LockContext lockContext);
-		bool                    IsLoaded   { get; }
-		bool                    FileExists { get; }
-		void                    RefreshFile();
-		Task                    CreateEmptyFile(LockContext lockContext, object data = null);
-		Task                    Load(LockContext lockContext, object data = null);
-		Task                    Reset(LockContext lockContext);
-		Task                    ReloadFileBytes(LockContext lockContext, object data = null);
+		int? FileCacheTimeout { get; }
+		bool IsLoaded { get; }
+		bool FileExists { get; }
+		void SetFileCacheTimeout(int? value, LockContext lockContext);
+		void RefreshFile();
+		Task CreateEmptyFile(LockContext lockContext, object data = null);
+		Task Load(LockContext lockContext, object data = null);
+		Task Reset(LockContext lockContext);
+		Task ReloadFileBytes(LockContext lockContext, object data = null);
+		void ClearCached(LockContext lockContext);
 
 		/// <summary>
 		///     cause a changing of the encryption
@@ -57,44 +59,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			where T : new();
 
 		public Task<bool> CollectionExists<T>(LockContext lockContext);
-
 	}
 
 	public abstract class WalletFileInfo : IWalletFileInfo {
 		private static readonly xxHasher32 hasher = new xxHasher32();
+		protected readonly ChainConfigurations chainConfiguration;
 
-		protected readonly RecursiveAsyncLock      locker = new RecursiveAsyncLock();
+		protected readonly RecursiveAsyncLock locker = new RecursiveAsyncLock();
 		protected readonly IWalletSerialisationFal serialisationFal;
 
 		protected readonly BlockchainServiceSet serviceSet;
-		private            Timer                fileBytesTimer;
+		private Timer fileBytesTimer;
 
-		private            int?                fileCacheTimeout;
-		private            int                 lastFileHash;
-		protected readonly ChainConfigurations chainConfiguration;
+		private int lastFileHash;
 
 		public WalletFileInfo(string filename, ChainConfigurations chainConfiguration, BlockchainServiceSet serviceSet, IWalletSerialisationFal serialisationFal, WalletPassphraseDetails walletSecurityDetails, int? fileCacheTimeout = null) {
-			this.serialisationFal      = serialisationFal;
-			this.Filename              = filename;
+			this.serialisationFal = serialisationFal;
+			this.Filename = filename;
 			this.WalletSecurityDetails = walletSecurityDetails;
 			this.SetFileCacheTimeout(fileCacheTimeout, null);
-			this.serviceSet         = serviceSet;
+			this.serviceSet = serviceSet;
 			this.chainConfiguration = chainConfiguration;
 		}
 
 		protected EncryptionInfo EncryptionInfo { get; set; }
 
-		public string                  Filename              { get; protected set; }
-		public SafeArrayHandle         Filebytes             { get; } = SafeArrayHandle.Create();
+		public string Filename { get; protected set; }
+		public SafeArrayHandle Filebytes { get; } = SafeArrayHandle.Create();
 		public WalletPassphraseDetails WalletSecurityDetails { get; }
 
-		public int? FileCacheTimeout {
-			get => this.fileCacheTimeout;
-		}
+		public int? FileCacheTimeout { get; private set; }
 
 		public void SetFileCacheTimeout(int? value, LockContext lockContext) {
 
-			this.fileCacheTimeout = value;
+			this.FileCacheTimeout = value;
 			this.ResetFileBytesTimer(lockContext);
 
 		}
@@ -120,21 +118,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				throw new ApplicationException("A file already exists. we can not overwrite an existing file. delete it and try again");
 			}
 
-			await CreateEmptyDb(lockContext).ConfigureAwait(false);
+			await this.CreateEmptyDb(lockContext).ConfigureAwait(false);
 
 			// force a creation
 			await this.CreateSecurityDetails(lockContext).ConfigureAwait(false);
 
 			await this.SaveFile(lockContext, true, data).ConfigureAwait(false);
-		}
-
-		public void DeleteFile() {
-
-			if(!this.FileExists) {
-				return;
-			}
-
-			this.serialisationFal.TransactionalFileSystem.FileDelete(this.Filename);
 		}
 
 		public virtual Task Reset(LockContext lockContext) {
@@ -148,13 +137,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// <summary>
 		///     if data was previously loaded, we for ce a refresh
 		/// </summary>
-		public virtual Task ReloadFileBytes(LockContext lockContext, object data = null) {
+		public virtual async Task ReloadFileBytes(LockContext lockContext, object data = null) {
 
 			if(this.IsLoaded) {
-				return this.LoadFileBytes(lockContext, data);
+				this.ClearCached(lockContext);
+				await this.LoadFileBytes(lockContext, data).ConfigureAwait(false);
 			}
+		}
 
-			return Task.CompletedTask;
+		public virtual void ClearCached(LockContext lockContext) {
 		}
 
 		public virtual async Task Load(LockContext lockContext, object data = null) {
@@ -172,11 +163,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		///     cause a changing of the encryption
 		/// </summary>
 		public virtual async Task ChangeEncryption(LockContext lockContext, object data = null) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				this.ClearEncryptionInfo();
 
 				// get the new settingsBase
-				await CreateSecurityDetails(handle).ConfigureAwait(false);
+				await this.CreateSecurityDetails(handle).ConfigureAwait(false);
 
 				string originalName = this.Filename;
 				string tempFileName = this.Filename + ".tmp";
@@ -197,12 +188,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		public virtual async Task Save(LockContext lockContext, object data = null) {
 
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 
 				await this.LazyLoad(handle, data).ConfigureAwait(false);
-
-				await this.UpdateDbEntry(handle).ConfigureAwait(false);
-
+				
 				await this.SaveFile(handle, false, data).ConfigureAwait(false);
 			}
 		}
@@ -218,9 +207,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 			return this.RunQueryDbOperation((litedbDal, lc) => {
 
-				return litedbDal.OpenAsync<T[]>(async db => litedbDal.CollectionExists<K>(db) ? operation(litedbDal.All<K>(db)).ToArray() : new T[0]);
+				return litedbDal.OpenAsync(async db => litedbDal.CollectionExists<K>(db) ? operation(litedbDal.All<K>(db)).ToArray() : new T[0]);
 
 			}, lockContext, data);
+		}
+
+		public void DeleteFile() {
+
+			if(!this.FileExists) {
+				return;
+			}
+
+			this.serialisationFal.TransactionalFileSystem.FileDelete(this.Filename);
 		}
 
 		private Task CreateEmptyDb(LockContext lockContext, object data = null) {
@@ -229,11 +227,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		protected virtual Task LoadFileBytes(LockContext lockContext, object data = null) {
 			return this.RunCryptoOperation(async () => {
-				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 					this.ClearFileBytes();
 
 					try {
-						this.Filebytes.Entry = (await serialisationFal.LoadFile(Filename, EncryptionInfo, false).ConfigureAwait(false)).Entry;
+						this.Filebytes.Entry = (await this.serialisationFal.LoadFile(this.Filename, this.EncryptionInfo, false).ConfigureAwait(false)).Entry;
 					} catch(FileNotFoundException fnex) {
 						//TODO: anything? it could be normal
 					}
@@ -246,8 +244,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		private void ClearFileBytes() {
 			if(this.Filebytes.HasData) {
-				this.Filebytes.Entry.Disposed = (entry) => entry.Clear();
-				this.Filebytes.Entry          = null;
+				this.Filebytes.Entry.Disposed = entry => entry.Clear();
+				this.Filebytes.Entry = null;
 			}
 		}
 
@@ -265,7 +263,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				this.fileBytesTimer = new Timer(state => {
 
 					try {
-						using(var handle = this.locker.Lock(lockContext)) {
+						using(LockHandle handle = this.locker.Lock(lockContext)) {
 							// clear it all from memory
 							this.ClearFileBytes();
 
@@ -273,7 +271,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						}
 					} catch(Exception ex) {
 						//TODO: do something?
-						Log.Error(ex, "Timer exception");
+						NLog.Default.Error(ex, "Timer exception");
 					}
 
 				}, this, TimeSpan.FromSeconds(this.FileCacheTimeout.Value), new TimeSpan(-1));
@@ -286,7 +284,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		protected abstract Task CreateSecurityDetails(LockContext lockContext);
 
-		protected abstract Task UpdateDbEntry(LockContext lockContext);
 
 		protected virtual async Task RunCryptoOperation(Func<Task> action, object data = null) {
 			try {
@@ -305,11 +302,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		protected async Task SaveFile(LockContext lockContext, bool force = false, object data = null) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				if(this.Filebytes != null && this.Filebytes.HasData) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				if((this.Filebytes != null) && this.Filebytes.HasData) {
 					int hash = hasher.Hash(this.Filebytes);
 
-					if(hash != this.lastFileHash || force) {
+					if((hash != this.lastFileHash) || force) {
 						// file has changed, lets save it
 						await this.SaveFileBytes(handle).ConfigureAwait(false);
 						this.lastFileHash = hash;
@@ -320,7 +317,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		protected virtual Task SaveFileBytes(LockContext lockContext, object data = null) {
 			return this.RunCryptoOperation(async () => {
-				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 					await this.serialisationFal.SaveFile(this.Filename, this.Filebytes, this.EncryptionInfo, false).ConfigureAwait(false);
 				}
 			}, data);
@@ -328,8 +325,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		private Task RunNoLoadDbOperation(Func<LiteDBDAL, LockContext, Task> operation, LockContext lockContext, object data = null) {
 			return this.RunCryptoOperation(async () => {
-				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-					using SafeArrayHandle newBytes = await serialisationFal.RunDbOperation(operation, Filebytes, handle).ConfigureAwait(false);
+				using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					using SafeArrayHandle newBytes = await this.serialisationFal.RunDbOperation(operation, this.Filebytes, handle).ConfigureAwait(false);
 
 					// clear previous memory since we replaced it
 					this.ClearFileBytes();
@@ -340,8 +337,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		private Task<T> RunNoLoadDbOperation<T>(Func<LiteDBDAL, LockContext, Task<T>> operation, LockContext lockContext, object data = null) {
 			return this.RunCryptoOperation(async () => {
-				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-					(SafeArrayHandle newBytes, T result) = await serialisationFal.RunDbOperation(operation, Filebytes, handle).ConfigureAwait(false);
+				using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					(SafeArrayHandle newBytes, T result) = await this.serialisationFal.RunDbOperation(operation, this.Filebytes, handle).ConfigureAwait(false);
 
 					using(newBytes) {
 						// clear previous memory since we replaced it
@@ -355,33 +352,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		protected async Task RunDbOperation(Func<LiteDBDAL, LockContext, Task> operation, LockContext lockContext, object data = null) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-				await LazyLoad(handle, data).ConfigureAwait(false);
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				await this.LazyLoad(handle, data).ConfigureAwait(false);
 
-				await RunNoLoadDbOperation(operation, handle, data).ConfigureAwait(false);
+				await this.RunNoLoadDbOperation(operation, handle, data).ConfigureAwait(false);
 			}
 		}
 
 		protected async Task<T> RunDbOperation<T>(Func<LiteDBDAL, LockContext, Task<T>> operation, LockContext lockContext, object data = null) {
-			using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 
-				await LazyLoad(handle, data).ConfigureAwait(false);
+				await this.LazyLoad(handle, data).ConfigureAwait(false);
 
-				return await RunNoLoadDbOperation(operation, handle, data).ConfigureAwait(false);
+				return await this.RunNoLoadDbOperation(operation, handle, data).ConfigureAwait(false);
 			}
 		}
 
 		protected Task<T> RunQueryDbOperation<T>(Func<LiteDBDAL, LockContext, Task<T>> operation, LockContext lockContext, object data = null) {
 			return this.RunCryptoOperation(async () => {
-				using(var handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
-					await LazyLoad(handle).ConfigureAwait(false);
+				using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+					await this.LazyLoad(handle).ConfigureAwait(false);
 
-					return await serialisationFal.RunQueryDbOperation(operation, Filebytes, handle).ConfigureAwait(false);
+					return await this.serialisationFal.RunQueryDbOperation(operation, this.Filebytes, handle).ConfigureAwait(false);
 				}
 			}, data);
 		}
 
-		private Task LazyLoad(LockContext lockContext, object data = null) {
+		protected Task LazyLoad(LockContext lockContext, object data = null) {
 			if(!this.IsLoaded) {
 				return this.Load(lockContext, data);
 			}

@@ -49,6 +49,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 			if(disposing && !this.IsDisposed) {
 				this.bytes?.Dispose();
 			}
+
 			this.IsDisposed = true;
 		}
 

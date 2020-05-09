@@ -14,8 +14,18 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 		public delegate void CompressedMessageBytesReceived(SafeArrayHandle compressedMessageBytes, ISplitMessageEntry splitMessageEntry = null);
 
+		public enum CompressionFlags : byte {
+			NotCompressed = 0,
+			Compressed = 1
+		}
+
 		private const int REPORTED_UUID_SIZE = 16;
 		public const int HANDSHAKE_PROTOCOL_SIZE = 5 + REPORTED_UUID_SIZE;
+
+		/// <summary>
+		///     size below which we just dont compress
+		/// </summary>
+		public const int MAXIMUM_NO_COMPRESSION_SIZE = 15000;
 
 		public static readonly byte[] HANDSHAKE_COUNTERCONNECT_BYTES = BitConverter.GetBytes(0xA21DB945DC90A422L);
 
@@ -24,11 +34,6 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		/// </summary>
 		public static readonly Guid PROTOCOL_UUID = Guid.NewGuid();
 
-		/// <summary>
-		/// size below which we just dont compress
-		/// </summary>
-		public const int MAXIMUM_NO_COMPRESSION_SIZE = 15000;
-		
 		private readonly object locker = new object();
 
 		private readonly xxHasher64 xxhasher = new xxHasher64();
@@ -39,11 +44,6 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 		private ProtocolVersion? sharedProtocolVersion;
 
 		private ICompression NetworkMessageCompressor { get; set; } = BrotliCompression.Instance;
-
-		public enum CompressionFlags : byte {
-			NotCompressed=0,
-			Compressed=1
-		}
 
 		private IMessageFactory MessageFactory {
 			get {
@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 						}
 
 						Array values = Enum.GetValues(typeof(ProtocolCompression.CompressionAlgorithm));
-						var levels = new byte[values.Length];
+						byte[] levels = new byte[values.Length];
 						int index = 0;
 
 						foreach(byte entry in values) {
@@ -148,7 +148,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 						this.NetworkMessageCompressor = new BrotliCompression();
 
 						break;
-					
+
 					default:
 
 						throw new ApplicationException("Invalid compression algorithm supplied");
@@ -166,7 +166,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 				throw new ApplicationException("Initial trigger code is invalid");
 			}
 
-			var subBuffer = buffer.Slice(5, REPORTED_UUID_SIZE);
+			Span<byte> subBuffer = buffer.Slice(5, REPORTED_UUID_SIZE);
 			TypeSerializer.Deserialize(in subBuffer, out Guid reportedUuid);
 
 			return (new ProtocolVersion(buffer[1], buffer[2]), new ProtocolCompression((ProtocolCompression.CompressionAlgorithm) buffer[3], (CompressionLevelByte) buffer[4]), reportedUuid);
@@ -213,19 +213,21 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			lock(this.locker) {
 
 				if(bytes.Length <= MAXIMUM_NO_COMPRESSION_SIZE) {
-					
+
 					//TODO: how could we avoid a copy here just to increase by 1 byte?
-					var other = ByteArray.Create(bytes.Length + 1);
+					ByteArray other = ByteArray.Create(bytes.Length + 1);
+
 					// move it all by 1 byte for the flag
 					bytes.Entry.CopyTo(other, 0, 1, bytes.Length);
-					other[0] = (byte)CompressionFlags.NotCompressed;
-					
+					other[0] = (byte) CompressionFlags.NotCompressed;
+
 					return other;
 				}
+
 				return this.NetworkMessageCompressor.Compress(bytes, this.sharedProtocolCompression.Level, stream => {
 
 					// to indicate that this is compressed
-					stream.WriteByte((byte)CompressionFlags.Compressed);
+					stream.WriteByte((byte) CompressionFlags.Compressed);
 				});
 			}
 		}
@@ -238,18 +240,18 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 
 			lock(this.locker) {
 
-				if(compressedMessage[0] == (byte)CompressionFlags.NotCompressed) {
+				if(compressedMessage[0] == (byte) CompressionFlags.NotCompressed) {
 					// skip the first byte. we can just reduce the effective size by moving the offset
 					compressedMessage.Entry.IncreaseOffset(1);
-					
-					return compressedMessage.Branch();
-				} else {
-					return this.NetworkMessageCompressor.Decompress(compressedMessage , stream => {
 
-						// to indicate that this is compressed
-						stream.Position += 1;
-					});
+					return compressedMessage.Branch();
 				}
+
+				return this.NetworkMessageCompressor.Decompress(compressedMessage, stream => {
+
+					// to indicate that this is compressed
+					stream.Position += 1;
+				});
 			}
 		}
 

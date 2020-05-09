@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 	public static class AccreditationCertificateUtils {
@@ -34,26 +36,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		public static void CheckValidity(IAccreditationCertificateSnapshot certificate, Action valid, Action Invalid) {
 			if(certificate != null) {
 				if(certificate.CertificateState == Enums.CertificateStates.Revoked) {
-if(					Invalid != null){					Invalid();}
+					if(Invalid != null) {
+						Invalid();
+					}
 
 					return;
 				}
 
-				if(certificate.EmissionDate > DateTime.UtcNow) {
-if(					Invalid != null){					Invalid();}
+				if(certificate.EmissionDate > DateTimeEx.CurrentTime) {
+					if(Invalid != null) {
+						Invalid();
+					}
 
 					return;
 				}
 
-				if(certificate.ValidUntil < DateTime.UtcNow) {
-if(					Invalid != null){					Invalid();}
+				if(certificate.ValidUntil < DateTimeEx.CurrentTime) {
+					if(Invalid != null) {
+						Invalid();
+					}
 
 					return;
 				}
 
-if(				valid != null){				valid();}
+				if(valid != null) {
+					valid();
+				}
 			} else {
-if(				Invalid != null){				Invalid();}
+				if(Invalid != null) {
+					Invalid();
+				}
 			}
 		}
 	}
