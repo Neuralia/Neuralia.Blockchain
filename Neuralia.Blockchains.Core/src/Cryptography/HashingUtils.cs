@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 		public static SafeArrayHandle Hash2(IHashNodeList sliceHashNodeList) {
 			using(Sha2SakuraTree Hasher2 = new Sha2SakuraTree(512)) {
-				return Hasher2.Hash(sliceHashNodeList);
+				return (SafeArrayHandle)Hasher2.Hash(sliceHashNodeList);
 			}
 		}
 
@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		}
 
 		public static SafeArrayHandle Hash3(IHashNodeList sliceHashNodeList, Sha3SakuraTree hasher) {
-			return hasher.Hash(sliceHashNodeList);
+			return (SafeArrayHandle)hasher.Hash(sliceHashNodeList);
 		}
 
 		public static long HashxxTree(IHashNodeList sliceHashNodeList) {
@@ -66,7 +66,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			using(xxHasher64 XxHasher64 = new xxHasher64()) {
 
 				long hash = 0;
-				using ByteArray buffer = ByteArray.Create(4096);
+				using SafeArrayHandle buffer = SafeArrayHandle.Create(4096);
 
 				await using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 					await using(BufferedStream bs = new BufferedStream(fs)) {
@@ -96,31 +96,31 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 		public static bool ValidateGossipMessageSetHash(IGossipMessageSet gossipMessageSet) {
 
-			using(HashNodeList structure = gossipMessageSet.GetStructuresArray()) {
-				long ownHash = HashxxTree(structure);
-
-				return ownHash == gossipMessageSet.BaseHeader.Hash;
-			}
+			return HashGossipMessageSet(gossipMessageSet) == gossipMessageSet.BaseHeader.Hash;
 		}
 
-		public static void HashGossipMessageSet(IGossipMessageSet gossipMessageSet) {
+		public static long HashGossipMessageSet(IGossipMessageSet gossipMessageSet) {
 
 			if(!gossipMessageSet.MessageCreated) {
 				throw new ApplicationException("Message must have been created and be valid");
 			}
-
+			
 			using(HashNodeList structure = gossipMessageSet.GetStructuresArray()) {
-
-				((IGossipMessageRWSet) gossipMessageSet).RWBaseHeader.Hash = HashxxTree(structure);
+				return HashxxTree(structure);
 			}
 		}
+		
+		public static void SetHashGossipMessageSet(IGossipMessageSet gossipMessageSet) {
 
-		public static (SafeArrayHandle sha2, SafeArrayHandle sha3) HashSecretKey(byte[] publicKey) {
+			((IGossipMessageRWSet) gossipMessageSet).RWBaseHeader.Hash = HashGossipMessageSet(gossipMessageSet);
+		}
+
+		public static (SafeArrayHandle sha2, SafeArrayHandle sha3) HashSecretKey(SafeArrayHandle publicKey) {
 
 			SafeArrayHandle sha2 = null;
 			SafeArrayHandle sha3 = null;
 
-			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(ByteArray.Wrap(publicKey));
+			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(publicKey);
 
 			// sha2
 			sha2 = Hash2(sliceHashNodeList);
@@ -132,10 +132,10 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 		}
 
-		public static (SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) HashSecretComboKey(byte[] publicKey, long promisedNonce1, long promisedNonce2) {
+		public static (SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) HashSecretComboKey(SafeArrayHandle publicKey, long promisedNonce1, long promisedNonce2) {
 
 			// sha2
-			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(ByteArray.Wrap(publicKey));
+			BinarySliceHashNodeList sliceHashNodeList = new BinarySliceHashNodeList(publicKey);
 
 			SafeArrayHandle sha2 = null;
 
@@ -200,7 +200,8 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 			(SafeArrayHandle sha2, SafeArrayHandle sha3) results = GenerateDualHash(hashable);
 
-			SafeArrayHandle result = DataSerializationFactory.CreateDehydrator().WriteNonNullable(results.sha2).WriteNonNullable(results.sha3).ToArray();
+			using var dehydrator = DataSerializationFactory.CreateDehydrator();
+			SafeArrayHandle result = dehydrator.WriteNonNullable(results.sha2).WriteNonNullable(results.sha3).ToArray();
 
 			results.sha2.Return();
 			results.sha3.Return();
@@ -211,15 +212,15 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		public static (SafeArrayHandle sha2, SafeArrayHandle sha3) ExtractCombinedDualHash(SafeArrayHandle combinedHash) {
 			using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(combinedHash)) {
 
-				SafeArrayHandle sha2 = rehydrator.ReadNonNullableArray();
-				SafeArrayHandle sha3 = rehydrator.ReadNonNullableArray();
+				SafeArrayHandle sha2 = (SafeArrayHandle)rehydrator.ReadNonNullableArray();
+				SafeArrayHandle sha3 = (SafeArrayHandle)rehydrator.ReadNonNullableArray();
 
 				return (sha2, sha3);
 			}
 		}
 
 		public static (SafeArrayHandle sha2, SafeArrayHandle sha3) GetCombinedHash(SafeArrayHandle hash, SafeArrayHandle sha2, SafeArrayHandle sha3) {
-			return (HashSha512(hasher => hasher.Hash(hash)), HashSha3_512(hasher => hasher.Hash(hash)));
+			return (HashSha512(hasher => (SafeArrayHandle)hasher.Hash(hash)), HashSha3_512(hasher => (SafeArrayHandle)hasher.Hash(hash)));
 		}
 
 		public static bool VerifyCombinedHash(SafeArrayHandle hash, SafeArrayHandle sha2, SafeArrayHandle sha3) {
@@ -255,7 +256,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			using(HashNodeList structure = hashable.GetStructuresArray()) {
 
 				using(Sha3SakuraTree Hasher3256 = new Sha3SakuraTree(256)) {
-					return Hasher3256.Hash(structure);
+					return (SafeArrayHandle)Hasher3256.Hash(structure);
 				}
 			}
 		}
@@ -270,7 +271,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 		public static ImmutableList<SafeArrayHandle> GenerateMd5Hash(List<SafeArrayHandle> data) {
 
 			using(MD5 md5Hash = MD5.Create()) {
-				return data.Select(h => (SafeArrayHandle) ByteArray.WrapAndOwn(md5Hash.ComputeHash(h.ToExactByteArray()))).ToImmutableList();
+				return data.Select(h => (SafeArrayHandle) SafeArrayHandle.WrapAndOwn(md5Hash.ComputeHash(h.ToExactByteArray()))).ToImmutableList();
 			}
 		}
 
@@ -281,14 +282,28 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 			}
 		}
 
+		public static SafeArrayHandle GenerateMd5Hash(ByteArray data) {
+
+			using(MD5 md5Hash = MD5.Create()) {
+				return SafeArrayHandle.WrapAndOwn(md5Hash.ComputeHash(data.ToExactByteArray()));
+			}
+		}
+		
 		public static SafeArrayHandle GenerateMd5Hash(SafeArrayHandle data) {
 
 			using(MD5 md5Hash = MD5.Create()) {
-				return ByteArray.WrapAndOwn(md5Hash.ComputeHash(data.ToExactByteArray()));
+				return SafeArrayHandle.WrapAndOwn(md5Hash.ComputeHash(data.ToExactByteArray()));
 			}
 		}
 
 		public static Guid GenerateMd5GuidHash(SafeArrayHandle data) {
+
+			using(MD5 md5Hash = MD5.Create()) {
+				return new Guid(md5Hash.ComputeHash(data.ToExactByteArray()));
+			}
+		}
+		
+		public static Guid GenerateMd5GuidHash(ByteArray data) {
 
 			using(MD5 md5Hash = MD5.Create()) {
 				return new Guid(md5Hash.ComputeHash(data.ToExactByteArray()));
@@ -333,11 +348,19 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				return hash(sha512Hasher);
 			}
 		}
+		
+		public static SafeArrayHandle HashSha512(SafeArrayHandle data) {
+			return HashSha512(hasher => (SafeArrayHandle)hasher.Hash(data));
+		}
 
 		public static SafeArrayHandle HashSha256(Func<Sha256Hasher, SafeArrayHandle> hash) {
 			using(Sha256Hasher sha256Hasher = new Sha256Hasher()) {
 				return hash(sha256Hasher);
 			}
+		}
+		
+		public static SafeArrayHandle HashSha3_512(SafeArrayHandle data) {
+			return HashSha3_512(hasher => (SafeArrayHandle)hasher.Hash(data));
 		}
 
 		public static SafeArrayHandle HashSha3_512(Func<Sha3_512Hasher, SafeArrayHandle> hash) {
@@ -345,11 +368,6 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 				return hash(sha3512Hasher);
 			}
 		}
-
-		public static SafeArrayHandle HashBlake2_512(Func<Blake2_512Hasher, SafeArrayHandle> hash) {
-			using(Blake2_512Hasher blake2512Hasher = new Blake2_512Hasher()) {
-				return hash(blake2512Hasher);
-			}
-		}
+		
 	}
 }

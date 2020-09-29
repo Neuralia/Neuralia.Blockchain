@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Services;
 
 namespace Neuralia.Blockchains.Core.Configuration {
@@ -18,8 +19,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		}
 
 		public enum SerializationTypes {
-			Master,
-			Feeder
+			Main,
+			Secondary
 		}
 
 		public enum BlockSavingModes : byte {
@@ -95,6 +96,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			CGroup
 		}
 
+		public Enums.ThreadMode XmssThreadMode { get; set; } = Enums.ThreadMode.Half;
+
 		/// <summary>
 		///     How we handle the transaction pool. Metadata is only the
 		///     transaction id connection. full, we also save the full envelope.
@@ -116,10 +119,20 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		}
 
 		/// <summary>
+		/// which protocol should we try to use
+		/// </summary>
+		public IPMode IPProtocol { get; set; } = IPMode.Both;
+
+		/// <summary>
 		///     What type of tcp socket to use
 		/// </summary>
 		public SocketTypes SocketType { get; set; } = SocketTypes.Duplex;
 
+		/// <summary>
+		/// should we use uPnP to try and open the port on the networks stack?
+		/// </summary>
+		public bool EnableUPnP  { get; set; } = true;
+		
 		/// <summary>
 		///     If true, we will use faster but larger memory buffers from the array pool. if false, we will use the regular exact
 		///     sized buffer. slower but less ram
@@ -141,7 +154,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public int LogLevel { get; set; }
 
 		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
+		public int ValidatorPort { get; set; } = GlobalsService.DEFAULT_VALIDATOR_PORT;
 		public int RpcPort { get; set; } = GlobalsService.DEFAULT_RPC_PORT;
+		
+		public bool UseUPnP { get; set; } = true;
+		public bool UsePmP { get; set; } = false;
 
 		public List<FullNode> Nodes { get; set; } = new List<FullNode>();
 
@@ -151,13 +168,13 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		/// the loggers we wish to enable. empty means all.
 		/// </summary>
-		public List<NLog.LoggerTypes> EnabledLoggers { get; set; } = new List<NLog.LoggerTypes>(); 
+		public List<NLog.LoggerTypes> EnabledLoggers { get; set; } = new List<NLog.LoggerTypes>{NLog.LoggerTypes.Standard}; 
 		
 		/// <summary>
-		///     how does it serialize?  if master, it will have its full blockchain files, and database. if feeder, it simply
+		///     how does it serialize?  if main, it will have its full blockchain files, and database. if feeder, it simply
 		///     observes the files and databases that are updated by a master
 		/// </summary>
-		public SerializationTypes SerializationType { get; set; } = SerializationTypes.Master;
+		public SerializationTypes SerializationType { get; set; } = SerializationTypes.Main;
 
 		/// <summary>
 		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so
@@ -166,13 +183,16 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public ContactMethods HubContactMethod { get; set; } = ContactMethods.WebOrGossip;
 
 #if TESTNET
-		public string HubsGossipAddress { get; set; } = "test-hubs.neuralium.com";
-		public string HubsWebAddress { get; set; } = "http://test-web-hubs.neuralium.com";
+		public string HubsGossipDNS { get; set; } = "test-hubs.neuralium.com";
+public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
+		public string HubsWebAddress { get; set; } = "https://test-web-hubs.neuralium.com";
 #elif DEVNET
-		public string HubsGossipAddress { get; set; } = "dev-hubs.neuralium.com";
+		public string HubsGossipDNS { get; set; } = "dev-hubs.neuralium.com";
+		public string PortTestDns { get; set; } = "dev-port-test.neuralium.com";
 		public string HubsWebAddress { get; set; } = "http://dev-web-hubs.neuralium.com";
 #else
-	    public string HubsGossipAddress { get; set; } = "hubs.neuralium.com";
+	    public string HubsGossipDNS { get; set; } = "hubs.neuralium.com";
+public string PortTestDns { get; set; } = "port-test.neuralium.com";
 		public string HubsWebAddress { get; set; } = "https://web-hubs.neuralium.com";
 #endif
 
@@ -182,8 +202,18 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public int MaximumIpCacheCount { get; set; } = 1000;
 
 		public int MaxPeerCount { get; set; } = 10;
+		
+		public int MaxNonConnectablePeerCount { get; set; } = 5;
 
 		public int AveragePeerCount { get; set; } = 5;
+		
+		public int MaxMobilePeerCount { get; set; } = 30;
+		
+		public double HubIPsRequestPeriod { get; set; } = 1800;
+		public double PeerIPsRequestPeriod { get; set; } = 600;
+		public double PeerReconnectionPeriod { get; set; } = 60;
+
+		public double IPCrawlerStartupDelay { get; set; } = 5.0;
 
 		/// <summary>
 		///     how do we delete the files when doing wallet transctions? safe is slower but clears data much better
@@ -329,7 +359,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 	public abstract class ChainConfigurations {
 
 		[Flags]
-		public enum FastKeyTypes {
+		public enum KeyDictionaryTypes {
 			Transactions = 1 << 0,
 			Messages = 1 << 1,
 			All = Transactions | Messages
@@ -337,8 +367,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		public enum HashTypes {
 			Sha2,
-			Sha3,
-			Blake2
+			Sha3
 		}
 		
 		[Flags]
@@ -355,51 +384,63 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public int? PassphraseTimeout { get; set; } = null;
 
-		public EncryptorParameters.SymetricCiphers WalletEncryptionFormat { get; set; } = EncryptorParameters.SymetricCiphers.XCHACHA_40;
+		public EncryptorParameters.SymetricCiphers WalletEncryptionFormat { get; set; } = EncryptorParameters.SymetricCiphers.XCHACHA_20_POLY_1305;
 
 		public bool Enabled { get; set; } = true;
 
 		/// <summary>
+		/// should we enable automatic transaction retry?
+		/// </summary>
+		public bool EnableAutomaticRetry{ get; set; } = true;
+		
+		/// <summary>
 		///     how does it serialize?  if master, it will have its full blockchain files, and database. if feeder, it simply
 		///     observes the files and databases that are updated by a master
 		/// </summary>
-		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Master;
+		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Main;
 
 		/// <summary>
 		///     The http url of the mining registration API
 		/// </summary>
 #if TESTNET
-		public string WebElectionsRegistrationUrl { get; set; } = "http://test-election-registration.neuralium.com";
-
-		public string WebElectionsRecordsUrl { get; set; } = "http://test-election-records.neuralium.com";
-		public string WebElectionsStatusUrl { get; set; } = "http://test-election-status.neuralium.com";
-		public string WebPresentationRegistrationUrl { get; set; } = "http://test-presentation-registration.neuralium.com";
-		public string WebTransactionRegistrationUrl { get; set; } = "http://test-transaction-registration.neuralium.com";
-		public string WebMessageRegistrationUrl { get; set; } = "http://test-message-registration.neuralium.com";
-		public string WebTransactionPoolUrl { get; set; } = "http://test-transaction-pool.neuralium.com";
+		
+		/// <summary>
+		///     The http url of the hash server
+		/// </summary>
+		public string HashUrl { get; set; } = "https://test-hash.neuralium.com";
+		public string WebElectionsRegistrationUrl { get; set; } = "https://test-election-registration.neuralium.com";
+		public string WebElectionsRecordsUrl { get; set; } = "https://test-election-records.neuralium.com";
+		public string WebElectionsStatusUrl { get; set; } = "https://test-election-status.neuralium.com";
+		public string WebPresentationRegistrationUrl { get; set; } = "https://test-presentation-registration.neuralium.com";
+		public string WebTransactionRegistrationUrl { get; set; } = "https://test-transaction-registration.neuralium.com";
+		public string WebMessageRegistrationUrl { get; set; } = "https://test-message-registration.neuralium.com";
+		public string WebAppointmentsRegistrationUrl { get; set; } = "https://test-appointments-registration.neuralium.com";
+		public string WebTransactionPoolUrl { get; set; } = "https://test-transaction-pool.neuralium.com";
+		public string WebSyncUrl { get; set; } = "https://test-sync.neuralium.com";
 #elif DEVNET
+		public string HashUrl { get; set; } = "http://dev-hash.neuralium.com";
 		public string WebElectionsRegistrationUrl { get; set; } = "http://dev-election-registration.neuralium.com";
-		public string WebRegistrationUrl { get; set; } = "http://dev-registration.neuralium.com";
+		public string WebElectionsRecordsUrl { get; set; } = "http://dev-election-records.neuralium.com";
+		public string WebElectionsStatusUrl { get; set; } = "http://dev-election-status.neuralium.com";
+		public string WebPresentationRegistrationUrl { get; set; } = "http://dev-presentation-registration.neuralium.com";
+		public string WebTransactionRegistrationUrl { get; set; } = "http://dev-transaction-registration.neuralium.com";
+		public string WebMessageRegistrationUrl { get; set; } = "http://dev-message-registration.neuralium.com";
+		public string WebAppointmentsRegistrationUrl { get; set; } = "http://dev-appointments-registration.neuralium.com";
+		public string WebTransactionPoolUrl { get; set; } = "http://dev-transaction-pool.neuralium.com";
+		public string WebSyncUrl { get; set; } = "http://dev-sync.neuralium.com";
 #else
+		public string HashUrl { get; set; } = "https://hash.neuralium.com";
 	    public string WebElectionsRegistrationUrl { get; set; } = "https://election-registration.neuralium.com";
 		public string WebElectionsRecordsUrl { get; set; } = "https://election-records.neuralium.com";
 		public string WebElectionsStatusUrl { get; set; } = "https://election-status.neuralium.com";
 		public string WebPresentationRegistrationUrl { get; set; } = "https://presentation-registration.neuralium.com";
 		public string WebTransactionRegistrationUrl { get; set; } = "https://transaction-registration.neuralium.com";
 		public string WebMessageRegistrationUrl { get; set; } = "https://message-registration.neuralium.com";
-		public string WebTransactionPoolUrl { get; set; } = "http://transaction-pool.neuralium.com";
+		public string WebAppointmentsRegistrationUrl { get; set; } = "https://appointments-registration.neuralium.com";
+		public string WebTransactionPoolUrl { get; set; } = "https://transaction-pool.neuralium.com";
+		public string WebSyncUrl { get; set; } = "https://sync.neuralium.com";
 #endif
-
-		/// <summary>
-		///     The http url of the hash server
-		/// </summary>
-#if TESTNET
-		public string HashUrl { get; set; } = "https://test-hash.neuralium.com";
-#elif DEVNET
-		public string HashUrl { get; set; } = "https://dev-hash.neuralium.com";
-#else
-	    public string HashUrl { get; set; } = "https://hash.neuralium.com";
-#endif
+		
 
 		/// <summary>
 		/// if true, we will contact the web transaction pools to get the webreg ones
@@ -434,6 +475,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public bool CreateMissingWallet { get; set; } = false;
 
+		/// <summary>
+		/// if we auto create wallet, what type of account to create
+		/// </summary>
+		public Enums.AccountTypes AccountType { get; set; } = Enums.AccountTypes.User;
+		
 		/// <summary>
 		///     Should we encrypt the wallet keys when creating a new wallet
 		/// </summary>
@@ -497,6 +543,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     should we publish our key indices inside transactions for key logging? (recommended)
 		/// </summary>
 		public bool PublishKeyUseIndices { get; set; } = true;
+		
+		/// <summary>
+		///     should we publish the limit at which a previous key index will not be usable? (highly recommended)
+		/// </summary>
+		public bool PublishKeyUseLocks { get; set; } = true;
+		
 
 		/// <summary>
 		///     The keylog is a security feature. it can be disabled if necessary, but it is not advised. This is part of the
@@ -508,6 +560,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     do we want to disable the block sync with other peers?
 		/// </summary>
 		public bool DisableSync { get; set; } = false;
+		
+		/// <summary>
+		///  should we use key gates to check key valid ranges in blocks?  highly recommended but takes more space
+		/// </summary>
+		public bool EnableKeyGates { get; set; } = true;
 		
 		/// <summary>
 		/// Should we store mining statistics in the wallet
@@ -537,9 +594,9 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     should we use a fast key index? takes more disk space, but makes verification much faster
 		///     by keeping fast access to the General and Message keys
 		/// </summary>
-		public bool EnableFastKeyIndex { get; set; } = true;
+		public bool EnableKeyDictionaryIndex { get; set; } = true;
 
-		public FastKeyTypes EnabledFastKeyTypes { get; set; } = FastKeyTypes.All;
+		public KeyDictionaryTypes EnabledKeyDictionaryTypes { get; set; } = KeyDictionaryTypes.All;
 
 		/// <summary>
 		///     How many parallel workflow threads can we have at a maximum in this chain
@@ -569,6 +626,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     its preferable to use.
 		/// </summary>
 		public AppSettingsBase.ContactMethods RegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
+		
+		/// <summary>
+		/// how do we want to sync the blockchain
+		/// </summary>
+		public AppSettingsBase.ContactMethods ChainSyncMethod { get; set; } = AppSettingsBase.ContactMethods.Gossip;
+		
 
 		/// <summary>
 		///     force a specific mining tier (if possible)
@@ -604,6 +667,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes TransactionXmssKeyHashType { get; set; } = HashTypes.Sha3;
+		public HashTypes TransactionXmssKeyBackupHashType { get; set; } = HashTypes.Sha2;
+		
 
 		/// <summary>
 		///     what kind of strength do we want for our xmss main key
@@ -624,7 +689,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes MessageXmssKeyHashType { get; set; } = HashTypes.Sha2;
-
+		public HashTypes MessageXmssKeyBackupHashType { get; set; } = HashTypes.Sha3;
+		
 		/// <summary>
 		///     what kind of strength do we want for our xmss main key
 		/// </summary>
@@ -644,7 +710,54 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes ChangeXmssKeyHashType { get; set; } = HashTypes.Sha3;
+		public HashTypes ChangeXmssKeyBackupHashType { get; set; } = HashTypes.Sha2;
+		
+		
+		/// <summary>
+		///     what kind of strength do we want for our xmss^MT super key
+		/// </summary>
+		public byte SuperXmssMTKeyTreeHeight { get; set; } = 12;
 
+		public byte SuperXmssMTKeyTreeLayers { get; set; } = 2;
+		
+		/// <summary>
+		///     Percentage level where we warn of a key Super comming
+		/// </summary>
+		public float SuperXmssMTKeyWarningLevel { get; set; } = 0.7F;
+
+		/// <summary>
+		///     Percentage level where we must begin the key Super process
+		/// </summary>
+		public float SuperXmssMTKeyChangeLevel { get; set; } = 0.9F;
+
+		/// <summary>
+		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// </summary>
+		public HashTypes SuperXmssMTKeyHashType { get; set; } = HashTypes.Sha3;
+		public HashTypes SuperXmssMTKeyBackupHashType { get; set; } = HashTypes.Sha2;
+
+		
+		/// <summary>
+		///     what kind of strength do we want for our xmss main key
+		/// </summary>
+		public byte ValidatorSignatureXmssKeyTreeHeight { get; set; } = 20;
+
+		/// <summary>
+		///     Percentage level where we warn of a key change comming
+		/// </summary>
+		public float ValidatorSignatureXmssKeyWarningLevel { get; set; } = 0.7F;
+
+		/// <summary>
+		///     Percentage level where we must begin the key change process
+		/// </summary>
+		public float ValidatorSignatureXmssKeyChangeLevel { get; set; } = 0.9F;
+
+		/// <summary>
+		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// </summary>
+		public HashTypes ValidatorSignatureXmssKeyHashType { get; set; } = HashTypes.Sha3;
+		public HashTypes ValidatorSignatureXmssKeyBackupHashType { get; set; } = HashTypes.Sha2;
+		
 		/// <summary>
 		///     if true, we will allow gossip presentations even if not allowed otherwise
 		/// </summary>
@@ -688,17 +801,6 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public bool SkipHubCheck { get; set; } = false;
 
 		public string WhiteListNodesRegex { get; set; } = "";
-
-		public List<NATRule> NATRules { get; set; } = new List<NATRule>();
-		
-		public class NATRule {
-			public AppSettingsBase.FullNode FromNode { get; set; } // Example "172.17.0.1:4000" -> matches sockets 172.17.0.1:4000, 172.17.0.1:4001, ...
-			public AppSettingsBase.Node ToIP { get; set; } 
-			// Example with IncrementIPWithPortDelta == true:  "172.23.0.42" -> translated to sockets 172.23.0.42:4000, 172.23.0.43:4001, ... 
-			// Example with IncrementIPWithPortDelta == false:  "172.23.0.42" -> translated to sockets 172.23.0.42:4000, 172.23.0.42:4001, ... 
-
-			public bool IncrementIPWithPortDelta { get; set; } = true;
-		}
 
 	}
 

@@ -38,7 +38,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 	}
 
 	public interface IChainSyncMessageFactory {
-		ITargettedMessageSet<IBlockchainEventsRehydrationFactory> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory);
+		ITargettedMessageSet<IBlockchainEventsRehydrationFactory> Rehydrate(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory);
 
 		/// <summary>
 		///     this is the client side trigger method, when we build a brand new one
@@ -86,10 +86,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public ChainSyncMessageFactory(IMainChainMessageFactory mainChainMessageFactory, BlockchainServiceSet serviceSet) : base(mainChainMessageFactory, serviceSet) {
 		}
 
-		public override ITargettedMessageSet<IBlockchainEventsRehydrationFactory> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		public override ITargettedMessageSet<IBlockchainEventsRehydrationFactory> Rehydrate(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			using IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-			SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+			using SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
 			NetworkMessageSet.ResetAfterHeader(dr);
 
 			using IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);

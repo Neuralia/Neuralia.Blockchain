@@ -49,14 +49,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 					// its a regular transcation, jsut take it
 					return true;
 				}
-
+				
 				if(this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.AllowGossipPresentations) {
 					// its a regular transcation, jsut take it
 					return true;
 				}
-
+				
 				// ok, its a presentation transaction. accept it only if we really want to
 				return this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations;
+			}
+			
+			if(gossipGroupMessageInfo.GossipMessageMetadata?.GossipMessageMetadataDetails is BlockchainMessageGossipMessageMetadataDetails blockchainMessageGossipMessageMetadataDetails) {
+
+				// if(!transactionGossipMessageMetadataDetails.IsPresentation == false) {
+				// 	// its a regular transcation, jsut take it
+				// 	return true;
+				// }
+				//
+				// // ok, its a presentation transaction. accept it only if we really want to
+				// return this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations;
 			}
 
 			return true;

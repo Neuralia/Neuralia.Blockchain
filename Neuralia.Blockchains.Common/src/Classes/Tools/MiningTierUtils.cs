@@ -4,9 +4,11 @@ using System.Collections.Immutable;
 using System.Linq;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Types.Specialized;
 using Neuralia.Blockchains.Core.Serialization.OffsetCalculators;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.General.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -59,6 +61,32 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 		public static bool IsFirstTier(Enums.MiningTiers miningTier) {
 			return miningTier == Enums.MiningTiers.FirstTier;
 		}
+		
+		/// <summary>
+		/// ensure that the basic conditions are right for mining
+		/// </summary>
+		/// <param name="miningTier"></param>
+		/// <param name="accountId"></param>
+		/// <returns></returns>
+		public static bool IsMiningTierValid(Enums.MiningTiers miningTier, AccountId accountId) {
+
+			if(accountId == null) {
+				return false;
+			}
+			
+			// only these 2 types of accounts can mine
+			if(!(accountId.IsUser || accountId.IsServer)) {
+				return false;
+			}
+			
+			// if in 1st or 2nd tier, the account must be of type server or we ignore it
+			if(IsFirstOrSecondTier(miningTier) && !accountId.IsServer) {
+				return false;
+			}
+
+			return true;
+		}
+
 
 		public static List<Enums.MiningTiers> GetAllMiningTiers(int total = MininingTierCount) {
 			return Enumerable.Range(1, total).Select(e => (Enums.MiningTiers) e).ToList();
@@ -142,8 +170,21 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			}
 		}
 
-		public static void RehydrateMiningSet<T, R>(Dictionary<Enums.MiningTiers, T> set, T defaultValue, IDataRehydrator rehydrator, Func<long, T> convertValue)
-			where R : IBinarySerializable, new() {
+		public static void RehydrateUShortMiningSet(Dictionary<Enums.MiningTiers, ushort> set, IDataRehydrator rehydrator, ushort defaultValue = 0) {
+			RehydrateMiningSet<ushort, AdaptiveShort1_2>(set, rehydrator, (a,b) => (ushort)(a+b), (a,b) => (ushort)(a-b), defaultValue);
+		}
+		
+		public static void RehydrateLongMiningSet(Dictionary<Enums.MiningTiers, long> set, IDataRehydrator rehydrator, long defaultValue = 0) {
+			RehydrateMiningSet<long, AdaptiveLong1_9>(set, rehydrator, (a,b) => a+b, (a,b) => a-b, defaultValue);
+		}
+		
+		public static void RehydrateDecimalMiningSet(Dictionary<Enums.MiningTiers, decimal> set, IDataRehydrator rehydrator, decimal defaultValue = 0) {
+			RehydrateMiningSet<decimal, Amount>(set, rehydrator, (a,b) => a+b, (a,b) => a-b, defaultValue);
+		}
+
+		public static void RehydrateMiningSet<T, R>(Dictionary<Enums.MiningTiers, T> set, IDataRehydrator rehydrator, Func<T, T, T> add, Func<T, T, T> subtract, T defaultValue = default)
+			where T : struct, IComparable, IConvertible, IFormattable, IComparable<T>, IEquatable<T>
+			where R : IBinarySerializable, IValue<T>, new() {
 
 			RehydrateTierList(set, defaultValue, rehydrator);
 
@@ -156,28 +197,28 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 			if(activeTierCount != 0) {
 
-				SequantialOffsetCalculator accountIdsCalculator = new SequantialOffsetCalculator();
+				RepeatableOffsetCalculator<T> accountIdsCalculator = new RepeatableOffsetCalculator<T>(add, subtract);
 
-				AdaptiveLong1_9 serializationTool = new AdaptiveLong1_9();
-				List<long> amounts = new List<long>();
+				R serializationTool = new R();
+				List<T> amounts = new List<T>();
 
 				for(int i = 0; i < amountCounts; i++) {
 
 					serializationTool.Rehydrate(rehydrator);
-					long offset = accountIdsCalculator.RebuildValue(serializationTool.Value);
+					T offset = accountIdsCalculator.RebuildValue(serializationTool.Value);
 
 					amounts.Add(offset);
 
 					accountIdsCalculator.AddLastOffset();
 				}
 
-				using ByteArray data = rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, activeTierCount));
+				SafeArrayHandle data = (SafeArrayHandle)rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, activeTierCount));
 				using SpecialIntegerSizeArray tiersetTierType = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, data, activeTierCount);
 
 				List<int> indices = new List<int>();
 
 				if(amountCounts > 1) {
-					using ByteArray data2 = rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, activeTierCount));
+					SafeArrayHandle data2 = (SafeArrayHandle)rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, activeTierCount));
 					using SpecialIntegerSizeArray tiersetOffsets = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, data2, activeTierCount);
 
 					for(int i = 0; i < activeTierCount; i++) {
@@ -189,7 +230,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 				}
 
 				for(int i = 0; i < activeTierCount; i++) {
-					set[(Enums.MiningTiers) tiersetTierType[i]] = convertValue(amounts[indices[i]]);
+					set[(Enums.MiningTiers) tiersetTierType[i]] = amounts[indices[i]];
 				}
 			}
 		}

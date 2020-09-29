@@ -155,7 +155,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1.Messages.Split {
 					length = endIndex - startIndex;
 				}
 
-				ByteArray sliceSimpleBytes = ByteArray.Create(length);
+				SafeArrayHandle sliceSimpleBytes = SafeArrayHandle.Create(length);
 				sliceSimpleBytes.CopyFrom(bytes.Entry, startIndex, length);
 
 				slices.Add(index, new Slice(index, startIndex, length, sliceSimpleBytes));

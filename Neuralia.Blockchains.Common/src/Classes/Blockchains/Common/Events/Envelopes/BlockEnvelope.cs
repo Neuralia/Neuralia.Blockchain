@@ -19,6 +19,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		public long BlockId { get; set; }
 
+		public override string GetId() {
+			return this.BlockId.ToString();
+		}
+
 		public override HashNodeList GetStructuresArray() {
 
 			HashNodeList nodeList = base.GetStructuresArray();
@@ -27,6 +31,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			nodeList.Add(this.BlockId);
 
 			return nodeList;
+		}
+
+		protected override HashNodeList GetContentStructuresArray() {
+			return this.Contents.RehydratedBlock.GetStructuresArray();
 		}
 
 		protected override IDehydratedBlock RehydrateContents(IDataRehydrator rh) {

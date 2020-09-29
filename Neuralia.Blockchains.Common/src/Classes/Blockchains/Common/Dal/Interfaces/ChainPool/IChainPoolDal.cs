@@ -8,7 +8,7 @@ using Neuralia.Blockchains.Core.DataAccess.Interfaces;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainPool {
 	public interface IChainPoolDal : IDalInterfaceBase {
 
-		Task InsertTransactionEntry(ITransactionEnvelope transactionEnvelope, DateTime chainInception);
+		Task InsertTransactionEntry(ITransactionEnvelope signedTransactionEnvelope, DateTime chainInception);
 		Task RemoveTransactionEntry(TransactionId transactionId);
 		Task<List<TransactionId>> GetTransactions();
 

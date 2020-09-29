@@ -12,16 +12,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		SafeArrayHandle DehydrateEnvelope();
 		void RehydrateEnvelope(SafeArrayHandle data);
 		void RehydrateContents();
+		void Clear();
+		string GetId();
 	}
 
 	public interface IEnvelope<BLOCKCHAIN_EVENT_TYPE> : IEnvelope
-		where BLOCKCHAIN_EVENT_TYPE : class, IBinarySerializable {
+		where BLOCKCHAIN_EVENT_TYPE : class, IDehydrateBlockchainEvent {
 
 		BLOCKCHAIN_EVENT_TYPE Contents { get; set; }
 	}
 
 	public abstract class Envelope<BLOCKCHAIN_EVENT_TYPE, T> : IEnvelope<BLOCKCHAIN_EVENT_TYPE>
-		where BLOCKCHAIN_EVENT_TYPE : class, IBinarySerializable, ITreeHashable
+		where BLOCKCHAIN_EVENT_TYPE : class, IDehydrateBlockchainEvent
 		where T : SimpleUShort<T>, new() {
 		private readonly SafeArrayHandle dehydratedEnvelopeBytes = SafeArrayHandle.Create();
 
@@ -68,7 +70,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 				this.dehydratedEnvelopeBytes.Entry = dh.ToArray().Entry;
 			}
 
-			return this.dehydratedEnvelopeBytes;
+			return this.dehydratedEnvelopeBytes.Branch();
 		}
 
 		public void RehydrateEnvelope(SafeArrayHandle data) {
@@ -101,18 +103,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			}
 		}
 
+		/// <summary>
+		/// clear the envelope contents back to empty state.
+		/// </summary>
+		public virtual void Clear() {
+
+			this.Contents = null;
+			this.dehydratedEnvelopeBytes.Entry = null;
+			this.EventBytes.Entry = null;
+		}
+
+		public abstract string GetId();
+
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
 
 			nodeList.Add(this.Version);
-
-			this.DehydrateContents();
-
-			nodeList.Add(this.EventBytes);
+			
+			nodeList.Add(this.GetContentStructuresArray());
 
 			return nodeList;
 		}
 
+		protected abstract HashNodeList GetContentStructuresArray();
+		
 		public void DehydrateContents() {
 			if((this.EventBytes == null) || this.EventBytes.IsEmpty) {
 
@@ -123,7 +137,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 				using IDataDehydrator dh = DataSerializationFactory.CreateDehydrator();
 				this.Contents.Dehydrate(dh);
 
-				this.EventBytes.Entry = dh.ToArray().Entry;
+				this.EventBytes.Entry = dh.ToArray().Release();
 			}
 		}
 

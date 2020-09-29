@@ -21,6 +21,15 @@ namespace Neuralia.Blockchains.Core.Services {
 
 	public sealed class GlobalsService : IGlobalsService {
 
+		public static TimeSpan VERIFICATION_SPAN = TimeSpan.FromDays(33);
+		public const int MINIMUM_PUZZLE_ENGINE_VERSION = 1;
+		public const int MAXIMUM_PUZZLE_ENGINE_VERSION = 1;
+
+		public const string DEFAULT_LOCALE = "en";
+
+#if TESTNET || DEVNET
+		public const long TESTING_APPOINTMENT_CODE = 260379949425144945L;
+#endif
 		/// <summary>
 		///     The default fodler name where to find the wallet
 		/// </summary>
@@ -42,6 +51,17 @@ namespace Neuralia.Blockchains.Core.Services {
 #else
 	    public const int DEFAULT_PORT = 33888;
 #endif
+		
+		/// <summary>
+		///     this is the default port our validator listener listens to
+		/// </summary>
+#if TESTNET
+		public const int DEFAULT_VALIDATOR_PORT = 32887;
+#elif DEVNET
+		public const int DEFAULT_VALIDATOR_PORT = 32886;
+#else
+	    public const int DEFAULT_VALIDATOR_PORT = 32888;
+#endif
 
 		/// <summary>
 		///     this is the default port our listener listens to
@@ -54,46 +74,39 @@ namespace Neuralia.Blockchains.Core.Services {
 	    public const int DEFAULT_RPC_PORT = 12033;
 #endif
 
-		/// <summary>
-		///     The size in bytes of public keys in our system. XMSS keys of course
-		/// </summary>
-		public const int KEY_BYTE_SIZE = 64;
-
-		/// <summary>
-		///     The size in bytes of hashes in our system. Sha3 hash of course
-		/// </summary>
-		public const int HASH_BYTE_SIZE = 64;
-
 		public const string COMMON_DIRECTORY_NAME = "common";
 		public const string TRANSACTION_KEY_NAME = "TransactionKey";
 		public const string MESSAGE_KEY_NAME = "MessageKey";
 		public const string CHANGE_KEY_NAME = "ChangeKey";
 		public const string SUPER_KEY_NAME = "SuperKey";
+		
+		public const string VALIDATOR_SIGNATURE_KEY_NAME = "ValidatorSignatureKey";
+		public const string VALIDATOR_SECRET_KEY_NAME = "ValidatorSecretKey";
+		
 
 		public const byte TRANSACTION_KEY_ORDINAL_ID = 1;
 		public const byte MESSAGE_KEY_ORDINAL_ID = 2;
 		public const byte CHANGE_KEY_ORDINAL_ID = 3;
 		public const byte SUPER_KEY_ORDINAL_ID = 4;
+		
+		public const byte VALIDATOR_SIGNATURE_KEY_ORDINAL_ID = 5;
+		public const byte VALIDATOR_SECRET_KEY_ORDINAL_ID = 6;
 
 		public const byte MODERATOR_COMMUNICATIONS_KEY_ID = 1;
-		public const byte MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID = 2;
+		public const byte MODERATOR_VALIDATOR_SECRETS_KEY_ID = 2;
+		
 		public const byte MODERATOR_BLOCKS_KEY_XMSS_ID = 3;
 		public const byte MODERATOR_BLOCKS_CHANGE_KEY_ID = 4;
 		public const byte MODERATOR_DIGEST_BLOCKS_KEY_ID = 5;
 		public const byte MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID = 6;
-		public const byte MODERATOR_BINARY_KEY_ID = 7;
-		public const byte MODERATOR_SUPER_CHANGE_KEY_ID = 8;
-		public const byte MODERATOR_PTAH_KEY_ID = 9;
+		public const byte MODERATOR_GOSSIP_KEY_ID = 7;
+		public const byte MODERATOR_BINARY_KEY_ID = 8;
+		
+		public const byte MODERATOR_SUPER_CHANGE_KEY_ID = 13;
+		public const byte MODERATOR_PTAH_KEY_ID = 33;
 
 		public const string TOKEN_CHAIN_NAME = "neuralium";
-
-		/// <summary>
-		///     The maximum amount of solutions allowed to be sent in POW transactions
-		/// </summary>
-		public const byte POW_MAX_SOLUTIONS = 3;
-
-		public static readonly ushort POW_DIFFICULTY = (ushort) HashDifficultyUtils.Default256Difficulty;
-
+		
 		/// <summary>
 		///     The delay in minutes after which we will update our mining registration
 		/// </summary>
@@ -109,7 +122,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <summary>
 		///     the timespan delay before a miner times out
 		/// </summary>
-		public static readonly TimeSpan TimeoutMinerDelay = TimeSpan.FromMinutes(MINING_REGISTRATION_TIMEOUT);
+		public static readonly TimeSpan MinerTimeoutDelay = TimeSpan.FromMinutes(MINING_REGISTRATION_TIMEOUT);
 
 		/// <summary>
 		///     The delay between each query for mining status

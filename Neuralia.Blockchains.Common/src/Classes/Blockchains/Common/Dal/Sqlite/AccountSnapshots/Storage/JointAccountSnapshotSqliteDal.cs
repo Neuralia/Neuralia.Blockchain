@@ -38,41 +38,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		public Task<List<JOINT_ACCOUNT_SNAPSHOT>> LoadAccounts(List<AccountId> accountIds) {
 
 			List<long> longAccountIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).Select(a => a.ToLongRepresentation()).ToList();
-			List<long> sequenceIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).Select(a => a.SequenceId).ToList();
 
 			return this.QueryAllAsync(db => {
 
 				return db.JointAccountSnapshots.Where(s => longAccountIds.Contains(s.AccountId)).ToListAsync();
-			}, sequenceIds);
+			}, accountIds);
 		}
 
 		public Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, JOINT_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
 
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId().SequenceId));
+			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
 		}
 
 		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, JOINT_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
 
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId().SequenceId));
+			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
 		}
 
-		public Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
+		public Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<AccountId, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
 			return this.PerformProcessingSetHoldTransactions(actions);
 		}
 
-		public Task InsertNewJointAccount(AccountId accountId, long inceptionBlockId, bool correlated) {
+		public Task InsertNewJointAccount(AccountId accountId, long inceptionBlockId, bool Verified) {
 
 			return this.PerformOperation(db => {
 				JOINT_ACCOUNT_SNAPSHOT accountEntry = new JOINT_ACCOUNT_SNAPSHOT();
 
 				accountEntry.AccountId = accountId.ToLongRepresentation();
 				accountEntry.InceptionBlockId = inceptionBlockId;
-				accountEntry.Correlated = correlated;
+				accountEntry.Correlated = Verified;
 
 				db.JointAccountSnapshots.Add(accountEntry);
 
 				return db.SaveChangesAsync();
-			}, this.GetKeyGroup(accountId.SequenceId));
+			}, this.GetKeyGroup(accountId));
 
 		}
 	}

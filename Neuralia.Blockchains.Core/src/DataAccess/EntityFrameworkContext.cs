@@ -66,10 +66,10 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		public EntityFrameworkContext(DbContextOptions<TContext> options) : base(options) {
 		}
 
-		private bool CanSave => this.SerializationType == AppSettingsBase.SerializationTypes.Master;
+		private bool CanSave => this.SerializationType == AppSettingsBase.SerializationTypes.Main;
 		public DbSet<DBVersion> Versions { get; set; }
 
-		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Master;
+		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Main;
 
 		public override int SaveChanges() {
 
@@ -97,8 +97,7 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 
 			try {
 				lock(this.locker) {
-					RelationalDatabaseCreator databaseCreator = (RelationalDatabaseCreator) this.Database.GetService<IDatabaseCreator>();
-					databaseCreator.EnsureCreated();
+					this.Database.EnsureCreated();
 				}
 			} catch(Exception ex) {
 				NLog.Default.Error(ex, "Failed to create database schema");

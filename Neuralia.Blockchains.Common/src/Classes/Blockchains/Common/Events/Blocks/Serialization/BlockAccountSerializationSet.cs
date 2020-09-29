@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public List<(long TimestampOffset, ITransaction transaction)> Transactions { get; } = new List<(long TimestampOffset, ITransaction transaction)>();
 
-		public void Rehydrate(AccountId accountId, IDataRehydrator rehydrator, ChannelsEntries<IDataRehydrator> channelRehydrators, Func<ChannelsEntries<IDataRehydrator>, AccountId, TransactionTimestamp, ITransaction> rehydrationCallback, RepeatableOffsetCalculator timestampsCalculator) {
+		public void Rehydrate(AccountId accountId, IDataRehydrator rehydrator, ChannelsEntries<IDataRehydrator> channelRehydrators, Func<ChannelsEntries<IDataRehydrator>, AccountId, TransactionTimestamp, ITransaction> rehydrationCallback, RepeatableLongOffsetCalculator timestampsCalculator) {
 
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 

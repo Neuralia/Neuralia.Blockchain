@@ -5,40 +5,58 @@ using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Appointments;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Appointments;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Moderator.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossip.Metadata;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
+using Neuralia.Blockchains.Core.P2p.Messages.MessageSets.GossipMessageMetadatas;
+using Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using RestSharp;
 using Serilog;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	public interface IGossipMessageDispatcher {
-		Task DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext);
+		Task DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext, ChainNetworkingProvider.MessageDispatchTypes messageDispatchType = ChainNetworkingProvider.MessageDispatchTypes.GeneralMessage);
+		Task<bool> DispatchNewGossipMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext, AppSettingsBase.ContactMethods method);
+		Task<bool> DispatchNewGossipMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext);
+
 	}
 
 	public interface IChainNetworkingProvider : IGossipMessageDispatcher, IDisposableExtended, IChainProvider {
-
+		bool InAppointmentWindow{ get; }
+		bool InAppointmentWindowProximity { get; }
+		bool IsInAppointmentWindow(DateTime appointment);
 		bool IsPaused { get; }
 		ulong MyClientIdNonce { get; }
 		Guid MyClientUuid { get; }
@@ -46,12 +64,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		IPAddress PublicIpv6 { get; }
 		int CurrentPeerCount { get; }
 		bool IsConnectable { get; }
-		int P2pPort  { get; }
-		
+		int P2pPort { get; }
+
 		bool HasPeerConnections { get; }
 		bool NoPeerConnections { get; }
-		bool MinimumDispatchPeerCountAchieved { get; }
-
+		bool MinimumDispatchPeerCountAchieved(AppSettingsBase.ContactMethods method);
+		bool MinimumDispatchPeerCountAchieved();
+		
 		bool NetworkingStarted { get; }
 		bool NoNetworking { get; }
 		BlockchainNetworkingService.MiningRegistrationParameters MiningRegistrationParameters { get; }
@@ -77,7 +96,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		BlockchainNetworkingService.MiningRegistrationParameters RegisterMiningRegistrationParameters();
 		void UnRegisterMiningRegistrationParameters();
-
 		Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
 
 		void ReceiveConnectionsManagerTask(ISimpleTask task);
@@ -88,17 +106,42 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void RemoveConnection(PeerConnection connection);
 
-		Task DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, LockContext lockContext);
+		Task DispatchLocalTransactionAsync(ITransactionEnvelope signedTransactionEnvelope, CorrelationContext correlationContext, LockContext lockContext);
 		Task DispatchLocalTransactionAsync(TransactionId transactionId, CorrelationContext correlationContext, LockContext lockContext);
 
 		Task<bool> DispatchElectionMessages(List<IElectionCandidacyMessage> messages, LockContext lockContext);
 
 		Task<List<WebTransactionPoolResult>> QueryWebTransactionPool(LockContext lockContext);
+
+		void RegisterValidationServer(List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
+		void UnregisterValidationServer();
+		void AddAppointmentWindow(DateTime appointment, TimeSpan window);
+		
+		Task<(bool success, CheckAppointmentRequestConfirmedResult result)> PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext);
+		Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext);
+		Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, long requesterIndex, DateTime appointment, LockContext lockContext);
+		Task<(bool success, CheckAppointmentTriggerResult result)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext);
+		
+		Task<(bool success, CheckAppointmentsResult result)> QueryAvailableAppointments(LockContext lockContext);
+		Task<(bool success, QueryValidatorAppointmentSessionsResult result)> QueryValidatorAppointmentSessions(AccountId miningAccountId, List<DateTime> appointments, List<Guid> hashes, LockContext lockContext);
+		void UrgentClearConnections();
+		
 	}
 
 	public interface IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainNetworkingProvider
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
+	}
+
+	public static class ChainNetworkingProvider {
+
+		public enum MessageDispatchTypes {
+			GeneralMessage,
+			AppointmentInitiationRequest,
+			AppointmentRequest,
+			AppointmentValidatorResults,
+			Elections
+		}
 	}
 
 	/// <summary>
@@ -113,7 +156,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected readonly CENTRAL_COORDINATOR centralCoordinator;
 
 		public IBlockchainNetworkingService networkingService;
-
+		private IClientAppointmentRequestWorkflow appointmentRequestWorkflow;
+		
 		public ChainNetworkingProvider(IBlockchainNetworkingService networkingService, CENTRAL_COORDINATOR centralCoordinator) {
 			this.networkingService = networkingService;
 			this.centralCoordinator = centralCoordinator;
@@ -157,7 +201,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public Guid MyClientUuid => this.networkingService.ConnectionStore.MyClientUuid;
 		public IPAddress PublicIpv4 => this.networkingService.ConnectionStore.PublicIpv4;
 		public IPAddress PublicIpv6 => this.networkingService.ConnectionStore.PublicIpv6;
-		
+
 		public void PauseNetwork() {
 			this.networkingService?.Pause();
 		}
@@ -170,6 +214,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.networkingService.ConnectionStore.RemoveConnection(connection);
 		}
 
+		/// <summary>
+		/// to be called in urgency only, to clear some ram
+		/// </summary>
+		public void UrgentClearConnections() {
+
+			this.networkingService.UrgentClearConnections();
+		}
+		
 		public int CurrentPeerCount => this.networkingService.CurrentPeerCount;
 		public bool IsConnectable => this.networkingService.ConnectionStore.IsConnectable;
 		public int P2pPort => this.networkingService.LocalPort;
@@ -180,15 +232,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     this property tells us if we have the minimum number of peers to send transactions
 		/// </summary>
-		public bool MinimumDispatchPeerCountAchieved {
-			get {
-				BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+		public bool MinimumDispatchPeerCountAchieved(AppSettingsBase.ContactMethods method) {
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-				return !((chainConfiguration.RegistrationMethod == AppSettingsBase.ContactMethods.Gossip) && (this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount < chainConfiguration.MinimumDispatchPeerCount));
-			}
+			return method.HasFlag(AppSettingsBase.ContactMethods.Gossip) && (this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount);
 		}
 
-		public bool NetworkingStarted => this.networkingService?.IsStarted ?? false;
+		public bool MinimumDispatchPeerCountAchieved() {
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			return this.MinimumDispatchPeerCountAchieved(chainConfiguration.RegistrationMethod);
+		}
+		
+		public bool NetworkingStarted => this.networkingService.IsNetworkAvailable && (this.networkingService?.IsStarted ?? false);
 		public bool NoNetworking => !this.NetworkingStarted;
 
 		public void RegisterChain(INetworkRouter transactionchainNetworkRouting) {
@@ -274,32 +330,46 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		public async Task DispatchLocalTransactionAsync(TransactionId transactionId, CorrelationContext correlationContext, LockContext lockContext) {
 
-			IWalletTransactionCache results = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionId, lockContext).ConfigureAwait(false);
+			IWalletGenerationCache results = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetGenerationCacheEntry(transactionId, lockContext).ConfigureAwait(false);
 
 			if(results == null) {
-				throw new ApplicationException("Impossible to dispatch a transaction, failed to find cached entry.");
+				throw new EventDispatchException("Impossible to dispatch a transaction, failed to find cached entry.");
 			}
 
-			if(results.Status != (byte) WalletTransactionCache.TransactionStatuses.New) {
-				throw new ApplicationException("Impossible to dispatch a transaction that has already been sent");
-			}
+			// if(results.Status != (byte) WalletGenerationCache.GenerationCacheStatuses.New) {
+			// 	throw new EventDispatchException("Impossible to dispatch a transaction that has already been sent");
+			// }
 
-			ITransactionEnvelope transactionEnvelope = null;
-			transactionEnvelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(results.Transaction);
+			ITransactionEnvelope signedTransactionEnvelope = null;
+			signedTransactionEnvelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(results.Event);
 
-			await this.DispatchLocalTransactionAsync(transactionEnvelope, correlationContext, lockContext).ConfigureAwait(false);
+			await this.DispatchLocalTransactionAsync(signedTransactionEnvelope, correlationContext, lockContext).ConfigureAwait(false);
 		}
 
+		protected bool CanSendGossip(AppSettingsBase.ContactMethods method) {
+			if(this.NoNetworking) {
+				throw new ApplicationException("We are not connected to the p2p network nor have internet access.");
+			}
+
+			return this.MinimumDispatchPeerCountAchieved(method);
+		}
 		/// <summary>
 		///     Publish an unpublished transaction on the network
 		/// </summary>
-		/// <param name="transactionEnvelope"></param>
-		public async Task DispatchLocalTransactionAsync(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, LockContext lockContext) {
+		/// <param name="signedTransactionEnvelope"></param>
+		public async Task DispatchLocalTransactionAsync(ITransactionEnvelope signedTransactionEnvelope, CorrelationContext correlationContext, LockContext lockContext) {
 
-			IWalletTransactionCache entry = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid, lockContext).ConfigureAwait(false);
+			if(signedTransactionEnvelope.Contents.RehydratedEvent is IGenesisAccountPresentationTransaction) {
+				throw new ApplicationException("Genesis transactions can not be added this way");
+			}
+			
+			IWalletGenerationCache entry = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetGenerationCacheEntry(signedTransactionEnvelope.Contents.Uuid, lockContext).ConfigureAwait(false);
 
-			if(entry.Status != (byte) WalletTransactionCache.TransactionStatuses.New) {
-				throw new ApplicationException("Impossible to dispatch a transaction that has already been sent");
+			if(entry.Signed == false) {
+				throw new EventDispatchException("Impossible to dispatch a transaction that is not signed");
+			}
+			if(entry.Dispatched) {
+				throw new EventDispatchException("Impossible to dispatch a transaction that has already been sent");
 			}
 
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
@@ -308,15 +378,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
 			bool sent = false;
 
-			if(!useWeb && !chainConfiguration.AllowGossipPresentations && (transactionEnvelope.IsPresentation || transactionEnvelope.Contents.RehydratedTransaction is IPresentation) && !this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.AllowGossipPresentations) {
-
-				// seems we have no choice but to use the webreg for presentation transactions.
-				useWeb = true;
-			}
-
 			if(useWeb) {
 				try {
-					await this.PerformWebTransactionRegistration(transactionEnvelope, correlationContext, lockContext).ConfigureAwait(false);
+					await this.PerformWebTransactionRegistration(signedTransactionEnvelope, correlationContext, lockContext).ConfigureAwait(false);
 					sent = true;
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "Failed to register transaction through web");
@@ -327,9 +391,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			if(!sent && useGossip) {
-				if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && (this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount)) {
 
-					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipTransactionMessageSet(transactionEnvelope);
+				if(this.CanSendGossip(chainConfiguration.RegistrationMethod)) {
+
+					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareTransactionGossipMessageSet(signedTransactionEnvelope);
 
 					await Repeater.RepeatAsync(async () => {
 						await this.SendGossipTransaction(gossipMessageSet).ConfigureAwait(false);
@@ -339,30 +404,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					if(!sent) {
 						throw new ApplicationException("Failed to send transaction");
 					}
-
-					await this.ConfirmTransactionSent(transactionEnvelope, correlationContext, gossipMessageSet.BaseHeader.Hash, lockContext).ConfigureAwait(false);
-
+					
 				} else {
-					throw new ApplicationException("Failed to send transaction. Not enough peers available to send a gossip transactions.");
+					throw new EventDispatchException("Failed to send transaction. Not enough peers available to send a gossip transactions.");
 				}
 			}
 
 			if(!sent) {
-				throw new ApplicationException("Failed to send transaction");
+				throw new EventDispatchException("Failed to send transaction");
 			}
+			
+			// send the confirmation
+			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionSent(signedTransactionEnvelope.Contents.Uuid), correlationContext);
 		}
 
 		public async Task<List<WebTransactionPoolResult>> QueryWebTransactionPool(LockContext lockContext) {
 			var chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
 			if(chainConfiguration.UseWebTransactionPool) {
-				
+
 				try {
 					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
-					await Repeater.RepeatAsync(async () => {
+					return await Repeater.RepeatAsync(async () => {
 						string url = chainConfiguration.WebTransactionPoolUrl;
 
 						Dictionary<string, object> parameters = new Dictionary<string, object>();
+
 						// parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
 						// parameters.Add("password", registrationInfo.Password);
 
@@ -371,8 +439,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						// ok, check the result
 						if(result.StatusCode == HttpStatusCode.OK && !string.IsNullOrWhiteSpace(result.Content)) {
 							// ok, we are not registered. we can await a response from the IP Validator
+							var serializerSettings = new JsonSerializerOptions();
+							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 							
-							return JsonSerializer.Deserialize<List<WebTransactionPoolResult>>(result.Content);
+							return JsonSerializer.Deserialize<List<WebTransactionPoolResult>>(result.Content, serializerSettings);
 						}
 
 						throw new ApplicationException();
@@ -381,14 +451,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					Log.Error(ex, "Failed to query web transaction pool");
 				}
 			}
-			
+
 			return new List<WebTransactionPoolResult>();
+		}
+
+		public void RegisterValidationServer(List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
+			this.networkingService.RegisterValidationServer(this.centralCoordinator.ChainId, appointmentWindows, appointmentValidatorDelegate);
+		}
+
+		public void UnregisterValidationServer() {
+			this.networkingService.UnregisterValidationServer(this.centralCoordinator.ChainId);
+		}
+
+		public void AddAppointmentWindow(DateTime appointment, TimeSpan window) {
+			this.networkingService.AddAppointmentWindow(appointment, window);
+		}
+
+		public bool InAppointmentWindow => this.networkingService.InAppointmentWindow;
+		public bool InAppointmentWindowProximity => this.networkingService.InAppointmentWindowProximity;
+		
+
+		public bool IsInAppointmentWindow(DateTime appointment) {
+			return this.networkingService.IsInAppointmentWindow(appointment);
 		}
 
 		/// <summary>
 		///     try to register through the public webapi interface
 		/// </summary>
-		protected async Task PerformWebTransactionRegistration(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, LockContext lockContext) {
+		protected async Task PerformWebTransactionRegistration(ITransactionEnvelope signedTransactionEnvelope, CorrelationContext correlationContext, LockContext lockContext) {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
@@ -396,12 +486,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
 
-				SafeArrayHandle bytes = transactionEnvelope.DehydrateEnvelope();
+				SafeArrayHandle bytes = signedTransactionEnvelope.DehydrateEnvelope();
 				parameters.Add("transactionEnvelope", bytes.Entry.ToBase64());
 				bytes.Return();
 
-				string url = transactionEnvelope.IsPresentation ? chainConfiguration.WebPresentationRegistrationUrl : chainConfiguration.WebTransactionRegistrationUrl;
-				string action = transactionEnvelope.IsPresentation ? "presentation/register" : "transactions/register";
+				string url = chainConfiguration.WebTransactionRegistrationUrl;
+				string action = "transactions/register";
+
+				if(signedTransactionEnvelope is IPresentationTransactionEnvelope) {
+					url = chainConfiguration.WebPresentationRegistrationUrl;
+					action = "presentation/register";
+				}
 
 				IRestResponse result = await restUtility.Put(url, action, parameters).ConfigureAwait(false);
 
@@ -414,27 +509,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				throw new ApplicationException("Failed to register transaction through web");
 			}).ConfigureAwait(false);
-
-			await this.ConfirmTransactionSent(transactionEnvelope, correlationContext, 0, lockContext).ConfigureAwait(false);
-
-		}
-
-		protected Task ConfirmTransactionSent(ITransactionEnvelope transactionEnvelope, CorrelationContext correlationContext, long messageHash, LockContext lockContext) {
-			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionSent(transactionEnvelope.Contents.Uuid), correlationContext);
-
-			return IndependentActionRunner.RunAsync(lockContext, lc => {
-				return Repeater.RepeatAsync(() => this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionCacheEntry(transactionEnvelope.Contents.Uuid, WalletTransactionCache.TransactionStatuses.Dispatched, messageHash, lc));
-			}, lc => {
-				ITransaction transaction = transactionEnvelope.Contents.RehydratedTransaction;
-
-				return Repeater.RepeatAsync(async () => this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalTransactionHistoryEntry(transaction, transactionEnvelope.Contents.Uuid, WalletTransactionHistory.TransactionStatuses.Dispatched, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight, lc));
-			});
 		}
 
 		/// <summary>
 		///     try to register through the public webapi interface
 		/// </summary>
-		protected async Task PerformWebMessageRegistration(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
+		protected async Task PerformWebMessageRegistration(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext, ChainNetworkingProvider.MessageDispatchTypes messageDispatchType) {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
@@ -442,12 +522,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
 
-				SafeArrayHandle bytes = messageEnvelope.DehydrateEnvelope();
-				parameters.Add("transactionEnvelope", bytes.Entry.ToBase64());
-				bytes.Return();
-
+				using SafeArrayHandle bytes = messageEnvelope.DehydrateEnvelope();
+				parameters.Add("messageEnvelope", bytes.Entry.ToBase64());
+				
 				string url = chainConfiguration.WebMessageRegistrationUrl;
 				string action = "messages/register";
+
+				if(messageDispatchType == ChainNetworkingProvider.MessageDispatchTypes.GeneralMessage) {
+					
+				} else if(messageDispatchType == ChainNetworkingProvider.MessageDispatchTypes.AppointmentInitiationRequest) {
+					url = chainConfiguration.WebAppointmentsRegistrationUrl;
+					action = "appointments/initiation";
+				} else if(messageDispatchType == ChainNetworkingProvider.MessageDispatchTypes.AppointmentRequest) {
+					url = chainConfiguration.WebAppointmentsRegistrationUrl;
+					action = "appointments/appointment";
+				} else if(messageDispatchType == ChainNetworkingProvider.MessageDispatchTypes.AppointmentValidatorResults) {
+					url = chainConfiguration.WebAppointmentsRegistrationUrl;
+					action = "appointments/validator";
+
+					if(messageEnvelope is ISignedMessageEnvelope signedEnvelope && signedEnvelope.Contents.RehydratedEvent is IAppointmentVerificationResultsMessage appointmentVerificationResultsMessage) {
+						
+					} else {
+						throw new ApplicationException("Invalid appointment initiation envelope type");
+					}
+				}
 
 				IRestResponse result = await restUtility.Put(url, action, parameters).ConfigureAwait(false);
 
@@ -463,21 +561,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		}
 
-		protected IBlockchainGossipMessageSet PrepareGossipTransactionMessageSet(ITransactionEnvelope transactionEnvelope) {
+		protected IBlockchainGossipMessageSet PrepareTransactionGossipMessageSet(ITransactionEnvelope signedTransactionEnvelope) {
 
 			// lets prepare our message first
-			IBlockchainGossipMessageSet gossipMessageSet = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.CreateTransactionCreatedGossipMessageSet(transactionEnvelope);
+			IBlockchainGossipMessageSet gossipMessageSet = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.CreateTransactionCreatedGossipMessageSet(signedTransactionEnvelope);
+
+			bool setMetadata = false;
+			bool presentation = false;
+
+			if(signedTransactionEnvelope is IPresentationTransactionEnvelope) {
+				setMetadata = true;
+				presentation = true;
+			}
+
+			if(setMetadata) {
+				gossipMessageSet.MessageMetadata = new GossipMessageMetadata(new TransactionGossipMessageMetadataDetails(presentation), this.centralCoordinator.ChainId);
+			}
 
 			this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.HashGossipMessage(gossipMessageSet);
 
 			return gossipMessageSet;
 		}
 
-		protected IBlockchainGossipMessageSet PrepareGossipBlockchainMessageMessageSet(IMessageEnvelope messageEnvelope) {
+		protected IBlockchainGossipMessageSet PrepareBlockchainMessageGossipMessageSet(IMessageEnvelope messageEnvelope) {
 
 			// lets prepare our message first
 			IBlockchainGossipMessageSet gossipMessageSet = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.CreateBlockchainMessageCreatedGossipMessageSet(messageEnvelope);
-
+			//gossipMessageSet.MessageMetadata = new GossipMessageMetadata(new BlockchainMessageGossipMessageMetadataDetails(), this.centralCoordinator.ChainId);
 			this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.HashGossipMessage(gossipMessageSet);
 
 			return gossipMessageSet;
@@ -498,18 +608,424 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public async Task DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
-
+		public async Task<(bool success, CheckAppointmentRequestConfirmedResult result)> PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext) {
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
 			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
 			bool sent = false;
+			CheckAppointmentRequestConfirmedResult result = null;
+			
+			if(useWeb) {
+				try {
+
+					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+
+					(sent, result) = await Repeater.RepeatAsync(async () => {
+
+						Dictionary<string, object> parameters = new Dictionary<string, object>();
+
+						parameters.Add("requesterId", requesterId);
+						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
+						string action = "appointments/check-appointment-request-confirmed";
+
+						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
+
+						// ok, check the result
+						if(webResult.StatusCode == HttpStatusCode.OK) {
+							
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, null);
+							}
+							// ok, all good
+							var serializerSettings = new JsonSerializerOptions();
+							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+							
+							return (true, JsonSerializer.Deserialize<CheckAppointmentRequestConfirmedResult>(webResult.Content, serializerSettings));
+						}
+
+						throw new ApplicationException("Failed to register message through web");
+					}).ConfigureAwait(false);
+
+					if(sent && result != null) {
+						return (sent, result);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to register message through web");
+
+					// do nothing, we will sent it on chain
+					sent = false;
+				}
+			}
+
+			if(!sent && useGossip) {
+				if(this.CanSendGossip(chainConfiguration.RegistrationMethod)) {
+
+					sent = await SendAppointmentRequest(requesterId, null, null, Enums.AppointmentRequestModes.RequestConfirmation, lockContext).ConfigureAwait(false);
+					
+					throw new ApplicationException("Failed to send message");
+				} else {
+					throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
+				}
+			}
+
+			return (sent, null);
+		}
+
+		public async Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext) {
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
+			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
+			bool sent = false;
+			CheckAppointmentVerificationConfirmedResult result = null;
+			
+			if(useWeb) {
+				try {
+
+					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+
+					(sent, result) = await Repeater.RepeatAsync(async () => {
+
+						Dictionary<string, object> parameters = new Dictionary<string, object>();
+
+						parameters.Add("requesterId", requesterId);
+						parameters.Add("secretAppointmentId", secretAppointmentId);
+						
+						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
+						string action = "appointments/check-appointment-verification-confirmed";
+
+						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
+
+						// ok, check the result
+						if(webResult.StatusCode == HttpStatusCode.OK) {
+							
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, null);
+							}
+							// ok, all good
+							var serializerSettings = new JsonSerializerOptions();
+							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+							
+							return (true, JsonSerializer.Deserialize<CheckAppointmentVerificationConfirmedResult>(webResult.Content, serializerSettings));
+						}
+
+						throw new ApplicationException("Failed to register message through web");
+					}).ConfigureAwait(false);
+
+					if(sent && result != null) {
+						return (sent, result);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to register message through web");
+
+					// do nothing, we will sent it on chain
+					sent = false;
+				}
+			}
+
+			if(!sent && useGossip) {
+				if(this.CanSendGossip(chainConfiguration.RegistrationMethod)) {
+
+					sent = await SendAppointmentRequest(requesterId, null, null, Enums.AppointmentRequestModes.VerificationConfirmation, lockContext).ConfigureAwait(false);
+					
+				} else {
+					throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
+				}
+			}
+
+			return (sent, null);
+		}
+
+		public async Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, long requesterIndex, DateTime appointment, LockContext lockContext) {
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
+			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
+			bool sent = false;
+			CheckAppointmentContextResult result = null;
+			
+			if(useWeb) {
+				try {
+
+					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+
+					(sent, result) = await Repeater.RepeatAsync(async () => {
+
+						Dictionary<string, object> parameters = new Dictionary<string, object>();
+
+						parameters.Add("requesterId", requesterId);
+						parameters.Add("appointment", appointment.Ticks);
+						
+						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
+						string action = "appointments/check-appointment-context";
+
+						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
+
+						// ok, check the result
+						if(webResult.StatusCode == HttpStatusCode.OK) {
+							
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, null);
+							}
+							// ok, all good
+							var serializerSettings = new JsonSerializerOptions();
+							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, null);
+							}
+							return (true, JsonSerializer.Deserialize<CheckAppointmentContextResult>(webResult.Content, serializerSettings));
+						}
+
+						throw new ApplicationException("Failed to register message through web");
+					}).ConfigureAwait(false);
+
+					if(sent && result != null) {
+						return (sent, result);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to register message through web");
+
+					// do nothing, we will sent it on chain
+					sent = false;
+				}
+			}
+
+			if(!sent && useGossip) {
+				if(this.CanSendGossip(chainConfiguration.RegistrationMethod)) {
+					
+					sent = await SendAppointmentRequest(requesterId, requesterIndex, appointment, Enums.AppointmentRequestModes.Context, lockContext).ConfigureAwait(false);
+				} else {
+					throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
+				}
+			}
+
+			return (sent, null);
+		}
+
+		public async Task<(bool success, CheckAppointmentTriggerResult result)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext) {
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
+			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
+			bool sent = false;
+			CheckAppointmentTriggerResult result = null;
+			
+			if(useWeb) {
+				try {
+
+					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+
+					(sent, result) = await Repeater.RepeatAsync(async () => {
+
+						Dictionary<string, object> parameters = new Dictionary<string, object>();
+
+						parameters.Add("appointment", appointment.Ticks);
+						
+						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
+						string action = "appointments/check-appointment-trigger";
+
+						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
+
+						// ok, check the result
+						if(webResult.StatusCode == HttpStatusCode.OK) {
+							
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, null);
+							}
+							// ok, all good
+							var serializerSettings = new JsonSerializerOptions();
+							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+							
+							return (true, JsonSerializer.Deserialize<CheckAppointmentTriggerResult>(webResult.Content, serializerSettings));
+						}
+
+						throw new ApplicationException("Failed to register message through web");
+					}).ConfigureAwait(false);
+
+					if(sent && result != null) {
+						return (sent, result);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to register message through web");
+
+					// do nothing, we will sent it on chain
+					sent = false;
+				}
+			}
+
+			if(!sent && useGossip) {
+				if(this.CanSendGossip(chainConfiguration.RegistrationMethod)) {
+
+					sent = await SendAppointmentRequest(null, null, appointment, Enums.AppointmentRequestModes.VerificationConfirmation, lockContext).ConfigureAwait(false);
+				} else {
+					throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
+				}
+			}
+			
+			return (sent, null);
+		}
+		
+		public async Task<(bool success, CheckAppointmentsResult result)> QueryAvailableAppointments(LockContext lockContext) {
+			
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
+			
+			if(useWeb) {
+				try {
+
+					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+
+					bool sent = false;
+					CheckAppointmentsResult result = null;
+
+					(sent, result) = await Repeater.RepeatAsync(async () => {
+
+						Dictionary<string, object> parameters = new Dictionary<string, object>();
+						
+						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
+						string action = "appointments/check-appointments";
+
+						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
+
+						// ok, check the result
+						if(webResult.StatusCode == HttpStatusCode.OK) {
+							
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, null);
+							}
+							// ok, all good
+							var serializerSettings = new JsonSerializerOptions();
+
+							return (true, JsonSerializer.Deserialize<CheckAppointmentsResult>(webResult.Content, serializerSettings));
+						}
+
+						throw new ApplicationException("Failed to register message through web");
+					}).ConfigureAwait(false);
+
+					if(sent && result != null) {
+						return (true, result);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to register message through web");
+					
+				}
+			}
+			
+			return (false, null);
+		}
+
+		public async Task<(bool success, QueryValidatorAppointmentSessionsResult result)> QueryValidatorAppointmentSessions(AccountId miningAccountId, List<DateTime> appointments, List<Guid> hashes, LockContext lockContext) {
+			
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
+			
+			if(useWeb) {
+				try {
+
+					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+
+					bool sent = false;
+					QueryValidatorAppointmentSessionsResult result = null;
+
+					(sent, result) = await Repeater.RepeatAsync(async () => {
+
+						Dictionary<string, object> parameters = new Dictionary<string, object>();
+						
+						parameters.Add("miningAccountId", miningAccountId.ToLongRepresentation());
+						
+						parameters.Add("appointments", string.Join(";", appointments.Select(h => h.ToString("o"))));
+						parameters.Add("hashes", string.Join(";", hashes.Select(h => h.ToString())));
+						
+						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
+						string action = "appointments/check-validator-appointment-sessions";
+
+						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
+
+						// ok, check the result
+						if(webResult.StatusCode == HttpStatusCode.OK) {
+							
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, null);
+							}
+							// ok, all good
+							var serializerSettings = new JsonSerializerOptions();
+							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+							
+							return (true, JsonSerializer.Deserialize<QueryValidatorAppointmentSessionsResult>(webResult.Content, serializerSettings));
+						}
+
+						throw new ApplicationException("Failed to register message through web");
+					}).ConfigureAwait(false);
+
+					if(sent && result != null) {
+						return (true, result);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to register message through web");
+					
+				}
+			}
+			
+			return (false, null);
+		}
+		
+		private async Task<bool> SendAppointmentRequest(Guid? requesterId, long? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode, LockContext lockContext) {
+			
+			if(this.appointmentRequestWorkflow == null) {
+				this.appointmentRequestWorkflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ClientWorkflowFactoryBase.CreateAppointmentRequestWorkflow(requesterId, requesterIndex, appointment, mode);
+
+				this.appointmentRequestWorkflow.Completed2 += (b, workflow) => {
+					this.appointmentRequestWorkflow = null;
+					return Task.CompletedTask;
+				};
+				this.centralCoordinator.PostWorkflow(this.appointmentRequestWorkflow);
+
+				await appointmentRequestWorkflow.Wait().ConfigureAwait(false);
+
+				if(appointmentRequestWorkflow.Task.IsCompletedSuccessfully && appointmentRequestWorkflow.Result != null && !appointmentRequestWorkflow.Result.IsZero) {
+					
+					ISignedMessageEnvelope messageEnvelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ISignedMessageEnvelope>(appointmentRequestWorkflow.Result);
+
+					ValidationResult valid = new ValidationResult();
+			
+					await this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(messageEnvelope, true, result => {
+						valid = result;
+					}, lockContext).ConfigureAwait(false);
+
+					if(valid.Valid) {
+
+						await this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedEvent, messageEnvelope, lockContext).ConfigureAwait(false);
+
+						return true;
+					}
+				}
+			}
+
+			return false;
+		}
+		
+
+		public async Task DispatchNewMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext, ChainNetworkingProvider.MessageDispatchTypes messageDispatchType = ChainNetworkingProvider.MessageDispatchTypes.GeneralMessage) {
+
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			var method = chainConfiguration.RegistrationMethod;
+
+			if(messageDispatchType == ChainNetworkingProvider.MessageDispatchTypes.Elections) {
+				method = chainConfiguration.ElectionsRegistrationMethod;
+			}
+			bool useWeb = method.HasFlag(AppSettingsBase.ContactMethods.Web);
+			bool useGossip = method.HasFlag(AppSettingsBase.ContactMethods.Gossip);
+			bool sent = false;
 
 			if(useWeb) {
 				try {
 
-					await this.PerformWebMessageRegistration(messageEnvelope, correlationContext).ConfigureAwait(false);
+					await this.PerformWebMessageRegistration(messageEnvelope, correlationContext, messageDispatchType).ConfigureAwait(false);
 					sent = true;
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "Failed to register message through web");
@@ -520,23 +1036,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			if(!sent && useGossip) {
-				if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections && (this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount >= chainConfiguration.MinimumDispatchPeerCount)) {
-
-					IBlockchainGossipMessageSet gossipMessageSet = this.PrepareGossipBlockchainMessageMessageSet(messageEnvelope);
-
-					await Repeater.RepeatAsync(async () => {
-						// ok, we are ready. lets send it out to the world!!  :)
-						await this.SendGossipTransaction(gossipMessageSet).ConfigureAwait(false);
-						sent = true;
-					}).ConfigureAwait(false);
-
-					if(!sent) {
-						throw new ApplicationException("Failed to send message");
-					}
-
-				} else {
-					throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
-				}
+				sent = await DispatchNewGossipMessage(messageEnvelope, correlationContext, method).ConfigureAwait(false);
 			}
 
 			if(!sent) {
@@ -544,17 +1044,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
+		public Task<bool> DispatchNewGossipMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext) {
+
+			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+
+			return this.DispatchNewGossipMessage(messageEnvelope, correlationContext, chainConfiguration.RegistrationMethod);
+		}
+
+		public async Task<bool> DispatchNewGossipMessage(IMessageEnvelope messageEnvelope, CorrelationContext correlationContext, AppSettingsBase.ContactMethods method) {
+
+
+			bool sent = false;
+			if(this.CanSendGossip(method)) {
+
+				IBlockchainGossipMessageSet gossipMessageSet = this.PrepareBlockchainMessageGossipMessageSet(messageEnvelope);
+
+				await Repeater.RepeatAsync(gossipMessageSet, async (messageSet, count) => {
+					// ok, we are ready. lets send it out to the world!!  :)
+					await this.SendGossipTransaction(messageSet).ConfigureAwait(false);
+					sent = true;
+				}).ConfigureAwait(false);
+
+				if(!sent) {
+					throw new ApplicationException("Failed to send gossip message");
+				}
+
+			} else {
+				throw new ApplicationException("Failed to send message. Not enough peers available to send a gossip message.");
+			}
+
+			return sent;
+		}
+
 		public async Task<bool> DispatchElectionMessages(List<IElectionCandidacyMessage> messages, LockContext lockContext) {
 			if((messages != null) && messages.Any()) {
 
 				// well, seems we have messages!  lets send them out. first, prepare the envelopes
 
-				List<IMessageEnvelope> results = await this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PrepareElectionMessageEnvelopes(messages, lockContext).ConfigureAwait(false);
+				List<ISignedMessageEnvelope> results = await this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PrepareElectionMessageEnvelopes(messages, lockContext).ConfigureAwait(false);
 
 				HashSet<Guid> sentMessages = new HashSet<Guid>();
 
 				await Repeater.RepeatAsync(async () => {
-					foreach(IMessageEnvelope envelope in results) {
+					foreach(ISignedMessageEnvelope envelope in results) {
 						// if we repeat, lets not send the successful ones more than once.
 						if(!sentMessages.Contains(envelope.ID)) {
 							await this.DispatchNewMessage(envelope, new CorrelationContext()).ConfigureAwait(false);

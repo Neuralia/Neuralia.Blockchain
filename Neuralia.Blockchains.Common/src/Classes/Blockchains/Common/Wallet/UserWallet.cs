@@ -16,7 +16,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 		[BsonId]
 		Guid Id { get; set; }
 
-		Guid ActiveAccount { get; set; }
+		string ActiveAccount { get; set; }
 
 		int Major { get; set; }
 		int Minor { get; set; }
@@ -24,18 +24,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 		int NetworkId { get; set; }
 		ushort ChainId { get; set; }
 
-		Dictionary<Guid, IWalletAccount> Accounts { get; set; }
+		Dictionary<string, IWalletAccount> Accounts { get; set; }
 
-		void InitializeNewDefaultAccount(BlockchainServiceSet serviceSet, IChainTypeCreationFactory typeCreationFactory);
+		void InitializeNewDefaultAccount(BlockchainServiceSet serviceSet, Enums.AccountTypes accountType, IChainTypeCreationFactory typeCreationFactory);
 
 		List<IWalletAccount> GetStandardAccounts();
 
+		bool HasAccount { get; }
 		IWalletAccount GetActiveAccount();
-		bool SetActiveAccount(string name);
-		bool SetActiveAccount(Guid uuid);
-		IWalletAccount GetAccount(Guid uuid);
+		bool SetActiveAccountByName(string name);
+		bool SetActiveAccount(string accountCode);
+
+		IWalletAccount GetAccount(string accountCode);
+		IWalletAccount GetAccountByName(string accountCode);
+		
 		IWalletAccount GetAccount(AccountId accountId);
-		IWalletAccount GetAccount(string name);
 		List<IWalletAccount> GetAccounts();
 	}
 
@@ -56,7 +59,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 		[BsonId]
 		public Guid Id { get; set; } = Guid.NewGuid();
 
-		public Guid ActiveAccount { get; set; } = Guid.Empty;
+		public string ActiveAccount { get; set; } = "";
 
 		public int Major { get; set; } = 1;
 		public int Minor { get; set; } = 0;
@@ -64,14 +67,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 		public int NetworkId { get; set; }
 		public ushort ChainId { get; set; }
 
-		public Dictionary<Guid, IWalletAccount> Accounts { get; set; } = new Dictionary<Guid, IWalletAccount>();
+		public Dictionary<string, IWalletAccount> Accounts { get; set; } = new Dictionary<string, IWalletAccount>();
 
-		public virtual void InitializeNewDefaultAccount(BlockchainServiceSet serviceSet, IChainTypeCreationFactory typeCreationFactory) {
-			this.CreateNewAccount(DEFAULT_ACCOUNT, Enums.AccountTypes.Standard, serviceSet, typeCreationFactory);
+		public virtual void InitializeNewDefaultAccount(BlockchainServiceSet serviceSet, Enums.AccountTypes accountType, IChainTypeCreationFactory typeCreationFactory) {
+			this.CreateNewAccount(DEFAULT_ACCOUNT, accountType, serviceSet, typeCreationFactory);
 		}
 
+		public bool HasAccount => this.Accounts.Count != 0;
 		public IWalletAccount GetActiveAccount() {
-			if(this.Accounts.Count == 0) {
+			if(!this.HasAccount) {
 				throw new ApplicationException("No user account loaded");
 			}
 
@@ -81,62 +85,62 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 
 			return this.Accounts[this.ActiveAccount];
 		}
+		
+		public bool SetActiveAccount(string accountCode) {
 
-		public bool SetActiveAccount(string name) {
-
-			if(this.Accounts.Count == 0) {
+			if(!this.HasAccount) {
 				throw new ApplicationException("No user account loaded");
 			}
 
-			IWalletAccount activeAccount = this.GetAccount(name);
-
-			if(activeAccount == null) {
-				return false;
-			}
-
-			return this.SetActiveAccount(activeAccount.AccountUuid);
-		}
-
-		public bool SetActiveAccount(Guid uuid) {
-
-			if(this.Accounts.Count == 0) {
-				throw new ApplicationException("No user account loaded");
-			}
-
-			IWalletAccount activeAccount = this.GetAccount(uuid);
+			IWalletAccount activeAccount = this.GetAccount(accountCode);
 
 			if(activeAccount == null) {
 				return false;
 			}
 
 			//TODO: should this be saved to disk?
-			this.ActiveAccount = activeAccount.AccountUuid;
+			this.ActiveAccount = activeAccount.AccountCode;
 
 			return true;
 		}
+		
+		public bool SetActiveAccountByName(string name) {
 
-		public IWalletAccount GetAccount(Guid accountUuid) {
-			if(this.Accounts.Count == 0) {
+			if(!this.HasAccount) {
 				throw new ApplicationException("No user account loaded");
 			}
 
-			if(!this.Accounts.ContainsKey(accountUuid)) {
-				throw new ApplicationException("The account does not exist");
+			IWalletAccount activeAccount = this.GetAccountByName(name);
+
+			if(activeAccount == null) {
+				return false;
 			}
 
-			return this.Accounts[accountUuid];
+			return this.SetActiveAccount(activeAccount.AccountCode);
 		}
 
-		public IWalletAccount GetAccount(string name) {
-			if(this.Accounts.Count == 0) {
+		public IWalletAccount GetAccountByName(string name) {
+			if(!this.HasAccount) {
 				return null;
 			}
 
 			return this.Accounts.Values.SingleOrDefault(i => i.FriendlyName == name);
 		}
+		
+		public IWalletAccount GetAccount(string accountCode) {
+			if(!this.HasAccount) {
+				throw new ApplicationException("No user account loaded");
+			}
+
+			if(!this.Accounts.ContainsKey(accountCode)) {
+				throw new ApplicationException("The account does not exist");
+			}
+
+			return this.Accounts[accountCode];
+		}
 
 		public IWalletAccount GetAccount(AccountId accountId) {
-			if(this.Accounts.Count == 0) {
+			if(!this.HasAccount) {
 				return null;
 			}
 
@@ -144,7 +148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 
 			if(result == null) {
 				// try by the hash if its a presentation transaction
-				result = this.Accounts.Values.SingleOrDefault(i => i.AccountUuidHash == accountId);
+				result = this.Accounts.Values.SingleOrDefault(i => i.PresentationId == accountId);
 			}
 
 			return result;
@@ -164,9 +168,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 			}
 
 			IWalletAccount newAccount = typeCreationFactory.CreateNewWalletAccount();
-			newAccount.InitializeNew(name, serviceSet, accountType);
+			newAccount.InitializeNew(name, accountType, serviceSet);
 
-			this.Accounts.Add(newAccount.AccountUuid, newAccount);
+			this.Accounts.Add(newAccount.AccountCode, newAccount);
 		}
 	}
 }

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
@@ -11,6 +10,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Messages {
@@ -69,41 +69,41 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 			this.messageFactories.Add(chainType, messageFactory);
 		}
 
-		public override ITargettedMessageSet<R> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory) {
-			using(IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data)) {
+		public override ITargettedMessageSet<R> Rehydrate(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory) {
+			using IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-				SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
-				NetworkMessageSet.ResetAfterHeader(dr);
+			using SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+			NetworkMessageSet.ResetAfterHeader(dr);
 
-				short workflowType = 0;
+			short workflowType = 0;
 
-				using(IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes)) {
+			using(IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes)) {
 
-					workflowType = messageRehydrator.ReadShort();
-				}
-
-				if(workflowType == 0) {
-					throw new ApplicationException("Invalid workflow type");
-				}
-
-				switch(workflowType) {
-					case WorkflowIDs.HANDSHAKE:
-
-						return new HandshakeMessageFactory<R>(this.serviceSet).RehydrateMessage(data, header, rehydrationFactory);
-
-					case WorkflowIDs.PEER_LIST_REQUEST:
-
-						return new PeerListRequestMessageFactory<R>(this.serviceSet).RehydrateMessage(data, header, rehydrationFactory);
-
-					case WorkflowIDs.MESSAGE_GROUP_MANIFEST:
-
-						return new MessageGroupManifestMessageFactory<R>(this.serviceSet).RehydrateMessage(data, header, rehydrationFactory);
-
-					default:
-
-						throw new ApplicationException("Workflow message factory not found");
-				}
+				workflowType = messageRehydrator.ReadShort();
 			}
+
+			if(workflowType == 0) {
+				throw new ApplicationException("Invalid workflow type");
+			}
+
+			switch(workflowType) {
+				case WorkflowIDs.HANDSHAKE:
+
+					return new HandshakeMessageFactory<R>(this.serviceSet).Rehydrate(data, header, rehydrationFactory);
+
+				case WorkflowIDs.PEER_LIST_REQUEST:
+
+					return new PeerListRequestMessageFactory<R>(this.serviceSet).Rehydrate(data, header, rehydrationFactory);
+
+				case WorkflowIDs.MESSAGE_GROUP_MANIFEST:
+
+					return new MessageGroupManifestMessageFactory<R>(this.serviceSet).Rehydrate(data, header, rehydrationFactory);
+
+				default:
+
+					throw new ApplicationException("Workflow message factory not found");
+			}
+
 		}
 
 		/// <summary>
@@ -122,45 +122,45 @@ namespace Neuralia.Blockchains.Core.P2p.Messages {
 		}
 
 		public virtual IRoutingHeader RehydrateMessageHeader(SafeArrayHandle data) {
-			using(IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data)) {
+			using IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-				IRoutingHeader header = null;
+			IRoutingHeader header = null;
 
-				// skip the initial network optionsBase
-				byte networkOptions = dr.ReadByte();
-				(int headerSize, int _, int _) = dr.ReadSectionSize();
+			// skip the initial network optionsBase
+			byte networkOptions = dr.ReadByte();
+			(int headerSize, int _, int _) = dr.ReadSectionSize();
 
-				ComponentVersion<SimpleUShort> version = dr.RehydrateRewind<ComponentVersion<SimpleUShort>>();
+			ComponentVersion<SimpleUShort> version = dr.RehydrateRewind<ComponentVersion<SimpleUShort>>();
 
-				switch(version.Type.Value.Value) {
-					case 1:
+			switch(version.Type.Value.Value) {
+				case 1:
 
-						if(version == (1, 0)) {
-							header = new TargettedHeader();
-						}
+					if(version == (1, 0)) {
+						header = new TargettedHeader();
+					}
 
-						break;
+					break;
 
-					case 2:
+				case 2:
 
-						if(version == (1, 0)) {
-							header = new GossipHeader();
-						}
+					if(version == (1, 0)) {
+						header = new GossipHeader();
+					}
 
-						break;
-				}
-
-				if(header == null) {
-					throw new ApplicationException("Invalid message header type");
-				}
-
-				header.Rehydrate(dr);
-
-				// make sure we set this here, externally since the value is outside the reading ability of the header rehydrator
-				header.NetworkOptions = networkOptions;
-
-				return header;
+					break;
 			}
+
+			if(header == null) {
+				throw new ApplicationException("Invalid message header type");
+			}
+
+			header.Rehydrate(dr);
+
+			// make sure we set this here, externally since the value is outside the reading ability of the header rehydrator
+			header.NetworkOptions = networkOptions;
+
+			return header;
+
 		}
 
 		/// <summary>

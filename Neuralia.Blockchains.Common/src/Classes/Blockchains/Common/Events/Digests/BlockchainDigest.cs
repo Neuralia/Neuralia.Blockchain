@@ -31,7 +31,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 		SafeArrayHandle GenesisBlockHash { get; }
 		SafeArrayHandle BlockHash { get; }
 		BlockId BlockId { get; set; }
-		long LastStandardAccountId { get; set; }
+		long LastUserAccountId { get; set; }
+		long LastServerAccountId { get; set; }
+		long LastModeratorAccountId { get; set; }
 		long LastJointAccountId { get; set; }
 
 		IPublishedAccountSignature Signature { get; }
@@ -65,7 +67,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 		public SafeArrayHandle BlockHash { get; } = SafeArrayHandle.Create();
 		public SafeArrayHandle GenesisBlockHash { get; } = SafeArrayHandle.Create();
 
-		public long LastStandardAccountId { get; set; }
+		public long LastUserAccountId { get; set; }
+		public long LastServerAccountId { get; set; }
+		public long LastModeratorAccountId { get; set; }
 		public long LastJointAccountId { get; set; }
 
 		public BlockchainDigestDescriptor DigestDescriptor { get; set; } = new BlockchainDigestDescriptor();
@@ -84,7 +88,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 
 			nodeList.Add(this.Timestamp);
 
-			nodeList.Add(this.LastStandardAccountId);
+			nodeList.Add(this.LastUserAccountId);
+			nodeList.Add(this.LastServerAccountId);
+			nodeList.Add(this.LastModeratorAccountId);
 			nodeList.Add(this.LastJointAccountId);
 
 			nodeList.Add(this.DigestDescriptor);
@@ -111,7 +117,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests 
 			this.GenesisBlockHash.Entry = rehydrator.ReadNonNullableArray();
 
 			this.Timestamp.Rehydrate(rehydrator);
-			this.LastStandardAccountId = rehydrator.ReadLong();
+			this.LastUserAccountId = rehydrator.ReadLong();
+			this.LastServerAccountId = rehydrator.ReadLong();
+			this.LastModeratorAccountId = rehydrator.ReadLong();
 			this.LastJointAccountId = rehydrator.ReadLong();
 
 			this.Signature.Rehydrate(rehydrator);

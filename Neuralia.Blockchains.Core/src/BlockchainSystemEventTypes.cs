@@ -1,3 +1,4 @@
+
 using Neuralia.Blockchains.Core.General.Types.Constants;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 
@@ -33,16 +34,20 @@ namespace Neuralia.Blockchains.Core {
 		public readonly BlockchainSystemEventType AccountCreationError;
 		public readonly BlockchainSystemEventType AccountCreationMessage;
 
+		
 		public readonly BlockchainSystemEventType AccountCreationStarted;
 		public readonly BlockchainSystemEventType AccountCreationStep;
 		public readonly BlockchainSystemEventType AccountPublicationEnded;
 		public readonly BlockchainSystemEventType AccountPublicationError;
 		public readonly BlockchainSystemEventType AccountPublicationMessage;
-		public readonly BlockchainSystemEventType AccountPublicationPOWNonceFound;
-		public readonly BlockchainSystemEventType AccountPublicationPOWNonceIteration;
+		
+		public readonly BlockchainSystemEventType POWBegin;
+		public readonly BlockchainSystemEventType POWIteration;
+		public readonly BlockchainSystemEventType POWSolution;
 
 		public readonly BlockchainSystemEventType AccountPublicationStarted;
 		public readonly BlockchainSystemEventType AccountPublicationStep;
+		public readonly BlockchainSystemEventType AccountStatusUpdated;
 
 		public readonly BlockchainSystemEventType Alert;
 		public readonly BlockchainSystemEventType BlockchainSyncEnded;
@@ -124,6 +129,21 @@ namespace Neuralia.Blockchains.Core {
 		
 		public readonly BlockchainSystemEventType RequestShutdown;
 		
+		
+		#region appointments & puzzles
+			
+			public readonly BlockchainSystemEventType AppointmentRequestSent;
+			public readonly BlockchainSystemEventType AppointmentRequestConfirmed;
+			public readonly BlockchainSystemEventType AppointmentContextCached;
+			public readonly BlockchainSystemEventType AppointmentPuzzlePreparation;
+			public readonly BlockchainSystemEventType AppointmentPuzzleBegin;
+			public readonly BlockchainSystemEventType AppointmentPuzzleCompleted;
+			public readonly BlockchainSystemEventType AppointmentVerificationRequestCompleted;
+			public readonly BlockchainSystemEventType AppointmentVerificationCompleted;
+			public readonly BlockchainSystemEventType InvalidPuzzleEngineVersion;
+			
+		#endregion
+		
 
 		static BlockchainSystemEventTypes() {
 		}
@@ -157,12 +177,12 @@ namespace Neuralia.Blockchains.Core {
 			this.KeyGenerationPercentageUpdate = this.CreateBaseConstant();
 			this.KeyGenerationError = this.CreateBaseConstant();
 
+			this.AccountStatusUpdated = this.CreateBaseConstant();
+			
 			this.AccountPublicationStarted = this.CreateBaseConstant();
 			this.AccountPublicationEnded = this.CreateBaseConstant();
 			this.AccountPublicationMessage = this.CreateBaseConstant();
 			this.AccountPublicationStep = this.CreateBaseConstant();
-			this.AccountPublicationPOWNonceIteration = this.CreateBaseConstant();
-			this.AccountPublicationPOWNonceFound = this.CreateBaseConstant();
 			this.AccountPublicationError = this.CreateBaseConstant();
 
 			this.WalletSyncStarted = this.CreateBaseConstant();
@@ -213,6 +233,22 @@ namespace Neuralia.Blockchains.Core {
 			this.ElectionProcessingCompleted = this.CreateBaseConstant();
 			
 			this.RequestShutdown = this.CreateBaseConstant();
+			
+			this.POWBegin = this.CreateBaseConstant();
+			this.POWIteration = this.CreateBaseConstant();
+			this.POWSolution = this.CreateBaseConstant();
+			
+			this.AppointmentRequestSent = this.CreateBaseConstant();
+			this.AppointmentRequestConfirmed = this.CreateBaseConstant();
+			this.AppointmentContextCached = this.CreateBaseConstant();
+			
+			this.AppointmentPuzzlePreparation = this.CreateBaseConstant();
+			this.AppointmentPuzzleBegin = this.CreateBaseConstant();
+			this.AppointmentPuzzleCompleted = this.CreateBaseConstant();
+			
+			this.AppointmentVerificationRequestCompleted = this.CreateBaseConstant();
+			this.AppointmentVerificationCompleted = this.CreateBaseConstant();
+			this.InvalidPuzzleEngineVersion = this.CreateBaseConstant();
 		}
 
 		public static BlockchainSystemEventTypes Instance { get; } = new BlockchainSystemEventTypes();

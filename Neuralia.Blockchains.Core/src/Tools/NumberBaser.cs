@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return transform(value, a => a.ToBase94());
 		}
 
-		private static long transformLong(string value, Func<string, SafeArrayHandle> transformer) {
+		private static long transformLong(string value, Func<string, ByteArray> transformer) {
 			using var bytes = transformer(value);
 			Span<byte> buffer = stackalloc byte[8];
 			bytes.Span.CopyTo(buffer);
@@ -134,7 +134,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase94());
 			}
 			
-			private static ulong transformULong(string value, Func<string, SafeArrayHandle> transformer) {
+			private static ulong transformULong(string value, Func<string, ByteArray> transformer) {
 				using var bytes = transformer(value);
 				Span<byte> buffer = stackalloc byte[8];
 				bytes.Span.CopyTo(buffer);
@@ -211,7 +211,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase94());
 			}
 			
-			private static int transformInt(string value, Func<string, SafeArrayHandle> transformer) {
+			private static int transformInt(string value, Func<string, ByteArray> transformer) {
 				using var bytes = transformer(value);
 				Span<byte> buffer = stackalloc byte[4];
 				bytes.Span.CopyTo(buffer);
@@ -288,7 +288,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase94());
 			}
 			
-			private static uint transformUInt(string value, Func<string, SafeArrayHandle> transformer) {
+			private static uint transformUInt(string value, Func<string, ByteArray> transformer) {
 				using var bytes = transformer(value);
 				Span<byte> buffer = stackalloc byte[4];
 				bytes.Span.CopyTo(buffer);
@@ -365,7 +365,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase94());
 			}
 			
-			private static short transformShort(string value, Func<string, SafeArrayHandle> transformer) {
+			private static short transformShort(string value, Func<string, ByteArray> transformer) {
 				using var bytes = transformer(value);
 				Span<byte> buffer = stackalloc byte[2];
 				bytes.Span.CopyTo(buffer);
@@ -442,7 +442,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase94());
 			}
 			
-			private static ushort transformUshort(string value, Func<string, SafeArrayHandle> transformer) {
+			private static ushort transformUshort(string value, Func<string, ByteArray> transformer) {
 				using var bytes = transformer(value);
 				Span<byte> buffer = stackalloc byte[2];
 				bytes.Span.CopyTo(buffer);

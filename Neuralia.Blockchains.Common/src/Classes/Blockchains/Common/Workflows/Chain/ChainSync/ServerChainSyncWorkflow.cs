@@ -24,6 +24,7 @@ using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Base;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
@@ -119,16 +120,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				} finally {
 					this.CentralCoordinator.ShutdownRequested -= this.CentralCoordinatorOnShutdownRequested;
 				}
-			} finally {
+			} 
+			catch(OutOfMemoryException oex) {
+				// thats bad, lets clear everything
+
+				DeliveryBlocksCache.Clear();
+				
+				GC.Collect();
+					
+				throw;
+			}
+
+			finally {
 				// clear it up, we are done. they can try again later
 				this.RemoveClientIdWorkflow();
 			}
 		}
 
 		protected virtual void PrepareHandshake(CHAIN_SYNC_TRIGGER trigger, BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> serverHandshake) {
-			if(this.ChainStateProvider.ChainInception == DateTime.MinValue) {
+			if(this.ChainStateProvider.ChainInception == DateTimeEx.MinValue) {
 				serverHandshake.Message.Status = ServerTriggerReply.SyncHandshakeStatuses.Synching;
-			} else if((trigger.ChainInception != DateTime.MinValue) && (this.ChainStateProvider.ChainInception != trigger.ChainInception)) {
+			} else if((trigger.ChainInception != DateTimeEx.MinValue) && (this.ChainStateProvider.ChainInception != trigger.ChainInception)) {
+				Console.WriteLine($"{trigger.ChainInception.ToString("o")} and {this.ChainStateProvider.ChainInception.ToString("o")}");
 				// this is a pretty serious error actually. it should always be the same for everybody
 				serverHandshake.Message.Status = ServerTriggerReply.SyncHandshakeStatuses.Error;
 			} else if(this.ChainStateProvider.DiskBlockHeight < trigger.DiskBlockHeight) {
@@ -658,7 +671,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			if(!DeliveryBlocksCache.ContainsKey(id)) {
 
-				ChannelsEntries<SafeArrayHandle> blockData = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockData(id);
+				ChannelsEntries<SafeArrayHandle> blockData = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockChannels(id);
 
 				if(blockData == null) {
 					return null;
@@ -738,7 +751,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			offsets.RunForAll((flag, offset) => {
 
 				(int i, int length) = offset;
-				slices[flag] = blockData[flag].Entry.Slice(i, length);
+				slices[flag] = (SafeArrayHandle)blockData[flag].Entry.Slice(i, length);
 			});
 
 			if(nextBlockId != 0) {

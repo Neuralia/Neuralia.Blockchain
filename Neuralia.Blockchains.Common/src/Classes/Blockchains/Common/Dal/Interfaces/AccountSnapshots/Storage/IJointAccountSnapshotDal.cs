@@ -9,7 +9,7 @@ using Neuralia.Blockchains.Tools.Locking;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage {
 
 	public interface IJointAccountSnapshotDal : IAccountSnapshotDal {
-		Task InsertNewJointAccount(AccountId accountId, long inceptionBlockId, bool correlated);
+		Task InsertNewJointAccount(AccountId accountId, long inceptionBlockId, bool Verified);
 	}
 
 	public interface IJointAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT, ACCOUNT_SNAPSHOT, ACCOUNT_ATTRIBUTE_SNAPSHOT, ACCOUNT_MEMBERS_SNAPSHOT> : IAccountSnapshotDal<ACCOUNT_SNAPSHOT_CONTEXT>, IJointAccountSnapshotDal
@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, ACCOUNT_SNAPSHOT accountSnapshotEntry);
 		Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, ACCOUNT_SNAPSHOT accountSnapshotEntry);
 
-		Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions);
+		Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<AccountId, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions);
 	}
 
 }

@@ -1,5 +1,6 @@
 ﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -17,6 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 		public KeyAddress KeyAddress { get; set; } = new KeyAddress();
 
+		
 		/// <summary>
 		///     the accompanying public key if applicable. this can help nodes that are not fully sync validate the message, even
 		///     if we dont know if the key truly is from it's account then.

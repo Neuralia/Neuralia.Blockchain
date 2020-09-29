@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
 	public interface IMessageFactory<R> : IMessageFactory
 		where R : IRehydrationFactory {
-		ITargettedMessageSet<R> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory);
+		ITargettedMessageSet<R> Rehydrate(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory);
 	}
 
 	public abstract class MessageFactory<R> : IMessageFactory<R>
@@ -31,6 +31,6 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
 		protected virtual IMainMessageFactory<R> MainMessageFactory => this.NetworkingService.MessageFactory;
 
-		public abstract ITargettedMessageSet<R> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory);
+		public abstract ITargettedMessageSet<R> Rehydrate(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory);
 	}
 }

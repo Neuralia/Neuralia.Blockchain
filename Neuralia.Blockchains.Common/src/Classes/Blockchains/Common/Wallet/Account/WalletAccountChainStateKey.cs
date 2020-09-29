@@ -1,13 +1,14 @@
 using LiteDB;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
 	public interface IWalletAccountChainStateKey {
 		[BsonId]
 		byte Ordinal { get; set; }
 
-		KeyUseIndexSet LocalKeyUse { get; set; }
-		KeyUseIndexSet LatestBlockSyncKeyUse { get; set; }
+		IdKeyUseIndexSet LocalIdKeyUse { get; set; }
+		IdKeyUseIndexSet LatestBlockSyncIdKeyUse { get; set; }
 	}
 
 	public abstract class WalletAccountChainStateKey : IWalletAccountChainStateKey {
@@ -16,10 +17,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public byte Ordinal { get; set; }
 
 		// the latest key data as we see it from our side from our use
-		public KeyUseIndexSet LocalKeyUse { get; set; } = new KeyUseIndexSet();
+		public IdKeyUseIndexSet LocalIdKeyUse { get; set; } = new IdKeyUseIndexSet();
 
 		// the latest key data as received from block confirmations
-		public KeyUseIndexSet LatestBlockSyncKeyUse { get; set; } = new KeyUseIndexSet();
+		public IdKeyUseIndexSet LatestBlockSyncIdKeyUse { get; set; } = new IdKeyUseIndexSet();
 	}
 
 }

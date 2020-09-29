@@ -1,6 +1,9 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses {
@@ -14,26 +17,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			LiteDBMappers.RegisterKeyAddress();
 		}
 
-		public byte OrdinalId { get; set; }
+		public byte OrdinalId {
+			get => this.KeyUseIndex.Ordinal;
+			set => this.KeyUseIndex.Ordinal = value;
+		}
+
+		public IdKeyUseIndexSet KeyUseIndex { get; set; } = new IdKeyUseIndexSet();
+
+		//public byte OrdinalId { get; set; }
+
+		public SafeArrayHandle Dehydrate() {
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			this.Dehydrate(dehydrator);
+
+			return dehydrator.ToArray();
+		}
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 
 			base.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.OrdinalId);
+			this.KeyUseIndex.Dehydrate(dehydrator);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 
 			base.Rehydrate(rehydrator);
 
-			this.OrdinalId = rehydrator.ReadByte();
+			this.KeyUseIndex.Rehydrate(rehydrator);
 		}
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
 
-			nodeList.Add(this.OrdinalId);
+			nodeList.Add(this.KeyUseIndex);
 
 			return nodeList;
 		}
@@ -41,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 
 			base.JsonDehydrate(jsonDeserializer);
-			jsonDeserializer.SetProperty("OrdinalId", this.OrdinalId);
+			jsonDeserializer.SetProperty("KeyUseIndex", this.KeyUseIndex);
 		}
 
 		public new KeyAddress Clone() {
@@ -56,7 +73,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected override void Copy(PublishedAddress newAddress) {
 
 			if(newAddress is KeyAddress keyAddress) {
-				keyAddress.OrdinalId = this.OrdinalId;
+				keyAddress.KeyUseIndex = this.KeyUseIndex.Clone2();
 			}
 
 			base.Copy(newAddress);

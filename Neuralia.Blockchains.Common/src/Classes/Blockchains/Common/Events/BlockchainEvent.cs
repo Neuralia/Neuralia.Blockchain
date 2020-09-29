@@ -14,24 +14,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events {
 		//		void Rehydrate(IDataRehydrator rehydrator, IRehydrationFactory rehydrationFactory);
 	}
 
-	public interface IBlockchainEvent<VERSION_TYPE> : IVersionable<VERSION_TYPE>, IBlockchainEvent
-		where VERSION_TYPE : SimpleUShort<VERSION_TYPE>, new() {
-		//		void Rehydrate(ArrayWrapper data, IRehydrationFactory rehydrationFactory);
-		//		void Rehydrate(IDataRehydrator rehydrator, IRehydrationFactory rehydrationFactory);
+
+	public interface IBlockchainEvent<DEHYDRATED> : IBlockchainEvent
+		where DEHYDRATED : IDehydrateBlockchainEvent {
+
 	}
 
-	public interface IBlockchainEvent<DEHYDRATED, in REHYDRATION_FACTORY, VERSION_TYPE> : IBlockchainEvent<VERSION_TYPE>
+	public interface IBlockchainEvent<DEHYDRATED, in REHYDRATION_FACTORY> : IBlockchainEvent<DEHYDRATED>
 		where DEHYDRATED : IDehydrateBlockchainEvent
-		where REHYDRATION_FACTORY : IRehydrationFactory
-		where VERSION_TYPE : SimpleUShort<VERSION_TYPE>, new() {
+		where REHYDRATION_FACTORY : IRehydrationFactory {
 
 		DEHYDRATED Dehydrate(BlockChannelUtils.BlockChannelTypes activeChannels);
+
 		void Rehydrate(DEHYDRATED data, REHYDRATION_FACTORY rehydrationFactory);
 		void Rehydrate(SafeArrayHandle data, REHYDRATION_FACTORY rehydrationFactory);
 		void Rehydrate(IDataRehydrator rehydrator, REHYDRATION_FACTORY rehydrationFactory);
 	}
 
-	/// <summary>
+	public interface IBlockchainEvent<DEHYDRATED, in REHYDRATION_FACTORY, VERSION_TYPE> : IVersionable<VERSION_TYPE>, IBlockchainEvent<DEHYDRATED, REHYDRATION_FACTORY>
+		where DEHYDRATED : IDehydrateBlockchainEvent
+		where REHYDRATION_FACTORY : IRehydrationFactory 
+		where VERSION_TYPE : SimpleUShort<VERSION_TYPE>, new() {
+
+		}
+
+/// <summary>
 	///     The base class for all events in the blockchain
 	/// </summary>
 	/// <typeparam name="REHYDRATION_FACTORY"></typeparam>

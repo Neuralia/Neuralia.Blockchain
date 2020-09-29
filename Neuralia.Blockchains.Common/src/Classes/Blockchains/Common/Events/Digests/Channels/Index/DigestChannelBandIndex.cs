@@ -181,7 +181,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			using FileStreamSliceHashNodeList sliceHashNodes = new FileStreamSliceHashNodeList(filename, this.fileSystem);
 
-			return HashingUtils.Hash3(sliceHashNodes);
+			return (SafeArrayHandle)HashingUtils.Hash3(sliceHashNodes);
 
 		}
 	}

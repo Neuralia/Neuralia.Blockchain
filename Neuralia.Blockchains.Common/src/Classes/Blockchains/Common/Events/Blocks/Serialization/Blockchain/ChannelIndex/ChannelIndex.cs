@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId);
 
 		ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
-		SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
+		SafeArrayHandle QueryIndexedTransactionOffsets(uint adjustedBlockId, int indexedTransactionIndex);
 
 		ChannelsEntries<long> QueryProviderFileSizes();
 	}
@@ -57,7 +57,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public abstract ChannelsEntries<SafeArrayHandle> QueryBytes(uint adjustedBlockId);
 
 		public abstract ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(uint adjustedBlockId, ChannelsEntries<(int offset, int length)> offsets);
-		public abstract SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex);
+		public abstract SafeArrayHandle QueryIndexedTransactionOffsets(uint adjustedBlockId, int indexedTransactionIndex);
 
 		public abstract ChannelsEntries<long> QueryProviderFileSizes();
 

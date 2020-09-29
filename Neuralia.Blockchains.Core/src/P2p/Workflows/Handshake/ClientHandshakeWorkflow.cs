@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
@@ -41,6 +42,40 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.PeerUnique = true;
 		}
 
+
+		public class ClientHandshakeException : WorkflowException
+		{
+			public enum ExceptionDetails
+			{
+				Unknown,
+				IsHub,
+				BadHub,
+				NoAnswer,
+				TimeOutOfSync,
+				Duplicate,
+				ConnectionDropped,
+				ConnectionError,
+				ConnectionsSaturated,
+				InvalidPeer,
+				InvalidNetworkId,
+				ChainUnsupported,
+				Rejected,
+				Loopback,
+				AlreadyConnected,
+				AlreadyConnecting,
+				ClientHandshakeConfirmFailed,
+				ClientHandshakeConfirmDropped,
+				CanGoNoFurther,
+				ClientVersionRefused,
+			}
+
+			public ExceptionDetails Details { get; private set; } = ExceptionDetails.Unknown;
+			public ClientHandshakeException(ExceptionDetails details) : base($"{details}") {
+				this.Details = details;
+			}
+
+		}
+
 		public NetworkEndPoint Endpoint { get; }
 
 		protected override void LogWorkflowException(Exception ex) {
@@ -55,7 +90,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 		protected override async Task PerformWork(LockContext lockContext) {
 			try {
 				if(!await this.PerformConnection().ConfigureAwait(false)) {
-					throw new WorkflowException();
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.Unknown);
 				}
 			} catch {
 				this.CloseConnection();
@@ -70,9 +105,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.serverConnection = null;
 		}
 
-		private async Task<bool> PerformConnection() {
+		private async Task<bool> PerformConnection()
+		{
 			this.CheckShouldCancel();
-
+			
 			TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger = this.MessageFactory.CreateHandshakeWorkflowTriggerSet(this.CorrelationId);
 			NLog.Default.Verbose("Sending correlation id {0}", this.CorrelationId);
 
@@ -98,10 +134,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			// lets make one last check, to ensure this connection is not already happening (maybe they tried to connect to us) before we contact them
 			if(this.networkingService.ConnectionStore.PeerConnectionExists(this.Endpoint, PeerConnection.Directions.Outgoing)) {
 				// thats it, we are already connecting, lets stop here and ignore it. we are done and we wont go further.
-
 				NLog.Default.Verbose("Connection already exists");
-
-				return false;
+				throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.Duplicate);
 			}
 			
 			// tell the server our own time schedule
@@ -112,8 +146,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				if(!this.SendMessage(this.serverConnection, handshakeTrigger)) {
 					NLog.Default.Verbose($"Connection with peer  {this.serverConnection.ScoppedAdjustedIp} was terminated");
-
-					return false;
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.NoAnswer);
 				}
 
 				TargettedMessageSet<ServerHandshake<R>, R> serverHandshake = null;
@@ -123,48 +156,64 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				} catch(Exception ex) {
 
 					NLog.Default.Verbose("Failed to connect to peer");
-
 					// this can happen if for some reason the other side cuts the connection early.
-					this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
-
-					return false;
+					this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo); //FIXME: this is now IPMarshall's job
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ConnectionDropped);
 				}
+				
 
-				//TODO: check if any errors
-				if(serverHandshake.Message.Status != ServerHandshake<R>.HandshakeStatuses.Ok) {
-
-					if(serverHandshake.Message.Status == ServerHandshake<R>.HandshakeStatuses.Loopback) {
+				switch (serverHandshake.Message.Status)
+				{ 
+					case ServerHandshake<R>.HandshakeStatuses.Ok:
+						break;
+					case ServerHandshake<R>.HandshakeStatuses.Loopback:
 						NLog.Default.Verbose("We attempted to connect to ourselves. let's cancel that");
 
 						if(ClientHandshakeWorkflow.ConnectingNonces.ContainsKey(handshakeTrigger.Message.nonce)) {
 							ClientHandshakeWorkflow.ConnectingNonces.RemoveSafe(handshakeTrigger.Message.nonce);
 						}
-
 						// let's make the connection as one of ours.
 						this.networkingService.ConnectionStore.AddLocalAddress(this.Endpoint.EndPoint.Address);
-
-						return false;
-					} else if(serverHandshake.Message.Status == ServerHandshake<R>.HandshakeStatuses.AlreadyConnected) {
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.Loopback);
+					case ServerHandshake<R>.HandshakeStatuses.AlreadyConnected:
 						NLog.Default.Verbose("We are already connected to this peer. removing");
-
 						// let's make the connection as one of ours.
 						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
-
-						return false;
-					} else if(serverHandshake.Message.Status == ServerHandshake<R>.HandshakeStatuses.AlreadyConnecting) {
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.AlreadyConnected);
+					case ServerHandshake<R>.HandshakeStatuses.AlreadyConnecting:
 						NLog.Default.Verbose("We are already connecting to this peer. removing");
-
 						// let's make the connection as one of ours.
 						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.AlreadyConnecting);
+					case ServerHandshake<R>.HandshakeStatuses.ConnectionsSaturated:
+						NLog.Default.Verbose("This peer is saturated.");
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ConnectionsSaturated);
+					case ServerHandshake<R>.HandshakeStatuses.InvalidPeer:
+						NLog.Default.Verbose("This peer is invalid.");
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.InvalidPeer);
+					case ServerHandshake<R>.HandshakeStatuses.ClientVersionRefused:
+						NLog.Default.Verbose("This peer's client version is refused.");
+						// let's make the connection as one of ours.
+						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientVersionRefused);
+					case ServerHandshake<R>.HandshakeStatuses.InvalidNetworkId:
+						NLog.Default.Verbose("This peer's network Id is invalid.");
+						// let's make the connection as one of ours.
+						this.networkingService.ConnectionStore.AddIgnorePeerNode(this.serverConnection.NodeAddressInfo);
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.InvalidNetworkId);	
+					case ServerHandshake<R>.HandshakeStatuses.TimeOutOfSync:
+						NLog.Default.Verbose("This peer's current time seems out of sync.");
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.InvalidNetworkId);
 
-						return false;
-					} else {
-						NLog.Default.Verbose("Server returned an error: {0}", serverHandshake.Message.Status);
-
-						return false;
-					}
-
+					case ServerHandshake<R>.HandshakeStatuses.ChainUnsupported:
+						NLog.Default.Verbose("This peer's chain is not supported.");
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ChainUnsupported);
+		
+					default:
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.Unknown);
+						
 				}
+
 
 				// lets take note of this peer's type
 				this.serverConnection.NodeInfo = serverHandshake.Message.nodeInfo;
@@ -172,13 +221,12 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				TargettedMessageSet<ClientHandshakeConfirm<R>, R> clientConfirm = this.ProcessServerHandshake(handshakeTrigger, serverHandshake.Message, this.serverConnection);
 
 				if(clientConfirm == null) {
-					return false;
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmFailed);
 				}
 
 				if(!this.SendMessage(this.serverConnection, clientConfirm)) {
 					NLog.Default.Verbose($"Connection with peer  {this.serverConnection.ScoppedAdjustedIp} was terminated");
-
-					return false;
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmDropped);
 				}
 
 				TargettedMessageSet<ServerHandshakeConfirm<R>, R> serverResponse = this.WaitSingleNetworkMessage<ServerHandshakeConfirm<R>, TargettedMessageSet<ServerHandshakeConfirm<R>, R>, R>();
@@ -191,7 +239,6 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					await this.AddValidConnection(serverResponse.Message, this.serverConnection).ConfigureAwait(false);
 
 					this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
-
 					return true;
 				}
 			} finally {
@@ -199,7 +246,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					ClientHandshakeWorkflow.ConnectingNonces.RemoveSafe(handshakeTrigger.Message.nonce);
 				}
 			}
-
+			
 			return false;
 		}
 
@@ -247,8 +294,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 					NLog.Default.Verbose("Sending handshake negative response");
 					this.SendFinalMessage(peerConnectionn, clientConfirm);
-
-					return null;
+					
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.TimeOutOfSync);
 				}
 
 				// now we validate our peer
@@ -260,7 +307,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					NLog.Default.Verbose("Sending handshake negative response, the peer version is unacceptable");
 					this.SendFinalMessage(peerConnectionn, clientConfirm);
 
-					return null;
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientVersionRefused);
 				}
 
 				// ok, seem its all in order, lets take its values
@@ -285,7 +332,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					NLog.Default.Verbose("Sending handshake negative response, the peer version is unacceptable");
 					this.SendFinalMessage(peerConnectionn, clientConfirm);
 
-					return null;
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientVersionRefused);
 				}
 
 				// ok, here the peer is usable
@@ -296,7 +343,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 					NLog.Default.Verbose("The non hub reported peer is listed as a hub!");
 
-					return null;
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.BadHub);
 				}
 
 				if(serverHandshake.Connectable.HasValue) {
@@ -315,7 +362,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.SkipHubCheck && !this.networkingService.ConnectionStore.IsNeuraliumHub(peerConnectionn)) {
 					NLog.Default.Verbose("The reported hub is not listed as a hub!");
 
-					return null;
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.BadHub);
 				}
 
 				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(IPUtils.GuidToIP(serverHandshake.PerceivedIP), ConnectionStore.PublicIpSource.Hub);
@@ -332,56 +379,55 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 		protected virtual bool ProcessServerHandshakeConfirm(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, ServerHandshake<R> serverHandshake, ServerHandshakeConfirm<R> serverHandshakeConfirm, PeerConnection peerConnectionn) {
 
-			if(serverHandshakeConfirm.Status == ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.CanGoNoFurther) {
+			switch (serverHandshakeConfirm.Status)
+			{
+				case ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Ok:
+				{
+					
+					if(serverHandshake.nodeInfo == NodeInfo.Hub) {
+						NLog.Default.Verbose("The peer reported as a hub, but did not Stop the connection when it should. This is illegal");
 
-				if(serverHandshake.nodeInfo != NodeInfo.Hub) {
-					NLog.Default.Verbose("The peer stops the connection like a hub, but does not report as one. This is illegal");
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.BadHub);
+					}
 
-					return false;
+					return true;
 				}
+				case ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.CanGoNoFurther:
+				{
 
-				if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.SkipHubCheck && !this.networkingService.ConnectionStore.IsNeuraliumHub(peerConnectionn)) {
+					if(serverHandshake.nodeInfo != NodeInfo.Hub) {
+						NLog.Default.Verbose("The peer stops the connection like a hub, but does not report as one. This is illegal");
 
-					NLog.Default.Verbose("The peer behaves like a hub but is not recorded as a hub. this is illegal");
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.CanGoNoFurther);
+					}
 
-					return false;
+					if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.SkipHubCheck && !this.networkingService.ConnectionStore.IsNeuraliumHub(peerConnectionn)) {
+
+						NLog.Default.Verbose("The peer behaves like a hub but is not recorded as a hub. this is illegal");
+
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.BadHub);
+					}
+
+					// ok, this node does not go any further. lets take the results it nicely sent us and add it to our contents
+					// take the peer nodes
+					this.networkingService.ConnectionStore.AddAvailablePeerNodes(serverHandshakeConfirm.nodes, false);
+
+					NLog.Default.Verbose("Server tells us it can go no further. we will now disconnect");
+
+					// this connection is not added, goes no further
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.IsHub);
 				}
-
-				// ok, this node does not go any further. lets take the results it nicely sent us and add it to our contents
-				// take the peer nodes
-				this.networkingService.ConnectionStore.AddAvailablePeerNodes(serverHandshakeConfirm.nodes, false);
-
-				NLog.Default.Verbose("Server tells us it can go no further. we will now disconnect");
-
-				// this connection is not added, goes no further
-				return false;
+				case ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Rejected:
+					NLog.Default.Verbose("The peer rejected our connection :(");
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.Rejected);
+				case ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Error:
+					NLog.Default.Verbose("The peer reported and error. the connection failed.");
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ConnectionError);
+				default:
+					NLog.Default.Verbose("Something wrong happened, we can go no further.");
+					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.Unknown);
 			}
 
-			if(serverHandshakeConfirm.Status == ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Rejected) {
-				NLog.Default.Verbose("The peer rejected our connection :(");
-
-				return false;
-			}
-
-			if(serverHandshakeConfirm.Status == ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Error) {
-				NLog.Default.Verbose("The peer reported and error. the connection failed.");
-
-				return false;
-			}
-
-			if(serverHandshakeConfirm.Status != ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Ok) {
-				NLog.Default.Verbose("Something wrong happened, we can go no further.");
-
-				return false;
-			}
-
-			if(serverHandshake.nodeInfo == NodeInfo.Hub) {
-				NLog.Default.Verbose("The peer reported as a hub, but did not Stop the connection when it should. This is illegal");
-
-				return false;
-			}
-
-			return true;
 		}
 
 		protected override HandshakeMessageFactory<R> CreateMessageFactory() {

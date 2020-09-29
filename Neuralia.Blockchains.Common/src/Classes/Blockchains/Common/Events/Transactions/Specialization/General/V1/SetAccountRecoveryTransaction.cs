@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -22,8 +23,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			Revoke = 2
 		}
 
-		public override HashNodeList GetStructuresArray() {
-			HashNodeList hashNodeList = base.GetStructuresArray();
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
+			HashNodeList hashNodeList = base.GetStructuresArray(types);
 
 			hashNodeList.Add((byte) this.Operation);
 			hashNodeList.Add(this.AccountRecoveryHash);
@@ -42,7 +43,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("AccountRecoveryHash", this.AccountRecoveryHash);
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => new[] {this.TransactionId.Account}.ToImmutableList();
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.Range;
+		public override AccountId[] ImpactedAccounts =>this.TargetAccounts;
+		public override AccountId[] TargetAccounts => this.GetSenderList();
 
 		protected override void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(dataChannels, rehydrationFactory);

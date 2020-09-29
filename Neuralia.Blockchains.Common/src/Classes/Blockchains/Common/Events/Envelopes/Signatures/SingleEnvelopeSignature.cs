@@ -6,15 +6,16 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures {
 	public interface ISingleEnvelopeSignature {
+		IAccountSignatureBase AccountSignatureBase { get; }
 	}
 
 	public interface ISingleEnvelopeSignature<T> : IEnvelopeSignature, ISingleEnvelopeSignature
-		where T : IAccountSignature, new() {
+		where T : IAccountSignatureBase, new() {
 		T AccountSignature { get; }
 	}
 
 	public abstract class SingleEnvelopeSignature<T> : EnvelopeSignature, ISingleEnvelopeSignature<T>
-		where T : IAccountSignature, new() {
+		where T : IAccountSignatureBase, new() {
 		public SingleEnvelopeSignature() {
 			this.AccountSignature = new T();
 
@@ -23,6 +24,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			}
 		}
 
+		public IAccountSignatureBase AccountSignatureBase => this.AccountSignature;
 		public T AccountSignature { get; }
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -48,5 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			jsonDeserializer.SetProperty("AccountSignature", this.AccountSignature);
 		}
+
+		
 	}
 }

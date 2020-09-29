@@ -64,7 +64,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			await using(FileStream fileStream = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.None, LARGE_BUFFER_SIZE, true)) {
 
-				await Download(requestUri, fileStream).ConfigureAwait(false);
+				await this.Download(requestUri, fileStream).ConfigureAwait(false);
 			}
 		}
 
@@ -72,9 +72,9 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			await using(MemoryStream memoryStream = new MemoryStream()) {
 
-				await Download(requestUri, memoryStream).ConfigureAwait(false);
+				await this.Download(requestUri, memoryStream).ConfigureAwait(false);
 
-				return ByteArray.WrapAndOwn(memoryStream.ToArray());
+				return SafeArrayHandle.WrapAndOwn(memoryStream.ToArray());
 			}
 		}
 
@@ -85,8 +85,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 					HttpClientHandler httpClientHandler = new HttpClientHandler();
 
-					if(appSettingsBase.ProxySettings != null) {
-						httpClientHandler.Proxy = GetProxy();
+					if(this.appSettingsBase.ProxySettings != null) {
+						httpClientHandler.Proxy = this.GetProxy();
 						httpClientHandler.PreAuthenticate = true;
 						httpClientHandler.UseDefaultCredentials = true;
 					}

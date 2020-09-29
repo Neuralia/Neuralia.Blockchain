@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -16,13 +17,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 	public class AccountResetWarningTransaction : ModerationTransaction, IAccountResetWarningTransaction {
 
-		public override HashNodeList GetStructuresArray() {
-			HashNodeList hashNodeList = base.GetStructuresArray();
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
+			HashNodeList hashNodeList = base.GetStructuresArray(types);
 
 			hashNodeList.Add(this.Account);
 			hashNodeList.Add(this.Echo);
 
 			return hashNodeList;
+		}
+
+		protected override void Sanitize() {
+			base.Sanitize();
 		}
 
 		public byte Echo { get; set; }
@@ -36,7 +41,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("Account", this.Account);
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => new[] {this.Account}.ToImmutableList();
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.Range;
+		public override AccountId[] ImpactedAccounts => this.TargetAccounts;
+		public override AccountId[] TargetAccounts => new[] {this.Account};
+		
 
 		protected override void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(dataChannels, rehydrationFactory);

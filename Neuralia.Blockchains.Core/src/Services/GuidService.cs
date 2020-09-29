@@ -1,10 +1,13 @@
 using System;
+using Neuralia.Blockchains.Tools.Cryptography;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using RT.Comb;
 
 namespace Neuralia.Blockchains.Core.Services {
 	public interface IGuidService {
 		Guid Create();
-
+		string CreateAccountCode();
+		
 		DateTime GetTimestamp(Guid guid);
 	}
 
@@ -26,6 +29,12 @@ namespace Neuralia.Blockchains.Core.Services {
 			//time = time.AddDays(-1).AddHours(4);
 
 			return Provider.PostgreSql.Create(time);
+		}
+
+		public string CreateAccountCode() {
+			using var code = ByteArray.Create(2);
+			code.FillSafeRandom();
+			return code.ToBase30();
 		}
 
 		public DateTime GetTimestamp(Guid guid) {

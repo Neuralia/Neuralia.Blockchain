@@ -1,6 +1,9 @@
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
@@ -14,6 +17,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 	}
 
 	public class McElieceWalletKey : WalletKey, IMcElieceWalletKey {
+		
+		public McElieceWalletKey() {
+		}
+		
+		protected override ComponentVersion<CryptographicKeyType> SetIdentity() {
+			return (CryptographicKeyTypes.Instance.MCELIECE, 1,0);
+		}
 
 		public McElieceEncryptor.McElieceCipherModes McElieceCipherMode { get; set; }
 		public int M { get; set; }

@@ -128,7 +128,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <param name="s"></param>
 		/// <returns></returns>
 		public static bool IsReallyConnected(this Socket socket) {
-
+			if(!socket.Connected) {
+				return false;
+			}
 			// first, check the active connections and simply check the state of the active connections
 			bool success = false;
 

@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Serilog;
@@ -24,12 +26,6 @@ namespace Neuralia.Blockchains.Core.Network {
 		///     The <see cref="IPMode">IPMode</see> the listener is listening for new clients on.
 		/// </summary>
 		IPMode IPMode { get; }
-
-		/// <summary>
-		///     A list of IP addresses we have blacklisted.false Connections from these clients will be refused.
-		/// </summary>
-		/// <returns></returns>
-		List<IPAddress> BlackListedAddresses { get; }
 
 		bool IsDisposed { get; }
 		event TcpServer.MessageBytesReceived NewConnection;
@@ -75,34 +71,43 @@ namespace Neuralia.Blockchains.Core.Network {
 		public TcpServer(NetworkEndPoint endPoint, TcpConnection.ExceptionOccured exceptionCallback, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) {
 			this.exceptionCallback = exceptionCallback;
 			this.EndPoint = endPoint.EndPoint;
-			this.IPMode = endPoint.IPMode;
 
 			if(protocolMessageFilters == null) {
 				this.protocolMessageFilters = TcpConnection.ProtocolMessageTypes.All;
 			} else {
 				this.protocolMessageFilters = protocolMessageFilters;
 			}
-
-			if(NodeAddressInfo.IsAddressIpV4(endPoint)) {
-				this.listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-			} else {
-				if(!Socket.OSSupportsIPv6) {
-					throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
-				}
-
+			
+			if(!Socket.OSSupportsIPv6 && endPoint.IPMode.HasFlag(IPMode.IPv6)) {
+				throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
+			}
+			
+			if(TcpConnection.IPv6Supported && endPoint.IPMode.HasFlag(IPMode.IPv6)) {
 				this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-				this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+
+				if(endPoint.IPMode.HasFlag(IPMode.IPv4)) {
+					this.IPMode = IPMode.Both;
+					this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+					this.listener.DualMode = true;
+					
+				} else {
+					this.IPMode = IPMode.IPv6;
+					this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+				}
+			} else {
+				this.IPMode = IPMode.IPv4;
+				this.listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 			}
 
 			this.listener.InitializeSocketParameters();
 
 			// seems to be needed in case the listener is not completely disposed yet (on linux and MacOs)
 			//https://github.com/dotnet/corefx/issues/24562
-			//TODO: this is a bug fix, and maybe in the future we dont need the below anymore.
-			// if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
-			// 	this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-			// 	this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
-			// }
+			//TODO: this is a bug fix, and maybe in the future we may not need the below anymore.
+			if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
+				this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+				this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
+			}
 		}
 
 		/// <summary>
@@ -114,12 +119,6 @@ namespace Neuralia.Blockchains.Core.Network {
 		///     The <see cref="IPMode">IPMode</see> the listener is listening for new clients on.
 		/// </summary>
 		public IPMode IPMode { get; }
-
-		/// <summary>
-		///     A list of IP addresses we have blacklisted.false Connections from these clients will be refused.
-		/// </summary>
-		/// <returns></returns>
-		public List<IPAddress> BlackListedAddresses { get; } = new List<IPAddress>();
 
 		public bool IsDisposed { get; private set; }
 
@@ -190,17 +189,8 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				IPEndPoint endPoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
 
-				// first thing, ensure rate limiting
-				bool shouldDisconnect = connectionInstance.server.CheckShouldDisconnect(endPoint);
-
-				if(!shouldDisconnect) {
-
-					// check to make sure we allow this client. If an IP address is blacklisted, we kill it completely and rudely. we dont care, they are blacklisted.
-					shouldDisconnect = connectionInstance.server.IsConnectionBlacklisted(endPoint.Address);
-				}
-
-				// we kill this connection as quickly as we can here
-				if(shouldDisconnect) {
+				// first thing, ask IPMarshall
+				if(connectionInstance.server.CheckShouldDisconnect(endPoint)) {
 					try {
 						tcpSocket.Close();
 					} catch(ObjectDisposedException) {
@@ -216,14 +206,15 @@ namespace Neuralia.Blockchains.Core.Network {
 					try {
 						tcpSocket?.Close();
 						tcpSocket?.Dispose();
+						
 					} catch {
-
+						//TODO: tell the IPMarshall?
 					}
-
+					IPMarshall.Instance.Quarantine(endPoint.Address, IPMarshall.QuarantineReason.ConnectionBroken, DateTimeEx.CurrentTime.AddSeconds(3));
 					NLog.Default.Verbose("Failed to establish connection");
 				}
 			} catch(Exception ex) {
-				NLog.Default.Error(ex, "Failed to listen for connections. this is bad. trying to reesablish connection.");
+				NLog.Default.Error(ex, "Failed to listen for connections. this is bad. trying to reestablish connection.");
 
 				try {
 					// lets try again
@@ -235,33 +226,9 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 		}
-
+		
 		protected virtual bool CheckShouldDisconnect(IPEndPoint endPoint) {
-			return RateLimiter.Instance.CheckEntryCanConnect(endPoint.Address) == false;
-		}
-
-		/// <summary>
-		///     if a connection is blacklisted, we reject it immediately, no niceness
-		/// </summary>
-		/// <param name="address"></param>
-		/// <returns></returns>
-		public bool IsConnectionBlacklisted(IPAddress address) {
-
-			IPAddress[] blackListed = null;
-
-			lock(this.locker) {
-				blackListed = this.BlackListedAddresses.ToArray();
-			}
-
-			if(blackListed.Contains(address)) {
-				return true;
-			}
-
-			if(GlobalSettings.ApplicationSettings.Blacklist.Any(e => e.Ip == address.ToString())) {
-				return true;
-			}
-
-			return false;
+			return IPMarshall.Instance.RequestIncomingConnectionClearance(endPoint.Address) == false;
 		}
 
 		public void AcceptNewConnection(Socket tcpSocket) {

@@ -285,14 +285,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <param name="blockIndex"></param>
-		/// <param name="masterTransactionIndex"></param>
+		/// <param name="indexedTransactionIndex"></param>
 		/// <returns></returns>
-		public SafeArrayHandle QueryBlockMasterTransactionOffsets(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int masterTransactionIndex) {
+		public SafeArrayHandle QueryBlockIndexedTransactionOffsets(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int indexedTransactionIndex) {
 			ChannelIndexSet channelIndexSet = this.CreateChannelSet(BlockChannelUtils.BlockChannelTypes.Keys);
 
 			uint adjustedBlockId = this.PrepareContext(blockId, blockIndex, channelIndexSet);
 
-			return channelIndexSet.QueryMasterTransactionOffsets(adjustedBlockId, masterTransactionIndex);
+			return channelIndexSet.QueryIndexedTransactionOffsets(adjustedBlockId, indexedTransactionIndex);
 		}
 
 		public ChannelsEntries<SafeArrayHandle> QueryPartialBlockBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, ChannelsEntries<(int offset, int length)> offsets) {

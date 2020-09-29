@@ -1,5 +1,6 @@
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 	public class Sha3SakuraTree : SakuraTree<Sha3ExternalDigest> {
@@ -24,9 +25,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		protected override SafeArrayHandle GenerateHash(SafeArrayHandle hopeBytes, Sha3ExternalDigest hasher) {
 
 			hasher.BlockUpdate(hopeBytes);
-			hasher.DoFinalReturn(out SafeArrayHandle hash);
+			hasher.DoFinalReturn2(out ByteArray hash);
 
-			return hash;
+			return (SafeArrayHandle)hash;
 		}
 	}
 }

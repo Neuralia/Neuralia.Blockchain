@@ -31,8 +31,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	public class TransactionTypes : UShortConstantSet<TransactionType> {
 
 		public readonly TransactionType ACCREDITATION_CERTIFICATE;
-		public readonly TransactionType DEBUG;
-		public readonly TransactionType DEBUG_KEYED;
 
 		public readonly TransactionType GATED_JUDGEMENT_TRANSACTION;
 
@@ -52,7 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public readonly TransactionType NONE;
 		public readonly TransactionType SET_ACCOUNT_CORRELATION;
 		public readonly TransactionType SET_ACCOUNT_RECOVERY;
-		public readonly TransactionType SIMPLE_PRESENTATION;
+		public readonly TransactionType STANDARD_PRESENTATION;
 
 		static TransactionTypes() {
 		}
@@ -60,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		protected TransactionTypes() : base(10_000) {
 
 			this.GENESIS = this.CreateBaseConstant();
-			this.SIMPLE_PRESENTATION = this.CreateBaseConstant();
+			this.STANDARD_PRESENTATION = this.CreateBaseConstant();
 			this.JOINT_PRESENTATION = this.CreateBaseConstant();
 			this.KEY_CHANGE = this.CreateBaseConstant();
 			this.ACCREDITATION_CERTIFICATE = this.CreateBaseConstant();
@@ -79,9 +77,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.MODERATION_PRESENTATION = this.CreateBaseConstant();
 			this.MODERATION_OPERATING_RULES = this.CreateBaseConstant();
 			this.MODERATION_ELECTION_POOL_PRESENTATION = this.CreateBaseConstant();
-
-			this.DEBUG = this.CreateBaseConstant();
-			this.DEBUG_KEYED = this.CreateBaseConstant();
+			
 			this.NONE = this.CreateBaseConstant();
 		}
 

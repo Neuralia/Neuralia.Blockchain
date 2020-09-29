@@ -1,4 +1,5 @@
 ﻿using System;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -8,23 +9,23 @@ using Org.BouncyCastle.Crypto;
 namespace Neuralia.Blockchains.Core.Cryptography.Hash {
 
 	public abstract class Hasher : IHasher<SafeArrayHandle> {
-		protected readonly IDigest digest;
+		protected readonly IHashDigest digest;
 
-		public Hasher(IDigest digest) {
+		public Hasher(IHashDigest digest) {
 			this.digest = digest;
 		}
 
 		public virtual SafeArrayHandle Hash(SafeArrayHandle message) {
-			SafeArrayHandle retValue = ByteArray.Create(this.digest.GetDigestSize());
+			SafeArrayHandle retValue = SafeArrayHandle.Create(this.digest.GetDigestSize());
 			this.digest.BlockUpdate(message.Bytes, message.Offset, message.Length);
 			this.digest.DoFinal(retValue.Bytes, retValue.Offset);
 
-			return retValue;
+			return (SafeArrayHandle)retValue;
 		}
 
 		public SafeArrayHandle Hash(byte[] message) {
 
-			using(SafeArrayHandle buffer = ByteArray.Create(message.Length)) {
+			using(SafeArrayHandle buffer = SafeArrayHandle.Create(message.Length)) {
 
 				buffer.Entry.CopyFrom(message.AsSpan());
 
@@ -45,14 +46,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Hash {
 				len2 = message2.Length;
 			}
 
-			using(SafeArrayHandle buffer = ByteArray.Create(len1 + len2)) {
+			using(SafeArrayHandle buffer = SafeArrayHandle.Create(len1 + len2)) {
 
 				if(message1 != null) {
-					message1.Entry.CopyTo(buffer.Entry);
+					message1.CopyTo(buffer.Entry);
 				}
 
 				if(message2 != null) {
-					message2.Entry.CopyTo(buffer.Entry, len1);
+					message2.CopyTo(buffer.Entry, len1);
 				}
 
 				// do the hash
@@ -108,7 +109,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Hash {
 		public bool IsDisposed { get; private set; }
 
 		public SafeArrayHandle HashTwo(SafeArrayHandle message1, ulong message2) {
-			return this.HashTwo(message1, TypeSerializer.Serialize(message2));
+			return this.HashTwo(message1, (SafeArrayHandle)TypeSerializer.Serialize(message2));
 		}
 
 		protected virtual void Dispose(bool disposing) {

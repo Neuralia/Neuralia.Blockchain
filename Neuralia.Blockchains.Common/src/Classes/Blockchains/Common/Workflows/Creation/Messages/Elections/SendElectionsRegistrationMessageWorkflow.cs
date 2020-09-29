@@ -9,7 +9,7 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Messages.Elections {
-	public interface ISendElectionsRegistrationMessageWorkflow<out CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IGenerateNewMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public interface ISendElectionsRegistrationMessageWorkflow<out CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IGenerateNewSignedMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 	}
@@ -19,12 +19,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 	/// </summary>
 	/// <typeparam name="CENTRAL_COORDINATOR"></typeparam>
 	/// <typeparam name="CHAIN_COMPONENT_PROVIDER"></typeparam>
-	public class SendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ASSEMBLY_PROVIDER> : GenerateNewMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ASSEMBLY_PROVIDER>, ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public class SendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : GenerateNewSignedMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, ISendElectionsRegistrationMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
+		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
 		protected readonly AccountId candidateAccountID;
+
+		protected override ChainNetworkingProvider.MessageDispatchTypes MessageDispatchType => ChainNetworkingProvider.MessageDispatchTypes.Elections;
 
 		protected readonly ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo;
 		protected readonly Enums.MiningTiers miningTier;
@@ -37,7 +38,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			this.miningTier = miningTier;
 		}
 
-		protected override Task<IMessageEnvelope> AssembleEvent(LockContext lockContext) {
+		protected override Task<ISignedMessageEnvelope> AssembleEvent(LockContext lockContext) {
 			if(this.registrationMethod == AppSettingsBase.ContactMethods.Gossip) {
 
 				return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.GenerateOnChainElectionsRegistrationMessage(this.candidateAccountID, this.miningTier, this.electionsCandidateRegistrationInfo, lockContext);

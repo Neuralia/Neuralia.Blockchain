@@ -155,7 +155,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
-		protected virtual async Task CleanMesageCache() {
+		protected virtual async Task CleanMessageCache() {
 			try {
 				await this.dataAccessService.CreateMessageRegistryDal(this.globalsService.GetSystemStorageDirectoryPath(), this.serviceSet).CleanMessageCache().ConfigureAwait(false);
 			} catch(Exception ex) {
@@ -186,7 +186,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			// lets hash it if it was not already
 			if(sendGossipMessageTask.gossipMessageSet.BaseHeader.Hash == 0) {
-				HashingUtils.HashGossipMessageSet(sendGossipMessageTask.gossipMessageSet);
+				HashingUtils.SetHashGossipMessageSet(sendGossipMessageTask.gossipMessageSet);
 			}
 
 			// now we add it to our database as already received, we dont need to get it back from other peers. we set it as valid, since this is our own message
@@ -341,7 +341,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				if(header is TargettedHeader targettedHeader) {
 					// this is a targeted header, its meant only for us
 
-					ITargettedMessageSet<R> messageSet = this.networkingService.MessageFactory.RehydrateMessage(task.data, targettedHeader, this.chainlessBlockchainEventsRehydrationFactory);
+					ITargettedMessageSet<R> messageSet = this.networkingService.MessageFactory.Rehydrate(task.data, targettedHeader, this.chainlessBlockchainEventsRehydrationFactory);
 
 					WorkflowTracker<IWorkflow<R>, R> workflowTracker = new WorkflowTracker<IWorkflow<R>, R>(task.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.WorkflowSessionId, messageSet.Header.OriginatorId, this.networkingService.ConnectionStore.MyClientUuid, this.networkingService.WorkflowCoordinator);
 
@@ -386,7 +386,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
 						}
 
-						// forward the message to the right correlated workflow
+						// forward the message to the right Verified workflow
 						// this method will ensure we get the right workflow id for our connection
 
 						//----------------------------------------------------
@@ -431,7 +431,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					this.CheckShouldCancel();
 
 					// lets keep our database clean
-					await this.CleanMesageCache().ConfigureAwait(false);
+					await this.CleanMessageCache().ConfigureAwait(false);
 
 					this.CheckShouldCancel();
 
@@ -444,7 +444,17 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// lets act again in X seconds
 					this.nextDatabaseClean = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
 				}
-			} catch(OperationCanceledException) {
+			} 
+			catch(OutOfMemoryException oex) {
+				// thats bad, lets clear everything
+
+				this.groupManifestWorkflow = null;
+				
+				GC.Collect();
+					
+				throw;
+			}
+			catch(OperationCanceledException) {
 				throw;
 			} catch(Exception ex) {
 				NLog.Messages.Error(ex, "Failed to process connections");

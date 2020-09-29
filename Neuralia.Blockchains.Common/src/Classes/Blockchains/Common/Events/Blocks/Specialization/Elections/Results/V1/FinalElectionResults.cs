@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Serialization;
@@ -35,74 +36,82 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public override void Rehydrate(IDataRehydrator rehydrator, Dictionary<int, TransactionId> transactionIndexesTree) {
 
-			this.ElectedCandidates.Clear();
-			this.DelegateAccounts.Clear();
+			ClosureWrapper<SpecialIntegerSizeArray> electorTypesArray = new ClosureWrapper<SpecialIntegerSizeArray>();
 
-			base.Rehydrate(rehydrator, transactionIndexesTree);
+			try {
+				this.ElectedCandidates.Clear();
+				this.DelegateAccounts.Clear();
 
-			this.RehydrateHeader(rehydrator);
+				base.Rehydrate(rehydrator, transactionIndexesTree);
 
-			// then the elected ones
+				this.RehydrateHeader(rehydrator);
 
-			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
-			adaptiveLong.Rehydrate(rehydrator);
-			int count = (int) adaptiveLong.Value;
+				// then the elected ones
 
-			SafeArrayHandle typeBytes = rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, count));
-			using SpecialIntegerSizeArray electorTypesArray = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, typeBytes, count);
-
-			List<AccountId> sortedDelegateAccounts = this.DelegateAccounts.Keys.OrderBy(k => k).ToList();
-
-			AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
-
-			parameters.RehydrateExtraData = (accountId, offset, index, dh) => {
-
-				// get the delegate offset
-				AdaptiveLong1_9 delegateAccountOffset = rehydrator.ReadRehydratable<AdaptiveLong1_9>();
-
-				AccountId delegateAccount = null;
-
-				if(delegateAccountOffset != null) {
-					delegateAccount = sortedDelegateAccounts[(ushort) delegateAccountOffset.Value];
-				}
-
-				IElectedResults electedCandidateResult = this.CreateElectedResult(accountId);
-
-				this.RehydrateAccountEntry(accountId, electedCandidateResult, rehydrator);
-
-				// now the transactions
-				SequantialOffsetCalculator transactionIdCalculator = new SequantialOffsetCalculator(0);
-
+				AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 				adaptiveLong.Rehydrate(rehydrator);
-				uint transactionCount = (uint) adaptiveLong.Value;
+				int count = (int) adaptiveLong.Value;
+				
+				List<AccountId> sortedDelegateAccounts = this.DelegateAccounts.Keys.OrderBy(k => k).ToList();
 
-				List<TransactionId> assignedTransactions = new List<TransactionId>();
+				AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
-				if(transactionCount != 0) {
+				parameters.DataPrerun = () => {
+					SafeArrayHandle typeBytes = (SafeArrayHandle)rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, count));
+					electorTypesArray.Value = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, typeBytes, count);
+				};
 
-					for(int j = 0; j < transactionCount; j++) {
+				parameters.RehydrateExtraData = (accountId, offset, index, totalIndex, dh) => {
 
-						adaptiveLong.Rehydrate(rehydrator);
+					// get the delegate offset
+					AdaptiveLong1_9 delegateAccountOffset = rehydrator.ReadRehydratable<AdaptiveLong1_9>();
 
-						int transactionIndex = (int) transactionIdCalculator.RebuildValue(adaptiveLong.Value);
+					AccountId delegateAccount = null;
 
-						// that's our transaction
-						if(transactionIndexesTree.ContainsKey(transactionIndex)) {
-							assignedTransactions.Add(transactionIndexesTree[transactionIndex]);
-						}
-
-						transactionIdCalculator.AddLastOffset();
+					if(delegateAccountOffset != null) {
+						delegateAccount = sortedDelegateAccounts[(ushort) delegateAccountOffset.Value];
 					}
-				}
 
-				electedCandidateResult.Transactions = assignedTransactions.OrderBy(t => t).ToList();
-				electedCandidateResult.ElectedTier = (Enums.MiningTiers) electorTypesArray[index];
-				electedCandidateResult.DelegateAccountId = delegateAccount;
+					IElectedResults electedCandidateResult = this.CreateElectedResult(accountId);
 
-				this.ElectedCandidates.Add(accountId, electedCandidateResult);
-			};
+					this.RehydrateAccountEntry(accountId, electedCandidateResult, rehydrator);
 
-			AccountIdGroupSerializer.Rehydrate(rehydrator, true, parameters);
+					// now the transactions
+					SequentialLongOffsetCalculator transactionIdCalculator = new SequentialLongOffsetCalculator(0);
+
+					adaptiveLong.Rehydrate(rehydrator);
+					uint transactionCount = (uint) adaptiveLong.Value;
+
+					List<TransactionId> assignedTransactions = new List<TransactionId>();
+
+					if(transactionCount != 0) {
+
+						for(int j = 0; j < transactionCount; j++) {
+
+							adaptiveLong.Rehydrate(rehydrator);
+
+							int transactionIndex = (int) transactionIdCalculator.RebuildValue(adaptiveLong.Value);
+
+							// that's our transaction
+							if(transactionIndexesTree.ContainsKey(transactionIndex)) {
+								assignedTransactions.Add(transactionIndexesTree[transactionIndex]);
+							}
+
+							transactionIdCalculator.AddLastOffset();
+						}
+					}
+
+					electedCandidateResult.Transactions = assignedTransactions.OrderBy(t => t).ToList();
+					electedCandidateResult.ElectedTier = (Enums.MiningTiers) electorTypesArray.Value[totalIndex];
+					electedCandidateResult.DelegateAccountId = delegateAccount;
+
+					this.ElectedCandidates.Add(accountId, electedCandidateResult);
+				};
+
+				AccountIdGroupSerializer.Rehydrate(rehydrator, true, parameters);
+			} finally {
+				electorTypesArray?.Value?.Dispose();
+			}
 
 		}
 
@@ -147,7 +156,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			this.DelegateAccounts.Clear();
 			AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
-			parameters.RehydrateExtraData = (delegateAccountId, offset, index, dh) => {
+			parameters.RehydrateExtraData = (delegateAccountId, offset, index, totalIndex, dh) => {
 
 				IDelegateResults delegateEntry = this.CreateDelegateResult();
 				this.DelegateAccounts.Add(delegateAccountId, delegateEntry);

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AccountSnapshots.Storage.Base {

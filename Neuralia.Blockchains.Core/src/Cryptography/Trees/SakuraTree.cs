@@ -152,7 +152,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 				this.HashHop(theOne, level);
 
-				SafeArrayHandle hash = theOne.data.Branch(); // this is the final hash
+				var hash = theOne.data.Branch(); // this is the final hash
 
 				theOne.Dispose();
 
@@ -170,13 +170,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				return;
 			}
 
-			SafeArrayHandle hopBytes = hop.GetHopBytes(level);
-			SafeArrayHandle hash = this.GenerateHash(hopBytes);
+			using SafeArrayHandle hopBytes = hop.GetHopBytes(level);
+			using SafeArrayHandle hash = this.GenerateHash(hopBytes);
 			hop.data.Entry = hash.Entry;
 			hop.IsHashed = true;
-
-			hash.Dispose();
-			hopBytes.Dispose();
 		}
 
 		protected SafeArrayHandle GenerateHash(SafeArrayHandle entry) {
@@ -254,7 +251,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		protected class LeafHop : Hop {
 			private static readonly byte[] LEAF_HOP_FLAG = {0};
-			private static readonly ByteArray LEAF_HOP_LEVEL = TypeSerializer.Serialize(0);
+			private static readonly SafeArrayHandle LEAF_HOP_LEVEL = TypeSerializer.Serialize(0);
 
 			public LeafHop(SafeArrayHandle entry) : base(entry) {
 
@@ -265,7 +262,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					throw new ApplicationException("Hope has already been hashed");
 				}
 
-				SafeArrayHandle result = ByteArray.Create(this.data.Length + sizeof(int) + sizeof(int) + sizeof(byte));
+				SafeArrayHandle result = SafeArrayHandle.Create(this.data.Length + sizeof(int) + sizeof(int) + sizeof(byte));
 
 				Span<byte> intBytes = stackalloc byte[sizeof(int)];
 				TypeSerializer.Serialize(this.data.Length, intBytes);
@@ -304,14 +301,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					throw new ApplicationException("A kangourou hop should not be hashed at this point");
 				}
 
-				SafeArrayHandle resultBytes = null;
+				SafeArrayHandle result = null;
 
 				try {
 					using(SafeArrayHandle kangourouBytes = this.kangourouHop.GetHopBytes(level)) {
 						// should not be hashed yet
 
 						// out final mega array
-						SafeArrayHandle result = ByteArray.Create(kangourouBytes.Length + this.totalChainingHopsSize + sizeof(int) + sizeof(int) + sizeof(byte));
+						result = SafeArrayHandle.Create(kangourouBytes.Length + this.totalChainingHopsSize + sizeof(int) + sizeof(int) + sizeof(byte));
 						int offset = 0;
 
 						//first we copy the kangourou hop itself
@@ -337,15 +334,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 						// and since this is a chaining hop, we always have a flag of 1
 						result.Entry.CopyFrom(ChainHopFlag.AsSpan(), 0, offset, sizeof(byte));
-
-						resultBytes = result;
 					}
 				} finally {
 					// these hashing sets can get huge, so lets clear as we go so we dont use up too much RAM.
 					this.ClearHops();
 				}
 
-				return resultBytes;
+				return result;
 			}
 
 			protected override void DisposeAll() {

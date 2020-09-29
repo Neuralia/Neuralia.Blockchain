@@ -1,7 +1,7 @@
 ﻿using System;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
-using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.Serialization;
+using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Versions {

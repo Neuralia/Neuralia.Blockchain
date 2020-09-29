@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Immutable;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -14,20 +15,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		AccountId ModeratorAccountId { get; set; }
 
-		NtruCryptographicKey CommunicationsCryptographicKey { get; }
+		NTRUPrimeCryptographicKey CommunicationsCryptographicKey { get; }
+		NTRUPrimeCryptographicKey ValidatorSecretsCryptographicKey { get; }
 		XmssCryptographicKey BlocksXmssCryptographicKey { get; }
 		SecretPentaCryptographicKey BlocksChangeCryptographicKey { get; }
 		XmssCryptographicKey DigestBlocksCryptographicKey { get; }
 		SecretPentaCryptographicKey DigestBlocksChangeCryptographicKey { get; }
 		XmssCryptographicKey BinaryCryptographicKey { get; }
+		XmssCryptographicKey GossipCryptographicKey { get; }
 		SecretPentaCryptographicKey SuperChangeCryptographicKey { get; }
 		SecretPentaCryptographicKey PtahCryptographicKey { get; }
 
 		bool IsCommunicationsKeyLoaded { get; }
+		bool IsValidatorSecretsKeyLoaded { get; }
 		bool IsBLocksChangeKeyLoaded { get; }
 		bool IsDigestBlocksKeyLoaded { get; }
 		bool IsDigestBlocksChangeKeyLoaded { get; }
 		bool IsBinaryKeyLoaded { get; }
+		bool IsGossipKeyLoaded { get; }
 		bool IsSuperChangeKeyLoaded { get; }
 		bool IsPtahKeyLoaded { get; }
 	}
@@ -37,8 +42,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public GenesisModeratorAccountPresentationTransaction() {
 
 			// CommunicationsKey
-			this.Keyset.Add<NtruCryptographicKey>(GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID);
+			this.Keyset.Add<NTRUPrimeCryptographicKey>(GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID);
 
+			// Validator Secrets
+			this.Keyset.Add<NTRUPrimeCryptographicKey>(GlobalsService.MODERATOR_VALIDATOR_SECRETS_KEY_ID);
+			
 			// Blocks Key
 			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID);
 
@@ -50,6 +58,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			// DigestBlocks change key
 			this.Keyset.Add<SecretPentaCryptographicKey>(GlobalsService.MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID);
+			
+			// gossipKey
+			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_GOSSIP_KEY_ID);
 
 			// binaryKey
 			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_BINARY_KEY_ID);
@@ -65,7 +76,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public AccountId ModeratorAccountId { get; set; } = new AccountId();
 
-		public NtruCryptographicKey CommunicationsCryptographicKey => (NtruCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID];
+		public NTRUPrimeCryptographicKey CommunicationsCryptographicKey => (NTRUPrimeCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID];
+		public NTRUPrimeCryptographicKey ValidatorSecretsCryptographicKey => (NTRUPrimeCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_VALIDATOR_SECRETS_KEY_ID];
 
 		public XmssCryptographicKey BlocksXmssCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID];
 
@@ -74,24 +86,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public XmssCryptographicKey DigestBlocksCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_DIGEST_BLOCKS_KEY_ID];
 		public SecretPentaCryptographicKey DigestBlocksChangeCryptographicKey => (SecretPentaCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID];
 
+		public XmssCryptographicKey GossipCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_GOSSIP_KEY_ID];
+		
 		public XmssCryptographicKey BinaryCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BINARY_KEY_ID];
-
+		
 		public SecretPentaCryptographicKey SuperChangeCryptographicKey => (SecretPentaCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_SUPER_CHANGE_KEY_ID];
 		public SecretPentaCryptographicKey PtahCryptographicKey => (SecretPentaCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_PTAH_KEY_ID];
 
 		public bool IsCommunicationsKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_COMMUNICATIONS_KEY_ID);
+		public bool IsValidatorSecretsKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_VALIDATOR_SECRETS_KEY_ID);
 
 		public bool IsBLocksChangeKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_BLOCKS_CHANGE_KEY_ID);
 
 		public bool IsDigestBlocksKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_DIGEST_BLOCKS_KEY_ID);
 		public bool IsDigestBlocksChangeKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID);
 
-		public bool IsBinaryKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_BINARY_KEY_ID);
+		public bool IsGossipKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_GOSSIP_KEY_ID);
 
+		public bool IsBinaryKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_BINARY_KEY_ID);
+		
 		public bool IsSuperChangeKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_SUPER_CHANGE_KEY_ID);
 		public bool IsPtahKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_PTAH_KEY_ID);
 
-		public override HashNodeList GetStructuresArray() {
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
 
 			string errorMessage = "{0} key data must be loaded to generate a sakura root";
 
@@ -99,6 +116,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 				throw new ApplicationException(string.Format(errorMessage, "Communications"));
 			}
 
+			if(!this.IsValidatorSecretsKeyLoaded) {
+				throw new ApplicationException(string.Format(errorMessage, "Validator Secrets"));
+			}
+			
 			if(!this.IsBlocksXmssMTKeyLoaded) {
 				throw new ApplicationException(string.Format(errorMessage, "Blocks xmssmt"));
 			}
@@ -116,7 +137,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			}
 
 			if(!this.IsBinaryKeyLoaded) {
-				throw new ApplicationException(string.Format(errorMessage, "Binary Blocks"));
+				throw new ApplicationException(string.Format(errorMessage, "Binary xmss"));
+			}
+			
+			if(!this.IsGossipKeyLoaded) {
+				throw new ApplicationException(string.Format(errorMessage, "Gossip xmss"));
 			}
 
 			if(!this.IsSuperChangeKeyLoaded) {
@@ -129,7 +154,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			HashNodeList nodeList = new HashNodeList();
 
-			nodeList.Add(base.GetStructuresArray());
+			nodeList.Add(base.GetStructuresArray(types));
 
 			nodeList.Add(this.ModeratorAccountId.GetStructuresArray());
 
@@ -143,7 +168,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("ModeratorAccountId", this.ModeratorAccountId);
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => new[] {this.ModeratorAccountId}.ToImmutableList();
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.All;
+		public override AccountId[] ImpactedAccounts =>this.TargetAccounts;
+		public override AccountId[] TargetAccounts => new[] {this.ModeratorAccountId};
 
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);

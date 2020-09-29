@@ -85,7 +85,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			this.MiningTiers = MiningTierUtils.RehydrateTierList(rehydrator);
 
-			MiningTierUtils.RehydrateMiningSet<ushort, AdaptiveShort1_2>(this.MaximumElectedTransactionCount, 1, rehydrator, v => (ushort) v);
+			MiningTierUtils.RehydrateUShortMiningSet(this.MaximumElectedTransactionCount, rehydrator, 1);
 
 			this.CandidatureMethod = CandidatureMethodRehydrator.Rehydrate(rehydrator);
 			this.PrimariesBallotingMethod = PrimariesBallotingMethodRehydrator.Rehydrate(rehydrator);

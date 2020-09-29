@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -54,9 +55,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// </summary>
 		public bool AllowGossipPresentations { get; set; }
 
-		public override HashNodeList GetStructuresArray() {
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
 
-			HashNodeList nodeList = base.GetStructuresArray();
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
 			nodeList.Add(this.MaximumVersionAllowed);
 			nodeList.Add(this.MinimumWarningVersionAllowed);
@@ -85,8 +86,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("AllowGossipPresentations", this.AllowGossipPresentations);
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => new List<AccountId>().ToImmutableList();
-
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.All;
+		public override AccountId[] ImpactedAccounts => this.TargetAccounts;
+		public override AccountId[] TargetAccounts => System.Array.Empty<AccountId>();
+		
 		protected override void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(dataChannels, rehydrationFactory);
 

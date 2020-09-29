@@ -1,5 +1,7 @@
 using Neuralia.Blockchains.Common.Classes.Configuration;
+using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Types;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
@@ -25,8 +27,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return nodeShareType.DoesNotShare;
 		}
 
-		public static Enums.MiningTiers GetMiningTier(BlockChainConfigurations configuration, int digestId) {
+		public static Enums.MiningTiers GetMiningTier(AccountId accountId, BlockChainConfigurations configuration, int digestId) {
 
+			if(accountId == null) {
+				return Enums.MiningTiers.Other;
+			}
+			
 			// if they force a tier, then we attempt to use it (first and second tier are special, so we ignore the explicit set)
 			if(configuration.MiningTier.HasValue && (configuration.MiningTier.Value != Enums.MiningTiers.FirstTier) && (configuration.MiningTier.Value != Enums.MiningTiers.SecondTier)) {
 				return configuration.MiningTier.Value;
@@ -62,6 +68,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				determinedMiningTier = Enums.MiningTiers.FirstTier;
 			}
 
+			// finally, if its not a server account, it can not be first or second tier no matter what
+			if(accountId != null &&MiningTierUtils.IsFirstOrSecondTier(determinedMiningTier) && !accountId.IsServer) {
+				determinedMiningTier = Enums.MiningTiers.ThirdTier;
+			}
+			
 			return determinedMiningTier;
 		}
 	}

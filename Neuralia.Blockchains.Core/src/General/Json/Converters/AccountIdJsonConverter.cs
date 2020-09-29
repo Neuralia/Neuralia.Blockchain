@@ -2,7 +2,6 @@ using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Neuralia.Blockchains.Core.General.Types;
-
 namespace Neuralia.Blockchains.Core.General.Json.Converters {
 
 	public class AccountIdJsonConverter : JsonConverter<AccountId> {

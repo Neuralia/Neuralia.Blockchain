@@ -32,7 +32,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public readonly EnvelopeSignatureType Published;
 		public readonly EnvelopeSignatureType SingleSecret;
 		public readonly EnvelopeSignatureType SingleSecretCombo;
-
+		public readonly EnvelopeSignatureType Initiation;
+		public readonly EnvelopeSignatureType POW;
+		
+		
 		static EnvelopeSignatureTypes() {
 		}
 
@@ -43,6 +46,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			this.SingleSecret = this.CreateBaseConstant();
 			this.SingleSecretCombo = this.CreateBaseConstant();
 			this.Presentation = this.CreateBaseConstant();
+			this.Initiation = this.CreateBaseConstant();
+			this.POW = this.CreateBaseConstant();
 		}
 
 		public static EnvelopeSignatureTypes Instance { get; } = new EnvelopeSignatureTypes();

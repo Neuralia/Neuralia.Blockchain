@@ -4,9 +4,12 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Messages.Components;
 using Neuralia.Blockchains.Core.P2p.Workflows;
 using Neuralia.Blockchains.Core.P2p.Workflows.Handshake;
@@ -22,6 +25,7 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Blockchains.Tools.Threading;
+using Open.Nat;
 using RestSharp;
 using Serilog;
 
@@ -37,16 +41,25 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		private readonly ColoredRoutedTaskReceiver coloredTaskReceiver;
 
-		private readonly IConnectionStore connectionStore;
+		protected readonly IConnectionStore connectionStore;
 
 		private readonly List<ConnectionsManager.RequestMoreConnectionsTask> explicitConnectionRequests = new List<ConnectionsManager.RequestMoreConnectionsTask>();
 
-		private readonly IGlobalsService globalsService;
+		private IPCrawler ipCrawler;
 
-		private readonly IPCrawler ipCrawler;
+		protected IPCrawler IpCrawler {
+			get {
+				if(this.ipCrawler == null) {
+					this.ipCrawler = this.CreateIPCrawler();
+				}
+
+				return this.ipCrawler;
+			}
+		}
+
 		private readonly INetworkingService<R> networkingService;
 
-		private readonly DateTime nextHubContact = DateTime.MinValue;
+		private readonly DateTime nextHubContact = DateTimeEx.MinValue;
 
 		/// <summary>
 		///     The receiver that allows us to act as a task endpoint mailbox
@@ -56,10 +69,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private List<(string, Task)> ipCrawlerRequests = new List<(string, Task)>();
 
 		private DateTime? nextAction;
-		private DateTime? nextUpdateNodeCountAction;
+		private DateTime? nextSyncProxiesAction;
 
 		public ConnectionsManagerIPCrawler(ServiceSet<R> serviceSet) : base(10_000) {
-			this.globalsService = serviceSet.GlobalsService;
 			this.networkingService = (INetworkingService<R>) DIService.Instance.GetService<INetworkingService>();
 
 			this.clientWorkflowFactory = serviceSet.InstantiationService.GetClientWorkflowFactory(serviceSet);
@@ -73,27 +85,49 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.RoutedTaskReceiver.TaskReceived += () => {
 			};
 
-			var translations = new List<NATRule>();
+			this.nextSyncProxiesAction = this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerStartupDelay);
 
-			foreach(var rule in GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.NATRules) {
+			this.ReceiveTask(new SimpleTask(async s => {
+				await this.networkingService.ServiceSet.PortMappingService.DiscoverAndSetup().ConfigureAwait(false);
+			}));
 
-				try {
-					translations.Add(new NATRule(
-						new NodeAddressInfo(rule.FromNode.Ip, rule.FromNode.Port, NodeInfo.Full)
-						, IPAddress.Parse(rule.ToIP.Ip)
-						, rule.IncrementIPWithPortDelta));
-				} catch(Exception ex) {
-					
-					// lets just die silently if it fails
+			this.connectionStore.IncomingPeerConnectionConfirmed += async connection => {
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} incoming connection detected: {connection.NodeAddressInfo}!");
+				this.HandleNewConnection(connection);
+			};
+
+			this.connectionStore.NewAvailablePeerNode += async node => {
+				if(this.connectionStore.IsNeuraliumHub(node)) {
+					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {node} is a hub, not adding as a peer!");
+
+					return;
 				}
-			}
-			
-			List<IPAddress> blacklist = GlobalSettings.ApplicationSettings.Blacklist.Select(node => IPAddress.Parse(node.Ip)).ToList();
 
-			this.ipCrawler = new IPCrawler(GlobalSettings.ApplicationSettings.AveragePeerCount, GlobalSettings.ApplicationSettings.MaxPeerCount, 
-				1800.0, 600.0, 60.0, translations, blacklist);
-			
-			
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} new available peer node: {node}!");
+				this.IpCrawler.HandleHubIPs(new List<NodeAddressInfo> {node}, DateTimeEx.CurrentTime);
+			};
+
+		}
+
+		protected virtual IPCrawler CreateIPCrawler() {
+			return new IPCrawler(GlobalSettings.ApplicationSettings.AveragePeerCount, GlobalSettings.ApplicationSettings.MaxPeerCount, GlobalSettings.ApplicationSettings.MaxMobilePeerCount, 1800.0, 600.0, 60.0, 24 * 60 * 60, GlobalSettings.ApplicationSettings.MaxNonConnectablePeerCount);
+		}
+
+		private void HandleNewConnection(PeerConnection connection) {
+			this.IpCrawler.HandleLogin(connection.NodeAddressInfo, connection.ConnectionTime, connection.connection.Latency);
+
+			connection.Disposed += disposed => {
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} connection disposed detected: {disposed.NodeAddressInfo}!");
+				var now = DateTimeEx.CurrentTime;
+
+				this.ReceiveTask(new SimpleTask(s => {
+					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} HandleLogout: {disposed.NodeAddressInfo}");
+					this.IpCrawler.HandleLogout(disposed.NodeAddressInfo, now);
+				}));
+			};
+
+			if(!this.IpCrawler.CanAcceptNewConnection(connection.NodeAddressInfo)) // have we reached max peer count?
+				this.RequestDisconnect(connection.NodeAddressInfo); // disconnect already!
 		}
 
 		/// <summary>
@@ -142,9 +176,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.RequestPeerIPs)}: succes={success}, {nodes.Count} ips returned.");
 
 							if(success) {
-								this.ipCrawler.HandlePeerIPs(node, nodes.ToList(), DateTimeEx.CurrentTime);
+								this.IpCrawler.HandlePeerIPs(node, nodes.ToList(), DateTimeEx.CurrentTime);
 							} else {
-								this.ipCrawler.HandleTimeout(node, DateTimeEx.CurrentTime);
+								this.IpCrawler.HandleTimeout(node, DateTimeEx.CurrentTime);
 							}
 						}));
 
@@ -168,8 +202,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.ipCrawlerRequests.Add((nameof(this.RequestConnect), this.CreateConnectionAttempt(node)));
 			} else {
 				NLog.IPCrawler.Warning($"[IpCrawler] {nameof(this.RequestConnect)}: {node} already connected, calling HandleLogin(), this hints at a bug.");
-
-				this.ipCrawler.HandleLogin(node, DateTimeEx.CurrentTime);
+				this.HandleNewConnection(shouldBeEmpty.Single());
 			}
 		}
 
@@ -179,14 +212,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			// lets get a list of connected IPs
 			List<PeerConnection> connectedNodes = this.connectionStore.AllConnectionsList.Where(c => c.NodeAddressInfo.Equals(node)).ToList();
 
-			this.ipCrawlerRequests.Add((nameof(this.RequestDisconnect), this.DisconnectPeers(connectedNodes, peer => {
-					                           // run this task in the connection manager thread by sending a delegated task
-
-					                           this.ReceiveTask(new SimpleTask(s => {
-						                           NLog.IPCrawler.Verbose($"{IPCrawler.TAG} HandleLogout: {node}");
-						                           this.ipCrawler.HandleLogout(peer.NodeAddressInfo, DateTimeEx.CurrentTime);
-					                           }));
-				                           })));
+			this.ipCrawlerRequests.Add((nameof(this.RequestDisconnect), this.DisconnectPeers(connectedNodes)));
 
 		}
 
@@ -218,8 +244,56 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				ClientHandshakeWorkflow<R> handshake = this.clientWorkflowFactory.CreateRequestHandshakeWorkflow(ConnectionStore<R>.CreateEndpoint(node));
 
 				handshake.Error2 += (workflow, ex) => {
-					// anything to do here?
-					NLog.IPCrawler.Debug(ex, $"{IPCrawler.TAG} failed to complete handshake with node {node}");
+					if(ex.GetBaseException() is ClientHandshakeWorkflow<R>.ClientHandshakeException clientEx) {
+
+						switch(clientEx.Details) {
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.IsHub:
+								NLog.IPCrawler.Verbose($"{IPCrawler.TAG} the {node} is a hub.");
+
+								break;
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.CanGoNoFurther:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.BadHub:
+								NLog.IPCrawler.Debug(ex, $"{IPCrawler.TAG} the {node} is a misbehaving hub.");
+
+								break;
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.Duplicate:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.Loopback:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.AlreadyConnected:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.AlreadyConnecting:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.ConnectionDropped:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.NoAnswer:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.TimeOutOfSync:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.ConnectionError:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.ConnectionsSaturated:
+								// 'acceptable' reasons to fail TODO some might warrant warnings
+								NLog.IPCrawler.Verbose($"{IPCrawler.TAG} CreateConnectionAttempt on {node} failed with 'acceptable' reason '{clientEx.Details}', not putting in quarantine.");
+
+								break;
+
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmDropped:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmFailed:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.ClientVersionRefused:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.InvalidNetworkId:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.InvalidPeer:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.Rejected:
+							case ClientHandshakeWorkflow<R>.ClientHandshakeException.ExceptionDetails.Unknown:
+								// unacceptable reasons to fail
+								NLog.IPCrawler.Verbose($"{IPCrawler.TAG} CreateConnectionAttempt on {node} failed with a 'serious' reason '{clientEx.Details}', putting in quarantine.");
+
+								if(IPMarshall.Instance.IsWhiteList(node.Address, out var acceptanceType))
+									NLog.IPCrawler.Verbose($"{IPCrawler.TAG} not placing whitelisted node {node} with acceptance type '{acceptanceType}' in quarantine.");
+								else
+									IPMarshall.Instance.Quarantine(node.Address, IPMarshall.QuarantineReason.FailedHandshake, DateTimeEx.CurrentTime.AddMinutes(5), $"{IPCrawler.TAG}.{clientEx.Details}");
+
+								break;
+
+							default:
+								NLog.IPCrawler.Debug($"{IPCrawler.TAG} CreateConnectionAttempt failed with unhandled reason '{clientEx.Details}', not putting in quarantine.");
+
+								break;
+						}
+
+					}
 
 					return Task.CompletedTask;
 				};
@@ -228,18 +302,17 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// run this task in the connection manager thread by sending a delegated task
 
 					this.ReceiveTask(new SimpleTask(s => {
+						var now = DateTimeEx.CurrentTime;
 
 						try {
-
-							NLog.IPCrawler.Information($"{IPCrawler.TAG} Login to {node} result: {success}");
-
 							if(success) {
-								this.ipCrawler.HandleLogin(node, DateTimeEx.CurrentTime);
 								List<PeerConnection> peers = this.connectionStore.AllConnectionsList.Where(peer => peer.NodeAddressInfo.Equals(node)).ToList();
 
 								if(peers.Any()) //should be exaclty 1
 								{
 									PeerConnection peer = peers.Single();
+
+									this.HandleNewConnection(peers.Single());
 
 									peer.connection.DataReceived += bytes => {
 										//TODO: make sure this handler is properly unregistered on disconnect
@@ -248,8 +321,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 										this.ReceiveTask(new SimpleTask(s2 => {
 
-//											NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(this.ipCrawler.HandleInput)}--{nBytes} bytes from node {node}");
-											this.ipCrawler.HandleInput(node, DateTimeEx.CurrentTime, nBytes);
+//											NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(IpCrawler.HandleInput)}--{nBytes} bytes from node {node}");
+											this.IpCrawler.HandleInput(node, now, nBytes);
 										}));
 									};
 
@@ -259,8 +332,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 										var nBytes = (uint) bytes.Length;
 
 										this.ReceiveTask(new SimpleTask(s2 => {
-//											NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(this.ipCrawler.HandleOutput)}--{nBytes} bytes from node {node}");
-											this.ipCrawler.HandleOutput(node, DateTimeEx.CurrentTime, nBytes);
+//											NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(IpCrawler.HandleOutput)}--{nBytes} bytes from node {node}");
+											this.IpCrawler.HandleOutput(node, now, nBytes);
 										}));
 									};
 								} else {
@@ -270,12 +343,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 										NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Found connection {c.NodeAddressInfo} searching for {node}");
 									}
 
-									NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ipCrawler.HandleTimeout)} (Failed Login) from node {node}");
-									this.ipCrawler.HandleTimeout(node, DateTimeEx.CurrentTime);
+									NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.IpCrawler.HandleTimeout)} (Failed Login) from node {node}");
+									this.IpCrawler.HandleTimeout(node, now);
 								}
-							} else {
-								this.ipCrawler.HandleTimeout(node, DateTimeEx.CurrentTime);
-							}
+							} else //success == false
+								this.IpCrawler.HandleTimeout(node, now);
+
 						} catch(Exception ex) {
 							//TODO: what to do here?
 						}
@@ -290,6 +363,19 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
+		protected virtual List<NodeAddressInfo> GetFilteredNodes() {
+			return new List<NodeAddressInfo>();
+		}
+
+		protected virtual async Task<List<NodeAddressInfo>> SynchProxies() {
+			//NOP
+			return new List<NodeAddressInfo>();
+		}
+
+		protected override Task DisposeAllAsync() {
+			return base.DisposeAllAsync();
+		}
+
 		protected override async Task ProcessLoop(LockContext lockContext) {
 			try {
 
@@ -302,58 +388,73 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				this.CheckShouldCancel();
 
-				// Synchronize with ConnectionStore
+				if(this.ShouldAct(ref this.nextSyncProxiesAction)) {
+					this.IpCrawler.QueueDynamicBlacklist(await this.SynchProxies().ConfigureAwait(false));
+					this.nextSyncProxiesAction = DateTimeEx.CurrentTime.AddSeconds(60); //FIXME: AppSettings parameter?
+				}
+
+				if(!this.ShouldAct(ref this.nextAction))
+					return;
+
+				// ok, its time to act
+				var secondsToWait = 3; // default next action time in seconds. we can play on this
+
+				if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
+					// its paused, we dont do anything, just return
+					this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
+
+					return;
+				}
+
+				//JD asked me to call this every loop for the need of child classes
+				this.connectionStore.LoadStaticStartNodes();
+
+				// Synchronize with ConnectionStore. needs to be called
 				List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, false, true, true);
 				this.ipCrawler.CombineIPs(currentAvailableNodes);
 
 				// FIXME: this whole synchronization idea is a workaround while we add proper new connection/disconnection signals
-				List<NodeAddressInfo> currentConnectedNodes =
-					this.connectionStore.AllConnections.Select(pair => pair.Value.NodeAddressInfo).ToList();
-				
-				this.ipCrawler.SyncConnections(currentConnectedNodes, DateTimeEx.CurrentTime); //won't give the real connection time, not very important anyway.
+				List<PeerConnection> currentConnectedNodes = this.connectionStore.AllConnections.Select(pair => pair.Value).ToList();
 
-				if(this.ShouldAct(ref this.nextAction)) {
-					// ok, its time to act
-					var secondsToWait = 3; // default next action time in seconds. we can play on this
+				int correctionsMade = this.IpCrawler.SyncConnections(currentConnectedNodes, DateTimeEx.CurrentTime); //won't give the real disconnection time, not very important anyway.
 
-					if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
-						// its paused, we dont do anything, just return
-						this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
+				if(correctionsMade > 0)
+					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} SyncConnections: {correctionsMade} corrections made");
 
-						return;
+				//at this moment, we know the ip crawler's nodes are in synch with connectionStore's nodes, now is a good time to filter them out
+				this.IpCrawler.SyncFilteredNodes(this.GetFilteredNodes(), this);
+
+				this.IpCrawler.Crawl(this, DateTimeEx.CurrentTime);
+
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} pending tasks: ");
+
+				foreach((string name, Task task) in this.ipCrawlerRequests) {
+					if(task.IsCompleted) {
+						NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Task {name} Completed.");
 					}
 
-					this.ipCrawler.Crawl(this, DateTimeEx.CurrentTime);
-
-					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} pending tasks: ");
-
-					foreach((string name, Task task) in this.ipCrawlerRequests) {
-						if(task.IsCompleted) {
-							NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Task {name} Completed.");
-						}
-
-						if(task.IsFaulted) {
-							NLog.IPCrawler.Error($"{IPCrawler.TAG} Task {name} Faulted.");
-						}
+					if(task.IsFaulted) {
+						NLog.IPCrawler.Error($"{IPCrawler.TAG} Task {name} Faulted.");
 					}
-
-					this.ipCrawlerRequests = this.ipCrawlerRequests.Where(el => !el.Item2.IsCompleted).ToList();
-
-					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} remaining tasks.");
-
-					this.ProcessLoopActions();
-
-					//-
-					// done, lets sleep for a while
-
-					// lets act again in X seconds
-					this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
 				}
+
+				this.ipCrawlerRequests = this.ipCrawlerRequests.Where(el => !el.Item2.IsCompleted).ToList();
+
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} remaining tasks.");
+
+				this.ProcessLoopActions();
+
+				//-
+				// done, lets sleep for a while
+
+				// lets act again in X seconds
+				this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
+
 			} catch(OperationCanceledException) {
 				throw;
 			} catch(Exception ex) {
 				NLog.IPCrawler.Error(ex, "Failed to process connections");
-				this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.MaxPeerCount);
+				this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerStartupDelay);
 			}
 		}
 
@@ -388,7 +489,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected Task<bool> ContactHubsWeb() {
-			var restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
+			var restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.FormData);
 
 			return Repeater.RepeatAsync(async () => {
 				var parameters = new Dictionary<string, object>();
@@ -405,6 +506,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					bytes.Return();
 				}
 
+				parameters.Add("networkid", GlobalSettings.Instance.NetworkId);
+
 				IRestResponse result = await restUtility.Post(GlobalSettings.ApplicationSettings.HubsWebAddress, "hub/query", parameters).ConfigureAwait(false);
 
 				// ok, check the result
@@ -416,15 +519,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					var infoList = new NodeAddressInfoList();
 					infoList.Rehydrate(rehydrator);
 
-					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ipCrawler.HandleHubIPs)} (Web): {infoList.Nodes.Count} ips returned");
-					this.ipCrawler.HandleHubIPs(infoList.Nodes.ToList(), DateTimeEx.CurrentTime);
+					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.IpCrawler.HandleHubIPs)} (Web): {infoList.Nodes.Count} ips returned");
+					this.IpCrawler.HandleHubIPs(infoList.Nodes.ToList(), DateTimeEx.CurrentTime);
 
 					this.connectionStore.AddAvailablePeerNodes(infoList, true);
 
 					return true;
 				}
 
-				throw new ApplicationException("Failed to query web hubs (Web)");
+				throw new QueryHubsException("Failed to query web hubs (Web)");
 			});
 		}
 
@@ -433,8 +536,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				NodeAddressInfoList infoList = this.connectionStore.GetHubNodes();
 
 				//TODO: remove duplication with ContactHubsWeb
-				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ipCrawler.HandleHubIPs)} (Gossip): {infoList.Nodes.Count} ips returned");
-				this.ipCrawler.HandleHubIPs(infoList.Nodes.ToList(), DateTimeEx.CurrentTime);
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ContactHubsGossip)}: {infoList.Nodes.Count} ips returned");
+
+				foreach(var node in infoList.Nodes) {
+					await this.CreateConnectionAttempt(node).ConfigureAwait(false);
+				}
 
 			} catch(Exception ex) {
 				NLog.IPCrawler.Error(ex, "Failed to query neuralium hubs (Gossip).");
@@ -495,9 +601,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected async Task<List<Guid>> CheckTasks() {
 			List<Guid> tasks = await this.coloredTaskReceiver.CheckTasks().ConfigureAwait(false);
 
-			tasks.AddRange(await this.RoutedTaskReceiver.CheckTasks(async () => {
+			tasks.AddRange(await this.RoutedTaskReceiver.CheckTasks(() => {
 				// check this every loop, for responsiveness
 				this.CheckShouldCancel();
+
+				return Task.CompletedTask;
 			}).ConfigureAwait(false));
 
 			return tasks;

@@ -3,21 +3,24 @@ using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets.GossipMessageMetadatas;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 	public interface IGossipMessageSet : INetworkMessageSet, ITreeHashable {
 
+		SafeArrayHandle MessageBytes { get; set; }
+
 		new GossipHeader BaseHeader { get; }
 
 		IGossipWorkflowTriggerMessage BaseMessage { get; }
 
-		ByteArray DeserializedData { get; set; }
+		SafeArrayHandle DeserializedData { get; set; }
 
 		bool HasDeserializedData { get; }
 
-		IGossipMessageMetadata MessageMetadata { get; }
+		IGossipMessageMetadata MessageMetadata { get; set; }
 
 		Enums.GossipSupportTypes MinimumNodeGossipSupport { get; }
 	}
@@ -60,16 +63,28 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		///     If we rehydrated the message from the network, we can store the byte array format, so we can avoid an expensive
 		///     deserializa
 		/// </summary>
-		public ByteArray DeserializedData { get; set; }
+		public SafeArrayHandle DeserializedData { get; set; }
 
 		public bool HasDeserializedData => this.DeserializedData != null;
 		public IGossipMessageMetadata MessageMetadata { get; set; }
+		
+		/// <summary>
+		/// here we cache the message bytes, usually for hashing
+		/// </summary>
+		public SafeArrayHandle MessageBytes { get; set; }
 
 		public virtual HashNodeList GetStructuresArray() {
+
+			if(this.MessageBytes == null || this.MessageBytes.IsZero) {
+				// lets make sure the message bytes were acquired. if we dont have them, we have to dehydrate the message
+				this.DehydrateMessageForBytes();
+			}
+			
 			HashNodeList hashNodeList = new HashNodeList();
 
 			hashNodeList.Add(this.Header);
-			hashNodeList.Add(this.Message);
+			// for gossip messages, we hash the message bytes, and not the rehydrated content. this is the same data, but we dont need to explicitly rehydrate. allows us to verify earlier in the process
+			hashNodeList.Add(this.MessageBytes);
 			hashNodeList.Add(this.MessageMetadata);
 
 			return hashNodeList;
@@ -77,6 +92,11 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 
 		public virtual Enums.GossipSupportTypes MinimumNodeGossipSupport => Enums.GossipSupportTypes.Basic;
 
+		public void ResetCachedMessageBytes() {
+			this.MessageBytes?.Dispose();
+			this.MessageBytes = null;
+		}
+		
 		protected override void DehydrateContents(IDataDehydrator dehydrator) {
 
 			base.DehydrateContents(dehydrator);
@@ -86,6 +106,17 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 			this.MessageMetadata?.Dehydrate(dehydrator);
 		}
 
+		private void DehydrateMessageForBytes() {
+			if(this.MessageBytes == null || this.MessageBytes.IsZero) {
+				this.MessageBytes = base.DehydrateMessage();
+			}
+		}
+		protected override SafeArrayHandle DehydrateMessage() {
+			this.DehydrateMessageForBytes();
+
+			return this.MessageBytes.Branch();
+		}
+		
 		protected override void RehydrateContents(IDataRehydrator dr, R rehydrationFactory) {
 
 			base.RehydrateContents(dr, rehydrationFactory);

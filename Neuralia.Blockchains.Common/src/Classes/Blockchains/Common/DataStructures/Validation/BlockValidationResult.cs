@@ -31,7 +31,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 		public readonly BlockValidationErrorCode INVALID_BLOCK_SIGNATURE_TYPE;
 		public readonly BlockValidationErrorCode INVALID_DIGEST_KEY;
-
+		public readonly BlockValidationErrorCode INVALID_KEY_SEQUENCE;
+		
 		public readonly BlockValidationErrorCode LAST_BLOCK_HEIGHT_INVALID;
 
 		public readonly BlockValidationErrorCode SECRET_KEY_PROMISSED_HASH_VALIDATION_FAILED;
@@ -49,6 +50,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 			this.CreateBaseConstant(ref this.INVALID_BLOCK_SIGNATURE_TYPE, nameof(this.INVALID_BLOCK_SIGNATURE_TYPE));
 			this.CreateBaseConstant(ref this.INVALID_BLOCK_KEY_CORRELATION_TYPE, nameof(this.INVALID_BLOCK_KEY_CORRELATION_TYPE));
+			this.CreateBaseConstant(ref this.INVALID_KEY_SEQUENCE, nameof(this.INVALID_KEY_SEQUENCE));
+
+			
 
 			//this.PrintValues(";");		
 		}

@@ -1,12 +1,13 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Core;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards {
 
 	public interface IAccountSnapshot : ISnapshot, ITypedCollectionExposure<IAccountAttribute> {
 		long AccountId { get; set; }
-
+		
 		/// <summary>
 		///     The block this account was presented and confirmed
 		/// </summary>

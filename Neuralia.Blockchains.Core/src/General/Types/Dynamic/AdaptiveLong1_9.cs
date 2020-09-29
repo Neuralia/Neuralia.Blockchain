@@ -127,7 +127,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			return base.ReadByteSpecs(firstByte);
 		}
 
-		protected override ulong prepareBuffer(ulong buffer, byte firstByte) {
+		protected override ulong PrepareBuffer(ulong buffer, byte firstByte) {
 
 			if(this.HasSpecialFlag(firstByte)) {
 				// its a single byte, lets rebuild the number
@@ -152,5 +152,10 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 		protected override ulong ConvertTypeFrom(long value) {
 			return (ulong) value;
 		}
-	}
+
+        public long? ToNullable()
+        {
+            throw new System.NotImplementedException();
+        }
+    }
 }

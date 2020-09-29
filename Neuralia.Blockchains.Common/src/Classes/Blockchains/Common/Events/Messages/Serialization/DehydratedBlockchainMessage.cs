@@ -1,4 +1,5 @@
 ﻿using System;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Tools.Data;
@@ -6,17 +7,15 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Serialization {
 
-	public interface IDehydratedBlockchainMessage : IDehydrateBlockchainEvent {
-		IBlockchainMessage RehydratedMessage { get; set; }
+	public interface IDehydratedBlockchainMessage : IDehydrateBlockchainEvent<IBlockchainMessage> {
 
 		SafeArrayHandle Contents { get; }
-		IBlockchainMessage RehydrateMessage(IBlockchainEventsRehydrationFactory rehydrationFactory);
 	}
 
 	public class DehydratedBlockchainMessage : IDehydratedBlockchainMessage {
 
 		public SafeArrayHandle Contents { get; } = SafeArrayHandle.Create();
-		public IBlockchainMessage RehydratedMessage { get; set; }
+		public IBlockchainMessage RehydratedEvent { get; set; }
 
 		public SafeArrayHandle Dehydrate() {
 			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
@@ -43,24 +42,31 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			this.Contents.Entry = rehydrator.ReadArrayToEnd();
 		}
 
-		public IBlockchainMessage RehydrateMessage(IBlockchainEventsRehydrationFactory rehydrationFactory) {
-			if(this.RehydratedMessage == null) {
+		public void Dehydrate(ChannelsEntries<IDataDehydrator> channelDehydrators) {
+			throw new NotImplementedException();
+		}
 
-				this.RehydratedMessage = rehydrationFactory.CreateMessage(this);
-				this.RehydratedMessage.Rehydrate(this, rehydrationFactory);
+		public IBlockchainMessage Rehydrate(IBlockchainEventsRehydrationFactory rehydrationFactory) {
+			if(this.RehydratedEvent == null) {
+
+				this.RehydratedEvent = rehydrationFactory.CreateMessage(this);
+				this.RehydratedEvent.Rehydrate(this, rehydrationFactory);
 			}
 
-			return this.RehydratedMessage;
+			return this.RehydratedEvent;
 		}
 
 		public HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = new HashNodeList();
 
-			nodeList.Add(this.RehydratedMessage.GetStructuresArray());
+			nodeList.Add(this.RehydratedEvent.GetStructuresArray());
 
 			return nodeList;
 		}
 
+		public void Clear() {
+			
+		}
 	#region Disposable
 
 		public void Dispose() {

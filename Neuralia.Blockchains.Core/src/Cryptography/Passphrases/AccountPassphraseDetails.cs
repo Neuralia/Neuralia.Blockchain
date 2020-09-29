@@ -24,7 +24,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 		public SecureString WalletPassphrase { get; private set; }
 
-		public SafeArrayHandle WalletPassphraseBytes => ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString()));
+		public SafeArrayHandle WalletPassphraseBytes => SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString()));
 
 		public bool HasKeysPassphrases => this.keys.Count != 0;
 
@@ -45,36 +45,36 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 		}
 
-		private string GenerateKeyScoppedName(Guid identityUuid, string keyname) {
-			return $"{identityUuid.ToString()}-{keyname}";
+		private string GenerateKeyScoppedName(string accountCode, string keyname) {
+			return $"{accountCode.ToString()}-{keyname}";
 		}
 
-		public void SetKeysPassphrase(Guid identityUuid, string keyname, byte[] passphrase, int? timeout = null) {
+		public void SetKeysPassphrase(string accountCode, string keyname, byte[] passphrase, int? timeout = null) {
 
-			this.SetKeysPassphrase(identityUuid, keyname, Encoding.UTF8.GetString(passphrase), timeout);
+			this.SetKeysPassphrase(accountCode, keyname, Encoding.UTF8.GetString(passphrase), timeout);
 		}
 
-		public void SetKeysPassphrase(Guid identityUuid, string keyname, string passphrase, int? timeout = null) {
+		public void SetKeysPassphrase(string accountCode, string keyname, string passphrase, int? timeout = null) {
 
-			this.SetKeysPassphrase(identityUuid, keyname, passphrase.ConvertToSecureString(), timeout);
+			this.SetKeysPassphrase(accountCode, keyname, passphrase.ConvertToSecureString(), timeout);
 		}
 
-		public void SetKeysPassphrase(Guid identityUuid, byte[] passphrase, int? timeout = null) {
+		public void SetKeysPassphrase(string accountCode, byte[] passphrase, int? timeout = null) {
 
-			this.SetKeysPassphrase(identityUuid, null, Encoding.UTF8.GetString(passphrase), timeout);
+			this.SetKeysPassphrase(accountCode, null, Encoding.UTF8.GetString(passphrase), timeout);
 		}
 
-		public void SetKeysPassphrase(Guid identityUuid, string passphrase, int? timeout = null) {
+		public void SetKeysPassphrase(string accountCode, string passphrase, int? timeout = null) {
 
-			this.SetKeysPassphrase(identityUuid, passphrase.ConvertToSecureString(), timeout);
+			this.SetKeysPassphrase(accountCode, passphrase.ConvertToSecureString(), timeout);
 		}
 
-		public void SetKeysPassphrase(Guid identityUuid, SecureString passphrase, int? timeout = null) {
+		public void SetKeysPassphrase(string accountCode, SecureString passphrase, int? timeout = null) {
 
-			this.SetKeysPassphrase(identityUuid, null, passphrase, timeout);
+			this.SetKeysPassphrase(accountCode, null, passphrase, timeout);
 		}
 
-		public void SetKeysPassphrase(Guid identityUuid, string keyname, SecureString passphrase, int? timeout = null) {
+		public void SetKeysPassphrase(string accountCode, string keyname, SecureString passphrase, int? timeout = null) {
 
 			if(passphrase == null) {
 				throw new ApplicationException("null passphrase provided");
@@ -89,14 +89,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 					throw new ApplicationException("Key name is required when encrypting keys individually");
 				}
 
-				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(accountCode, keyname);
 			}
 
 			this.SetKeyEntry(scoppedName, passphrase, timeout);
 
 			if((scoppedName == DEFAULT_NAME) && !string.IsNullOrWhiteSpace(keyname)) {
 				// let's set that one too
-				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(accountCode, keyname);
 
 				SecureString clone = passphrase.ConvertToUnsecureString().ConvertToSecureString();
 
@@ -154,7 +154,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			this.keys.Add(scoppedName, (passphrase, keysPassphraseTimer));
 		}
 
-		public bool KeyPassphraseValid(Guid identityUuid, string keyname) {
+		public bool KeyPassphraseValid(string accountCode, string keyname) {
 			if(!this.EncryptWalletKeys) {
 				return true; // no encryption, so we dont care, always valid
 			}
@@ -162,7 +162,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			string scoppedName = DEFAULT_NAME;
 
 			if(this.EncryptWalletKeysIndividually) {
-				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(accountCode, keyname);
 			}
 
 			if(this.keys.ContainsKey(scoppedName)) {
@@ -174,7 +174,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			return false;
 		}
 
-		public bool KeyPassphraseValid(Guid identityUuid) {
+		public bool KeyPassphraseValid(string accountCode) {
 			if(!this.EncryptWalletKeys) {
 				return true; // no encryption, so we dont care, always valid
 			}
@@ -192,7 +192,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			return false;
 		}
 
-		public SecureString KeyPassphrase(Guid identityUuid, string keyname) {
+		public SecureString KeyPassphrase(string accountCode, string keyname) {
 			string scoppedName = DEFAULT_NAME;
 
 			if(this.EncryptWalletKeysIndividually) {
@@ -200,7 +200,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 					throw new ApplicationException("Key name is required when encrypting keys individually");
 				}
 
-				scoppedName = this.GenerateKeyScoppedName(identityUuid, keyname);
+				scoppedName = this.GenerateKeyScoppedName(accountCode, keyname);
 			}
 
 			if(this.keys.ContainsKey(scoppedName)) {
@@ -212,7 +212,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			return null;
 		}
 
-		public SecureString KeyPassphrase(Guid identityUuid) {
+		public SecureString KeyPassphrase(string accountCode) {
 
 			if(this.EncryptWalletKeysIndividually) {
 				return null;

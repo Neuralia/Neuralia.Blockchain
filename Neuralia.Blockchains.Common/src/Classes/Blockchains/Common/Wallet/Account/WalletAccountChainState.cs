@@ -8,13 +8,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 	public interface IWalletAccountChainState {
 
 		[BsonId]
-		Guid AccountUuid { get; set; }
+		string AccountCode { get; set; }
 
 		long LastBlockSynced { get; set; }
 
 		int BlockSyncStatus { get; set; }
 
 		Dictionary<byte, IWalletAccountChainStateKey> Keys { get; set; }
+		
+	
 	}
 
 	public abstract class WalletAccountChainState : IWalletAccountChainState {
@@ -35,7 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		}
 
 		[BsonId]
-		public Guid AccountUuid { get; set; }
+		public string AccountCode { get; set; }
 
 		public long LastBlockSynced { get; set; } = 0;
 
@@ -45,5 +47,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public int BlockSyncStatus { get; set; } = (int) BlockSyncStatuses.FullySynced;
 
 		public Dictionary<byte, IWalletAccountChainStateKey> Keys { get; set; } = new Dictionary<byte, IWalletAccountChainStateKey>();
+		
 	}
 }

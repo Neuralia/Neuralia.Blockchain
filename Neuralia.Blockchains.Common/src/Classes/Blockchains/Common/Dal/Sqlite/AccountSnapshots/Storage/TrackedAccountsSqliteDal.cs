@@ -31,17 +31,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 				return;
 			}
 
-			List<long> sequenceAccounts = accountIds.Select(a => a.SequenceId).ToList();
 
-			Dictionary<long, List<Action<TRACKED_ACCOUNT_CONTEXT>>> actions = sequenceAccounts.ToDictionary(a => a, e => new Action<TRACKED_ACCOUNT_CONTEXT>[] {
+			Dictionary<AccountId, List<Action<TRACKED_ACCOUNT_CONTEXT>>> actions = accountIds.ToDictionary(a => a, e => new Action<TRACKED_ACCOUNT_CONTEXT>[] {
 				db => {
+					List<AccountId> longAccounts = accountIds.Where(a => (a.SequenceId >= db.IndexRange.start) && (a.SequenceId <= db.IndexRange.end)).ToList();
 
-					List<long> longAccounts = accountIds.Where(a => (a.SequenceId >= db.IndexRange.start) && (a.SequenceId <= db.IndexRange.end)).Select(a => a.ToLongRepresentation()).ToList();
+					List<AccountId> existing = db.TrackedAccounts.Where(a => longAccounts.Contains(a.AccountId.ToAccountId())).Select(a => a.AccountId.ToAccountId()).ToList();
 
-					List<long> existing = db.TrackedAccounts.Where(a => longAccounts.Contains(a.AccountId)).Select(a => a.AccountId).ToList();
-
-					foreach(long account in longAccounts.Where(a => !existing.Contains(a))) {
-						TrackedAccountSqliteEntry entry = new TrackedAccountSqliteEntry {AccountId = account};
+					foreach(AccountId account in longAccounts.Where(a => !existing.Contains(a))) {
+						TrackedAccountSqliteEntry entry = new TrackedAccountSqliteEntry {AccountId = account.ToLongRepresentation()};
 						db.TrackedAccounts.Add(entry);
 					}
 
@@ -67,7 +65,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			return await this.QueryAllAsync(db => {
 
 				return db.TrackedAccounts.Where(a => longAccountIds.Contains(a.AccountId)).Select(a => a.AccountId.ToAccountId()).ToListAsync();
-			}, accountIds.Select(a => a.SequenceId).ToList()).ConfigureAwait(false);
+			}, accountIds).ConfigureAwait(false);
 		}
 
 		public Task<bool> AnyAccountsTracked() {
@@ -85,7 +83,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			return await this.AnyAllAsync(db => {
 
 				return db.TrackedAccounts.AnyAsync(a => longAccountIds.Contains(a.AccountId));
-			}, accountIds.Select(a => a.SequenceId).ToList()).ConfigureAwait(false);
+			}, accountIds).ConfigureAwait(false);
 
 		}
 
@@ -97,7 +95,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 			return await this.PerformOperationAsync(db => {
 
 				return db.TrackedAccounts.AnyAsync(a => a.AccountId == accountId.ToLongRepresentation());
-			}, this.GetKeyGroup(accountId.SequenceId)).ConfigureAwait(false);
+			}, this.GetKeyGroup(accountId)).ConfigureAwait(false);
 		}
 
 		// public void PerformOperation(Action<TRACKED_ACCOUNT_CONTEXT> process, AccountId accountId) {

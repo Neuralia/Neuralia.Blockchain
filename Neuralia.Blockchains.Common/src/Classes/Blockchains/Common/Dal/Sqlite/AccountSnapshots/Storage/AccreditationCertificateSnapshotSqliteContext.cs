@@ -1,3 +1,4 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage;
 using Neuralia.Blockchains.Core;
@@ -36,6 +37,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 				eb.Ignore(b => b.PermittedAccounts);
 
 				eb.ToTable("AccreditationCertificates");
+				
+				eb.Property(c => c.EmissionDate).HasConversion(v => v.ToUniversalTime(), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+				eb.Property(c => c.ValidUntil).HasConversion(v => v.ToUniversalTime(), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
 			});
 
 			modelBuilder.Entity<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT>(eb => {

@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
+using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.ChainState {
 
@@ -26,7 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		///     The date of the first genesisModeratorAccountPresentation transaction
 		/// </summary>
 		[Required]
-		public DateTime ChainInception { get; set; } = DateTime.MinValue;
+		public DateTime ChainInception { get; set; } = DateTimeEx.MinValue;
 
 		public byte[] LastBlockHash { get; set; }
 		public byte[] GenesisBlockHash { get; set; }
@@ -43,7 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		[Required]
 		public long DownloadBlockHeight { get; set; }
 
-		public DateTime LastBlockTimestamp { get; set; } = DateTime.MinValue;
+		public DateTime LastBlockTimestamp { get; set; } = DateTimeEx.MinValue;
 		public ushort LastBlockLifespan { get; set; }
 		public ChainStateEntryFields.BlockInterpretationStatuses BlockInterpretationStatus { get; set; }
 
@@ -59,7 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		public long DigestBlockHeight { get; set; }
 
 		public byte[] LastDigestHash { get; set; }
-		public DateTime LastDigestTimestamp { get; set; } = DateTime.MinValue;
+		public DateTime LastDigestTimestamp { get; set; } = DateTimeEx.MinValue;
 
 		[Required]
 		public int PublicDigestHeight { get; set; }
@@ -81,11 +82,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		[Required]
 		public bool AllowGossipPresentations { get; set; }
 
-		public long MiningPassword { get; set; }
-
-		public byte[] MiningAutograph { get; set; }
-
-		public DateTime? LastMiningRegistrationUpdate { get; set; }
+		public byte[] LastBlockXmssKeySignaturePathCache { get; set; }
 
 		public void Copy(MODEL_SNAPSHOT other) {
 			IEnumerable<string> excludeProperties = new[] {nameof(this.ModeratorKeys)};

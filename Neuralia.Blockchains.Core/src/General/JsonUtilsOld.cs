@@ -1,9 +1,9 @@
 using System;
-using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Core.General.Types.Simple;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -232,11 +232,11 @@ namespace Neuralia.Blockchains.Core.General {
 			SafeArrayHandle array = null;
 
 			if(this.mode == BaseModes.Base58) {
-				array = ByteArray.FromBase58(basevalue);
+				array = SafeArrayHandle.FromBase58(basevalue);
 			}
 
 			if(this.mode == BaseModes.Base64) {
-				array = ByteArray.FromBase64(basevalue);
+				array = SafeArrayHandle.FromBase64(basevalue);
 			}
 
 			if(typeof(SafeArrayHandle).IsAssignableFrom(objectType)) {

@@ -305,9 +305,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		public static bool GetIPV4CIDRRange(IPAddress address, List<IPV4CIDRRange> ranges) {
 			foreach(IPV4CIDRRange range in ranges) {
 
-				(IPAddress lower, IPAddress upper) rangeComponents = IPUtils.GetIPV4CIDRRange(range);
+				(IPAddress lower, IPAddress upper) rangeComponents = GetIPV4CIDRRange(range);
 
-				if(IPUtils.IsIPV4InCIDRRange(address.MapToIPv4(), rangeComponents)) {
+				if(IsIPV4InCIDRRange(address.MapToIPv4(), rangeComponents)) {
 					return true;
 				}
 			}
@@ -398,6 +398,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static string TranslateDnsToIP(string host) {
+			if(string.IsNullOrWhiteSpace(host)) {
+				throw new ArgumentException("the host parameter must be set.", nameof(host));
+			}
 			bool isIp = IsIPV4(host) || IsIPV6(host);
 
 			if(!isIp) {

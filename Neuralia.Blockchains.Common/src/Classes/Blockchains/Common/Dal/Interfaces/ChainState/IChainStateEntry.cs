@@ -111,12 +111,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		///     are presentations allowed to pass on gossip
 		/// </summary>
 		public bool AllowGossipPresentations { get; set; }
-
-		public long MiningPassword { get; set; }
-
-		public byte[] MiningAutograph { get; set; }
-
-		public DateTime? LastMiningRegistrationUpdate { get; set; }
+		
+		/// <summary>
+		/// here we store the last block index key signature path cache
+		/// </summary>
+		public byte[] LastBlockXmssKeySignaturePathCache { get; set; }
 	}
 
 	public interface IChainStateEntry : IChainStateEntryFields {

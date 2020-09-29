@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public async Task<Guid?> FetchSuperkeyConfirmationUuid(string hashuri, long blockId) {
 			string confirmationName = $"confirmation-{blockId}.conf";
 
-			SafeArrayHandle result = await httpService.Download(Combine(hashuri, "/confirmations/", confirmationName).ToLower()).ConfigureAwait(false);
+			SafeArrayHandle result = await this.httpService.Download(Combine(hashuri, "/confirmations/", confirmationName).ToLower()).ConfigureAwait(false);
 
 			TypeSerializer.Deserialize(result.Span, out Guid confirmation);
 
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		public async Task<SafeArrayHandle> FetchBlockPublicHash(string hashuri, long blockId) {
 
 			string hashName = $"block-{blockId}.hash";
-			SafeArrayHandle result = await httpService.Download(Combine(hashuri, "/hashes/", hashName).ToLower()).ConfigureAwait(false);
+			SafeArrayHandle result = await this.httpService.Download(Combine(hashuri, "/hashes/", hashName).ToLower()).ConfigureAwait(false);
 
 			return result;
 		}
@@ -58,7 +58,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <returns></returns>
 		public async Task<(SafeArrayHandle sha2, SafeArrayHandle sha3)?> FetchGenesisHash(string hashuri, string genesisPath, string filename) {
 
-			string hashName = $"{filename.CapitallizeFirstLetter()}.hash";
+			string hashName = $"{filename.CapitalizeFirstLetter()}.hash";
 			FileExtensions.EnsureDirectoryStructure(genesisPath);
 			string filepath = Path.Combine(genesisPath, hashName);
 
@@ -66,14 +66,14 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				string hashUri = Combine(hashuri.ToLower(), hashName);
 				NLog.Default.Information($"Downloading genesis hash from {hashUri}");
-				await httpService.Download(hashUri, filepath).ConfigureAwait(false);
+				await this.httpService.Download(hashUri, filepath).ConfigureAwait(false);
 			}
 
 			if(!File.Exists(filepath)) {
 				return null;
 			}
 
-			ByteArray data = ByteArray.WrapAndOwn(await File.ReadAllBytesAsync(filepath).ConfigureAwait(false));
+			SafeArrayHandle data = SafeArrayHandle.WrapAndOwn(await File.ReadAllBytesAsync(filepath).ConfigureAwait(false));
 
 			if((data == null) || data.IsCleared) {
 				throw new ApplicationException("Failed to obtain genesis verification hash.");
@@ -90,14 +90,14 @@ namespace Neuralia.Blockchains.Core.Services {
 
 			if(!File.Exists(filepath)) {
 
-				await httpService.Download(Combine(hashuri, "/hashes/", hashName).ToLower(), filepath).ConfigureAwait(false);
+				await this.httpService.Download(Combine(hashuri, "/hashes/", hashName).ToLower(), filepath).ConfigureAwait(false);
 			}
 
 			if(!File.Exists(filepath)) {
 				return default;
 			}
 
-			ByteArray data = ByteArray.WrapAndOwn(await File.ReadAllBytesAsync(filepath).ConfigureAwait(false));
+			SafeArrayHandle data = SafeArrayHandle.WrapAndOwn(await File.ReadAllBytesAsync(filepath).ConfigureAwait(false));
 
 			if((data == null) || data.IsCleared) {
 				throw new ApplicationException("Failed to obtain digest verification hash.");

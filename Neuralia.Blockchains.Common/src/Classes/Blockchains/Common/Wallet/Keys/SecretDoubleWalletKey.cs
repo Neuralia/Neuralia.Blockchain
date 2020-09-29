@@ -1,11 +1,14 @@
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 	public interface ISecretDoubleWalletKey : ISecretComboWalletKey {
 
-		QTeslaWalletKey SecondKey { get; set; }
+		XmssWalletKey SecondKey { get; set; }
 	}
 
 	//TODO: ensure we use sakura trees for the hashing of a secret key.
@@ -15,7 +18,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 	/// </summary>
 	public abstract class SecretDoubleWalletKey : SecretComboWalletKey, ISecretDoubleWalletKey {
 
-		public QTeslaWalletKey SecondKey { get; set; }
+		public SecretDoubleWalletKey() {
+		}
+		
+		protected override ComponentVersion<CryptographicKeyType> SetIdentity() {
+			return (CryptographicKeyTypes.Instance.SecretDouble, 1,0);
+		}
+		
+		public XmssWalletKey SecondKey { get; set; }
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
@@ -43,7 +53,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			if(isNull == false) {
 
 				WalletKeyHelper walletKeyHelper = this.CreateWalletKeyHelper();
-				this.SecondKey = walletKeyHelper.CreateKey<QTeslaWalletKey>(rehydrator);
+				this.SecondKey = walletKeyHelper.CreateKey<XmssWalletKey>(rehydrator);
 				this.SecondKey.Rehydrate(rehydrator);
 			}
 		}

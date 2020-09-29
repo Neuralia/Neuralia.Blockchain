@@ -1,7 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.RepresentativeBallotingMethods.Active;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
+using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections {
@@ -38,6 +42,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			foreach(TransactionId transaction in this.SelectedTransactions) {
 				transaction.Dehydrate(dehydrator);
 			}
+		}
+		
+		public override HashNodeList GetStructuresArray() {
+			HashNodeList nodesList = base.GetStructuresArray();
+
+			nodesList.Add(this.SelectedTransactions.Count);
+
+			foreach(var entry in this.SelectedTransactions.OrderBy(t => t)) {
+				nodesList.Add(entry);
+			}
+
+			return nodesList;
+		}
+
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+			
+			jsonDeserializer.SetArray("SelectedTransactions", this.SelectedTransactions);
 		}
 
 		protected override ComponentVersion<BlockchainMessageType> SetIdentity() {

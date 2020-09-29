@@ -1,11 +1,12 @@
 using System;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Types;
 
 namespace Neuralia.Blockchains.Core.Configuration {
 	public sealed class GlobalSettings {
 
-		
+
 		private bool valueSet;
 
 		public static SoftwareVersion SoftwareVersion => Instance.CurrentSoftwareVersion;
@@ -18,8 +19,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public NodeInfo NodeInfo { get; private set; }
 		public int NetworkId { get; private set; }
 
-		
+		public string Locale { get; private set; } = GlobalsService.DEFAULT_LOCALE;
 
+		public void SetLocale(string locale) {
+			this.Locale = locale;
+		}
+		
 		public void SetValues<OS>(in GlobalSettingsParameters globalSettingsParameters)
 			where OS : IOptionsSetter, new() {
 

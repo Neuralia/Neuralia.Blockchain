@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -46,7 +47,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
 			set {
 				if(this.treeAddress != value) {
 					this.treeAddress = value;
-					TypeSerializer.Serialize(value, this.bytes.Span.Slice(4, sizeof(long)), TypeSerializer.Direction.BigEndian);
+					TypeSerializerFlexible.Serialize(value, this.bytes.Span.Slice(4, sizeof(long)), TypeSerializerFlexible.Direction.BigEndian);
 				}
 			}
 		}
@@ -135,7 +136,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		protected void SetBytesField(int value, int offset) {
 
-			TypeSerializer.Serialize(value, this.bytes.Span.Slice(offset, sizeof(int)), TypeSerializer.Direction.BigEndian);
+			TypeSerializerFlexible.Serialize(value, this.bytes.Span.Slice(offset, sizeof(int)), TypeSerializerFlexible.Direction.BigEndian);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

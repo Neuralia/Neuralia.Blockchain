@@ -3,30 +3,33 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Si
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
-using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools;
-using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes {
 
 	public interface ITransactionEnvelope : ISignedEnvelope<IDehydratedTransaction, IEnvelopeSignature> {
 		byte Expiration { get; }
-		byte Options { get; }
-		bool IsPresentation { get; set; }
 		DateTime GetExpirationTime(ITimeService timeService, DateTime chainInception);
 		void SetExpiration(byte value, TransactionId transactionId, IBlockchainTimeService timeService, DateTime chainInception);
 
-		HashNodeList GetTransactionHashingStructuresArray();
+		HashNodeList GetTransactionHashingStructuresArray(TransactionEnvelope.TransactionHashingTypes type = TransactionEnvelope.TransactionHashingTypes.Full);
+		HashNodeList GetFixedStructuresArray();
 	}
+	
 
 	public abstract class TransactionEnvelope : SignedEnvelope<IDehydratedTransaction, IEnvelopeSignature>, ITransactionEnvelope {
 
-		public enum EnvelopTransactionOptionTypes : byte {
-			Presentation = 1
+		[Flags]
+		public enum TransactionHashingTypes {
+			None = 0,
+			Time = 1,
+			NoTime = None,
+			Full = Time 
 		}
 
 		public const int SLICE_MINUTES = 30; // 30 minute
@@ -57,23 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			get => this.expiration;
 			private set => this.expiration = this.ClampExpirationTime(value);
 		}
-
-		public byte Options { get; set; }
-
-		public bool IsPresentation {
-			get {
-				ByteExclusiveOption<EnvelopTransactionOptionTypes> option = new ByteExclusiveOption<EnvelopTransactionOptionTypes>(this.Options);
-
-				return option.HasOption(EnvelopTransactionOptionTypes.Presentation);
-			}
-			set {
-
-				ByteExclusiveOption<EnvelopTransactionOptionTypes> option = new ByteExclusiveOption<EnvelopTransactionOptionTypes>(this.Options);
-				option.SetOptionValue(EnvelopTransactionOptionTypes.Presentation, value);
-				this.Options = option;
-			}
-		}
-
+		
 		public void SetExpiration(byte value, TransactionId transactionId, IBlockchainTimeService timeService, DateTime chainInception) {
 
 			DateTime transactionTime = timeService.GetTransactionDateTime(transactionId, chainInception);
@@ -89,24 +76,54 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			return timeService.GetTimestampDateTime(this.Contents.Uuid.Timestamp.Value, chainInception).AddMinutes(this.ClampExpirationTime(this.Expiration) * SLICE_MINUTES);
 		}
 
+		public override string GetId() {
+			return this.Contents.Uuid.ToString();
+		}
+		
 		public override HashNodeList GetStructuresArray() {
 
 			HashNodeList nodeList = base.GetStructuresArray();
-
-			nodeList.Add(this.GetTransactionHashingStructuresArray());
-
+			
 			return nodeList;
 		}
 
 		/// <summary>
-		///     Extra fields that will be hashed with the transaction
+		/// get only the fixed elements of the transaction
 		/// </summary>
 		/// <returns></returns>
-		public virtual HashNodeList GetTransactionHashingStructuresArray() {
+		public virtual HashNodeList GetFixedStructuresArray() {
+			try {
+				this.skipRehydratedEventStructuresArray = true;
+				HashNodeList nodeList = this.GetStructuresArray();
+
+				nodeList.Add(this.Contents.RehydratedEvent.GetStructuresArray(Enums.MutableStructureTypes.Fixed));
+
+				return nodeList;
+			} finally {
+				this.skipRehydratedEventStructuresArray = false;
+			}
+		}
+
+		private bool skipRehydratedEventStructuresArray;
+		
+		protected override HashNodeList GetContentStructuresArray() {
+			// do nothing here, we add it explicitly
+			if(this.skipRehydratedEventStructuresArray) {
+				return null;
+			}
+			return this.Contents.RehydratedEvent.GetStructuresArray();
+		}
+
+		/// <summary>
+		///     Extra conditional fields that will be hashed with the transaction
+		/// </summary>
+		/// <returns></returns>
+		public virtual HashNodeList GetTransactionHashingStructuresArray(TransactionHashingTypes type = TransactionHashingTypes.Full) {
 			HashNodeList hashNodeList = new HashNodeList();
 
-			hashNodeList.Add(this.Expiration);
-			hashNodeList.Add(this.Options);
+			if(type.HasFlag(TransactionHashingTypes.Time)) {
+				hashNodeList.Add(this.Expiration);
+			}
 
 			return hashNodeList;
 		}
@@ -123,20 +140,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			return (byte) Math.Max(Math.Min((decimal) expiration, MAXIMUM_EXPIRATION_TIME), MINIMUM_EXPIRATION_TIME);
 		}
-
-		protected override void Dehydrate(IDataDehydrator dehydrator) {
-			base.Dehydrate(dehydrator);
-
-			dehydrator.Write(this.Expiration);
-			dehydrator.Write(this.Options);
-
-		}
+		
 
 		protected override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-
+			
 			this.Expiration = rehydrator.ReadByte();
-			this.Options = rehydrator.ReadByte();
+		}
+		
+		protected override void Dehydrate(IDataDehydrator dehydrator) {
+			base.Dehydrate(dehydrator);
+			
+			dehydrator.Write(this.Expiration);
 		}
 
 		protected override IDehydratedTransaction RehydrateContents(IDataRehydrator rh) {
@@ -146,9 +161,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 
 			return dehydratedTransaction;
 		}
-
+		
 		protected override ComponentVersion<EnvelopeType> SetIdentity() {
-			return (EnvelopeTypes.Instance.Transaction, 1, 0);
+			return (EnvelopeTypes.Instance.SignedTransaction, 1, 0);
 		}
 	}
 }

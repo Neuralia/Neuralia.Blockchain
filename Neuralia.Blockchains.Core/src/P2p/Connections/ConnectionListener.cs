@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Tools;
@@ -36,15 +37,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public event Action<ITcpConnection> NewConnectionRequestReceived;
 
 		public void Start() {
-
-			if(Socket.OSSupportsIPv6) {
-				this.StartServer(IPMode.IPv6);
-			} else {
-				this.StartServer(IPMode.IPv4);
-			}
+			
+			this.StartServer(GlobalSettings.ApplicationSettings.IPProtocol);
 		}
 
 		private void StartServer(IPMode ipMode) {
+
+			if(ipMode == IPMode.Unknown) {
+				throw new ApplicationException("Invalid IP protocol mode.");
+			}
 			try {
 				Repeater.Repeat(() => {
 
@@ -69,7 +70,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							}
 						};
 
-						NLog.Default.Information($"Listening on port {this.port} in {ipMode}{(ipMode == IPMode.IPv6 ? " and " + IPMode.IPv4 : "")} mode");
+						string protocolTypes = "";
+						
+						if(this.tcpServer.IPMode == IPMode.IPv4) {
+							protocolTypes = "IPv4 mode";
+						}
+						else if(this.tcpServer.IPMode == IPMode.IPv6) {
+							protocolTypes = "IPv6 mode";
+						}
+						else if(this.tcpServer.IPMode == IPMode.Both) {
+							protocolTypes = "IPv4 and IPv6 mode";
+						}
+						NLog.Default.Information($"Listening on port {this.port} in {protocolTypes}");
 
 						this.tcpServer.Start();
 					} catch {
@@ -89,7 +101,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected virtual ITcpServer CreateTcpServer(IPMode ipMode) {
-			return new TcpServer(new NetworkEndPoint(IPAddress.Any, this.port, ipMode), this.TriggerExceptionOccured);
+			IPAddress address = IPAddress.Any;
+			
+			if(ipMode.HasFlag(IPMode.IPv6) && TcpConnection.IPv6Supported) {
+				address = IPAddress.IPv6Any;
+			}
+			
+			return new TcpServer(new NetworkEndPoint(address, this.port, ipMode), this.TriggerExceptionOccured);
 		}
 
 		public event TcpConnection.ExceptionOccured ExceptionOccured;

@@ -207,9 +207,9 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 				// let's check if its the same message by hashing them
 				xxHashSakuraTree hasher = new xxHashSakuraTree();
 
-				IEnumerable<long> messageHashes = messages.Cast<T>().Select(m => {
+				IEnumerable<long> messageHashes = messages.Select(m => {
 
-					using HashNodeList nodes = m.GetStructuresArray();
+					using HashNodeList nodes = m.BaseMessage.GetStructuresArray();
 
 					return hasher.HashLong(nodes);
 
@@ -254,7 +254,11 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 				// let's check if its the same message by hashing them
 				xxHasher64 hasher = new xxHasher64();
 
-				IEnumerable<long> messageHashes = messages.Select(m => hasher.HashLong(m.Dehydrate())).Distinct();
+				IEnumerable<long> messageHashes = messages.Select(m => {
+
+					using var array = m.Dehydrate();
+					return hasher.HashLong(array);
+				}).Distinct();
 
 				if(messageHashes.Count() == 1) {
 					// the are the same message repeated. lets just take one.

@@ -27,12 +27,12 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			Span<byte> bytes = stackalloc byte[sizeof(long)];
 			TypeSerializer.Serialize(nonce1, bytes);
 
-			this.nonce1 = ByteArray.Create(bytes.Length);
+			this.nonce1 = SafeArrayHandle.Create(bytes.Length);
 			this.nonce1.Entry.CopyFrom(bytes);
 
 			TypeSerializer.Serialize(nonce2, bytes);
 
-			this.nonce2 = ByteArray.Create(bytes.Length);
+			this.nonce2 = SafeArrayHandle.Create(bytes.Length);
 			this.nonce2.Entry.CopyFrom(bytes);
 		}
 
@@ -216,11 +216,11 @@ namespace Neuralia.Blockchains.Core.Serialization {
 
 		private SafeArrayHandle Encrypt(in Span<byte> bytes) {
 			//TODO: the toarray causes performance considerations
-			return FileEncryptor.Encrypt(ByteArray.Wrap(bytes.ToArray()), this.secret, this.encryptorParameters);
+			return FileEncryptor.Encrypt(SafeArrayHandle.Wrap(bytes.ToArray()), this.secret, this.encryptorParameters);
 		}
 
 		private SafeArrayHandle Decrypt(in Span<byte> bytes) {
-			return FileEncryptor.Decrypt(ByteArray.Wrap(bytes.ToArray()), this.secret, this.encryptorParameters);
+			return FileEncryptor.Decrypt(SafeArrayHandle.Wrap(bytes.ToArray()), this.secret, this.encryptorParameters);
 		}
 
 		public void Deserialize(in Span<byte> bytes, out byte value) {

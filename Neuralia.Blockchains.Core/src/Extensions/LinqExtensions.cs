@@ -35,5 +35,16 @@ namespace Neuralia.Blockchains.Core.Extensions {
 				return predicate(e.selected);
 			}).Select(e => e.source);
 		}
+		
+		
+		public static IEnumerable<TFirst> Except<TFirst, TSecond>(this IEnumerable<TFirst> first, IEnumerable<TSecond> second, Func<TFirst, TSecond, bool> comparer)
+		{
+			return first.Where(x => second.Count(y => comparer(x, y)) == 0);
+		} 
+
+		public static IEnumerable<TFirst> Intersect<TFirst, TSecond>(this IEnumerable<TFirst> first, IEnumerable<TSecond> second, Func<TFirst, TSecond, bool> comparer)
+		{
+			return first.Where(x => second.Count(y => comparer(x, y)) == 1);
+		}
 	}
 }

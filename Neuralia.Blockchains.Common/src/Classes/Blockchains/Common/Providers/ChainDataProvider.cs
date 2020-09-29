@@ -55,14 +55,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public const string EVENTS_FOLDER_NAME = "store";
 		public const string BLOCKS_FOLDER_NAME = "blocks";
 
-		public const string GENERAL_ACHE_FOLDER_NAME = "caches";
+		public const string GENERAL_CACHE_FOLDER_NAME = "caches";
 		public const string BLOCKS_CACHE_FOLDER_NAME = "caches";
 		public const string GOSSIP_CACHE_FOLDER_NAME = "gossip";
 		public const string SYNC_CACHE_FOLDER_NAME = "sync";
+		public const string POW_CACHE_FOLDER_NAME = "pow";
 
 		public const string BLOCKS_CONFIG_FILE_NAME = "config";
 		public const string MESSAGES_CONFIG_FILE_NAME = "config";
-
 		private const string BLOCK_SYNC_MANIFEST_FILE = "block-sync-manifest.json";
 		private const string BLOCK_SYNC_MANIFEST_COMPLETED_FILE = "block-sync-manifest-completed.mark";
 
@@ -82,10 +82,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public const string BLOCKS_INDEX_L3_FILE_NAME = "blocks.l3.index";
 
 		public const string MESSAGES_FOLDER_NAME = "messages";
+		public const string APPOINTMENT_MESSAGES_CACHE_FOLDER_NAME = "appointments";
 
 		public const string MESSAGES_FILE_NAME = "messages.{0}.neuralia";
 		public const string MESSAGES_INDEX_FILE_NAME = "messages.{0}.index";
 		public const string MESSAGES_METADATA_FILE_NAME = "messages.meta";
+		
+		public const string APPOINTMENT_CACHE_FILE = "{0}.appointment";
+
 
 		public const int BLOCKS_COUNT_PER_GROUP = 1000;
 		public const int MESSAGE_COUNT_PER_GROUP = 10_000;
@@ -197,8 +201,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public override async Task PostInitialize() {
 			await base.PostInitialize().ConfigureAwait(false);
 
-			this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
-			this.BlockchainEventSerializationFal.TestFastKeysPath();
+			this.BlockchainEventSerializationFal.EnsureKeyDictionaryIndex();
+			this.BlockchainEventSerializationFal.TestKeyDictionaryPath();
 		}
 
 		protected struct BlockGroupingConfigs {
@@ -228,9 +232,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public string GetGeneralCachePath() {
-			return Path.Combine(this.GetEventsFolderPath(), GENERAL_ACHE_FOLDER_NAME);
+			return Path.Combine(this.GetEventsFolderPath(), GENERAL_CACHE_FOLDER_NAME);
 		}
 
+		public string GetPOWCachePath() {
+			return Path.Combine(this.GetGeneralCachePath(), POW_CACHE_FOLDER_NAME);
+		}
+		
 		public string GetBlocksFolderPath() {
 
 			return Path.Combine(this.GetEventsFolderPath(), BLOCKS_FOLDER_NAME);
@@ -349,6 +357,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			return Path.Combine(this.GetEventsFolderPath(), this.guidService.GetTimestamp(uuid).ToString(@"yyyy\/MM\/dd/HH/"));
 		}
+		
+				
+		public string GetAppointmentMessagesCacheFolderPath() {
+			
+			return Path.Combine(this.GetMessagesFolderPath(), APPOINTMENT_MESSAGES_CACHE_FOLDER_NAME);
+		}
+		
+		public string GetAppointmentMessageFilePath(Guid messageId) {
+			return Path.Combine(this.GetAppointmentMessagesCacheFolderPath(), string.Format(APPOINTMENT_CACHE_FILE, messageId.ToString()));
+		}
+
 
 		public BlockchainEventSerializationFal.BlockchainMessagesMetadata GetMessagesMetadata(Guid uuid) {
 

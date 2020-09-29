@@ -23,11 +23,11 @@ namespace Neuralia.Blockchains.Core {
 		public delegate void RehydrationDelegate<T>(IDataRehydrator rehydrator, ref T entry)
 			where T : IBinaryRehydratable;
 
-		public delegate Task RequestCopyKeyFileDelegate(CorrelationContext correlationContext, Guid accountUUid, string keyName, int attempt, LockContext lockContext);
+		public delegate Task RequestCopyKeyFileDelegate(CorrelationContext correlationContext, string accountCode, string keyName, int attempt, LockContext lockContext);
 
 		public delegate Task RequestCopyWalletFileDelegate(CorrelationContext correlationContext, int attempt, LockContext lockContext);
 
-		public delegate Task<SecureString> RequestKeyPassphraseDelegate(CorrelationContext correlationContext, Guid accountUUid, string keyName, int attempt, LockContext lockContext);
+		public delegate Task<SecureString> RequestKeyPassphraseDelegate(CorrelationContext correlationContext, string accountCode, string keyName, int attempt, LockContext lockContext);
 
 		public delegate Task<(SecureString passphrase, bool keysToo)> RequestPassphraseDelegate(CorrelationContext correlationContext, int attempt, LockContext lockContext);
 	}

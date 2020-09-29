@@ -10,18 +10,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		public int attempt;
 		public int correlationCode;
 
-		public RequestWalletKeyPassphraseSystemMessageTask(Guid accountUUid, string keyName, int attempt, Action action) : base(BlockchainSystemEventTypes.Instance.RequestKeyPassphrase) {
+		public RequestWalletKeyPassphraseSystemMessageTask(string accountCode, string keyName, int attempt, Action action) : base(BlockchainSystemEventTypes.Instance.RequestKeyPassphrase) {
 			this.action = action;
 
-			this.accountUUid = accountUUid;
+			this.accountCode = accountCode;
 			this.keyName = keyName;
 			this.correlationCode = GlobalRandom.GetNext();
 			this.attempt = attempt;
 
-			this.parameters = new object[] {this.correlationCode, this.accountUUid, this.keyName, this.attempt};
+			this.parameters = new object[] {this.correlationCode, this.accountCode, this.keyName, this.attempt};
 		}
 
-		public Guid accountUUid { get; set; }
+		public string accountCode { get; set; }
 		public string keyName { get; set; }
 
 		public SecureString Passphrase { get; set; }

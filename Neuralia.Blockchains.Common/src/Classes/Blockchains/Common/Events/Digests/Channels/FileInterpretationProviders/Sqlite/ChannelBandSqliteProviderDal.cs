@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where ENTRY : class, IChannelBandSqliteProviderEntry<KEY>
 		where KEY : struct {
 
-		public ChannelBandSqliteProviderDal(string filename, string folderPath, SoftwareVersion softwareVersion, Expression<Func<ENTRY, object>> keyDeclaration = null) : base(folderPath, null, softwareVersion, st => new ChannelBandSqliteProviderContext<ENTRY, KEY>(filename, keyDeclaration), AppSettingsBase.SerializationTypes.Master) {
+		public ChannelBandSqliteProviderDal(string filename, string folderPath, SoftwareVersion softwareVersion, Expression<Func<ENTRY, object>> keyDeclaration = null) : base(folderPath, null, softwareVersion, st => new ChannelBandSqliteProviderContext<ENTRY, KEY>(filename, keyDeclaration), AppSettingsBase.SerializationTypes.Main) {
 
 		}
 

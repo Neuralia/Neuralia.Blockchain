@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		}
 
 		public static SafeArrayHandle ConvertToUnsecureBytes(this SecureString securePassword) {
-			return ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(securePassword.ConvertToUnsecureString()));
+			return SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(securePassword.ConvertToUnsecureString()));
 		}
 
 		public static SecureString ConvertToSecureString(this string password) {

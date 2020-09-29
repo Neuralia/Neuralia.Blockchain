@@ -1,18 +1,27 @@
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
-	public interface IXmssMTWalletKey : IXmssWalletKey {
-		int TreeLayers { get; set; }
+	public interface IXmssMTWalletKey : IXmssmtKey, IXmssWalletKey {
 	}
 
 	public class XmssMTWalletKey : XmssWalletKey, IXmssMTWalletKey {
 
+		public XmssMTWalletKey() {
+		}
+		
+		protected override ComponentVersion<CryptographicKeyType> SetIdentity() {
+			return (CryptographicKeyTypes.Instance.XMSSMT, 1,0);
+		}
+		
 		/// <summary>
 		///     xmss layers if XMSSMT
 		/// </summary>
-		public int TreeLayers { get; set; }
+		public byte TreeLayers { get; set; }
 
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
@@ -25,17 +34,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
 
-			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
-			entry.Value = this.TreeLayers;
-			entry.Dehydrate(dehydrator);
+			dehydrator.Write(this.TreeLayers);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
-
-			AdaptiveLong1_9 entry = new AdaptiveLong1_9();
-			entry.Rehydrate(rehydrator);
-			this.TreeLayers = (int) entry.Value;
+			
+			this.TreeLayers = rehydrator.ReadByte();
 		}
 	}
 }

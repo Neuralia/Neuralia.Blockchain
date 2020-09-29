@@ -5,7 +5,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 	public interface IWalletElectionCache {
 		[BsonId]
-		TransactionId TransactionId { get; set; }
+		string TransactionId { get; set; }
 
 		long BlockId { get; set; }
 	}
@@ -13,7 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 	public abstract class WalletElectionCache : IWalletElectionCache {
 
 		[BsonId]
-		public TransactionId TransactionId { get; set; }
+		public string TransactionId { get; set; }
 
 		public long BlockId { get; set; }
 	}

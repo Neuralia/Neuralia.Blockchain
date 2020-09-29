@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
@@ -68,6 +69,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			this.xmssEngine = new XMSSEngine(mode, threadMode, this.wotsPlusProvider, this.xmssExecutionContext, this.ReducedHeight);
 		}
 
+		private bool EnableCaches => this.xmssExecutionContext.EnableCaches;
 		public long LeafCount { get; }
 		public int ReducedHeight { get; }
 		public long ReducedLeafCount { get; }
@@ -75,7 +77,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 		public ByteArray[] GenerateWotsDeterministicPrivateSeeds(ByteArray secretSeed, int nonce, XMSSMTLeafId index) {
 
-			if(this.wotsPrivateSeedsCache.ContainsKey(index)) {
+			bool enabledCache = this.EnableCaches && index.Layer != 0;
+			if(enabledCache && this.wotsPrivateSeedsCache.ContainsKey(index)) {
 				return this.wotsPrivateSeedsCache[index];
 			}
 
@@ -89,78 +92,97 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			this.xmssExecutionContext.OtsHashAddressPool.PutObject(otsHashAddress);
 
-			this.wotsPrivateSeedsCache.Add(index, result);
+			if(enabledCache) {
+				this.wotsPrivateSeedsCache.Add(index, result);
+			}
 
 			return result;
 		}
 
 		public async Task<(XMSSMTPrivateKey privateKey, XMSSMTPublicKey publicKey)> GenerateKeys(bool buildCache = true, Func<int, long, int, Task> progressCallback = null) {
 
-			(ByteArray publicSeed, ByteArray secretSeed, ByteArray secretSeedPrf) = XMSSCommonUtils.GenerateSeeds(this.xmssExecutionContext);
+			ByteArray publicSeed = null;
+			ByteArray secretSeed = null;
+			ByteArray secretSeedPrf = null;
 
-			this.wotsPrivateSeedsCache.Clear();
+			try {
+				(publicSeed, secretSeed, secretSeedPrf) = XMSSCommonUtils.GenerateSeeds(this.xmssExecutionContext);
 
-			List<(int nonce1, int nonce2)> nonces = new List<(int nonce1, int nonce2)>();
+				this.ClearCaches();
 
-			for(int i = 0; i < this.ReducedLeafCount; i++) {
+				List<(int nonce1, int nonce2)> nonces = new List<(int nonce1, int nonce2)>();
+
+				for(int i = 0; i < this.ReducedLeafCount; i++) {
 
 #if DETERMINISTIC_DEBUG
 				nonces.Add((0, 0));
 #else
-				nonces.Add((this.xmssExecutionContext.Random.NextInt(), this.xmssExecutionContext.Random.NextInt()));
+					nonces.Add((GlobalRandom.GetNext(), GlobalRandom.GetNext()));
 #endif
-			}
+				}
 
-			nonces.Shuffle();
+				nonces.Shuffle();
 
-			XMSSMTPrivateKey secretKey = new XMSSMTPrivateKey(this.height, this.layers, publicSeed, secretSeed, secretSeedPrf, new XMSSNonceSet(nonces), this.xmssExecutionContext);
+				XMSSMTPrivateKey secretKey = new XMSSMTPrivateKey(this.height, this.layers, publicSeed, secretSeed, secretSeedPrf, new XMSSNonceSet(nonces), this.xmssExecutionContext);
 
-			// now lets prepare the public key
-			int lastLayer = this.layers - 1;
+				// now lets prepare the public key
+				int lastLayer = this.layers - 1;
 
-			OtsHashAddress adrs = this.xmssExecutionContext.OtsHashAddressPool.GetObject();
+				OtsHashAddress adrs = this.xmssExecutionContext.OtsHashAddressPool.GetObject();
 
-			for(int layer = 0; layer < this.layers; layer++) {
-				for(long tree = 0; tree < (1 << ((this.layers - 1 - layer) * this.ReducedHeight)); tree++) {
+				for(int layer = 0; layer < this.layers; layer++) {
+					for(long tree = 0; tree < (1 << ((this.layers - 1 - layer) * this.ReducedHeight)); tree++) {
 
-					adrs.Reset();
+						adrs.Reset();
 
-					adrs.LayerAddress = layer;
-					adrs.TreeAddress = tree;
+						adrs.LayerAddress = layer;
+						adrs.TreeAddress = tree;
 
-					using XMSSPrivateKey xmssPrivateKey = this.BuildXmssPrivateKey(adrs, secretKey, 0);
+						using XMSSPrivateKey xmssPrivateKey = this.BuildXmssPrivateKey(adrs, secretKey, 0);
 
-					// build the node tree
-					long tree1 = tree;
-					int layer1 = layer;
+						// build the node tree
+						long tree1 = tree;
+						int layer1 = layer;
 
-					ByteArray root = await this.xmssEngine.TreeHash(xmssPrivateKey, 0, this.ReducedHeight, publicSeed, adrs, pct => {
+						(ByteArray root, ByteArray backupRoot) = await this.xmssEngine.TreeHash(xmssPrivateKey, 0, this.ReducedHeight, publicSeed, adrs, pct => {
 
-						if(progressCallback != null) {
-							return progressCallback(pct, tree1, layer1);
+							if(progressCallback != null) {
+								return progressCallback(pct, tree1, layer1);
+							}
+
+							return Task.CompletedTask;
+						}).ConfigureAwait(false);
+
+						if(layer == lastLayer) {
+							secretKey.Root = root;
+							secretKey.BackupRoot = backupRoot;
+						} else {
+							root?.Dispose();
+							backupRoot?.Dispose();
 						}
 
-						return Task.CompletedTask;
-					}).ConfigureAwait(false);
-
-					if(layer == lastLayer) {
-						secretKey.Root = root;
+						// so it wont be disposed, since we keep it in the xmss^mt key
+						xmssPrivateKey.ClearNodeCache();
 					}
-
-					// so it wont be disposed, since we keep it in the xmss^mt key
-					xmssPrivateKey.ClearNodeCache();
 				}
+
+				this.xmssExecutionContext.OtsHashAddressPool.PutObject(adrs);
+
+				XMSSMTPublicKey publicKey = new XMSSMTPublicKey(publicSeed, secretKey.Root, secretKey.BackupRoot, this.xmssExecutionContext);
+
+				if(!buildCache) {
+					secretKey.NodeCache.Clear();
+				}
+
+				return (secretKey, publicKey);
+			} finally {
+				
+				this.ClearCaches();
+				
+				publicSeed?.Dispose();
+				secretSeed?.Dispose();
+				secretSeedPrf?.Dispose();
 			}
-
-			this.xmssExecutionContext.OtsHashAddressPool.PutObject(adrs);
-
-			XMSSMTPublicKey publicKey = new XMSSMTPublicKey(publicSeed, secretKey.Root.Clone(), this.xmssExecutionContext);
-
-			if(!buildCache) {
-				secretKey.NodeCache.Clear();
-			}
-
-			return (secretKey, publicKey);
 		}
 
 		private XMSSPrivateKey BuildXmssPrivateKey(XMSSMTreeId id, XMSSMTPrivateKey xmssmtSecretKey, int leafIndex) {
@@ -182,13 +204,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			this.CheckValidIndex(xmssmtSecretKey);
 
+			this.ClearCaches();
 			long signatureIndex = xmssmtSecretKey.Index;
 
 			OtsHashAddress adrs = this.xmssExecutionContext.OtsHashAddressPool.GetObject();
 			adrs.Reset();
 
 			using ByteArray temp2 = XMSSCommonUtils.ToBytes(signatureIndex, this.digestLength);
-			ByteArray random = XMSSCommonUtils.PRF(xmssmtSecretKey.SecretPrf, temp2, this.xmssExecutionContext);
+			ByteArray random = XMSSCommonUtils.PRF(xmssmtSecretKey.SecretPrf, temp2, this.xmssExecutionContext, XMSSCommonUtils.HashTypes.Regular);
 			ByteArray temp = xmssmtSecretKey.Root;
 
 			ByteArray concatenated = XMSSCommonUtils.Concatenate(random, temp, temp2);
@@ -217,7 +240,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			xmssmtSignature.Signatures.Add(adrs.LayerAddress, xmssSignature);
 
 			for(int j = 1; j < this.layers; j++) {
-				ByteArray root = await this.xmssEngine.TreeHash(xmssSecretKey, 0, this.ReducedHeight, xmssSecretKey.PublicSeed, adrs).ConfigureAwait(false);
+				(ByteArray root, ByteArray backupRoot) = await this.xmssEngine.TreeHash(xmssSecretKey, 0, this.ReducedHeight, xmssSecretKey.PublicSeed, adrs).ConfigureAwait(false);
 
 				treeIndex = this.GetTreeIndex(treeIndex, this.height - (j * this.ReducedHeight));
 				leafIndex = this.GetLeafIndex(treeIndex);
@@ -235,11 +258,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				xmssmtSignature.Signatures.Add(adrs.LayerAddress, xmssSignature);
 			}
 
+			this.ClearCaches();
 			return xmssmtSignature.Save();
 		}
 
 		public Task<bool> Verify(ByteArray signature, ByteArray message, ByteArray publicKey) {
 
+			this.ClearCaches();
 			using XMSSMTSignature loadedSignature = new XMSSMTSignature(this.xmssExecutionContext);
 			loadedSignature.Load(signature, this.wotsPlusProvider, this.height, this.layers);
 
@@ -248,7 +273,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			}
 
 			using XMSSMTPublicKey loadedPublicKey = new XMSSMTPublicKey(this.xmssExecutionContext);
-			loadedPublicKey.LoadKey(publicKey);
+			loadedPublicKey.LoadKey(SafeArrayHandle.Wrap(publicKey));
 
 			using ByteArray temp2 = XMSSCommonUtils.ToBytes(loadedSignature.Index, this.digestLength);
 
@@ -274,7 +299,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			XMSSSignature xmssSignature = loadedSignature.Signatures[0];
 
-			ByteArray node = this.xmssEngine.XmssRootFromSig(leafIndex, xmssSignature.XmssTreeSignature.otsSignature, xmssSignature.XmssTreeSignature.Auth, hasedMessage, loadedPublicKey.PublicSeed, adrs);
+			(ByteArray node, ByteArray backupNode) = this.xmssEngine.XmssRootFromSig(leafIndex, xmssSignature.XmssTreeSignature.otsSignature, xmssSignature.XmssTreeSignature.Auth, xmssSignature.XmssTreeSignature.BackupAuth, hasedMessage, loadedPublicKey.PublicSeed, adrs);
 
 			hasedMessage.Return();
 
@@ -290,16 +315,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				adrs.OtsAddress = leafIndex;
 
 				ByteArray backNode = node;
-				node = this.xmssEngine.XmssRootFromSig(leafIndex, xmssSignature.XmssTreeSignature.otsSignature, xmssSignature.XmssTreeSignature.Auth, node, loadedPublicKey.PublicSeed, adrs);
+				(node, backupNode) = this.xmssEngine.XmssRootFromSig(leafIndex, xmssSignature.XmssTreeSignature.otsSignature, xmssSignature.XmssTreeSignature.Auth, xmssSignature.XmssTreeSignature.BackupAuth, node, loadedPublicKey.PublicSeed, adrs);
 				backNode.Return();
 			}
 
 			this.xmssExecutionContext.OtsHashAddressPool.PutObject(adrs);
 
-			bool result = XMSSCommonUtils.EqualsConstantTime(loadedPublicKey.Root, node);
+			bool result = ByteArray.EqualsConstantTime(loadedPublicKey.Root, node);
 
 			node.Return();
 
+			this.ClearCaches();
+			
 			return Task.FromResult(result);
 		}
 
@@ -334,6 +361,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			return (int) (index & ((1L << this.ReducedHeight) - 1L));
 		}
 
+		private void ClearCaches() {
+			foreach(ByteArray[] entry in this.wotsPrivateSeedsCache.Values) {
+				DoubleArrayHelper.Dispose(entry);
+			}
+			this.wotsPrivateSeedsCache.Clear();
+		}
 	#region disposable
 
 		public bool IsDisposed { get; private set; }
@@ -349,10 +382,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 				this.xmssEngine?.Dispose();
 
-				foreach(ByteArray[] entry in this.wotsPrivateSeedsCache.Values) {
-					DoubleArrayHelper.Dispose(entry);
-				}
-
+				this.ClearCaches();
+				
 				this.wotsPlusProvider?.Dispose();
 
 				this.xmssExecutionContext?.Dispose();

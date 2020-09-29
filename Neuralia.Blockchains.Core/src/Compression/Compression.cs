@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 		public static T Instance { get; } = new T();
 
 		public SafeArrayHandle Compress(string text, CompressionLevelByte level) {
-			SafeArrayHandle data = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(text));
+			using SafeArrayHandle data = SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(text));
 			SafeArrayHandle result = null;
 
 			lock(this.locker) {
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 		}
 
 		public SafeArrayHandle Compress(string text) {
-			SafeArrayHandle data = ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(text));
+			using SafeArrayHandle data = SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(text));
 			SafeArrayHandle result = null;
 
 			lock(this.locker) {

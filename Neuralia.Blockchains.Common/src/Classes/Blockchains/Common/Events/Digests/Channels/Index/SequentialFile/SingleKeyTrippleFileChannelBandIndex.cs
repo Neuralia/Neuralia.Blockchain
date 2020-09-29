@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		//TODO: in the future, replace the L1 index with a sort of B_Tree
 		protected readonly int groupSize;
 
-		protected ITrippleChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>, uint> L1IndexProvider;
+		protected ITripleChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>, uint> L1IndexProvider;
 
 		public SingleKeyTrippleFileChannelBandIndex(string filename, string baseFolder, string scopeFolder, int groupSize, CHANEL_BANDS enabledBands, FileSystemWrapper fileSystem) : base(filename, baseFolder, scopeFolder, enabledBands, fileSystem) {
 			this.groupSize = groupSize;
@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		}
 
 		protected override void CreateIndexProviders() {
-			this.L1IndexProvider = new TrippleChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>, uint>(new GroupDigestChannelBandFileNamingProvider<uint>(), this.baseFolder, this.scopeFolder, this.ChannelBand.ToString(), this.fileSystem);
+			this.L1IndexProvider = new TripleChannelBandFileInterpretationProvider<GroupDigestChannelBandFileNamingProvider<uint>, uint>(new GroupDigestChannelBandFileNamingProvider<uint>(), this.baseFolder, this.scopeFolder, this.ChannelBand.ToString(), this.fileSystem);
 		}
 
 		public override Dictionary<int, SafeArrayHandle> HashFiles(int groupIndex) {

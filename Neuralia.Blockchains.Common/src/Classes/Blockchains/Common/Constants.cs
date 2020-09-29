@@ -8,9 +8,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		/// <summary>
 		///     the id of the first account that will be publicly assigned.
 		/// </summary>
-		public const int FIRST_PUBLIC_ACCOUNT_NUMBER = 34;
+		public const int FIRST_PUBLIC_ACCOUNT_NUMBER = 1;
 
-		public static AccountId FirstStandardAccountId => new AccountId(FIRST_PUBLIC_ACCOUNT_NUMBER, Enums.AccountTypes.Standard);
-		public static AccountId FirstJointAccountId => new AccountId(FIRST_PUBLIC_ACCOUNT_NUMBER, Enums.AccountTypes.Standard);
+		public const int DEFAULT_STRIDE_LENGTH = 64;
+		public const int HALF_STRIDE_LENGTH = DEFAULT_STRIDE_LENGTH / 2;
 	}
 }

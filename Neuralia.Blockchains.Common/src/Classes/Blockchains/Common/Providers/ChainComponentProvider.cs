@@ -37,9 +37,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> ChainNetworkingProviderBase { get; }
 
 		IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> InterpretationProviderBase { get; }
+		
+		IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> AppointmentsProviderBase { get; }
 	}
 
-	public interface IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, out WALLET_PROVIDER_PROXY, out ASSEMBLY_PROVIDER, out MAIN_FACTORY_PROVIDER, out BLOCKCHAIN_PROVIDER, out CHAIN_STATE_PROVIDER, out CHAIN_CONFIGURATION_PROVIDER, out CHAIN_VALIDATION_PROVIDER, out CHAIN_MINING_PROVIDER, out CHAIN_LOADING_PROVIDER, out CHAIN_WRITING_PROVIDER, out ACCREDITATION_CERTIFICATE_PROVIDER, out ACCOUNT_SNAPSHOTS_PROVIDER, out CHAIN_NETWORKING_PROVIDER, out INTERPRETATION_PROVIDER> : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public interface IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, out WALLET_PROVIDER_PROXY, out ASSEMBLY_PROVIDER, out MAIN_FACTORY_PROVIDER, out BLOCKCHAIN_PROVIDER, out CHAIN_STATE_PROVIDER, out CHAIN_CONFIGURATION_PROVIDER, out CHAIN_VALIDATION_PROVIDER, out CHAIN_MINING_PROVIDER, out CHAIN_LOADING_PROVIDER, out CHAIN_WRITING_PROVIDER, out ACCREDITATION_CERTIFICATE_PROVIDER, out ACCOUNT_SNAPSHOTS_PROVIDER, out CHAIN_NETWORKING_PROVIDER, out INTERPRETATION_PROVIDER, out APPOINTMENTS_PROVIDER> : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where WALLET_PROVIDER_PROXY : IWalletProviderProxy
@@ -55,7 +57,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where ACCREDITATION_CERTIFICATE_PROVIDER : IAccreditationCertificateProvider
 		where ACCOUNT_SNAPSHOTS_PROVIDER : IAccountSnapshotsProvider
 		where CHAIN_NETWORKING_PROVIDER : IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where INTERPRETATION_PROVIDER : IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
+		where INTERPRETATION_PROVIDER : IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+		where APPOINTMENTS_PROVIDER : IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>{
 
 		WALLET_PROVIDER_PROXY WalletProvider { get; }
 		ASSEMBLY_PROVIDER AssemblyProvider { get; }
@@ -68,18 +71,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		CHAIN_LOADING_PROVIDER ChainDataLoadProvider { get; }
 		CHAIN_WRITING_PROVIDER ChainDataWriteProvider { get; }
 		ACCREDITATION_CERTIFICATE_PROVIDER AccreditationCertificateProvider { get; }
-
+		
 		ACCOUNT_SNAPSHOTS_PROVIDER AccountSnapshotsProvider { get; }
 
 		CHAIN_NETWORKING_PROVIDER ChainNetworkingProvider { get; }
 
 		INTERPRETATION_PROVIDER InterpretationProvider { get; }
+		APPOINTMENTS_PROVIDER AppointmentsProvider { get; }
 	}
 
 	/// <summary>
 	///     The main bucket to store all components used by the chain
 	/// </summary>
-	public abstract class ChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, WALLET_PROVIDER_PROXY, ASSEMBLY_PROVIDER, MAIN_FACTORY_PROVIDER, BLOCKCHAIN_PROVIDER, CHAIN_STATE_PROVIDER, CHAIN_CONFIGURATION_PROVIDER, CHAIN_VALIDATION_PROVIDER, CHAIN_MINING_PROVIDER, CHAIN_LOADING_PROVIDER, CHAIN_WRITING_PROVIDER, ACCREDITATION_CERTIFICATE_PROVIDER, ACCOUNT_SNAPSHOTS_PROVIDER, CHAIN_NETWORKING_PROVIDER, INTERPRETATION_PROVIDER> : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, WALLET_PROVIDER_PROXY, ASSEMBLY_PROVIDER, MAIN_FACTORY_PROVIDER, BLOCKCHAIN_PROVIDER, CHAIN_STATE_PROVIDER, CHAIN_CONFIGURATION_PROVIDER, CHAIN_VALIDATION_PROVIDER, CHAIN_MINING_PROVIDER, CHAIN_LOADING_PROVIDER, CHAIN_WRITING_PROVIDER, ACCREDITATION_CERTIFICATE_PROVIDER, ACCOUNT_SNAPSHOTS_PROVIDER, CHAIN_NETWORKING_PROVIDER, INTERPRETATION_PROVIDER>
+	public abstract class ChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, WALLET_PROVIDER_PROXY, ASSEMBLY_PROVIDER, MAIN_FACTORY_PROVIDER, BLOCKCHAIN_PROVIDER, CHAIN_STATE_PROVIDER, CHAIN_CONFIGURATION_PROVIDER, CHAIN_VALIDATION_PROVIDER, CHAIN_MINING_PROVIDER, CHAIN_LOADING_PROVIDER, CHAIN_WRITING_PROVIDER, ACCREDITATION_CERTIFICATE_PROVIDER, ACCOUNT_SNAPSHOTS_PROVIDER, CHAIN_NETWORKING_PROVIDER, INTERPRETATION_PROVIDER, APPOINTMENTS_PROVIDER> : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, WALLET_PROVIDER_PROXY, ASSEMBLY_PROVIDER, MAIN_FACTORY_PROVIDER, BLOCKCHAIN_PROVIDER, CHAIN_STATE_PROVIDER, CHAIN_CONFIGURATION_PROVIDER, CHAIN_VALIDATION_PROVIDER, CHAIN_MINING_PROVIDER, CHAIN_LOADING_PROVIDER, CHAIN_WRITING_PROVIDER, ACCREDITATION_CERTIFICATE_PROVIDER, ACCOUNT_SNAPSHOTS_PROVIDER, CHAIN_NETWORKING_PROVIDER, INTERPRETATION_PROVIDER, APPOINTMENTS_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where WALLET_PROVIDER_PROXY : IWalletProviderProxy
@@ -95,9 +99,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where ACCREDITATION_CERTIFICATE_PROVIDER : IAccreditationCertificateProvider
 		where ACCOUNT_SNAPSHOTS_PROVIDER : IAccountSnapshotsProvider
 		where CHAIN_NETWORKING_PROVIDER : IChainNetworkingProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where INTERPRETATION_PROVIDER : IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
+		where INTERPRETATION_PROVIDER : IInterpretationProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+		where APPOINTMENTS_PROVIDER : IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>{
 
-		public ChainComponentProvider(WALLET_PROVIDER_PROXY walletProviderProxy, ASSEMBLY_PROVIDER assemblyProvider, MAIN_FACTORY_PROVIDER chainFactoryProvider, BLOCKCHAIN_PROVIDER blockchainProvider, CHAIN_STATE_PROVIDER chainStateProvider, CHAIN_CONFIGURATION_PROVIDER chainConfigurationProvider, CHAIN_VALIDATION_PROVIDER chainValidationProvider, CHAIN_MINING_PROVIDER chainMiningProvider, CHAIN_LOADING_PROVIDER chainDataLoadProvider, ACCREDITATION_CERTIFICATE_PROVIDER accreditationCertificateProvider, ACCOUNT_SNAPSHOTS_PROVIDER accountSnapshotsProvider, CHAIN_NETWORKING_PROVIDER chainNetworkingProvider, INTERPRETATION_PROVIDER interpretationProvider) {
+		public ChainComponentProvider(WALLET_PROVIDER_PROXY walletProviderProxy, ASSEMBLY_PROVIDER assemblyProvider, MAIN_FACTORY_PROVIDER chainFactoryProvider, BLOCKCHAIN_PROVIDER blockchainProvider, CHAIN_STATE_PROVIDER chainStateProvider, CHAIN_CONFIGURATION_PROVIDER chainConfigurationProvider, CHAIN_VALIDATION_PROVIDER chainValidationProvider, CHAIN_MINING_PROVIDER chainMiningProvider, CHAIN_LOADING_PROVIDER chainDataLoadProvider, ACCREDITATION_CERTIFICATE_PROVIDER accreditationCertificateProvider, ACCOUNT_SNAPSHOTS_PROVIDER accountSnapshotsProvider, CHAIN_NETWORKING_PROVIDER chainNetworkingProvider, INTERPRETATION_PROVIDER interpretationProvider, APPOINTMENTS_PROVIDER appointmentsProvider) {
 			this.WalletProvider = walletProviderProxy;
 			this.AssemblyProvider = assemblyProvider;
 			this.ChainFactoryProvider = chainFactoryProvider;
@@ -111,6 +116,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.AccountSnapshotsProvider = accountSnapshotsProvider;
 			this.ChainNetworkingProvider = chainNetworkingProvider;
 			this.InterpretationProvider = interpretationProvider;
+			this.AppointmentsProvider = appointmentsProvider;
 
 			this.Providers.Add(this.WalletProvider);
 			this.Providers.Add(((IWalletProviderProxyInternal) this.WalletProvider).UnderlyingWalletProvider);
@@ -125,6 +131,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.Providers.Add(this.AccountSnapshotsProvider);
 			this.Providers.Add(this.ChainNetworkingProvider);
 			this.Providers.Add(this.InterpretationProvider);
+			this.Providers.Add(this.AppointmentsProvider);
 		}
 
 		public IWalletProviderProxy WalletProviderBase => this.WalletProvider;
@@ -179,6 +186,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public CHAIN_NETWORKING_PROVIDER ChainNetworkingProvider { get; }
 
 		public INTERPRETATION_PROVIDER InterpretationProvider { get; }
+		
+		public IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> AppointmentsProviderBase => this.AppointmentsProvider;
+		public APPOINTMENTS_PROVIDER AppointmentsProvider { get; protected set; }
 
 		public abstract ICardUtils CardUtils { get; }
 		public List<IChainProvider> Providers { get; } = new List<IChainProvider>();

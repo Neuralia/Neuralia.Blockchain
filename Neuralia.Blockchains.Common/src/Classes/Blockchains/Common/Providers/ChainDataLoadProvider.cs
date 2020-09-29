@@ -5,25 +5,31 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Components.Blocks;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.Extensions;
@@ -33,7 +39,10 @@ using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
+using Newtonsoft.Json;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
@@ -77,7 +86,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		IEnumerable<T> LoadBlocks<T>(IEnumerable<long> blockIds)
 			where T : class, IBlock;
 
-		IMasterTransaction LoadMasterTransaction(PublishedAddress keyAddress);
+		IIndexedTransaction LoadIndexedTransaction(PublishedAddress keyAddress);
 		SafeArrayHandle LoadDigestKey(KeyAddress keyAddress);
 		SafeArrayHandle LoadDigestKey(AccountId accountId, byte ordinal);
 
@@ -90,8 +99,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		List<IAccreditationCertificateDigestChannelCard> LoadDigestAccreditationCertificateCards();
 		IAccreditationCertificateDigestChannelCard LoadDigestAccreditationCertificateCard(int id);
 
-		ChannelsEntries<SafeArrayHandle> LoadBlockData(long blockId);
+		ChannelsEntries<SafeArrayHandle> LoadBlockChannels(long blockId);
+		SafeArrayHandle LoadBlockData(long blockId);
 
+		Task<SafeArrayHandle> GetCachedAppointmentMessage(Guid messageId);
 		IBlockHeader LoadBlockHeader(long blockId);
 
 		ChannelsEntries<SafeArrayHandle> LoadBlockSlice(BlockId blockId, ChannelsEntries<(int offset, int length)> offsets);
@@ -116,11 +127,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		int? GetMessagesFileCount(Guid uuid);
 
 		(long index, long startingBlockId, long endingBlockId) FindBlockIndex(long blockId);
-		bool TestFastKeysPath();
+		bool TestKeyDictionaryPath();
 
 		SafeArrayHandle LoadBlockPartialTransactionBytes(long blockId, int offset, int length);
-		Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
-		bool FastKeyEnabled(byte ordinal);
+		Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
+		bool KeyDictionaryEnabled(byte ordinal);
 		Task<List<(IBlockEnvelope envelope, long xxHash)>> GetCachedUnvalidatedBlockGossipMessage(long blockId);
 		Task<bool> GetUnvalidatedBlockGossipMessageCached(long blockId);
 		Task<bool> CheckRegistryMessageInCache(long messagexxHash, bool validated);
@@ -128,7 +139,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Dictionary<string, long> GetBlockFileSizes(long blockId);
 
 		string LoadBlockJson(BlockId blockId);
-
+		DecomposedBlockAPI LoadDecomposedBlock(BlockId blockId);
+		string LoadDecomposedBlockJson(BlockId blockId);
+		
 		(ChannelsEntries<int> sizes, SafeArrayHandle hash)? GetBlockSizeAndHash(BlockId blockId);
 		SafeArrayHandle LoadBlockHash(BlockId blockId);
 		Dictionary<AccountId, SafeArrayHandle> LoadKeys(List<KeyAddress> keyAddresses);
@@ -142,6 +155,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		T LoadFullKey<T>(KeyAddress keyAddress)
 			where T : class, ICryptographicKey;
+
+		Task<List<(AccountId accountId, SafeArrayHandle key, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>> LoadKeyDictionary(List<(AccountId accountId, byte ordinal)> accountIdKeys, LockContext lockContext);
+
+		Task<POWState> LoadCachedPOWState(string key);
 	}
 
 	public interface IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainDataProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataLoadProvider
@@ -155,13 +172,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public abstract class ChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainDataProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
-
-		private const string INDEX_FILE = "index.db";
-		private const string INDEX_ID_SYNC_FILE = "index-id-sync.db";
-
-		private const string RELATIONSHIPS_FILE = "relationships.db";
-
-		private const string QUARANTINE = "quarantine";
 
 		public const int BLOCK_CACHE_SIZE = 10;
 
@@ -205,39 +215,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.BlockchainEventSerializationFal.LoadDigestAccreditationCertificateCard(id);
 		}
 
-		public Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
+		public Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
 			return this.BlockchainEventSerializationFal.LoadAccountKeyFromIndex(accountId, ordinal);
 		}
 
-		public bool FastKeyEnabled(byte ordinal) {
+		public bool KeyDictionaryEnabled(byte ordinal) {
 			BlockChainConfigurations configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-			return configuration.EnableFastKeyIndex && ((configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Transactions) && (ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID)) || (configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Messages) && (ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID)));
+			return configuration.EnableKeyDictionaryIndex && ((configuration.EnabledKeyDictionaryTypes.HasFlag(ChainConfigurations.KeyDictionaryTypes.Transactions) && (ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID)) || (configuration.EnabledKeyDictionaryTypes.HasFlag(ChainConfigurations.KeyDictionaryTypes.Messages) && (ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID)));
 		}
 
-		public IMasterTransaction LoadMasterTransaction(PublishedAddress keyAddress) {
+		public IIndexedTransaction LoadIndexedTransaction(PublishedAddress keyAddress) {
 
 			IBlock cachedBlock = this.GetCachedBlock(keyAddress.AnnouncementBlockId.Value);
 
 			if(cachedBlock != null) {
-				IMasterTransaction transaction = cachedBlock.ConfirmedMasterTransactions.SingleOrDefault(t => t.TransactionId == keyAddress.DeclarationTransactionId);
+				IIndexedTransaction transaction = cachedBlock.ConfirmedIndexedTransactions.SingleOrDefault(t => t.TransactionId == keyAddress.DeclarationTransactionId);
 
 				if(transaction != null) {
 					return transaction;
 				}
 			}
 
-			IMasterTransaction masterTransaction = null;
+			IIndexedTransaction indexedTransaction = null;
 
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(keyAddress.AnnouncementBlockId.Value)) {
 					IBlock block = this.blocksCache[keyAddress.AnnouncementBlockId.Value].block;
 
-					masterTransaction = block.ConfirmedMasterTransactions.SingleOrDefault(t => t.TransactionId == keyAddress.DeclarationTransactionId);
+					indexedTransaction = block.ConfirmedIndexedTransactions.SingleOrDefault(t => t.TransactionId == keyAddress.DeclarationTransactionId);
 				}
 			}
 
-			if(masterTransaction == null) {
+			if(indexedTransaction == null) {
 				(long index, long startingBlockId, long endingBlockId) blockGroupIndex = this.FindBlockIndex(keyAddress.AnnouncementBlockId.Value);
 
 				SafeArrayHandle keyedBytes = this.BlockchainEventSerializationFal.LoadBlockPartialTransactionBytes(keyAddress, blockGroupIndex);
@@ -252,18 +262,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					DehydratedTransaction dehydratedTransaction = new DehydratedTransaction();
 					dehydratedTransaction.Rehydrate(keyedRehydrator);
 
-					masterTransaction = rehydrationFactory.CreateMasterTransaction(dehydratedTransaction);
-					masterTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
+					indexedTransaction = rehydrationFactory.CreateIndexedTransaction(dehydratedTransaction);
+					indexedTransaction.Rehydrate(dehydratedTransaction, rehydrationFactory);
 
 				}
 			}
 
 			// ensure the key address transaction comes from the key address account
-			if((masterTransaction != null) && !masterTransaction.TransactionId.Account.Equals(keyAddress.DeclarationTransactionId.Account)) {
+			if((indexedTransaction != null) && !indexedTransaction.TransactionId.Account.Equals(keyAddress.DeclarationTransactionId.Account)) {
 				throw new InvalidOperationException("The keyed transaction loaded does not match the calling key address account");
 			}
 
-			return masterTransaction;
+			return indexedTransaction;
 		}
 
 		public SafeArrayHandle LoadBlockPartialTransactionBytes(long blockId, int offset, int length) {
@@ -277,7 +287,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <returns></returns>
-		public ChannelsEntries<SafeArrayHandle> LoadBlockData(long blockId) {
+		public ChannelsEntries<SafeArrayHandle> LoadBlockChannels(long blockId) {
 			lock(this.locker) {
 				if(this.blocksCache.ContainsKey(blockId)) {
 					return this.blocksCache[blockId].channels;
@@ -289,6 +299,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.BlockchainEventSerializationFal.LoadBlockBytes(blockId, blockGroupIndex);
 		}
 
+		public SafeArrayHandle LoadBlockData(long blockId) {
+
+			var channels = this.LoadBlockChannels(blockId);
+
+			if((channels == null) || channels.Entries.Values.All(e => (e == null) || e.IsEmpty)) {
+				return default;
+			}
+
+			IDehydratedBlock dehydratedBlock = new DehydratedBlock();
+
+			dehydratedBlock.Rehydrate(channels);
+
+			using var dehydrator = DataSerializationFactory.CreateDehydrator();
+
+			dehydratedBlock.Dehydrate(dehydrator);
+
+			return dehydrator.ToArray();
+		}
+
+
 		public (T block, IDehydratedBlock dehydratedBlock) LoadBlockAndMetadata<T>(long blockId)
 			where T : class, IBlock {
 			lock(this.locker) {
@@ -299,7 +329,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 			}
 
-			ChannelsEntries<SafeArrayHandle> result = this.LoadBlockData(blockId);
+			ChannelsEntries<SafeArrayHandle> result = this.LoadBlockChannels(blockId);
 
 			if((result == null) || result.Entries.Values.All(e => (e == null) || e.IsEmpty)) {
 				return default;
@@ -395,6 +425,143 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return DigestChannelSetFactory.CreateValidatingDigestChannelSet(this.GetDigestsScoppedFolderPath(digestId), blockchainDigestDescriptor, this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.CreateDigestChannelfactory());
 		}
 
+		
+		protected abstract DecomposedBlockAPI CreateDecomposedBlockAPI();
+
+		public string LoadDecomposedBlockJson(BlockId blockId) {
+			
+			return JsonConvert.SerializeObject(this.LoadDecomposedBlock(blockId), Formatting.None, new JsonSerializerSettings()
+			{
+				TypeNameHandling = TypeNameHandling.Auto,
+				ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+			});
+		}
+
+		/// <summary>
+		/// build a decomposed version of the block with transaction info separated
+		/// </summary>
+		/// <param name="blockId"></param>
+		/// <returns></returns>
+		public DecomposedBlockAPI LoadDecomposedBlock(BlockId blockId) {
+			IBlock block = this.LoadBlock(blockId);
+
+			if(block == null) {
+				return null;
+			}
+			
+			DecomposedBlockAPI decomposedBlock = this.CreateDecomposedBlockAPI();
+
+			decomposedBlock.BlockHeader.BlockId = block.BlockId.Value;
+			decomposedBlock.BlockHeader.Timestamp = block.Timestamp.Value;
+			decomposedBlock.BlockHeader.FullTimestamp = block.FullTimestamp;
+			decomposedBlock.BlockHeader.Hash = block.Hash.ToExactByteArrayCopy();
+			decomposedBlock.BlockHeader.Version = block.Version.ToString();
+
+			foreach (var intermediaryElectionResult in block.IntermediaryElectionResults) {
+
+				if(intermediaryElectionResult is IPassiveIntermediaryElectionResults passiveIntermediaryElectionResults) {
+					var intermediaryResultApi = decomposedBlock.BlockHeader.CreateBlockHeaderIntermediaryResultAPI();
+
+					intermediaryResultApi.Offset = passiveIntermediaryElectionResults.BlockOffset;
+					
+					foreach(var candidate in passiveIntermediaryElectionResults.ElectedCandidates) {
+						intermediaryResultApi.PassiveElected.Add(candidate.Key.ToString(), (byte)candidate.Value);
+					}
+
+					decomposedBlock.BlockHeader.IntermediaryElectionResults.Add(intermediaryResultApi.Offset, intermediaryResultApi);
+				}
+			}
+			
+			foreach(var finalElectionResult in block.FinalElectionResults) {
+				var finalResultApi = decomposedBlock.BlockHeader.CreateBlockHeaderFinalResultsAPI();
+				
+				finalResultApi.FillFromElectionResult(finalElectionResult, block);
+
+				decomposedBlock.BlockHeader.FinalElectionResults.Add(finalResultApi.Offset, finalResultApi);
+			}
+			
+			if(block is IElectionBlock electionBlock) {
+				decomposedBlock.BlockHeader.ElectionContext = JsonUtils.SerializeJsonSerializable(electionBlock.ElectionContext);
+			}
+
+			TransactionInfoAPI GenerateTransactionInfoApi(ITransaction transaction, byte[] transactionBytes1) {
+				TransactionInfoAPI transactionInfo = new TransactionInfoAPI();
+
+				transactionInfo.ImpactedAccountIds.AddRange(transaction.ImpactedAccounts.Select(a => a.ToString()));
+				transactionInfo.TransactionBytes = transactionBytes1;	
+				transactionInfo.TransactionType = transaction.Version.Type.Value.Value;
+				transactionInfo.Version = transaction.Version.ToString();
+				transactionInfo.TargetType = transaction.TargetType;
+				return transactionInfo;
+			}
+			
+			IndexedTransactionInfoAPI GenerateIndexedTransactionInfoApi(ITransaction transaction, int index1, byte[] transactionBytes1) {
+				IndexedTransactionInfoAPI transactionInfo = new IndexedTransactionInfoAPI();
+
+				transactionInfo.ImpactedAccountIds.AddRange(transaction.ImpactedAccounts.Select(a => a.ToString()));
+				transactionInfo.TransactionBytes = transactionBytes1;	
+				transactionInfo.TransactionType = transaction.Version.Type.Value.Value;
+				transactionInfo.Version = transaction.Version.ToString();
+				transactionInfo.TargetType = transaction.TargetType;
+				transactionInfo.IndexedTransactionIndex = index1;
+				return transactionInfo;
+			}
+			
+			
+			var transactionBytes = this.GetTransactionBytes(block.GetAllConfirmedTransactions());
+			int index = 0;
+			foreach(var transaction in block.ConfirmedIndexedTransactions) {
+				decomposedBlock.IndexedTransactions.Add(transaction.TransactionId.ToString(), GenerateIndexedTransactionInfoApi(transaction, index, transactionBytes[transaction.TransactionId]));
+				index++;
+			}
+			foreach(var transaction in block.ConfirmedTransactions) {
+				
+				decomposedBlock.Transactions.Add(transaction.TransactionId.ToString(), GenerateTransactionInfoApi(transaction, transactionBytes[transaction.TransactionId]));
+			}
+			foreach(var transaction in block.RejectedTransactions) {
+
+				RejectedTransactionInfoAPI transactionInfo = new RejectedTransactionInfoAPI();
+
+				transactionInfo.ReasonCode = transaction.Reason.Value;
+				
+				decomposedBlock.RejectedTransactions.Add(transaction.TransactionId.ToString(), transactionInfo);
+			}
+			return decomposedBlock;
+		}
+
+		public Dictionary<TransactionId, byte[]> QueryBlockBinaryTransactions(long blockId) {
+			IBlock block = this.LoadBlock(blockId);
+
+			if(block == null) {
+				return new Dictionary<TransactionId, byte[]>();
+			}
+			
+			return this.GetTransactionBytes(block.GetAllConfirmedTransactions());
+		}
+
+		private Dictionary<TransactionId, byte[]> GetTransactionBytes(Dictionary<TransactionId, ITransaction> transactions) {
+			BrotliCompression compressor = new BrotliCompression();
+
+			return transactions.Select(t => {
+
+				// now dehydrate each transaction into a byte array
+				IDehydratedTransaction dehydratedTransaction = t.Value.Dehydrate(BlockChannelUtils.BlockChannelTypes.All);
+
+				using IDataDehydrator rehydrator = DataSerializationFactory.CreateDehydrator();
+				dehydratedTransaction.Dehydrate(rehydrator);
+
+				SafeArrayHandle bytes = rehydrator.ToArray();
+				SafeArrayHandle compressed = compressor.Compress(bytes, CompressionLevelByte.Optimal);
+
+				byte[] data = compressed.ToExactByteArrayCopy();
+
+				compressed.Return();
+				bytes.Return();
+
+				return new {data, t.Key};
+			}).ToDictionary(e => e.Key, e => e.data);
+		}
+		
 		public string LoadBlockJson(BlockId blockId) {
 			IBlock block = this.LoadBlock(blockId);
 
@@ -636,12 +803,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return IndexCalculator.ComputeIndex(blockId, this.BlockGroupingConfig.GroupingCount);
 		}
 
-		public bool TestFastKeysPath() {
+		public bool TestKeyDictionaryPath() {
 
-			return this.BlockchainEventSerializationFal.TestFastKeysPath();
+			return this.BlockchainEventSerializationFal.TestKeyDictionaryPath();
 		}
 
-		/// <summary>
+		public Task<List<(AccountId accountId, SafeArrayHandle key, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>> LoadKeyDictionary(List<(AccountId accountId, byte ordinal)> accountIdKeys, LockContext lockContext) {
+			return this.BlockchainEventSerializationFal.LoadKeyDictionary(accountIdKeys, lockContext);
+		}
+	
+	
+
+	/// <summary>
 		///     Return the sizes of all the files inside the block index
 		/// </summary>
 		/// <param name="blockId"></param>
@@ -683,7 +856,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					datas.Add(data);
 				});
 
-				int sliceHash = HashingUtils.GenerateBlockDataSliceHash(datas);
+				int sliceHash = HashingUtils.GenerateBlockDataSliceHash(datas.Select(e => e).ToList());
 				sliceHashes.Add(sliceHash);
 				topNodes.Add(sliceHash);
 			}
@@ -780,6 +953,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return results;
 		}
 
+		public async Task<SafeArrayHandle> GetCachedAppointmentMessage(Guid messageId) {
+			
+			string filePath = this.GetAppointmentMessageFilePath(messageId);
+
+			FileExtensions.EnsureDirectoryStructure(this.GetAppointmentMessagesCacheFolderPath());
+			
+			if(this.fileSystem.FileExists(filePath)){
+				return SafeArrayHandle.WrapAndOwn(await this.fileSystem.ReadAllBytesAsync(filePath).ConfigureAwait(false));
+			}
+			
+			return null;
+		}
+		
+		public async Task<POWState> LoadCachedPOWState(string key) {
+			
+			string cachePath = this.GetPOWCachePath();
+
+			FileExtensions.EnsureDirectoryStructure(this.GetAppointmentMessagesCacheFolderPath());
+
+			string filename = Path.Combine(cachePath, key.CleanInvalidFileNameCharacters());
+
+			try {
+				if(this.fileSystem.FileExists(filename)) {
+					return System.Text.Json.JsonSerializer.Deserialize<POWState>(await this.fileSystem.ReadAllTextAsync(filename).ConfigureAwait(false));
+				}
+			} catch {
+				
+			}
+
+			return null;
+		}
+		
 	#endregion
 
 	#region import from serialization manager
@@ -837,9 +1042,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			//TODO: loading the entire keyset is not very efficient if we want only one key. optimize
 			// lets load from the block
-			IMasterTransaction masterTransaction = this.LoadMasterTransaction(keyAddress);
+			IIndexedTransaction indexedTransaction = this.LoadIndexedTransaction(keyAddress);
 
-			if(masterTransaction is IKeyedTransaction keyedTransaction) {
+			if(indexedTransaction is IKeyedTransaction keyedTransaction) {
 				ICryptographicKey key = keyedTransaction.Keyset.Keys[keyAddress.OrdinalId];
 
 				using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
@@ -871,9 +1076,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			//TODO: loading the entire keyset is not very efficient if we want only one key. optimize
 			// lets load from the block
-			IMasterTransaction masterTransaction = this.LoadMasterTransaction(keyAddress);
+			IIndexedTransaction indexedTransaction = this.LoadIndexedTransaction(keyAddress);
 
-			if(masterTransaction is IKeyedTransaction keyedTransaction) {
+			if(indexedTransaction is IKeyedTransaction keyedTransaction) {
 
 				return (T) keyedTransaction.Keyset.Keys[keyAddress.OrdinalId];
 			}

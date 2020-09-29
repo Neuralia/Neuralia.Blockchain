@@ -7,7 +7,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses {
 		private int treeHeight;
 		private int treeIndex;
 
-		public HashTreeAddress(int layerAddress, long treeAddress, int keyAndMask, int treeHeight, int treeIndex) : base(layerAddress, treeAddress, keyAndMask, AddressTypes.HashTree) {
+		public HashTreeAddress(int layerAddress, long treeAddress, int keyAndMask, byte treeHeight, int treeIndex) : base(layerAddress, treeAddress, keyAndMask, AddressTypes.HashTree) {
 			this.TreeHeight = treeHeight;
 			this.TreeIndex = treeIndex;
 		}

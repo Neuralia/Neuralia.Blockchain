@@ -13,9 +13,11 @@ namespace Neuralia.Blockchains.Core.Tools {
 			if(chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.AES_GCM_256) {
 				return AESGCMFileEncryptor.GenerateEncryptionParameters();
 			}
-
-			if((chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.XCHACHA_20) || (chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.XCHACHA_40)) {
-				return XChaChaFileEncryptor.GenerateEncryptionParameters();
+			
+			if(chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.XCHACHA_20_POLY_1305 ||
+			   chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.XCHACHA_30_POLY_1305 ||
+			   chainConfiguration.WalletEncryptionFormat == EncryptorParameters.SymetricCiphers.XCHACHA_40_POLY_1305) {
+				return ChaCha20Poly1305FileEncryptor.GenerateEncryptionParameters(chainConfiguration.WalletEncryptionFormat);
 			}
 
 			throw new ApplicationException("invalid cipher");

@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					length = this.sizeSize;
 				}
 
-				return this.content.Entry.SliceReference(i * this.sizeSize, length);
+				return (SafeArrayHandle)this.content.Entry.SliceReference(i * this.sizeSize, length);
 			}
 		}
 

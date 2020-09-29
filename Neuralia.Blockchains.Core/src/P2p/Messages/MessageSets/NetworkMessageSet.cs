@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		public static SafeArrayHandle ExtractMessageBytes(IDataRehydrator dr) {
 			ResetAfterHeader(dr);
 
-			return dr.ReadNonNullableArray();
+			return (SafeArrayHandle)dr.ReadNonNullableArray();
 		}
 
 		public static void ResetAfterHeader(IDataRehydrator dr) {
@@ -95,13 +95,15 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray();
+			var bytes = dehydrator.ToArray();
+
+			return bytes;
 		}
 
 		public void RehydrateRest(IDataRehydrator dr, R rehydrationFactory) {
 
 			// dont put anything here. the message MUST be next
-			this.RehydrateMessage(dr, rehydrationFactory);
+			this.Rehydrate(dr, rehydrationFactory);
 
 			this.RehydrateContents(dr, rehydrationFactory);
 
@@ -116,8 +118,10 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 			});
 
 			// dont put anything here, the message MUST be next. see MainChainMessageFactory.RehydrateGossipMessage
-			this.DehydrateMessage(dehydrator);
+			using SafeArrayHandle messageBytes = this.DehydrateMessage();
 
+			dehydrator.WriteNonNullable(messageBytes);
+			
 			// anything else before the message
 			this.DehydrateContents(dehydrator);
 		}
@@ -126,15 +130,14 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 
 		}
 
-		protected virtual void DehydrateMessage(IDataDehydrator dehydrator) {
+		protected virtual SafeArrayHandle DehydrateMessage() {
 			using IDataDehydrator subDehydrator = DataSerializationFactory.CreateDehydrator();
 			this.Message.Dehydrate(subDehydrator);
 
-			SafeArrayHandle bytes = subDehydrator.ToArray();
-			dehydrator.WriteNonNullable(bytes);
-			bytes.Return();
+			return subDehydrator.ToArray();
 		}
 
+		
 		/// <summary>
 		///     Here we decompress and rehydrate the message
 		/// </summary>
@@ -147,14 +150,12 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets {
 		///     Here we decompress and rehydrate the message
 		/// </summary>
 		/// <param name="dr"></param>
-		protected void RehydrateMessage(IDataRehydrator dr, R rehydrationFactory) {
+		protected void Rehydrate(IDataRehydrator dr, R rehydrationFactory) {
 
-			ByteArray bytes = dr.ReadNonNullableArray();
+			using ByteArray bytes = dr.ReadNonNullableArray();
 
 			using(IDataRehydrator subRehydrator = DataSerializationFactory.CreateRehydrator(bytes)) {
 				this.BaseMessage.Rehydrate(subRehydrator, rehydrationFactory);
-
-				bytes.Return();
 			}
 		}
 	}

@@ -22,8 +22,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			GC.SuppressFinalize(this);
 		}
 
-		private string GenerateKeyScoppedName(Guid identityUuid, string keyname) {
-			return $"{identityUuid.ToString()}-{keyname}";
+		private string GenerateKeyScoppedName(string accountCode, string keyname) {
+			return $"{accountCode.ToString()}-{keyname}";
 		}
 
 		protected void Dispose(bool disposing) {

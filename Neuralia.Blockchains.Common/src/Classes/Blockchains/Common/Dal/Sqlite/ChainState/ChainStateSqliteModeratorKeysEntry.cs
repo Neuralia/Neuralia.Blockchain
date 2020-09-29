@@ -20,6 +20,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		public int ChainStateId { get; set; }
 		public MODEL_SNAPSHOT ChainStateEntry { get; set; }
+		public long ExpectedNextKeyIndex { get; set; }
+		public long ExpectedNextKeySequenceId { get; set; }
 
 		public byte[] PublicKey { get; set; }
 

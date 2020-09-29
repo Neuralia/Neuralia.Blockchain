@@ -70,6 +70,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public SafeArrayHandle Hash { get; } = SafeArrayHandle.Create();
 
+		public void Clear() {
+			
+		}
 	#region Disposable
 
 		public void Dispose() {

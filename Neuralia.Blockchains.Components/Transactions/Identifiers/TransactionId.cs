@@ -149,6 +149,10 @@ namespace Neuralia.Blockchains.Components.Transactions.Identifiers {
 			return transactionId.Split(new[] {SEPARATOR}, StringSplitOptions.RemoveEmptyEntries);
 		}
 
+		public static TransactionId FromString(string transactionId) {
+			return new TransactionId(transactionId);
+		}
+
 		private void Parse(string transactionId) {
 
 			string[] items = GetTransactionIdComponents(transactionId);
@@ -290,7 +294,7 @@ namespace Neuralia.Blockchains.Components.Transactions.Identifiers {
 
 			AccountId accountId = AccountId.FromCompactString(items[0]);
 
-			SafeArrayHandle buffer = ByteArray.FromBase94(items[1]);
+			SafeArrayHandle buffer = SafeArrayHandle.FromBase94(items[1]);
 			Span<byte> fullbuffer = stackalloc byte[sizeof(long)];
 			buffer.Entry.CopyTo(fullbuffer);
 
@@ -299,7 +303,7 @@ namespace Neuralia.Blockchains.Components.Transactions.Identifiers {
 			short scope = 0;
 
 			if((items.Length == 3) && !string.IsNullOrWhiteSpace(items[2])) {
-				buffer = ByteArray.FromBase94(items[2]);
+				buffer = SafeArrayHandle.FromBase94(items[2]);
 				fullbuffer = stackalloc byte[sizeof(short)];
 				buffer.Entry.CopyTo(fullbuffer);
 

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.JointSignatureTypes;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Serialization;
@@ -23,9 +24,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		/// </summary>
 		public byte Duration { get; set; } = 10;
 
-		public override HashNodeList GetStructuresArray() {
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
 
-			HashNodeList nodeList = base.GetStructuresArray();
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
 			nodeList.Add(this.VerifierAccountId);
 			nodeList.Add(this.ReceiverAccountId);
@@ -43,7 +44,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("ReceiverAccountId", this.Duration);
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => new[] {this.VerifierAccountId, this.SenderAccountId, this.ReceiverAccountId}.ToImmutableList();
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.Range;
+		public override AccountId[] ImpactedAccounts => new[] {this.VerifierAccountId, this.SenderAccountId, this.ReceiverAccountId};
+		public override AccountId[] TargetAccounts => this.GetAccountIds(this.ReceiverAccountId);
 
 		protected override void Sanitize() {
 			base.Sanitize();

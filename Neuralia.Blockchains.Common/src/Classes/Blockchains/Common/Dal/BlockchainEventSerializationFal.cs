@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.FastKeyIndex;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.KeyDictionary;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization;
@@ -26,6 +26,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
@@ -60,10 +61,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		SafeArrayHandle LoadGenesisHighHeaderBytes();
 
 		SafeArrayHandle LoadBlockPartialTransactionBytes(PublishedAddress keyAddress, (long index, long startingBlockId, long endingBlockId) blockIndex);
-		Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
-		bool TestFastKeysPath();
-		Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal);
-		void EnsureFastKeysIndex();
+		Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal);
+		bool TestKeyDictionaryPath();
+		Task<List<(AccountId accountId, SafeArrayHandle key, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>> LoadKeyDictionary(List<(AccountId accountId, byte ordinal)> accountIdKeys, LockContext lockContext);
+		Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashType hashType, Enums.KeyHashType backupBits, byte ordinal);
+		void EnsureKeyDictionaryIndex();
 		ChannelsEntries<int> LoadBlockSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex);
 		(ChannelsEntries<int> sizes, SafeArrayHandle hash)? LoadBlockSizeAndHash(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int hashOffset, int hashLength);
 		int? LoadBlockHighHeaderSize(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex);
@@ -121,7 +123,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		public const string GENESIS_BLOCK_FILE_NAME = "genesis.block";
 		public const string GENESIS_BLOCK_BAND_FILE_NAME = "genesis.{0}.neuralia";
 		public const string GENESIS_BLOCK_COMPRESSED_FILE_NAME = "genesis.block.arch";
-
+		
 		public const string FAST_INDEX_FOLDER_NAME = "keyindices";
 
 		public const int SIZE_BLOCK_INDEX_OFFSET_ENTRY = sizeof(long);
@@ -151,7 +153,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		protected readonly BlockChannelUtils.BlockChannelTypes enabledChannels;
 
-		protected readonly FastKeyProvider fastKeyProvider;
+		protected readonly KeyDictionaryProvider KeyDictionaryProvider;
 
 		protected readonly FileSystemWrapper fileSystem;
 		protected string digestFolderPath;
@@ -177,11 +179,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				}
 			}
 
-			if(configurations.EnableFastKeyIndex) {
-				this.fastKeyProvider = new FastKeyProvider(this.GetFastKeyIndexPath(), configurations.EnabledFastKeyTypes);
+			if(configurations.EnableKeyDictionaryIndex) {
+				this.KeyDictionaryProvider = new KeyDictionaryProvider(this.GetKeyDictionaryIndexPath(), configurations.EnabledKeyDictionaryTypes);
 			}
 
-			NLog.Default.Information($"Fast key provider is {(configurations.EnableFastKeyIndex ? "enabled" : "disabled")}.");
+			NLog.Default.Information($"Fast key provider is {(configurations.EnableKeyDictionaryIndex ? "enabled" : "disabled")}.");
 
 			// create the digest access channels
 			this.CreateDigestChannelSet(digestFolderPath);
@@ -257,7 +259,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public SafeArrayHandle LoadDigestStandardKey(AccountId accountId, byte ordinal) {
 			if(this.DigestChannelSet != null) {
-				return ((IStandardAccountKeysDigestChannel) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.StandardAccountKeys]).GetKey(accountId.ToLongRepresentation(), ordinal).Branch();
+				if(accountId.IsUser)
+					return ((IStandardAccountKeysDigestChannel) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.UserAccountKeys]).GetKey(accountId.ToLongRepresentation(), ordinal).Branch();
+				else if(accountId.IsServer)
+					return ((IStandardAccountKeysDigestChannel) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.ServerAccountKeys]).GetKey(accountId.ToLongRepresentation(), ordinal).Branch();
+				else if(accountId.IsModerator)
+					return ((IStandardAccountKeysDigestChannel) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.ModeratorAccountKeys]).GetKey(accountId.ToLongRepresentation(), ordinal).Branch();
+
 			}
 
 			return null;
@@ -269,15 +277,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public List<IStandardAccountKeysDigestChannelCard> LoadDigestStandardAccountKeyCards(long accountId) {
 
-			return ((IStandardAccountKeysDigestChannel<IStandardAccountKeysDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.StandardAccountKeys]).GetKeys(accountId).ToList();
+			var account = accountId.ToAccountId();
+			if(account.IsUser)
+				return ((IUserAccountKeysDigestChannel<IStandardAccountKeysDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.UserAccountKeys]).GetKeys(accountId).ToList();
+			else if(account.IsServer)
+				return ((IUserAccountKeysDigestChannel<IStandardAccountKeysDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.ServerAccountKeys]).GetKeys(accountId).ToList();
+			else if(account.IsModerator)
+				return ((IUserAccountKeysDigestChannel<IStandardAccountKeysDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.ModeratorAccountKeys]).GetKeys(accountId).ToList();
+
+			throw null;
 		}
 
 		public IAccountSnapshotDigestChannelCard LoadDigestAccount(long accountSequenceId, Enums.AccountTypes accountType) {
-			if(accountType == Enums.AccountTypes.Standard) {
+			if(AccountId.IsStandardAccountType(accountType)) {
 				return this.LoadDigestStandardAccount(accountSequenceId);
 			}
 
-			if(accountType == Enums.AccountTypes.Joint) {
+			if(AccountId.IsJointAccountType(accountType)) {
 				return this.LoadDigestJointAccount(accountSequenceId);
 			}
 
@@ -285,7 +301,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		}
 
 		public IStandardAccountSnapshotDigestChannelCard LoadDigestStandardAccount(long accountId) {
-			return ((IAccountSnapshotDigestChannel<IStandardAccountSnapshotDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.StandardAccountSnapshot]).GetAccount(accountId);
+			
+			var account = accountId.ToAccountId();
+			if(account.IsUser)
+				return ((IAccountSnapshotDigestChannel<IStandardAccountSnapshotDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.UserAccountSnapshot]).GetAccount(accountId);
+			else if(account.IsServer)
+				return ((IAccountSnapshotDigestChannel<IStandardAccountSnapshotDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.ServerAccountSnapshot]).GetAccount(accountId);
+			else if(account.IsModerator)
+				return ((IAccountSnapshotDigestChannel<IStandardAccountSnapshotDigestChannelCard>) this.DigestChannelSet.Channels[DigestChannelTypes.Instance.ModeratorAccountSnapshot]).GetAccount(accountId);
+
+			throw null;
 		}
 
 		public IJointAccountSnapshotDigestChannelCard LoadDigestJointAccount(long accountId) {
@@ -355,7 +380,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 			ChannelsEntries<SafeArrayHandle> dataChannels = genesisBlock.GetRawDataChannels();
 
-			dataChannels[BlockChannelUtils.BlockChannelTypes.Keys] = this.PrepareMasterTransactionData(keyedOffsets);
+			dataChannels[BlockChannelUtils.BlockChannelTypes.Keys] = this.PrepareIndexedTransactionData(keyedOffsets);
 
 			dataChannels.RunForAll((band, data) => {
 
@@ -402,7 +427,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				return null;
 			}
 
-			return ByteArray.WrapAndOwn(this.fileSystem.ReadAllBytes(filename));
+			return SafeArrayHandle.WrapAndOwn(this.fileSystem.ReadAllBytes(filename));
 		}
 
 		public SafeArrayHandle LoadDigestBytes(int digestId, int offset, int length, string filename) {
@@ -415,7 +440,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public SafeArrayHandle LoadBlockPartialTransactionBytes(PublishedAddress keyAddress, (long index, long startingBlockId, long endingBlockId) blockIndex) {
 
-			(int offset, int length) offsets = this.LoadBlockMasterTransactionOffsets(keyAddress.AnnouncementBlockId.Value, blockIndex, keyAddress.MasterTransactionIndex);
+			(int offset, int length) offsets = this.LoadBlockIndexedTransactionOffsets(keyAddress.AnnouncementBlockId.Value, blockIndex, keyAddress.IndexedTransactionIndex);
 
 			if(offsets == default) {
 				return null;
@@ -430,35 +455,42 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		/// <param name="accountId"></param>
 		/// <param name="ordinal"></param>
 		/// <returns></returns>
-		public async Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
+		public async Task<(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)?> LoadAccountKeyFromIndex(AccountId accountId, byte ordinal) {
 
 			if((ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || (ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
-				if(this.fastKeyProvider == null) {
+				if(this.KeyDictionaryProvider == null) {
 					return null;
 				}
 
-				return await this.fastKeyProvider.LoadKeyFile(accountId, ordinal, this.fileSystem).ConfigureAwait(false);
+				return await this.KeyDictionaryProvider.LoadKeyFileAsync(accountId, ordinal, this.fileSystem).ConfigureAwait(false);
 			}
 
 			throw new InvalidOperationException($"Key ordinal ID must be either '{GlobalsService.TRANSACTION_KEY_ORDINAL_ID}' or '{GlobalsService.MESSAGE_KEY_ORDINAL_ID}'. Value '{ordinal}' provided.");
 		}
 
-		public bool TestFastKeysPath() {
+		public bool TestKeyDictionaryPath() {
 
-			return this.fastKeyProvider?.Test() ?? true;
+			return this.KeyDictionaryProvider?.Test() ?? true;
 		}
 
-		public async Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal) {
-			if(this.fastKeyProvider != null) {
-				await this.fastKeyProvider.WriteKey(accountId, key, treeHeight, hashBits, ordinal, this.fileSystem).ConfigureAwait(false);
+		public Task<List<(AccountId accountId, SafeArrayHandle key, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>> LoadKeyDictionary(List<(AccountId accountId, byte ordinal)> accountIdKeys, LockContext lockContext) {
+			return this.KeyDictionaryProvider?.LoadKeyDictionary(accountIdKeys, lockContext) ?? Task.FromResult(new List<(AccountId accountId, SafeArrayHandle key, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>());
+		}
+
+		public async Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashType hashType, Enums.KeyHashType backupBits, byte ordinal) {
+			if(this.KeyDictionaryProvider != null) {
+				await this.KeyDictionaryProvider.WriteKey(accountId, key, treeHeight, hashType, backupBits, ordinal, this.fileSystem).ConfigureAwait(false);
 			}
 		}
 
 		/// <summary>
 		///     ensure the base structure exists
 		/// </summary>
-		public void EnsureFastKeysIndex() {
-			this.fastKeyProvider?.EnsureBaseFileExists(this.fileSystem);
+		public void EnsureKeyDictionaryIndex() {
+			foreach(var type in AccountId.StandardAccountTypes) {
+				this.KeyDictionaryProvider?.EnsureBaseFileExists(this.fileSystem, type);
+
+			}
 		}
 
 		public SafeArrayHandle LoadBlockPartialHighHeaderBytes(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int offset, int length) {
@@ -642,7 +674,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				}
 			} else {
 				// write a regular block
-				using SafeArrayHandle bytes = this.PrepareMasterTransactionData(keyedOffsets);
+				using SafeArrayHandle bytes = this.PrepareIndexedTransactionData(keyedOffsets);
 
 				this.ChainScheduler.ScheduleWrite(indexer => {
 					result = indexer.SaveBlockBytes(blockId, blockIndex, blockData, bytes);
@@ -683,6 +715,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			FileExtensions.OpenAppend(filename, data, this.fileSystem);
 		}
 
+
 		public ChannelsEntries<long> GetBlockChannelFileSize((long index, long startingBlockId, long endingBlockId) blockIndex, BlockChannelUtils.BlockChannelTypes channelType) {
 			ChannelsEntries<long> result = null;
 
@@ -708,11 +741,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		}
 
-		public (int offset, int length) LoadGenesisMasterTransactionOffsets(int masterTransactionIndex) {
+		public (int offset, int length) LoadGenesisIndexedTransactionOffsets(int indexedTransactionIndex) {
 
 			using SafeArrayHandle data = FileExtensions.ReadAllBytes(this.GetGenesisBlockBandFilename(BlockChannelUtils.BlockChannelTypes.Keys.ToString()), this.fileSystem);
 
-			return this.ExtractBlockMasterTransactionOffsets(data, masterTransactionIndex);
+			return this.ExtractBlockIndexedTransactionOffsets(data, indexedTransactionIndex);
 
 		}
 
@@ -721,26 +754,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 		/// </summary>
 		/// <param name="blockId"></param>
 		/// <param name="blockIndex"></param>
-		/// <param name="masterTransactionIndex"></param>
+		/// <param name="indexedTransactionIndex"></param>
 		/// <returns></returns>
-		public (int offset, int length) LoadBlockMasterTransactionOffsets(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int masterTransactionIndex) {
+		public (int offset, int length) LoadBlockIndexedTransactionOffsets(long blockId, (long index, long startingBlockId, long endingBlockId) blockIndex, int indexedTransactionIndex) {
 			if(blockId == 1) {
-				return this.LoadGenesisMasterTransactionOffsets(masterTransactionIndex);
+				return this.LoadGenesisIndexedTransactionOffsets(indexedTransactionIndex);
 			}
 
 			SafeArrayHandle data = null;
 
 			// get the block
 			this.ChainScheduler.ScheduleRead(indexer => {
-				data = indexer.QueryBlockMasterTransactionOffsets(blockId, blockIndex, masterTransactionIndex);
+				data = indexer.QueryBlockIndexedTransactionOffsets(blockId, blockIndex, indexedTransactionIndex);
 			});
 
 			using(data) {
-				return this.ExtractBlockMasterTransactionOffsets(data, masterTransactionIndex);
+				return this.ExtractBlockIndexedTransactionOffsets(data, indexedTransactionIndex);
 			}
 		}
 
-		protected (int offset, int length) ExtractBlockMasterTransactionOffsets(SafeArrayHandle data, int masterTransactionIndex) {
+		protected (int offset, int length) ExtractBlockIndexedTransactionOffsets(SafeArrayHandle data, int indexedTransactionIndex) {
 			IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(data);
 
 			AdaptiveInteger2_5 numberWriter = new AdaptiveInteger2_5();
@@ -753,12 +786,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				numberWriter.Rehydrate(rehydrator);
 				int offset = (int) numberWriter.Value;
 
-				for(int i = 0; i <= masterTransactionIndex; i++) {
+				for(int i = 0; i <= indexedTransactionIndex; i++) {
 
 					numberWriter.Rehydrate(rehydrator);
 					int length = (int) numberWriter.Value;
 
-					if(i == masterTransactionIndex) {
+					if(i == indexedTransactionIndex) {
 						return (offset, length);
 					}
 
@@ -769,7 +802,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			return default;
 		}
 
-		protected SafeArrayHandle PrepareMasterTransactionData(List<(int offset, int length)> keyedOffsets) {
+		protected SafeArrayHandle PrepareIndexedTransactionData(List<(int offset, int length)> keyedOffsets) {
 			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 			AdaptiveInteger2_5 numberWriter = new AdaptiveInteger2_5();
 
@@ -863,7 +896,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			return this.LoadGenesisBlockHighHeaderSize() + this.LoadGenesisBlockLowHeaderSize();
 		}
 
-		public string GetFastKeyIndexPath() {
+		public string GetKeyDictionaryIndexPath() {
 			return Path.Combine(this.blocksFolderPath, FAST_INDEX_FOLDER_NAME);
 		}
 

@@ -1,7 +1,11 @@
 using System;
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
+using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.Signatures;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
+using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Digests;
 
@@ -10,68 +14,98 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 
 		public enum hashAlgos {
 			Sha2,
-			Sha3,
-			Blake2
+			Sha3
 		}
 
 		public const int BITS_256 = 256;
 		public const int BITS_512 = 512;
-		protected XMSSExecutionContext excutionContext;
+		public XMSSExecutionContext ExcutionContext { get; protected set; }
 		protected Enums.ThreadMode threadMode;
-		protected int treeHeight;
+		protected byte treeHeight;
 
-		protected XMSSProviderBase(Enums.KeyHashBits hashBits, int treeHeight, Enums.ThreadMode threadMode) {
-			this.HashBitsEnum = hashBits;
+		protected XMSSProviderBase(Enums.KeyHashType hashType, Enums.KeyHashType backupHashType, byte treeHeight, Enums.ThreadMode threadMode) {
+			this.HashTypeEnum = hashType;
+			this.BackupHashTypeEnum = backupHashType;
 			this.threadMode = threadMode;
 
-			if(hashBits.HasFlag((Enums.KeyHashBits) Enums.SHA2)) {
+			if(hashType.HasFlag((Enums.KeyHashType) Enums.SHA2)) {
 				this.hashAlgo = hashAlgos.Sha2;
-			} else if(hashBits.HasFlag((Enums.KeyHashBits) Enums.SHA3)) {
+			} else if(hashType.HasFlag((Enums.KeyHashType) Enums.SHA3)) {
 				this.hashAlgo = hashAlgos.Sha3;
-			} else if(hashBits.HasFlag((Enums.KeyHashBits) Enums.BLAKE2)) {
-				this.hashAlgo = hashAlgos.Blake2;
 			}
 
-			this.HashBits = BITS_256;
+			this.HashType = BITS_256;
 
-			if(hashBits.HasFlag((Enums.KeyHashBits) Enums.HASH512)) {
-				this.HashBits = BITS_512;
+			if(hashType.HasFlag((Enums.KeyHashType) Enums.HASH512)) {
+				this.HashType = BITS_512;
+			}
+			
+			
+			if(backupHashType.HasFlag((Enums.KeyHashType) Enums.SHA2)) {
+				this.backupHashAlgo = hashAlgos.Sha2;
+			} else if(backupHashType.HasFlag((Enums.KeyHashType) Enums.SHA3)) {
+				this.backupHashAlgo = hashAlgos.Sha3;
+			}
+
+
+			this.BackupHashType = BITS_256;
+
+			if(backupHashType.HasFlag((Enums.KeyHashType) Enums.HASH512)) {
+				this.BackupHashType = BITS_512;
 			}
 
 			this.treeHeight = treeHeight;
+
+			if(this.hashAlgo == this.backupHashAlgo && this.HashType == this.BackupHashType) {
+				throw new ApplicationException($"The hashing and backup hashing algorithms can not be the same with the same bit strength");
+			}
 		}
 
 		public abstract int MaximumHeight { get; }
+		public bool EnableCache { get; set; } = false;
 
-		public int HashBits { get; } = BITS_256;
+		public int HashType { get; } = BITS_256;
 		private hashAlgos hashAlgo { get; } = hashAlgos.Sha3;
+		public Enums.KeyHashType HashTypeEnum { get; } = Enums.KeyHashType.SHA3_256;
 
-		public Enums.KeyHashBits HashBitsEnum { get; } = Enums.KeyHashBits.SHA3_256;
-
-		public int TreeHeight {
+		public int BackupHashType { get; } = BITS_256;
+		private hashAlgos backupHashAlgo { get; } = hashAlgos.Sha3;
+		public Enums.KeyHashType BackupHashTypeEnum { get; } = Enums.KeyHashType.SHA3_256;
+		
+		
+		public byte TreeHeight {
 			get => this.treeHeight;
 			protected set => this.treeHeight = value;
 		}
 
 		protected XMSSExecutionContext GetNewExecutionContext() {
-			return new XMSSExecutionContext(this.GenerateNewDigest, this.GetRandom());
+			return new XMSSExecutionContext(this.HashTypeEnum, this.BackupHashTypeEnum, this.GenerateNewDigest, this.GenerateNewBackupDigest, this.EnableCache);
 		}
 
-		protected IDigest GenerateNewDigest() {
+		protected IHashDigest GenerateNewDigest() {
 
 			if(this.hashAlgo == hashAlgos.Sha2) {
-				if(this.HashBits == BITS_256) {
+				if(this.HashType == BITS_256) {
 					return new Sha256DotnetDigest();
 				}
 
 				return new Sha512DotnetDigest();
 			}
 
-			if(this.hashAlgo == hashAlgos.Blake2) {
-				return new Blake2bDigest(this.HashBits);
+			return new Sha3ExternalDigest(this.HashType);
+		}
+		
+		protected IHashDigest GenerateNewBackupDigest() {
+
+			if(this.backupHashAlgo == hashAlgos.Sha2) {
+				if(this.BackupHashType == BITS_256) {
+					return new Sha256DotnetDigest();
+				}
+
+				return new Sha512DotnetDigest();
 			}
 
-			return new Sha3ExternalDigest(this.HashBits);
+			return new Sha3ExternalDigest(this.BackupHashType);
 		}
 
 		public int GetKeyUseThreshold(float percentage) {
@@ -86,6 +120,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			base.DisposeAll();
 
 		}
+
+		public abstract SafeArrayHandle SetPrivateKeyIndex(int index, SafeArrayHandle privateKey);
 
 		public abstract int GetMaxMessagePerKey();
 	}

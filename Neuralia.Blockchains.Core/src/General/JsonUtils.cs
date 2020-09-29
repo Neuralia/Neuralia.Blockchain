@@ -17,29 +17,30 @@ namespace Neuralia.Blockchains.Core.General {
 			return JsonSerializer.Serialize(entry, serializerOptions);
 		}
 
-		public static JsonSerializerOptions CreateSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
+		public static JsonSerializerOptions CreateSerializerSettings() {
 			JsonSerializerOptions settings = new JsonSerializerOptions();
 			settings.WriteIndented = false;
 			settings.IgnoreNullValues = false;
 			settings.PropertyNameCaseInsensitive = false;
 			settings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 
-			settings.Converters.Add(new ByteArrayBaseConverter(mode));
+			settings.Converters.Add(new ByteArrayConverter());
+			settings.Converters.Add(new SafeArrayHandleConverter());
 			settings.Converters.Add(new DecimalConverter());
 
 			return settings;
 		}
 
-		public static JsonSerializerOptions CreateCompactSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerOptions settings = CreateSerializerSettings(mode);
+		public static JsonSerializerOptions CreateCompactSerializerSettings() {
+			JsonSerializerOptions settings = CreateSerializerSettings();
 
 			settings.WriteIndented = false;
 
 			return settings;
 		}
 
-		public static JsonSerializerOptions CreateNoNamesSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerOptions settings = CreateCompactSerializerSettings(mode);
+		public static JsonSerializerOptions CreateNoNamesSerializerSettings() {
+			JsonSerializerOptions settings = CreateCompactSerializerSettings();
 
 			settings.IgnoreNullValues = true;
 			settings.IgnoreNullValues = true;
@@ -47,16 +48,16 @@ namespace Neuralia.Blockchains.Core.General {
 			return settings;
 		}
 
-		public static JsonSerializerOptions CreatePrettySerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerOptions settings = CreateSerializerSettings(mode);
+		public static JsonSerializerOptions CreatePrettySerializerSettings() {
+			JsonSerializerOptions settings = CreateSerializerSettings();
 
 			settings.WriteIndented = true;
 
 			return settings;
 		}
 
-		public static JsonSerializerOptions CreateBlockSerializerSettings(ByteArrayBaseConverter.BaseModes mode = ByteArrayBaseConverter.BaseModes.Base58) {
-			JsonSerializerOptions settings = CreateNoNamesSerializerSettings(mode);
+		public static JsonSerializerOptions CreateBlockSerializerSettings() {
+			JsonSerializerOptions settings = CreateNoNamesSerializerSettings();
 
 			return settings;
 		}
@@ -99,42 +100,6 @@ namespace Neuralia.Blockchains.Core.General {
 
 		public override bool CanConvert(Type typeToConvert) {
 			return typeof(SafeArrayHandle).IsAssignableFrom(typeToConvert) || typeof(ByteArray).IsAssignableFrom(typeToConvert);
-		}
-	}
-
-	public class ByteArrayBaseConverter : JsonConverter<ByteArray> {
-		public enum BaseModes {
-			Base58,
-			Base64
-		}
-
-		private readonly BaseModes mode;
-
-		public ByteArrayBaseConverter(BaseModes mode = BaseModes.Base58) {
-			this.mode = mode;
-
-		}
-
-		public override ByteArray Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
-			throw new NotImplementedException();
-		}
-
-		public override void Write(Utf8JsonWriter writer, ByteArray value, JsonSerializerOptions options) {
-
-			if(value.IsEmpty) {
-				writer.WriteStringValue("");
-			} else {
-				if(this.mode == BaseModes.Base58) {
-					writer.WriteStringValue(value.ToBase58());
-				} else if(this.mode == BaseModes.Base64) {
-					writer.WriteStringValue(value.ToBase64());
-				}
-			}
-
-		}
-
-		public override bool CanConvert(Type typeToConvert) {
-			return typeof(ByteArray).IsAssignableFrom(typeToConvert);
 		}
 	}
 

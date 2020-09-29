@@ -39,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
-			MiningTierUtils.RehydrateMiningSet<long, AdaptiveLong1_9>(this.MiningTierDifficulties, HashDifficultyUtils.Default512Difficulty, rehydrator, v => v);
+			MiningTierUtils.RehydrateLongMiningSet(this.MiningTierDifficulties, rehydrator, HashDifficultyUtils.Default512Difficulty);
 		}
 
 		public override HashNodeList GetStructuresArray() {

@@ -13,10 +13,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			if(version == EnvelopeSignatureTypes.Instance.Published) {
 				envelopeSignature = new PublishedEnvelopeSignature();
 
-			} else if(version == EnvelopeSignatureTypes.Instance.SingleSecret) {
-				envelopeSignature = new SecretEnvelopeSignature();
-
-			} else if(version == EnvelopeSignatureTypes.Instance.SingleSecretCombo) {
+			}
+			// else if(version == EnvelopeSignatureTypes.Instance.SingleSecret) {
+			// 	envelopeSignature = new SecretEnvelopeSignature();
+			//
+			// } 
+			else if(version == EnvelopeSignatureTypes.Instance.SingleSecretCombo) {
 				envelopeSignature = new SecretComboEnvelopeSignature();
 
 			} else if(version == EnvelopeSignatureTypes.Instance.Joint) {
@@ -26,7 +28,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			} else if(version == EnvelopeSignatureTypes.Instance.Presentation) {
 				envelopeSignature = new PresentationEnvelopeSignature();
 			}
-
+			else if(version == EnvelopeSignatureTypes.Instance.Initiation) {
+				envelopeSignature = new InitiationAppointmentEnvelopeSignature();
+			}
+			else if(version == EnvelopeSignatureTypes.Instance.POW) {
+				envelopeSignature = new POWEnvelopeSignature();
+			}
 			if(envelopeSignature == null) {
 				throw new ApplicationException("Invalid account signature type");
 			}

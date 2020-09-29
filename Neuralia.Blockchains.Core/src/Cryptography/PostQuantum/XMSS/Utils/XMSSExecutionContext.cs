@@ -1,39 +1,55 @@
 using System;
+using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Security;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 	public class XMSSExecutionContext : IDisposableExtended {
 
-		public XMSSExecutionContext(Func<IDigest> digestFactory, SecureRandom random) {
+		public XMSSExecutionContext(Enums.KeyHashType hashType, Enums.KeyHashType backupHashType, Func<IHashDigest> digestFactory, Func<IHashDigest> backupDigestFactory, bool enableCaches = false) {
 			this.DigestFactory = digestFactory;
-			this.DigestPool = new ObjectPool<IDigest>(() => this.DigestFactory(), 0, 2);
+			this.BackupDigestFactory = backupDigestFactory;
 
-			IDigest digest = this.DigestPool.GetObject();
+			this.HashType = hashType;
+			this.BackupHashType = backupHashType;
+			
+			this.DigestPool = new ObjectPool<IHashDigest>(() => this.DigestFactory(), 0, 2);
+			this.BackupDigestPool = new ObjectPool<IHashDigest>(() => this.BackupDigestFactory(), 0, 2);
+
+			IHashDigest digest = this.DigestPool.GetObject();
 			this.DigestSize = digest.GetDigestSize();
 			this.DigestPool.PutObject(digest);
+			
+			IHashDigest backupDigest = this.BackupDigestPool.GetObject();
+			this.BackupDigestSize = backupDigest.GetDigestSize();
+			this.BackupDigestPool.PutObject(backupDigest);
 
 			this.OtsHashAddressPool = new ObjectPool<OtsHashAddress>(() => new OtsHashAddress(), 0, 2);
 			this.LTreeAddressPool = new ObjectPool<LTreeAddress>(() => new LTreeAddress(), 0, 2);
 			this.HashTreeAddressPool = new ObjectPool<HashTreeAddress>(() => new HashTreeAddress(), 0, 2);
 
-			this.Random = random;
+			this.EnableCaches = enableCaches;
 		}
 
-		public Func<IDigest> DigestFactory { get; }
-
+		public Func<IHashDigest> DigestFactory { get; }
+		public Func<IHashDigest> BackupDigestFactory { get; }
+		
 		public ObjectPool<OtsHashAddress> OtsHashAddressPool { get; }
 		public ObjectPool<LTreeAddress> LTreeAddressPool { get; }
 		public ObjectPool<HashTreeAddress> HashTreeAddressPool { get; }
 
+		public Enums.KeyHashType HashType { get; }
+		public Enums.KeyHashType BackupHashType { get; }
+
+		public bool EnableCaches { get; set; }
 		public int DigestSize { get; }
-		public ObjectPool<IDigest> DigestPool { get; }
-
-		public SecureRandom Random { get; }
-
+		public int BackupDigestSize { get; }
+		public ObjectPool<IHashDigest> DigestPool { get; }
+		public ObjectPool<IHashDigest> BackupDigestPool { get; }
+		
 	#region disposable
 
 		public bool IsDisposed { get; private set; }
@@ -63,6 +79,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 
 				try {
 					this.DigestPool.Dispose();
+				} catch {
+				}
+				
+				try {
+					this.BackupDigestPool.Dispose();
 				} catch {
 				}
 

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -20,8 +21,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public List<AccountId> EnableAccounts { get; } = new List<AccountId>();
 		public List<AccountId> DisableAccounts { get; } = new List<AccountId>();
 
-		public override HashNodeList GetStructuresArray() {
-			HashNodeList nodeList = base.GetStructuresArray();
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
 			nodeList.Add(this.EnableAccounts.Count);
 			nodeList.Add(this.EnableAccounts);
@@ -39,12 +40,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetArray("DisableAccounts", this.DisableAccounts);
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts {
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.Range;
+		
+		public override AccountId[] ImpactedAccounts => this.TargetAccounts;
+		public override AccountId[] TargetAccounts {
 			get {
 				List<AccountId> entries = this.EnableAccounts.ToList();
 				entries.AddRange(this.DisableAccounts);
 
-				return entries.ToImmutableList();
+				return entries.ToArray();
 			}
 		}
 

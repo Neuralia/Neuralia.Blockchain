@@ -22,22 +22,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		where CHAIN_POOL_PUBLIC_TRANSACTIONS : ChainPoolSqlitePublicTransactions<CHAIN_POOL_PUBLIC_TRANSACTIONS> {
 	}
 
-	public abstract class ChainPoolSqliteDal<CHAIN_STATE_CONTEXT, CHAIN_POOL_PUBLIC_TRANSACTIONS> : SqliteDal<CHAIN_STATE_CONTEXT>, IChainPoolSqliteDal<CHAIN_POOL_PUBLIC_TRANSACTIONS>
-		where CHAIN_STATE_CONTEXT : DbContext, IChainPoolSqliteContext<CHAIN_POOL_PUBLIC_TRANSACTIONS>
+	public abstract class ChainPoolSqliteDal<CHAIN_POOL_CONTEXT, CHAIN_POOL_PUBLIC_TRANSACTIONS> : SqliteDal<CHAIN_POOL_CONTEXT>, IChainPoolSqliteDal<CHAIN_POOL_PUBLIC_TRANSACTIONS>
+		where CHAIN_POOL_CONTEXT : DbContext, IChainPoolSqliteContext<CHAIN_POOL_PUBLIC_TRANSACTIONS>
 		where CHAIN_POOL_PUBLIC_TRANSACTIONS : ChainPoolSqlitePublicTransactions<CHAIN_POOL_PUBLIC_TRANSACTIONS>, new() {
 
 		private readonly ITimeService timeService;
-		public ChainPoolSqliteDal(string folderPath, BlockchainServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateChainPoolContext<CHAIN_STATE_CONTEXT>, serializationType) {
+		public ChainPoolSqliteDal(string folderPath, BlockchainServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateChainPoolContext<CHAIN_POOL_CONTEXT>, serializationType) {
 
 			this.timeService = serviceSet.TimeService;
 		}
 
-		public async Task InsertTransactionEntry(ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
+		public async Task InsertTransactionEntry(ITransactionEnvelope signedTransactionEnvelope, DateTime chainInception) {
 			CHAIN_POOL_PUBLIC_TRANSACTIONS entry = new CHAIN_POOL_PUBLIC_TRANSACTIONS();
 
 			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
-			this.PrepareTransactionEntry(entry, transactionEnvelope, chainInception);
+			this.PrepareTransactionEntry(entry, signedTransactionEnvelope, chainInception);
 
 			await this.PerformOperationAsync(db => {
 				db.PublicTransactions.Add(entry);
@@ -124,10 +124,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			}
 		}
 
-		protected virtual void PrepareTransactionEntry(CHAIN_POOL_PUBLIC_TRANSACTIONS entry, ITransactionEnvelope transactionEnvelope, DateTime chainInception) {
-			entry.TransactionId = transactionEnvelope.Contents.Uuid.ToCompactString();
+		protected virtual void PrepareTransactionEntry(CHAIN_POOL_PUBLIC_TRANSACTIONS entry, ITransactionEnvelope signedTransactionEnvelope, DateTime chainInception) {
+			entry.TransactionId = signedTransactionEnvelope.Contents.Uuid.ToCompactString();
 			entry.Timestamp = DateTimeEx.CurrentTime;
-			entry.Expiration = transactionEnvelope.GetExpirationTime(this.timeService, chainInception);
+			entry.Expiration = signedTransactionEnvelope.GetExpirationTime(this.timeService, chainInception);
 		}
 	}
 }

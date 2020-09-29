@@ -38,9 +38,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			IDehydratedBlockchainMessage dehydratedMessage = new DehydratedBlockchainMessage();
 
-			dehydratedMessage.RehydratedMessage = this;
+			dehydratedMessage.RehydratedEvent = this;
 
-			IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
 			this.Version.Dehydrate(dehydrator);
 

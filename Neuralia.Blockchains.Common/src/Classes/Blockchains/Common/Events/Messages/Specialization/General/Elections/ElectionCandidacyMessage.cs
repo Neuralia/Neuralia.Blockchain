@@ -1,8 +1,10 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections {
@@ -94,5 +96,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				this.FirstTierAnswer.Dehydrate(dehydrator);
 			}
 		}
+		
+		public override HashNodeList GetStructuresArray() {
+			HashNodeList nodesList = base.GetStructuresArray();
+
+			nodesList.Add(this.BlockId);
+			nodesList.Add(this.MaturityBlockHash);
+			nodesList.Add(this.AccountId);
+			
+			nodesList.Add((byte)this.MiningTier);
+			
+			nodesList.Add(this.SecondTierAnswer);
+			nodesList.Add(this.DigestAnswer);
+			nodesList.Add(this.FirstTierAnswer);
+			
+			return nodesList;
+		}
+
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+			
+			jsonDeserializer.SetProperty("BlockId", this.BlockId);
+			jsonDeserializer.SetProperty("MaturityBlockHash", this.MaturityBlockHash);
+			jsonDeserializer.SetProperty("AccountId", this.AccountId);
+			
+			jsonDeserializer.SetProperty("MiningTier", this.MiningTier.ToString());
+			
+			jsonDeserializer.SetProperty("SecondTierAnswer", this.SecondTierAnswer);
+			jsonDeserializer.SetProperty("DigestAnswer", this.DigestAnswer);
+			jsonDeserializer.SetProperty("FirstTierAnswer", this.FirstTierAnswer);
+		}
+		
 	}
 }

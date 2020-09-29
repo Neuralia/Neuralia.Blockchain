@@ -145,12 +145,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		protected readonly SnapshotCache<CHAIN_OPTIONS_SNAPSHOT, int> chainOptionsSnapshotCache;
 		protected readonly SnapshotCache<JOINT_ACCOUNT_SNAPSHOT, AccountId> jointAccountSnapshotCache;
 
-		protected readonly SnapshotCache<STANDARD_ACCOUNT_SNAPSHOT, AccountId> simpleAccountSnapshotCache;
+		protected readonly SnapshotCache<STANDARD_ACCOUNT_SNAPSHOT, AccountId> standardAccountSnapshotCache;
 
 		private bool initialized;
 
 		public SnapshotCacheSet(ICardUtils cardUtils) {
-			this.simpleAccountSnapshotCache = new SnapshotCache<STANDARD_ACCOUNT_SNAPSHOT, AccountId>(cardUtils);
+			this.standardAccountSnapshotCache = new SnapshotCache<STANDARD_ACCOUNT_SNAPSHOT, AccountId>(cardUtils);
 			this.jointAccountSnapshotCache = new SnapshotCache<JOINT_ACCOUNT_SNAPSHOT, AccountId>(cardUtils);
 			this.accountKeySnapshotCache = new SnapshotCache<STANDARD_ACCOUNT_KEY_SNAPSHOT, (long AccountId, byte OrdinalId)>(cardUtils);
 			this.accreditationCertificateSnapshotCache = new SnapshotCache<ACCREDITATION_CERTIFICATE_SNAPSHOT, int>(cardUtils);
@@ -172,13 +172,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		public void Initialize() {
 
 			if(!this.initialized) {
-				this.simpleAccountSnapshotCache.RequestSnapshots += this.RequestStandardAccountSnapshots;
+				this.standardAccountSnapshotCache.RequestSnapshots += this.RequestStandardAccountSnapshots;
 				this.jointAccountSnapshotCache.RequestSnapshots += this.RequestJointAccountSnapshots;
 				this.accountKeySnapshotCache.RequestSnapshots += this.RequestAccountKeySnapshots;
 				this.accreditationCertificateSnapshotCache.RequestSnapshots += this.RequestAccreditationCertificateSnapshots;
 				this.chainOptionsSnapshotCache.RequestSnapshots += this.RequestChainOptionSnapshots;
 
-				this.simpleAccountSnapshotCache.CreateSnapshot += this.RequestCreateNewStandardAccountSnapshot;
+				this.standardAccountSnapshotCache.CreateSnapshot += this.RequestCreateNewStandardAccountSnapshot;
 				this.jointAccountSnapshotCache.CreateSnapshot += this.RequestCreateNewJointAccountSnapshot;
 				this.accountKeySnapshotCache.CreateSnapshot += this.RequestCreateNewAccountKeySnapshot;
 				this.accreditationCertificateSnapshotCache.CreateSnapshot += this.RequestCreateNewAccreditationCertificateSnapshot;
@@ -189,7 +189,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public void Reset() {
-			this.simpleAccountSnapshotCache.Reset();
+			this.standardAccountSnapshotCache.Reset();
 			this.jointAccountSnapshotCache.Reset();
 			this.accountKeySnapshotCache.Reset();
 			this.accreditationCertificateSnapshotCache.Reset();
@@ -199,7 +199,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		public async Task EnsureSnapshots(SnapshotKeySet snapshotKeySet, LockContext lockContext) {
 			// since we dont know which is which, we try to load from both. the odds its a simple account are high, so lets try this first
-			await this.simpleAccountSnapshotCache.EnsureSnapshots(snapshotKeySet.standardAccounts, lockContext).ConfigureAwait(false);
+			await this.standardAccountSnapshotCache.EnsureSnapshots(snapshotKeySet.standardAccounts, lockContext).ConfigureAwait(false);
 			await this.jointAccountSnapshotCache.EnsureSnapshots(snapshotKeySet.jointAccounts, lockContext).ConfigureAwait(false);
 			await this.accountKeySnapshotCache.EnsureSnapshots(snapshotKeySet.accountKeys, lockContext).ConfigureAwait(false);
 			await this.accreditationCertificateSnapshotCache.EnsureSnapshots(snapshotKeySet.accreditationCertificates, lockContext).ConfigureAwait(false);
@@ -238,7 +238,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		public async Task<STANDARD_ACCOUNT_SNAPSHOT> CreateNewStandardAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext) {
 
-			STANDARD_ACCOUNT_SNAPSHOT entry = this.simpleAccountSnapshotCache.LastNew(newAccountId);
+			STANDARD_ACCOUNT_SNAPSHOT entry = this.standardAccountSnapshotCache.LastNew(newAccountId);
 
 			if(entry != null) {
 				return entry;
@@ -251,13 +251,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			}
 
 			entry.AccountId = newAccountId.ToLongRepresentation();
-			this.simpleAccountSnapshotCache.AddEntry(newAccountId, TemporaryAccountHash, entry);
+			this.standardAccountSnapshotCache.AddEntry(newAccountId, TemporaryAccountHash, entry);
 
 			return entry;
 		}
 
 		public Task<bool> CheckStandardAccountSnapshotExists(AccountId newAccountId, LockContext lockContext) {
-			return this.simpleAccountSnapshotCache.CheckEntryExists(newAccountId, lockContext);
+			return this.standardAccountSnapshotCache.CheckEntryExists(newAccountId, lockContext);
 		}
 
 		public void DeleteAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
@@ -280,11 +280,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public Task<STANDARD_ACCOUNT_SNAPSHOT> GetStandardAccountSnapshotReadonly(AccountId newAccountId, LockContext lockContext) {
-			return this.simpleAccountSnapshotCache.GetEntryReadonly(newAccountId, lockContext);
+			return this.standardAccountSnapshotCache.GetEntryReadonly(newAccountId, lockContext);
 		}
 
 		public Task<STANDARD_ACCOUNT_SNAPSHOT> GetStandardAccountSnapshotModify(AccountId newAccountId, LockContext lockContext) {
-			return this.simpleAccountSnapshotCache.GetEntryModify(newAccountId, lockContext);
+			return this.standardAccountSnapshotCache.GetEntryModify(newAccountId, lockContext);
 		}
 
 		public async Task<JOINT_ACCOUNT_SNAPSHOT> CreateNewJointAccountSnapshot(AccountId newAccountId, AccountId TemporaryAccountHash, LockContext lockContext) {
@@ -309,7 +309,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		public void DeleteStandardAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
 
-			this.simpleAccountSnapshotCache.DeleteEntry(newAccountId, lockContext);
+			this.standardAccountSnapshotCache.DeleteEntry(newAccountId, lockContext);
 		}
 
 		public Task<JOINT_ACCOUNT_SNAPSHOT> CreateLooseJointAccountSnapshot(AccountId newAccountId, LockContext lockContext) {
@@ -480,7 +480,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 			SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> history = new SnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>();
 
-			history.simpleAccounts = this.simpleAccountSnapshotCache.GetEntriesSubKeyModificationStack();
+			history.standardAccounts = this.standardAccountSnapshotCache.GetEntriesSubKeyModificationStack();
 			history.jointAccounts = this.jointAccountSnapshotCache.GetEntriesSubKeyModificationStack();
 			history.standardAccountKeys = this.accountKeySnapshotCache.GetEntriesModificationStack();
 			history.accreditationCertificates = this.accreditationCertificateSnapshotCache.GetEntriesModificationStack();
@@ -492,7 +492,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 	#region recording
 
 		public void BeginTransaction() {
-			this.simpleAccountSnapshotCache.BeginTransaction();
+			this.standardAccountSnapshotCache.BeginTransaction();
 			this.jointAccountSnapshotCache.BeginTransaction();
 			this.accountKeySnapshotCache.BeginTransaction();
 			this.accreditationCertificateSnapshotCache.BeginTransaction();
@@ -500,7 +500,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public void CommitTransaction() {
-			this.simpleAccountSnapshotCache.CommitTransaction();
+			this.standardAccountSnapshotCache.CommitTransaction();
 			this.jointAccountSnapshotCache.CommitTransaction();
 			this.accountKeySnapshotCache.CommitTransaction();
 			this.accreditationCertificateSnapshotCache.CommitTransaction();
@@ -508,7 +508,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public void RollbackTransaction() {
-			this.simpleAccountSnapshotCache.RollbackTransaction();
+			this.standardAccountSnapshotCache.RollbackTransaction();
 			this.jointAccountSnapshotCache.RollbackTransaction();
 			this.accountKeySnapshotCache.RollbackTransaction();
 			this.accreditationCertificateSnapshotCache.RollbackTransaction();
@@ -537,15 +537,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			}
 		}
 
-		public void AddAccounts(ImmutableList<AccountId> accountIds) {
+		public void AddAccounts(IEnumerable<AccountId> accountIds) {
 
-			this.standardAccounts.AddRange(accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard));
+			this.standardAccounts.AddRange(accountIds.Where(a => a.IsStandard));
 			this.jointAccounts.AddRange(accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint));
-		}
-
-		public void AddAccounts(List<AccountId> accountIds) {
-
-			this.AddAccounts(accountIds.ToImmutableList());
 		}
 
 		public void Add(SnapshotKeySet snapshotKeySet) {
@@ -567,7 +562,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public void AddAccountId(AccountId accountId) {
-			if(accountId.AccountType == Enums.AccountTypes.Standard) {
+			if(accountId.IsStandard) {
 				this.standardAccounts.Add(accountId);
 			}
 
@@ -592,14 +587,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		public Dictionary<int, CHAIN_OPTIONS_SNAPSHOT> chainOptions = new Dictionary<int, CHAIN_OPTIONS_SNAPSHOT>();
 		public Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT> jointAccounts = new Dictionary<AccountId, JOINT_ACCOUNT_SNAPSHOT>();
 
-		public Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT> simpleAccounts = new Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>();
+		public Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT> standardAccounts = new Dictionary<AccountId, STANDARD_ACCOUNT_SNAPSHOT>();
 
 		public void Add(SnapshotSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotSet) {
 			if(snapshotSet != null) {
 
-				foreach(KeyValuePair<AccountId, STANDARD_ACCOUNT_SNAPSHOT> entry in snapshotSet.simpleAccounts) {
-					if(!this.simpleAccounts.ContainsKey(entry.Key)) {
-						this.simpleAccounts[entry.Key] = entry.Value;
+				foreach(KeyValuePair<AccountId, STANDARD_ACCOUNT_SNAPSHOT> entry in snapshotSet.standardAccounts) {
+					if(!this.standardAccounts.ContainsKey(entry.Key)) {
+						this.standardAccounts[entry.Key] = entry.Value;
 					}
 				}
 
@@ -630,7 +625,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 
 		public bool Any() {
-			return this.simpleAccounts.Any() || this.jointAccounts.Any() || this.accountKeys.Any() || this.accreditationCertificates.Any() || this.chainOptions.Any();
+			return this.standardAccounts.Any() || this.jointAccounts.Any() || this.accountKeys.Any() || this.accreditationCertificates.Any() || this.chainOptions.Any();
 		}
 	}
 

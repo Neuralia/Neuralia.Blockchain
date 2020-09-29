@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 			this.VersionValidationCallback = versionValidationCallback;
 		}
 
-		public SoftwareVersion(SoftwareVersion other) : this(other.Major, other.Minor, other.Revision, other.Build) {
+		public SoftwareVersion(SoftwareVersion other, Func<SoftwareVersion, SoftwareVersion, bool> versionValidationCallback = null) : this(other.Major, other.Minor, other.Revision, other.Build, versionValidationCallback) {
 		}
 
 		public Func<SoftwareVersion, SoftwareVersion, bool> VersionValidationCallback { get; }

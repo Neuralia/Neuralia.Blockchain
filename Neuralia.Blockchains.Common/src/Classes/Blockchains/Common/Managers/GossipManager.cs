@@ -125,11 +125,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				// ok, the first step is to ensure the message is valid. otherwise we do not handle it any further
 
-				ValidationResult valid = new ValidationResult();
-
-				await this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, true, result => {
-					valid = result;
-				}).ConfigureAwait(false);
+				ValidationResult valid = await ValidateEnvelopedContent(blockchainGossipMessageSet, lockContext).ConfigureAwait(false);
 
 				// ok, if we can't validate a message, we are most probably out of sync. if we are not already syncing, let's request one.
 				if(valid == ValidationResult.ValidationResults.CantValidate) {
@@ -227,8 +223,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 									blockInserted = true;
 								} else if(blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.MESSAGE_RECEIVED) {
 									IMessageEnvelope messageEnvelope = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
-
-									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedMessage, messageEnvelope.Contents, lc).ConfigureAwait(false);
+									
+									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedEvent, messageEnvelope, lc).ConfigureAwait(false);
 								} else {
 									throw new InvalidOperationException("Invalid gossip message type");
 								}
@@ -240,7 +236,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 								NLog.Default.Error(ex, "Failed to process gossip message that was found as valid.");
 
 							} finally {
-								if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage && (blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED) && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope blockEnvelope) {
+								if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage2 && (blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.BLOCK_RECEIVED) && blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope blockEnvelope) {
 
 									// try to remove the lock on the block
 									this.FreeLockedBlock(blockEnvelope.BlockId, !blockInserted, lc);
@@ -262,6 +258,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			}
 		}
 
+		protected virtual async Task<ValidationResult> ValidateEnvelopedContent(IBlockchainGossipMessageSet blockchainGossipMessageSet, LockContext lockContext) {
+			ValidationResult valid = new ValidationResult();
+			
+			await this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateEnvelopedContent(blockchainGossipMessageSet.BaseMessage.BaseEnvelope, true, result => {
+				valid = result;
+			}, lockContext).ConfigureAwait(false);
+
+			return valid;
+		}
 		/// <summary>
 		///     free a block id from sync lock. also request a sync or not if error happened
 		/// </summary>
@@ -271,7 +276,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.FreeLockedBlock(blockId);
 
 			// now control the sync. if we succeeded, then we reset the sync timer. otherwise, we nullify it and ask for a sync immediately.
-			this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = failed ? DateTime.MinValue : DateTimeEx.CurrentTime;
+			this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = failed ? DateTimeEx.MinValue : DateTimeEx.CurrentTime;
 
 			if(failed) {
 				this.RequestSync(lockContext).WaitAndUnwrapException();

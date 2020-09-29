@@ -62,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result;
 		}
 
-		public override SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int keyedTransactionIndex) {
+		public override SafeArrayHandle QueryIndexedTransactionOffsets(uint adjustedBlockId, int indexedTransactionIndex) {
 			throw new NotImplementedException();
 		}
 

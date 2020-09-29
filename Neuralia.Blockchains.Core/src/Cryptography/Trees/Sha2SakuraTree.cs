@@ -29,7 +29,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry, HashAlgorithm hasher) {
-			return ByteArray.WrapAndOwn(hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length));
+			return SafeArrayHandle.WrapAndOwn(hasher.ComputeHash(entry.Bytes, entry.Offset, entry.Length));
 		}
 	}
 }

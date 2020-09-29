@@ -14,6 +14,18 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 			return source.Local.Any(predicate);
 		}
 
+		public static async Task<T_SOURCE> GetOrCreate<T_SOURCE>(this DbSet<T_SOURCE> dbSet, Func<T_SOURCE> prepare, Expression<Func<T_SOURCE, bool>> predicate = null)
+			where T_SOURCE : class, new() {
+			var entity = await dbSet.SingleOrDefaultAsync(predicate).ConfigureAwait(false);
+
+			if(entity == null) {
+				entity = prepare();
+				await dbSet.AddAsync(entity).ConfigureAwait(false);
+			}
+
+			return entity;
+		}
+
 		public static async Task<bool> AddIfNotExists<T_SOURCE>(this DbSet<T_SOURCE> dbSet, Func<T_SOURCE> prepare, Expression<Func<T_SOURCE, bool>> predicate = null)
 			where T_SOURCE : class, new() {
 			if((prepare != null) && (predicate != null)) {
@@ -41,6 +53,15 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 			T_SOURCE result = source.Local.SingleOrDefault(predicate.Compile());
 
 			return result ??= source.SingleOrDefault(predicate);
+
+		}
+		
+		public static async Task<T_SOURCE> SingleOrDefaultAllAsync<T_SOURCE>(this DbSet<T_SOURCE> source, Expression<Func<T_SOURCE, bool>> predicate)
+			where T_SOURCE : class {
+
+			T_SOURCE result = source.Local.SingleOrDefault(predicate.Compile());
+
+			return result ??= await source.SingleOrDefaultAsync(predicate).ConfigureAwait(false);
 
 		}
 
@@ -101,12 +122,13 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 		public static void Delete<T_SOURCE>(this DbSet<T_SOURCE> dbSet, DbContext dbContext, Expression<Func<T_SOURCE, bool>> predicate)
 			where T_SOURCE : class {
 
+			var changeTracker = dbContext.ChangeTracker;
 			try {
-				dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+				//changeTracker.AutoDetectChangesEnabled = false;
 				dbSet.RemoveRange(dbSet.Where(predicate));
 
 			} finally {
-				dbContext.ChangeTracker.AutoDetectChangesEnabled = true;
+				//changeTracker.AutoDetectChangesEnabled = true;
 			}
 
 		}
@@ -117,8 +139,10 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 			List<T_KEY> deleteIds = await dbSet.AsNoTracking().Where(selector).Select(keysSelector).ToListAsync().ConfigureAwait(false);
 
 			if(deleteIds.Any()) {
+				
+				var changeTracker = dbContext.ChangeTracker;
 				try {
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+					//changeTracker.AutoDetectChangesEnabled = false;
 
 					// get the local ones first
 					List<T_SOURCE> allEntities = dbSet.Local.Where(selector.Compile()).ToList();
@@ -131,11 +155,126 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 					dbSet.RemoveRange(allEntities);
 
 				} finally {
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = true;
+					//changeTracker.AutoDetectChangesEnabled = true;
 				}
 			}
 
 			return deleteIds;
+		}
+		
+		public static async Task UpdateOrAddAsync<T>(this DbSet<T> dbSet, Expression<Func<T, bool>> predicate, Action<T, bool> operation)
+			where T : class, new() {
+
+			var entity = await dbSet.SingleOrDefaultAllAsync(predicate).ConfigureAwait(false);
+			bool created = false;
+			if(entity == null) {
+				entity = new T();
+	
+				dbSet.Add(entity); //The keys are passed by argument, so we know we won't have to generate them. We use the non-async version that is much faster in that case and do not block the thread.
+				created = true;
+			}
+
+			operation(entity, created);
+		}
+		
+		/// <summary>
+        ///     If the entity with the provided key(s) is already being tracked by the context or is found in the database, then it
+        ///     will be tracked in the <see cref="EntityState.Modified" /> state.
+        ///     If the entity associated to the key(s) is not already tracked or can't be found in the database, then the entity
+        ///     will be tracked in the <see cref="EntityState.Added" /> state.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dbSet"></param>
+        /// <param name="entity"></param>
+        /// <param name="keyValues"></param>
+        public static void UpdateOrAdd<T>(this DbSet<T> dbSet, T entity, params object[] keyValues)
+			where T : class {
+			T trackedEntity;
+
+			if((trackedEntity = dbSet.Find(keyValues)) != null) {
+				if(!ReferenceEquals(trackedEntity, entity)) {
+					dbSet.Attach(trackedEntity).State = EntityState.Detached;
+				}
+
+				dbSet.Update(entity);
+			} else {
+				dbSet.Add(entity);
+			}
+		}
+
+		
+		
+        /// <summary>
+        ///     If the entity with the provided key(s) is already being tracked by the context or is found in the database, then it
+        ///     will be tracked in the <see cref="EntityState.Modified" /> state.
+        ///     If the entity associated to the key(s) is not already tracked or can't be found in the database, then the entity
+        ///     will be tracked in the <see cref="EntityState.Added" /> state.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dbSet"></param>
+        /// <param name="entity"></param>
+        /// <param name="keyValues"></param>
+        /// <returns></returns>
+        public static async Task UpdateOrAddAsync<T>(this DbSet<T> dbSet, T entity, params object[] keyValues)
+			where T : class {
+			T trackedEntity;
+
+			if((trackedEntity = await dbSet.FindAsync(keyValues).ConfigureAwait(false)) != null) {
+				if(!ReferenceEquals(trackedEntity, entity)) {
+					dbSet.Attach(trackedEntity).State = EntityState.Detached;
+				}
+
+				dbSet.Update(entity);
+			} else {
+				dbSet.Add(entity); //The keys are passed by argument, so we know we won't have to generate them. We use the non-async version that is much faster in that case and do not block the thread.
+			}
+		}
+
+        /// <summary>
+        ///     If the entity with the provided key(s) is already being tracked by the context or is found in the database, then it
+        ///     will be tracked in the <see cref="EntityState.Deleted" /> state.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dbSet"></param>
+        /// <param name="keyValues"></param>
+        public static void RemoveIfExists<T>(this DbSet<T> dbSet, params object[] keyValues)
+			where T : class {
+			T entity;
+
+			if((entity = dbSet.Find(keyValues)) != null) {
+				dbSet.Remove(entity);
+			}
+		}
+
+        /// <summary>
+        ///     If the entity with the provided key(s) is already being tracked by the context or is found in the database, then it
+        ///     will be tracked in the <see cref="EntityState.Deleted" /> state.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dbSet"></param>
+        /// <param name="keyValues"></param>
+        /// <returns></returns>
+        public static async Task RemoveIfExistsAsync<T>(this DbSet<T> dbSet, params object[] keyValues)
+			where T : class {
+			T entity;
+
+			if((entity = await dbSet.FindAsync(keyValues).ConfigureAwait(false)) != null) {
+				dbSet.Remove(entity);
+			}
+		}
+
+        /// <summary>
+        ///     Every entity of the sequence that satisfy the condition will be tracked in the <see cref="EntityState.Deleted" />
+        ///     state.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dbSet"></param>
+        /// <param name="predicate"></param>
+        public static void RemoveManyOnCondition<T>(this DbSet<T> dbSet, Expression<Func<T, bool>> predicate)
+			where T : class {
+			foreach(T entity in dbSet.Where(predicate)) {
+				dbSet.Remove(entity);
+			}
 		}
 	}
 

@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		Task PerformOperationAsync(Func<CHAIN_STATE_CONTEXT, Task> process);
 		Task<T> PerformOperationAsync<T>(Func<CHAIN_STATE_CONTEXT, Task<T>> process);
 
-		MODEL_SNAPSHOT LoadFullState(CHAIN_STATE_CONTEXT db);
-		MODEL_SNAPSHOT LoadSimpleState(CHAIN_STATE_CONTEXT db);
+		Task<MODEL_SNAPSHOT> LoadFullState(CHAIN_STATE_CONTEXT db);
+		Task<MODEL_SNAPSHOT> LoadSimpleState(CHAIN_STATE_CONTEXT db);
 	}
 }

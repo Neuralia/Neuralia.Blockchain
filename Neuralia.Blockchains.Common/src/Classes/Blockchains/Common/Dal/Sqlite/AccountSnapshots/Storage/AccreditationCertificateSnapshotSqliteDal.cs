@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Acco
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Locking;
@@ -41,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		}
 
 		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificates(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>>> operation, List<int> certificateIds) {
-			return this.QueryAllAsync(operation, certificateIds.Cast<long>().ToList());
+			return this.QueryAllAsync(operation, certificateIds.Select(e => (long)e).ToList());
 		}
 
 		public Task UpdateSnapshotDigestFromDigest(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task> operation, ACCREDITATION_CERTIFICATE_SNAPSHOT accountSnapshotEntry) {

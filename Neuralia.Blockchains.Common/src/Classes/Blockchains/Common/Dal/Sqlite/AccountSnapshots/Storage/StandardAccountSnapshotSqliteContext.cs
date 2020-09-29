@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		where STANDARD_ACCOUNT_SNAPSHOT : StandardAccountSnapshotSqliteEntry<ACCOUNT_ATTRIBUTE_SNAPSHOT>, new()
 		where ACCOUNT_ATTRIBUTE_SNAPSHOT : AccountAttributeSqliteEntry, new() {
 
-		public override string GroupRoot => "simple-accounts-snapshots";
+		public override string GroupRoot => "standard-accounts-snapshots";
 
 		public DbSet<STANDARD_ACCOUNT_SNAPSHOT> StandardAccountSnapshots { get; set; }
 		public DbSet<ACCOUNT_ATTRIBUTE_SNAPSHOT> StandardAccountSnapshotAttributes { get; set; }

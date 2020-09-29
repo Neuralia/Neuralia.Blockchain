@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
@@ -81,8 +82,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		Task RequestWalletSync(IBlock block, bool force = false, bool? allowGrowth = null);
 		Task RequestWalletSync(List<IBlock> blocks, bool force, bool mobileForce, bool? allowGrowth = null);
 
-		Task Pause();
-		Task Resume();
+		Task PauseChain();
+		Task ResumeChain();
 	}
 
 	public interface ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ILoopThread<CentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>>, ICentralCoordinator
@@ -102,7 +103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		void PostNewGossipMessage(IBlockchainGossipMessageSet gossipMessageSet);
 
-		void PostWorkflow(IWorkflow<IBlockchainEventsRehydrationFactory> workflow);
+		void PostWorkflow(IWorkflow workflow);
 
 		void PostImmediateWorkflow(IWorkflow<IBlockchainEventsRehydrationFactory> workflow);
 
@@ -129,7 +130,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		protected readonly Dictionary<string, (IRoutedTaskRoutingThread service, Enums.ServiceExecutionTypes executionType)> services = new Dictionary<string, (IRoutedTaskRoutingThread service, Enums.ServiceExecutionTypes executionType)>();
 
-		protected readonly WorkflowCoordinator<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory> workflowCoordinator;
+		protected readonly WorkflowCoordinator<IWorkflow, IBlockchainEventsRehydrationFactory> workflowCoordinator;
 		private ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> centralCoordinatorImplementation;
 
 		private IBlockChainInterface chainInterface;
@@ -152,7 +153,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				maximumWorkflows = Math.Min(maximumWorkflows, maximumThreadCounts.Value);
 			}
 
-			this.workflowCoordinator = new WorkflowCoordinator<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>(serviceSet, maximumWorkflows);
+			this.workflowCoordinator = new WorkflowCoordinator<IWorkflow, IBlockchainEventsRehydrationFactory>(serviceSet, maximumWorkflows);
 
 			this.ColoredRoutedTaskReceiver = new ColoredRoutedTaskReceiver(this.HandleMessages);
 
@@ -180,10 +181,54 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			return true;
 		}
+
+		private Timer urgentShutdownTimer;
 		
-		protected void UrgentShutdown() {
+		protected virtual void UrgentShutdown() {
 			//TODO: what else. should we stop the chain?
 			this.PostSystemEventImmediate(SystemEventGenerator.RequestShutdown());
+
+			if(this.urgentShutdownTimer == null) {
+				
+				// try to clear some memory
+				
+				try {
+					this.ChainComponentProvider.ChainDataWriteProviderBase.ClearBlocksCache();
+				} catch {
+					// do nothing
+				}
+				
+				try {
+					this.ChainComponentProvider.WalletProviderBase.ClearSynthesizedBlocksCache();
+				} catch {
+					// do nothing
+				}
+				try {
+					this.ChainComponentProvider.ChainMiningProviderBase.ClearElectionBlockCache();
+				} catch {
+					// do nothing
+				}
+
+				//TODO: what else can we clear here?
+				
+				// this below might be a bad idea
+				// try {
+				// 	this.ChainComponentProvider.ChainNetworkingProviderBase.UrgentClearConnections();
+				// } catch {
+				// 	// do nothing
+				// }
+				
+				GC.Collect(2, GCCollectionMode.Forced, true, true);
+				
+				// start a timer so we can force a shutdown if it takes too long
+				Repeater.Repeat(() => {
+					this.urgentShutdownTimer = new Timer(state => {
+
+						Environment.Exit(1);
+
+					}, this, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+				});
+			}
 
 			// we really want to shutdown early
 			this.RequestShutdown().WaitAndUnwrapException();
@@ -262,11 +307,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			return this.RouteTask(blockchainTask);
 		}
 
-		public Task Pause() {
+		public Task PauseChain() {
 			return this.ChainComponentProvider.WalletProviderBase.Pause();
 		}
 
-		public Task Resume() {
+		public Task ResumeChain() {
 			return this.ChainComponentProvider.WalletProviderBase.Resume();
 		}
 
@@ -334,7 +379,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		///     insert a new workflow in our workflow ecosystem
 		/// </summary>
 		/// <param name="workflow"></param>
-		public void PostWorkflow(IWorkflow<IBlockchainEventsRehydrationFactory> workflow) {
+		public void PostWorkflow(IWorkflow workflow) {
 
 			this.workflowCoordinator.AddWorkflow(workflow).WaitAndUnwrapException();
 		}
@@ -503,9 +548,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				if(messageTask.header is TargettedHeader targettedHeader) {
 					// this is a targeted header, its meant only for us
 
-					IBlockchainTargettedMessageSet messageSet = (IBlockchainTargettedMessageSet) this.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.RehydrateMessage(messageTask.data, targettedHeader, this.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
+					IBlockchainTargettedMessageSet messageSet = (IBlockchainTargettedMessageSet) this.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.Rehydrate(messageTask.data, targettedHeader, this.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
-					WorkflowTracker<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory> workflowTracker = new WorkflowTracker<IWorkflow<IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>(messageTask.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.WorkflowSessionId, messageSet.Header.OriginatorId, this.ChainComponentProvider.ChainNetworkingProviderBase.MyClientUuid, this.workflowCoordinator);
+					WorkflowTracker<IWorkflow, IBlockchainEventsRehydrationFactory> workflowTracker = new WorkflowTracker<IWorkflow, IBlockchainEventsRehydrationFactory>(messageTask.Connection, messageSet.Header.WorkflowCorrelationId, messageSet.Header.WorkflowSessionId, messageSet.Header.OriginatorId, this.ChainComponentProvider.ChainNetworkingProviderBase.MyClientUuid, this.workflowCoordinator);
 
 					if(messageSet.Header.IsWorkflowTrigger && messageSet is IBlockchainTriggerMessageSet triggerMessageSet) {
 						// route the message
@@ -530,7 +575,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 							throw new ApplicationException("We have a cognitive dissonance here. The trigger flag is set, but the message type is not a workflow trigger");
 						}
 
-						// forward the message to the right correlated workflow
+						// forward the message to the right Verified workflow
 						// this method wlil ensure we get the right workflow id for our connection
 
 						// now we verify if this message originator was us

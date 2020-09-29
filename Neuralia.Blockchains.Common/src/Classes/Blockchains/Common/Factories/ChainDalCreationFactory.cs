@@ -2,8 +2,11 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AppointmentRegistry;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainPool;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Gates;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AppointmentRegistry;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
@@ -18,6 +21,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		// here are replaceable injection functions
 		Func<ChainConfigurations, BlockChannelUtils.BlockChannelTypes, string, string, IBlockchainDigestChannelFactory, FileSystemWrapper, IBlockchainEventSerializationFalReadonly> CreateSerializedArchiveFal { get; }
 
+		GATES_DAL CreateGatesDal<GATES_DAL, STANDARD_GATE_SNAPSHOT,JOINT_GATE_SNAPSHOT>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+			where GATES_DAL : IGatesDal
+			where STANDARD_GATE_SNAPSHOT : class, IStandardAccountGates
+		    where JOINT_GATE_SNAPSHOT : class, IJointAccountGates;
+
+		IGatesDal CreateGatesDal(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType);
+		
+		GATES_CONTEXT CreateGatesContext<GATES_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
+			where GATES_CONTEXT : IGatesContext;
+		
 		CHAIN_STATE_DAL CreateChainStateDal<CHAIN_STATE_DAL, CHAIN_STATE_SNAPSHOT>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_STATE_DAL : IChainStateDal
 			where CHAIN_STATE_SNAPSHOT : IChainStateEntry;
@@ -30,6 +43,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 
 		CHAIN_POOL_CONTEXT CreateChainPoolContext<CHAIN_POOL_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_POOL_CONTEXT : IChainPoolContext;
+		
+		APPOINTMENT_CONTEXT_CONTEXT CreateAppointmentRegistryContext<APPOINTMENT_CONTEXT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
+			where APPOINTMENT_CONTEXT_CONTEXT : IAppointmentRegistryContext;
+		
+		APPOINTMENT_REGISTRY_DAL CreateAppointmentRegistryDal<APPOINTMENT_REGISTRY_DAL>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+			where APPOINTMENT_REGISTRY_DAL : IAppointmentRegistryDal;
+
 
 		STANDARD_ACCOUNT_SNAPSHOT_DAL CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_SNAPSHOT_DAL : IStandardAccountSnapshotDal;
@@ -85,6 +105,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		// now the chain SqliteDals. because of their generics, we can not have a generic func propety. so here we have a method, and the chain child class
 		// can override it and provide the func property down there.
 
+		public abstract GATES_DAL CreateGatesDal<GATES_DAL, STANDARD_GATE_SNAPSHOT, JOINT_GATE_SNAPSHOT>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+			where GATES_DAL : IGatesDal
+			where STANDARD_GATE_SNAPSHOT : class, IStandardAccountGates
+			where JOINT_GATE_SNAPSHOT : class, IJointAccountGates;
+
+		public abstract IGatesDal CreateGatesDal(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType);
+
+		public abstract GATES_CONTEXT CreateGatesContext<GATES_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
+			where GATES_CONTEXT : IGatesContext;
+
 		public abstract CHAIN_STATE_DAL CreateChainStateDal<CHAIN_STATE_DAL, CHAIN_STATE_SNAPSHOT>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_STATE_DAL : IChainStateDal
 			where CHAIN_STATE_SNAPSHOT : IChainStateEntry;
@@ -103,6 +133,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 
 		public abstract CHAIN_POOL_CONTEXT CreateChainPoolContext<CHAIN_POOL_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where CHAIN_POOL_CONTEXT : IChainPoolContext;
+
+		public abstract APPOINTMENT_CONTEXT_CONTEXT CreateAppointmentRegistryContext<APPOINTMENT_CONTEXT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
+			where APPOINTMENT_CONTEXT_CONTEXT : IAppointmentRegistryContext;
+
+		public abstract APPOINTMENT_REGISTRY_DAL CreateAppointmentRegistryDal<APPOINTMENT_REGISTRY_DAL>(string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
+			where APPOINTMENT_REGISTRY_DAL : IAppointmentRegistryDal;
 
 		public abstract STANDARD_ACCOUNT_SNAPSHOT_DAL CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)
 			where STANDARD_ACCOUNT_SNAPSHOT_DAL : IStandardAccountSnapshotDal;

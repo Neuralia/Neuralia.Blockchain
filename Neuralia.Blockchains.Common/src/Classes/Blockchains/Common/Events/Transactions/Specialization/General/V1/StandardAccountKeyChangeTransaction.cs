@@ -1,6 +1,7 @@
 ﻿using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -12,9 +13,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	public interface IStandardAccountKeyChangeTransaction : IKeyedTransaction, IKeychange {
 
 		CryptographicKey NewCryptographicKey { get; }
-		SecretCryptographicKey NextSuperCryptographicKey { get; }
-		XmssCryptographicKey XmssNewCryptographicKey { get; }
-		bool IsNextSuperCryptographicKeySet { get; }
 		bool IsChangingChangeKey { get; }
 		bool IsChangingSuperKey { get; }
 	}
@@ -25,47 +23,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		}
 
-		public StandardAccountKeyChangeTransaction(byte changeOrdinalId) {
-			this.ChangeOrdinalId = changeOrdinalId;
+		public StandardAccountKeyChangeTransaction(byte changeOrdinalOrdinal) {
+			this.ChangeOrdinalOrdinal = changeOrdinalOrdinal;
 
 			ICryptographicKey changeKey = null;
 
-			if((changeOrdinalId == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || (changeOrdinalId == GlobalsService.MESSAGE_KEY_ORDINAL_ID) || (changeOrdinalId == GlobalsService.CHANGE_KEY_ORDINAL_ID)) {
+			if(changeOrdinalOrdinal == GlobalsService.SUPER_KEY_ORDINAL_ID) {
+				changeKey = new XmssmtCryptographicKey();
+			} 
+			else if(changeOrdinalOrdinal == GlobalsService.VALIDATOR_SECRET_KEY_ORDINAL_ID) {
+				changeKey = new NTRUPrimeCryptographicKey();
+			}
+			else {
 				changeKey = new XmssCryptographicKey();
-			} else {
-				changeKey = new SecretCryptographicKey();
 			}
 
-			changeKey.Id = changeOrdinalId;
+			changeKey.Ordinal = changeOrdinalOrdinal;
 			this.Keyset.Add(changeKey);
-
-			if(this.IsChangingChangeKey || this.IsChangingSuperKey) {
-				this.Keyset.Add<SecretCryptographicKey>(GlobalsService.SUPER_KEY_ORDINAL_ID);
-			}
 		}
 
-		public byte ChangeOrdinalId { get; set; }
+		public byte ChangeOrdinalOrdinal { get; set; }
 
-		public bool IsChangingChangeKey => this.ChangeOrdinalId == GlobalsService.CHANGE_KEY_ORDINAL_ID;
-		public bool IsChangingSuperKey => this.ChangeOrdinalId == GlobalsService.SUPER_KEY_ORDINAL_ID;
+		public bool IsChangingChangeKey => this.ChangeOrdinalOrdinal == GlobalsService.CHANGE_KEY_ORDINAL_ID;
+		public bool IsChangingSuperKey => this.ChangeOrdinalOrdinal == GlobalsService.SUPER_KEY_ORDINAL_ID;
 
-		public CryptographicKey NewCryptographicKey => (CryptographicKey) this.Keyset.Keys[this.ChangeOrdinalId];
-		public XmssCryptographicKey XmssNewCryptographicKey => (XmssCryptographicKey) this.NewCryptographicKey;
-		public SecretCryptographicKey NextSuperCryptographicKey => (SecretCryptographicKey) this.Keyset.Keys[GlobalsService.SUPER_KEY_ORDINAL_ID];
-		public bool IsNextSuperCryptographicKeySet => (this.IsChangingChangeKey || this.IsChangingSuperKey) && this.Keyset.KeyLoaded(GlobalsService.SUPER_KEY_ORDINAL_ID);
+		public CryptographicKey NewCryptographicKey => (CryptographicKey) this.Keyset.Keys[this.ChangeOrdinalOrdinal];
+		
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
 
-		public override HashNodeList GetStructuresArray() {
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
-			HashNodeList nodeList = base.GetStructuresArray();
-
-			nodeList.Add(this.ChangeOrdinalId);
+			nodeList.Add(this.ChangeOrdinalOrdinal);
 
 			nodeList.Add(this.NewCryptographicKey);
-
-			if(this.IsNextSuperCryptographicKeySet) {
-				nodeList.Add(this.NextSuperCryptographicKey);
-			}
-
+			
 			return nodeList;
 		}
 
@@ -73,21 +64,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.JsonDehydrate(jsonDeserializer);
 
 			//
-			jsonDeserializer.SetProperty("ChangeOrdinalId", this.ChangeOrdinalId);
+			jsonDeserializer.SetProperty("ChangeOrdinalId", this.ChangeOrdinalOrdinal);
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => new[] {this.TransactionId.Account}.ToImmutableList();
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.Range;
+		public override AccountId[] ImpactedAccounts => this.TargetAccounts;
+		public override AccountId[] TargetAccounts => this.GetSenderList();
+		
 
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 
-			this.ChangeOrdinalId = rehydrator.ReadByte();
+			this.ChangeOrdinalOrdinal = rehydrator.ReadByte();
 		}
 
 		protected override void DehydrateHeader(IDataDehydrator dehydrator) {
 			base.DehydrateHeader(dehydrator);
 
-			dehydrator.Write(this.ChangeOrdinalId);
+			dehydrator.Write(this.ChangeOrdinalOrdinal);
 		}
 
 		protected override ComponentVersion<TransactionType> SetIdentity() {

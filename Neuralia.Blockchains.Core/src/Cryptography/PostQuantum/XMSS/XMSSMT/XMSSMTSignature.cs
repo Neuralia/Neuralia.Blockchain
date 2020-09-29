@@ -13,7 +13,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 		// versioning information
 		public readonly byte Major = 1;
 		public readonly byte Minor = 0;
-		public readonly byte Revision = 0;
 		protected readonly XMSSExecutionContext XmssExecutionContext;
 
 		public XMSSMTSignature(XMSSExecutionContext xmssExecutionContext) {
@@ -41,7 +40,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			int type = rehydrator.ReadByte();
 			int major = rehydrator.ReadByte();
 			int minor = rehydrator.ReadByte();
-			int increment = rehydrator.ReadByte();
 
 			int n = this.XmssExecutionContext.DigestSize;
 
@@ -72,7 +70,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray().Release();
+			return dehydrator.ToReleasedArray();
 		}
 
 		protected virtual void Dehydrate(IDataDehydrator dehydrator) {
@@ -80,7 +78,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 			dehydrator.Write((byte) 1);
 			dehydrator.Write(this.Major);
 			dehydrator.Write(this.Minor);
-			dehydrator.Write(this.Revision);
 
 			dehydrator.Write(this.Index);
 			dehydrator.WriteRawArray(this.Random);

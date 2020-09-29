@@ -3,16 +3,24 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
+using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
+using Neuralia.Blockchains.Core.Extensions;
+using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-using Neuralia.BouncyCastle.extra.pqc.math.ntru.util;
 using Org.BouncyCastle.Crypto;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 	public static class XMSSCommonUtils {
 
+		public enum HashTypes {
+			Regular,
+			Backup
+		}
+		
 		public enum HashCodes : byte {
 			F = 0,
 			H = 1,
@@ -54,31 +62,31 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static ByteArray PRF(ByteArray key, int index, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray PRF(ByteArray key, int index, XMSSExecutionContext xmssExecutionContext, HashTypes hashType) {
 
-			using(ByteArray indexBytes = ToBytes(index, 32)) {
-
-				return PRF(key, indexBytes, xmssExecutionContext);
-
-			}
+			using ByteArray indexBytes = ToBytes(index, 32);
+			return PRF(key, indexBytes, xmssExecutionContext, hashType);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static ByteArray PRF(ByteArray key, CommonAddress adrs, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray PRF(ByteArray key, CommonAddress adrs, XMSSExecutionContext xmssExecutionContext, HashTypes hashType) {
 
-			// do note return this array, it is only lent for performance
-			return PRF(key, adrs.ToByteArray(), xmssExecutionContext);
+			// do note dispose this array, it is only lent for performance
+			var adrBytes = adrs.ToByteArray();
+			return PRF(key, adrBytes, xmssExecutionContext, hashType);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static ByteArray PRF(ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray PRF(ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext, HashTypes hashType) {
 
-			return HashEntry(HashCodes.Prf, key, buffer, xmssExecutionContext);
+			return HashEntry(HashCodes.Prf, key, buffer, xmssExecutionContext, hashType);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ByteArray PRF(ByteArray key, CommonAddress adrs, WotsPlus.ThreadContext threadContext) {
-			return HashEntry(HashCodes.Prf, threadContext.Digest, key, adrs.ToByteArray(), threadContext.XmssExecutionContext);
+			// do note dispose this array, it is only lent for performance
+			var adrBytes = adrs.ToByteArray();
+			return HashEntry(HashCodes.Prf, threadContext.Digest, key, adrBytes, threadContext.XmssExecutionContext);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -88,43 +96,53 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static ByteArray HashEntry(HashCodes hashCode, ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray HashEntry(HashCodes hashCode, ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext, HashTypes hashType) {
 
-			IDigest digest = xmssExecutionContext.DigestPool.GetObject();
-			ByteArray hash = HashEntry(hashCode, digest, key, buffer, xmssExecutionContext);
-
-			xmssExecutionContext.DigestPool.PutObject(digest);
-
-			return hash;
+			IHashDigest digest = null;
+			ObjectPool<IHashDigest> returnPool = null;
+			
+			try {
+				if(hashType == HashTypes.Regular) {
+					returnPool = xmssExecutionContext.DigestPool;
+				} else {
+					returnPool = xmssExecutionContext.BackupDigestPool;
+				}
+				
+				digest = returnPool.GetObject();
+				return HashEntry(hashCode, digest, key, buffer, xmssExecutionContext);
+			} finally {
+				returnPool?.PutObject(digest);
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static ByteArray HashEntry(HashCodes hashCode, IDigest digest, ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
+		public static ByteArray HashEntry(HashCodes hashCode, IHashDigest digest, ByteArray key, ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
 
 			ByteArray hash = null;
 
 			if(digest is ShaDigestBase digestBase) {
 
-				using(ByteArray index = ToBytes((int) hashCode, xmssExecutionContext.DigestSize)) {
+				using ByteArray index = ToBytes((int) hashCode, digest.GetDigestSize());
 
-					// soince we know the final size, lets preset the size of the buffer
-					digestBase.ResetFixed(buffer.Length + key.Length + index.Length);
+				// since we know the final size, lets preset the size of the buffer
+				digestBase.ResetFixed(buffer.Length + key.Length + index.Length);
 
-					digest.BlockUpdate(index.Bytes, index.Offset, index.Length);
-					digest.BlockUpdate(key.Bytes, key.Offset, key.Length);
-					digest.BlockUpdate(buffer.Bytes, buffer.Offset, buffer.Length);
+				digest.BlockUpdate(index.Bytes, index.Offset, index.Length);
+				digest.BlockUpdate(key.Bytes, key.Offset, key.Length);
+				digest.BlockUpdate(buffer.Bytes, buffer.Offset, buffer.Length);
 
-					digestBase.DoFinalReturn(out hash);
-				}
+				digestBase.DoFinalReturn(out hash);
 			}
-
+			else 
+				throw new ArgumentException(nameof(digest));
+			
 			return hash;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ByteArray Hash(ByteArray buffer, XMSSExecutionContext xmssExecutionContext) {
 
-			IDigest digest = xmssExecutionContext.DigestPool.GetObject();
+			IHashDigest digest = xmssExecutionContext.DigestPool.GetObject();
 			ByteArray hash = null;
 
 			if(digest is ShaDigestBase digestBase) {
@@ -135,6 +153,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 
 				digestBase.DoFinalReturn(out hash);
 			}
+			else 
+				throw new ArgumentException(nameof(digest));
 
 			xmssExecutionContext.DigestPool.PutObject(digest);
 
@@ -144,7 +164,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ByteArray Hash(ByteArray buffer, ByteArray buffer2, XMSSExecutionContext xmssExecutionContext) {
 
-			IDigest digest = xmssExecutionContext.DigestPool.GetObject();
+			IHashDigest digest = xmssExecutionContext.DigestPool.GetObject();
 			ByteArray hash = null;
 
 			if(digest is ShaDigestBase digestBase) {
@@ -156,6 +176,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 
 				digestBase.DoFinalReturn(out hash);
 			}
+			else 
+				throw new ArgumentException(nameof(digest));
 
 			xmssExecutionContext.DigestPool.PutObject(digest);
 
@@ -241,50 +263,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 			return Concatenate(a, b);
 		}
 
-		/// <summary>
-		/// </summary>
-		/// <param name="a"></param>
-		/// <param name="b"></param>
-		/// <remarks>must be a multiple of 4</remarks>
-		/// <returns></returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static unsafe bool EqualsConstantTime(ByteArray a, ByteArray b) {
-			int len = a.Length;
-
-			if(len != b.Length) {
-				return false;
-			}
-
-			len >>= 3;
-
-			if((len & 0x3) != 0) {
-				void ThrowMustBeMultiple4Exception() {
-					throw new ArgumentException("Arrays size must be a multiple of 4.");
-				}
-
-				ThrowMustBeMultiple4Exception();
-			}
-
-			long difference = 0;
-
-			fixed(byte* cFirst = a.Span) {
-				fixed(byte* cSecond = b.Span) {
-
-					long* cFirstL = (long*) cFirst;
-					long* cSecondL = (long*) cSecond;
-
-					for(; len != 0; len -= 4) {
-						difference |= *(cFirstL + (len - 1)) ^ *(cSecondL + (len - 1));
-						difference |= *(cFirstL + (len - 2)) ^ *(cSecondL + (len - 2));
-						difference |= *(cFirstL + (len - 3)) ^ *(cSecondL + (len - 3));
-						difference |= *(cFirstL + (len - 4)) ^ *(cSecondL + (len - 4));
-					}
-				}
-			}
-
-			return difference == 0;
-		}
-
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int GetThreadCount(Enums.ThreadMode threadMode) {
 
@@ -339,13 +317,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils {
 			for(int i = 0; i < pool.Length; i++) {
 
 				ByteArray buffer = ByteArray.Create(xmssExecutionContext.DigestSize);
-				xmssExecutionContext.Random.NextBytes(buffer.Bytes, buffer.Offset, buffer.Length);
+				GlobalRandom.GetNextBytes(buffer.Bytes, buffer.Offset, buffer.Length);
 				pool[i] = buffer;
 			}
 
-			List<ByteArray> entries = pool.ToList();
-
-			entries.Shuffle(xmssExecutionContext.Random);
+			List<ByteArray> entries = pool.Shuffle().ToList();
 
 			ByteArray publicSeed = entries[0].Clone();
 			ByteArray secretSeedPrf = entries[1].Clone();

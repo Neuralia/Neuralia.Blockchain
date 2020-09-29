@@ -12,19 +12,17 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Serialization {
 
-	public interface IDehydratedTransaction : IDehydrateBlockchainEvent {
+	public interface IDehydratedTransaction : IDehydrateBlockchainEvent<ITransaction> {
 		TransactionId Uuid { get; set; }
 		SafeArrayHandle Header { get; }
 		ChannelsEntries<SafeArrayHandle> DataChannels { get; }
 
-		ITransaction RehydratedTransaction { get; set; }
+		
 		ChannelsEntries<SafeArrayHandle> DehydrateSplit();
-		void Dehydrate(ChannelsEntries<IDataDehydrator> channelDehydrators);
 
 		void RehydrateHeader(SafeArrayHandle data, AccountId accountId, TransactionTimestamp timestamp);
 		void RehydrateHeader(IDataRehydrator rehydrator, AccountId accountId, TransactionTimestamp timestamp);
-		ITransaction RehydrateTransaction(IBlockchainEventsRehydrationFactory rehydrationFactory, AccountId accountId, TransactionTimestamp timestamp);
-		ITransaction RehydrateTransaction(IBlockchainEventsRehydrationFactory rehydrationFactory);
+		ITransaction Rehydrate(IBlockchainEventsRehydrationFactory rehydrationFactory, AccountId accountId, TransactionTimestamp timestamp);
 	}
 
 	/// <summary>
@@ -38,7 +36,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public SafeArrayHandle Header => this.DataChannels[this.HeaderChannel];
 		public ChannelsEntries<SafeArrayHandle> DataChannels { get; } = new ChannelsEntries<SafeArrayHandle>();
 
-		public ITransaction RehydratedTransaction { get; set; }
+		public ITransaction RehydratedEvent { get; set; }
 
 		public SafeArrayHandle Dehydrate() {
 			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
@@ -88,7 +86,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			for(int i = 0; i < count; i++) {
 				BlockChannelUtils.BlockChannelTypes channelId = (BlockChannelUtils.BlockChannelTypes) rehydrator.ReadUShort();
-				SafeArrayHandle channelData = rehydrator.ReadNonNullableArray();
+				SafeArrayHandle channelData = (SafeArrayHandle)rehydrator.ReadNonNullableArray();
 
 				dataChannels[channelId] = channelData;
 			}
@@ -110,24 +108,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			ComponentVersion<TransactionType> rehydratedVersion = Transaction.RehydrateTopHeader(rehydrator, this.Uuid, accountId, timestamp);
 		}
 
-		public ITransaction RehydrateTransaction(IBlockchainEventsRehydrationFactory rehydrationFactory, AccountId accountId, TransactionTimestamp timestamp) {
-			if(this.RehydratedTransaction == null) {
+		public ITransaction Rehydrate(IBlockchainEventsRehydrationFactory rehydrationFactory, AccountId accountId, TransactionTimestamp timestamp) {
+			if(this.RehydratedEvent == null) {
 
-				this.RehydratedTransaction = rehydrationFactory.CreateTransaction(this);
+				this.RehydratedEvent = rehydrationFactory.CreateTransaction(this);
 
 				if((accountId == default(AccountId)) && (timestamp == null)) {
-					this.RehydratedTransaction.Rehydrate(this, rehydrationFactory);
+					this.RehydratedEvent.Rehydrate(this, rehydrationFactory);
 				} else {
-					this.RehydratedTransaction.RehydrateForBlock(this, rehydrationFactory, accountId, timestamp);
+					this.RehydratedEvent.RehydrateForBlock(this, rehydrationFactory, accountId, timestamp);
 				}
 
 			}
 
-			return this.RehydratedTransaction;
+			return this.RehydratedEvent;
 		}
 
-		public ITransaction RehydrateTransaction(IBlockchainEventsRehydrationFactory rehydrationFactory) {
-			return this.RehydrateTransaction(rehydrationFactory, null, null);
+		public ITransaction Rehydrate(IBlockchainEventsRehydrationFactory rehydrationFactory) {
+			return this.Rehydrate(rehydrationFactory, null, null);
 		}
 
 		public HashNodeList GetStructuresArray() {
@@ -140,6 +138,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			return nodeList;
 		}
 
+		public void Clear() {
+
+			this.DataChannels.Entries.Clear();
+		}
+
 		public void Rehydrate(ChannelsEntries<SafeArrayHandle> dataChannels, AccountId accountId, TransactionTimestamp timestamp) {
 
 			this.DataChannels.Entries.Clear();
@@ -149,7 +152,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			}
 
 			// since we dont use the high header, we add it back artificially
-			this.DataChannels.Entries.Add(BlockChannelUtils.BlockChannelTypes.HighHeader, ByteArray.Empty());
+			this.DataChannels.Entries.Add(BlockChannelUtils.BlockChannelTypes.HighHeader, SafeArrayHandle.Empty());
 
 			this.RehydrateHeader(this.Header, accountId, timestamp);
 		}
@@ -164,7 +167,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			this.Rehydrate(dataChannels.ConvertAll(rehydrator => {
 
 				if(rehydrator.RemainingLength == 0) {
-					return ByteArray.Empty();
+					return SafeArrayHandle.Empty();
 				}
 
 				return (SafeArrayHandle) rehydrator.ReadNonNullableArray();

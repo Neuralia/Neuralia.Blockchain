@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages {
@@ -54,7 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		public override void Rehydrate(IDataRehydrator dr, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			base.Rehydrate(dr, rehydrationFactory);
 
-			this.Envelope = rehydrationFactory.RehydrateEnvelope<EVENT_ENVELOPE_TYPE>(dr.ReadArrayToEnd());
+			this.Envelope = rehydrationFactory.RehydrateEnvelope<EVENT_ENVELOPE_TYPE>((SafeArrayHandle)dr.ReadArrayToEnd());
 		}
 
 		public IEnvelope BaseEnvelope => this.Envelope;

@@ -220,7 +220,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		}
 
 		protected void ValidateChainInception(DateTime chainInception) {
-			if(chainInception == DateTime.MinValue) {
+			if(chainInception == DateTimeEx.MinValue) {
 				throw new ApplicationException("Chain inception is not set");
 			}
 		}

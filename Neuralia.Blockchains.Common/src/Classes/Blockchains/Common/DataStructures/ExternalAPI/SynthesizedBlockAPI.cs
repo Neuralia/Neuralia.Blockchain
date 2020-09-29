@@ -6,13 +6,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 	public abstract class SynthesizedBlockAPI {
 
+		public class IndexedTransaction{
+			public byte[] Bytes { get; set; }
+			public int Index { get; set; }
+		}
+		
 		public long BlockId { get; set; }
 		public string Timestamp { get; set; }
 
 		public string AccountId { get; set; }
-		public string AccountHash { get; set; }
-
-		public Dictionary<string, byte[]> ConfirmedGeneralTransactions { get; set; } = new Dictionary<string, byte[]>();
+		public string AccountCode { get; set; }
+		
+		public Dictionary<string, IndexedTransaction> ConfirmedIndexedTransactions { get; set; } = new Dictionary<string, IndexedTransaction>();
 		public Dictionary<string, byte[]> ConfirmedTransactions { get; set; } = new Dictionary<string, byte[]>();
 		public Dictionary<string, int> RejectedTransactions { get; set; } = new Dictionary<string, int>();
 

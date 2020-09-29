@@ -13,8 +13,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Seri
 			SerializationTransactionOperation entry = null;
 
 			switch(type) {
-				case SerializationTransactionOperationTypes.FastKeys:
-					entry = new SerializationFastKeysOperations(chainDataWriteProvider);
+				case SerializationTransactionOperationTypes.KeyDictionary:
+					entry = new SerializationKeyDictionaryOperations(chainDataWriteProvider);
 
 					break;
 				default:

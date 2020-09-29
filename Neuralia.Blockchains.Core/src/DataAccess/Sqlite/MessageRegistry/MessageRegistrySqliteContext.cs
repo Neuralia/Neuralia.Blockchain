@@ -1,3 +1,4 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 
@@ -23,6 +24,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 				mb.HasIndex(b => b.Hash).IsUnique();
 				mb.Ignore(b => b.PeersBase);
 				mb.ToTable("MessageEntries");
+				
+				mb.Property(c => c.Received).HasConversion(v => v.ToUniversalTime(), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
 			});
 
 			modelBuilder.Entity<PeerSqlite>(mb => {
@@ -39,6 +43,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 				mb.Ignore(b => b.PeerBase);
 				mb.Ignore(b => b.MessageBase);
 				mb.ToTable("MessagePeer");
+				
+				mb.Property(c => c.Received).HasConversion(v => v.ToUniversalTime(), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
 
 				mb.HasOne(pt => pt.Message).WithMany(p => p.Peers).HasForeignKey(pt => pt.Hash);
 			});
@@ -46,6 +53,9 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite.MessageRegistry {
 			modelBuilder.Entity<UnvalidatedBlockGossipMessageCacheEntrySqlite>(mb => {
 
 				mb.HasKey(c => c.Id);
+				
+				mb.Property(c => c.Received).HasConversion(v => v.ToUniversalTime(), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
 
 				mb.ToTable("UnvalidatedBlockGossipMessageCacheEntry");
 			});

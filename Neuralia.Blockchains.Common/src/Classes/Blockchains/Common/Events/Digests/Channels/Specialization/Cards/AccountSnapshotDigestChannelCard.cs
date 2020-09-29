@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 	}
 
 	public abstract class AccountSnapshotDigestChannelCard : IAccountSnapshotDigestChannelCard {
-		public byte AccountType { get; set; }
+		public Enums.AccountTypes AccountType { get; set; }
 
 		public long AccountId {
 			get => this.AccountIdFull.ToLongRepresentation();
@@ -39,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
 			// this one must ALWAYS be first
-			this.AccountType = rehydrator.ReadByte();
+			this.AccountType = (Enums.AccountTypes)rehydrator.ReadByte();
 
 			BlockId inceptionBlockId = new BlockId();
 			inceptionBlockId.Rehydrate(rehydrator);
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 					attribute.Start = rehydrator.ReadNullableDateTime();
 					attribute.Expiration = rehydrator.ReadNullableDateTime();
 
-					SafeArrayHandle data = rehydrator.ReadNullEmptyArray();
+					SafeArrayHandle data = (SafeArrayHandle)rehydrator.ReadNullEmptyArray();
 
 					if(data != null) {
 						attribute.Context = data.ToExactByteArray();
@@ -82,7 +82,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {
 			// this one must ALWAYS be first
-			dehydrator.Write(this.AccountType);
+			dehydrator.Write((byte)this.AccountType);
 
 			BlockId inceptionBlockId = this.InceptionBlockId;
 			inceptionBlockId.Dehydrate(dehydrator);

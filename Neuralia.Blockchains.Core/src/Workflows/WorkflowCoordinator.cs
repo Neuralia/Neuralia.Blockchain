@@ -93,7 +93,7 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 			if(this.workflows.ContainsKey(workflow.Id)) {
 				//return, we dont run the SAME workflow twice
-				NLog.Default.Verbose($"A workflow of type '{workflow.GetType().FullName}' that was already added was being added again. ignoring.");
+				NLog.Default.Verbose($"A workflow of type '{workflow.GetType().FullName}' with Id {workflow.Id} that was already added was being added again. ignoring.");
 
 				await DisposeWorkflow(workflow).ConfigureAwait(false);
 

@@ -2,8 +2,7 @@
 using System.IO;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Tools;
-using Neuralia.BouncyCastle.extra.Security;
-using Org.BouncyCastle.Security;
+using Neuralia.Blockchains.Tools.Cryptography;
 
 namespace Neuralia.Blockchains.Core.Cryptography {
 	public static class SecureWipe {
@@ -24,9 +23,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 
 					// Buffer the size of a sector.
 					byte[] buffer = new byte[1024];
-
-					SecureRandom random = new BetterSecureRandom();
-
+					
 					await using Stream inputStream = fileSystem.CreateFile(filename);
 
 					for(int currentPass = 0; currentPass < timesToWrite; currentPass++) {
@@ -37,7 +34,7 @@ namespace Neuralia.Blockchains.Core.Cryptography {
 						for(int sectorsWritten = 0; sectorsWritten < sectors; sectorsWritten++) {
 
 							// Fill the buffer with random data
-							random.NextBytes(buffer);
+							GlobalRandom.GetNextBytes(buffer);
 
 							await inputStream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
 						}

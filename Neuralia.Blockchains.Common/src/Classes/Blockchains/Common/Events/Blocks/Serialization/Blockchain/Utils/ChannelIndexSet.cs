@@ -120,9 +120,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			return result;
 		}
 
-		public SafeArrayHandle QueryMasterTransactionOffsets(uint adjustedBlockId, int masterTransactionIndex) {
+		public SafeArrayHandle QueryIndexedTransactionOffsets(uint adjustedBlockId, int indexedTransactionIndex) {
 
-			return this.MainChannelIndex.QueryMasterTransactionOffsets(adjustedBlockId, masterTransactionIndex);
+			return this.MainChannelIndex.QueryIndexedTransactionOffsets(adjustedBlockId, indexedTransactionIndex);
 
 		}
 

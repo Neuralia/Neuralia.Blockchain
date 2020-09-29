@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Serialization;
@@ -16,10 +19,14 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.Cha
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
 using Neuralia.Blockchains.Core.Compression;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Locking;
+using RestSharp;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync {
@@ -105,9 +112,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <summary>
 		///     Now we perform the synchronization for the next block
 		/// </summary>
-		protected virtual async Task<ResultsState> SynchronizeDigest(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connections) {
+		protected virtual async Task<ResultsState> SynchronizeDigest(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connections, LockContext lockContext) {
 
 			this.CheckShouldStopThrow();
+
+			bool useWeb = this.ChainConfiguration.ChainSyncMethod == AppSettingsBase.ContactMethods.Web;
+			bool webOrGossip = this.ChainConfiguration.ChainSyncMethod == AppSettingsBase.ContactMethods.WebOrGossip;
 
 			DigestSingleEntryContext singleEntryContext = new DigestSingleEntryContext();
 			singleEntryContext.details = new PeerDigestSpecs();
@@ -132,30 +142,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			if(singleEntryContext.syncManifest == null) {
 				// ok, determine if there is a digest to get
 
-				ConsensusUtilities.ConsensusType nextDigestIdConsensusType;
-				(singleEntryContext.details.digestId, nextDigestIdConsensusType) = ConsensusUtilities.GetConsensus(singleEntryContext.Connections.GetSyncingConnections().Where(v => v.TriggerResponse.Message.ShareType.HasDigests), a => a.ReportedDigestHeight);
-				this.TestConsensus(nextDigestIdConsensusType, nameof(singleEntryContext.details.digestId));
+				if(useWeb || (webOrGossip && !connections.HasSyncingConnections)) {
 
-				ResultsState resultState = ResultsState.None;
+					singleEntryContext.details.digestId = await this.DownloadWebDigestId(lockContext).ConfigureAwait(false);
+					
+				} else {
+					ConsensusUtilities.ConsensusType nextDigestIdConsensusType;
+					(singleEntryContext.details.digestId, nextDigestIdConsensusType) = ConsensusUtilities.GetConsensus(singleEntryContext.Connections.GetSyncingConnections().Where(v => v.TriggerResponse.Message.ShareType.HasDigests), a => a.ReportedDigestHeight);
+					this.TestConsensus(nextDigestIdConsensusType, nameof(singleEntryContext.details.digestId));
 
-				try {
-					await Repeater.RepeatAsync(async () => {
+					ResultsState resultState = ResultsState.None;
 
-						// no choice, we must fetch the connection
-						(Dictionary<Guid, PeerDigestSpecs> results, ResultsState state) peerBlockSpecs = await this.FetchPeerDigestInfo(singleEntryContext).ConfigureAwait(false);
+					try {
+						await Repeater.RepeatAsync(async () => {
 
-						if(peerBlockSpecs.state != ResultsState.OK) {
-							resultState = peerBlockSpecs.state;
+							// no choice, we must fetch the connection
+							(Dictionary<Guid, PeerDigestSpecs> results, ResultsState state) = await this.FetchPeerDigestInfo(singleEntryContext).ConfigureAwait(false);
 
-							throw new NoDigestInfoException();
-						}
+							if(state != ResultsState.OK) {
+								resultState = state;
 
-						singleEntryContext.details = this.GetDigestInfoConsensus(peerBlockSpecs.results);
-					}).ConfigureAwait(false);
-				} catch(WorkflowException) when(resultState != ResultsState.OK) {
-					return resultState;
+								throw new NoDigestInfoException();
+							}
+
+							singleEntryContext.details = this.GetDigestInfoConsensus(results);
+						}).ConfigureAwait(false);
+					} catch(WorkflowException) when(resultState != ResultsState.OK) {
+						return resultState;
+					}
 				}
-
 				// ok, lets start the sync process
 				singleEntryContext.syncManifest = new DigestFilesetSyncManifest();
 
@@ -195,7 +210,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						await Repeater.RepeatAsync(async () => {
 
 							// we its the first thing to do, lets get the digest core
-							await this.FetchPeerDigestData(singleEntryContext).ConfigureAwait(false);
+							await this.FetchPeerDigestData(singleEntryContext, lockContext).ConfigureAwait(false);
 
 							if(singleEntryContext.syncManifest.IsComplete) {
 								success = true;
@@ -271,7 +286,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					NLog.Default.Verbose($"Fetching digest files data, attempt {singleEntryContext.blockFetchAttemptCounter}");
 
-					await this.FetchPeerDigestFileData(singleFileEntryContext).ConfigureAwait(false);
+					await this.FetchPeerDigestFileData(singleFileEntryContext, lockContext).ConfigureAwait(false);
 
 					if(singleFileEntryContext.syncManifest.IsComplete) {
 						success = true;
@@ -315,6 +330,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			//			NLog.Default.Information($"Block {digestId} has been synced successfully");
 			return ResultsState.OK;
+		}
+		
+		protected Task<int> DownloadWebDigestId(LockContext lockContext) {
+
+			Log.Information($"Downloading digest Id via web sync service");
+			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.None);
+
+			return Repeater.RepeatAsync(async () => {
+				string url = this.ChainConfiguration.WebSyncUrl;
+				
+				IRestResponse result = await restUtility.Get(url, $"sync/digestid").ConfigureAwait(false);
+
+				// ok, check the result
+				if(result.StatusCode == HttpStatusCode.OK) {
+
+					try {
+						if(!string.IsNullOrWhiteSpace(result.Content)) {
+							if(int.TryParse(result.Content, out int digestHeight)) {
+								return digestHeight;
+							}
+						}
+						
+					} catch(Exception ex) {
+						Log.Error(ex, "Failed to sync from web. may try again...");
+						throw;
+					}
+				}
+
+				throw new ApplicationException("Failed to download block from web");
+			});
 		}
 
 		protected Task<(Dictionary<Guid, PeerDigestSpecs> results, ResultsState state)> FetchPeerDigestInfo(DigestSingleEntryContext singleEntryContext) {
@@ -388,7 +433,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			return this.FetchPeerInfo(infoParameters);
 		}
 
-		protected Task FetchPeerDigestData(DigestSingleEntryContext singleBlockContext) {
+		protected Task FetchPeerDigestData(DigestSingleEntryContext singleBlockContext, LockContext lockContext) {
 
 			FetchDataParameter<DigestChannelsInfoSet<DataSliceInfo>, DataSliceInfo, DigestChannelsInfoSet<DataSlice>, DataSlice, int, int, PeerDigestSpecs, REQUEST_DIGEST, SEND_DIGEST, DigestFilesetSyncManifest, DigestSingleEntryContext, object, DigestFilesetSyncManifest.DigestSyncingDataSlice> parameters = new FetchDataParameter<DigestChannelsInfoSet<DataSliceInfo>, DataSliceInfo, DigestChannelsInfoSet<DataSlice>, DataSlice, int, int, PeerDigestSpecs, REQUEST_DIGEST, SEND_DIGEST, DigestFilesetSyncManifest, DigestSingleEntryContext, object, DigestFilesetSyncManifest.DigestSyncingDataSlice>();
 
@@ -458,7 +503,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 			};
 
-			parameters.downloadCompleted = async data => {
+			parameters.downloadCompleted = async (data, lc) => {
 
 				DigestFilesetSyncManifest syncManifest = parameters.singleEntryContext.syncManifest;
 
@@ -486,7 +531,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(valid) {
 
-					valid = (await this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateDigest(dehydratedDigest.RehydratedDigest, false).ConfigureAwait(false)).Valid;
+					valid = (await this.centralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateDigest(dehydratedDigest.RehydratedDigest, false, lc).ConfigureAwait(false)).Valid;
 
 					this.CheckShouldStopThrow();
 				}
@@ -517,10 +562,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			parameters.singleEntryContext = singleBlockContext;
 
-			return this.FetchPeerData(parameters);
+			return this.FetchPeerData(parameters, lockContext);
 		}
 
-		protected Task FetchPeerDigestFileData(DigestFilesSingleEntryContext singleBlockContext) {
+		protected Task FetchPeerDigestFileData(DigestFilesSingleEntryContext singleBlockContext, LockContext lockContext) {
 
 			FetchDataParameter<DigestFilesInfoSet<DataSliceInfo>, DataSliceInfo, DigestFilesInfoSet<DataSlice>, DataSlice, int, ChannelFileSetKey, PeerDigestFileSpecs, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, ChannelsFilesetSyncManifest, DigestFilesSingleEntryContext, object, ChannelsFilesetSyncManifest.ChannelsSyncingDataSlice> parameters = new FetchDataParameter<DigestFilesInfoSet<DataSliceInfo>, DataSliceInfo, DigestFilesInfoSet<DataSlice>, DataSlice, int, ChannelFileSetKey, PeerDigestFileSpecs, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, ChannelsFilesetSyncManifest, DigestFilesSingleEntryContext, object, ChannelsFilesetSyncManifest.ChannelsSyncingDataSlice>();
 			parameters.id = singleBlockContext.details.digestId;
@@ -580,13 +625,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			parameters.clearManifest = this.ClearDigestFileSyncManifest;
 
-			parameters.downloadCompleted = async data => {
+			parameters.downloadCompleted = async (data, lc) => {
 
 				// recreate the digest files from the parts
 				this.RecreateDigestFiles(parameters.singleEntryContext.syncManifest);
 
 				// thats it, we have it all, now we fully validate the digest and install it!
-				await this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InstallDigest(parameters.singleEntryContext.details.digestId, null).ConfigureAwait(false);
+				await this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InstallDigest(parameters.singleEntryContext.details.digestId, lc).ConfigureAwait(false);
 
 				return true;
 			};
@@ -596,7 +641,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			parameters.singleEntryContext = singleBlockContext;
 
-			return this.FetchPeerData(parameters);
+			return this.FetchPeerData(parameters, lockContext);
 		}
 
 		protected void RecreateDigestFiles(ChannelsFilesetSyncManifest syncManifest) {

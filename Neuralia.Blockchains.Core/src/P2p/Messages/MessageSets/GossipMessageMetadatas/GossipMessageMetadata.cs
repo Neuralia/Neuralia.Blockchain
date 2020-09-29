@@ -24,9 +24,9 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.MessageSets.GossipMessageMetada
 			this.Type = rehydrator.ReadByte();
 			this.BlockchainType = rehydrator.ReadUShort();
 
-			bool isNMetadataNull = rehydrator.ReadBool();
+			bool isMetadataNull = rehydrator.ReadBool();
 
-			if(!isNMetadataNull) {
+			if(!isMetadataNull) {
 
 				// lets invoke the right rehydratio factory for the required chain
 				if(ServerMessageGroupManifestWorkflow.ChainRehydrationFactories.ContainsKey(this.BlockchainType)) {

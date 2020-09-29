@@ -88,6 +88,39 @@ namespace Neuralia.Blockchains.Core.Tools {
 			throw new ApplicationException($"Falied to retry {tries} times.");
 		}
 
+		public static async Task<bool> RepeatAsync<T>( T parameter, Func<T, int, Task> action, int tries = 3, Func<Task> afterFailed = null) {
+			int count = 1;
+
+			int time = 10;
+
+			while(count <= tries) {
+
+				try {
+
+					await action(parameter, count).ConfigureAwait(false);
+
+					return true;
+
+				} catch(Exception ex) {
+
+					if(count == tries) {
+						throw;
+					}
+
+					if(afterFailed != null) {
+						await afterFailed().ConfigureAwait(false);
+					}
+				}
+
+				// this inside a lock is not great, but we want stability so we will just wait...
+				Thread.Sleep(time);
+				time += 100;
+				count++;
+			}
+
+			return false;
+		}
+		
 		public static async Task<bool> RepeatAsync(Func<int, Task> action, int tries = 3, Func<Task> afterFailed = null) {
 			int count = 1;
 

@@ -50,6 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			jsonDeserializer.SetProperty("SecondTierQuestion", this.SecondTierQuestion);
 			jsonDeserializer.SetProperty("FirstTierQuestion", this.FirstTierQuestion);
+			jsonDeserializer.SetProperty("DigestQuestion", this.DigestQuestion);
 		}
 
 		public override HashNodeList GetStructuresArray() {
@@ -57,7 +58,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			nodeList.Add(this.SecondTierQuestion);
 			nodeList.Add(this.FirstTierQuestion);
-
+			nodeList.Add(this.DigestQuestion);
+			
 			return nodeList;
 		}
 	}

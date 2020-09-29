@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private readonly TransactionTypeTransactionSelectionStrategySettings transactionSelectionStrategySettings;
 
-		public TransactionTypeTransactionSelectionMethod(long blockId, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, TransactionTypeTransactionSelectionStrategySettings transactionSelectionStrategySettings) : base(blockId, configuration, chainStateProvider, walletProvider, electionContext) {
+		public TransactionTypeTransactionSelectionMethod(long blockId, IChainMiningStatusProvider chainMiningStatusProvider, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, TransactionTypeTransactionSelectionStrategySettings transactionSelectionStrategySettings) : base(blockId, chainMiningStatusProvider, configuration, chainStateProvider, walletProvider, electionContext) {
 			this.transactionSelectionStrategySettings = transactionSelectionStrategySettings;
 		}
 

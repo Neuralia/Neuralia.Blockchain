@@ -1,15 +1,29 @@
 using System;
 using Neuralia.Blockchains.Core.General.Types;
-
 namespace Neuralia.Blockchains.Core {
 	public static class Enums {
 
+		
 		public enum AccountTypes : byte {
-			Standard = 1,
-			Joint = 2,
+			Unknown = 0,
+			User = 1,
+			Server = 2,
+			Moderator = 3,
+			Joint = 4,
 			Presentation = AccountId.MAX_ACCOUNT_TYPE
 		}
-
+		
+		public enum AccountVerificationTypes : byte {
+			None = 0,
+			Appointment = 1,
+			SMS = 2,
+			Phone = 3,
+			Email = 4,
+			Gate = 5,
+			KYC = 100,
+			Unknown = byte.MaxValue
+		}
+		
 		public enum BlockchainEventTypes : byte {
 			Transaction = 1,
 			Message = 2,
@@ -65,40 +79,24 @@ namespace Neuralia.Blockchains.Core {
 			Full = 3
 		}
 
+		public enum BookkeepingTypes {
+			None,
+			Debit,
+			Credit
+		}
+
 		[Flags]
-		public enum KeyHashBits : byte {
+		public enum KeyHashType : byte {
 			SHA3_256 = SHA3,
 			SHA3_512 = SHA3 | HASH512,
 			SHA2_256 = SHA2,
-			SHA2_512 = SHA2 | HASH512,
-			BLAKE2_256 = BLAKE2,
-			BLAKE2_512 = BLAKE2 | HASH512
+			SHA2_512 = SHA2 | HASH512
 		}
 
 		public enum KeyStatus : byte {
 			Ok = 1,
 			Changing = 2,
 			New = 3
-		}
-
-		public enum KeyTypes : byte {
-			Unknown = 0,
-			XMSS = 1,
-			XMSSMT = 2,
-			NTRU = 3,
-			SPHINCS = 4,
-			QTESLA = 5,
-			ECDSA = 6,
-			RSA = 7,
-
-			// more?
-
-			Secret = 15,
-			SecretCombo = 16,
-			SecretDouble = 17,
-			SecretPenta = 18,
-			MCELIECE = 19
-
 		}
 
 		public enum MiningStatus : byte {
@@ -126,10 +124,40 @@ namespace Neuralia.Blockchains.Core {
 		}
 
 		public enum PublicationStatus : byte {
+			Unknown = 0,
 			New = 1,
 			Dispatched = 2,
 			Published = 3,
-			Rejected = 4
+			Rejected = byte.MaxValue
+		}
+		
+		public enum AccountPublicationModes : byte {
+			Unknown = 0,
+			Appointment = 1,
+			SMS = 2,
+			Server = 3
+		}
+
+		public enum OperationStatus : byte {
+			Unknown = 0,
+			None = 1,
+			Appointment = 2,
+			Presenting = 3,
+		}
+		
+		public enum AppointmentStatus : byte {
+			None = 0,
+			AppointmentRequested = 1,
+			AppointmentSet = 2,
+			AppointmentContextCached = 3,
+			AppointmentPuzzleCompleted = 4,
+			AppointmentCompleted = 5
+		}
+		
+		public enum AppointmentResults : byte {
+			None = 0,
+			Succeeded = 1,
+			Failed = 2,
 		}
 
 		public enum ServiceExecutionTypes {
@@ -146,9 +174,29 @@ namespace Neuralia.Blockchains.Core {
 			Full
 		}
 
-		public const byte SHA2 = 0x0;
-		public const byte SHA3 = 0x10;
-		public const byte BLAKE2 = 0x20;
+		public enum AppointmentsResultTypes : int {
+			Puzzle = 1,
+			POW = 2,
+			SecretCodeL2 = 3
+		}
+
+		[Flags]
+		public enum MutableStructureTypes :int{
+			None = 0,
+			Fixed = 1 << 0,
+			Mutable = 1 << 1,
+			All = Fixed |  Mutable
+		}
+		
+		public enum AppointmentRequestModes {
+			RequestConfirmation, Context, Trigger, VerificationConfirmation
+		}
+
+		public enum TransactionTargetTypes : int {
+			None=0, Range=1, All=2
+		}
+		public const byte SHA2 = 0x1;
+		public const byte SHA3 = 0x2;
 
 		public const byte HASH512 = 0x80;
 

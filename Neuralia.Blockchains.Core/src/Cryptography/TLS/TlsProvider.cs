@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Neuralia.Blockchains.Core.Configuration;
@@ -21,6 +22,7 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities;
 using Org.BouncyCastle.X509;
+using BigInteger = Org.BouncyCastle.Math.BigInteger;
 using X509Certificate = Org.BouncyCastle.X509.X509Certificate;
 
 namespace Neuralia.Blockchains.Core.Cryptography.TLS {
@@ -78,7 +80,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 		public SafeArrayHandle Encrypt(SafeArrayHandle message, X509Certificate2 certificate) {
 			using(RSA csp = certificate.GetRSAPublicKey()) {
 				// Sign the hash
-				return ByteArray.WrapAndOwn(csp.Encrypt(message.ToExactByteArray(), RSAEncryptionPadding.OaepSHA512));
+				return SafeArrayHandle.WrapAndOwn(csp.Encrypt(message.ToExactByteArray(), RSAEncryptionPadding.OaepSHA512));
 			}
 		}
 

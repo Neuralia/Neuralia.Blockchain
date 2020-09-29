@@ -10,6 +10,7 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
@@ -19,7 +20,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		bool EventPoolEnabled { get; }
 		bool SaveTransactionEnvelopes { get; }
 
-		Task InsertTransaction(ITransactionEnvelope transactionEnvelope);
+		Task InsertTransaction(ITransactionEnvelope signedTransactionEnvelope, LockContext lockContext);
 		Task<List<(ITransactionEnvelope envelope, TransactionId transactionId)>> GetTransactions();
 		Task<List<TransactionId>> GetTransactionIds();
 		Task DeleteTransactions(List<TransactionId> transactionIds);
@@ -79,12 +80,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public virtual async Task InsertTransaction(ITransactionEnvelope transactionEnvelope) {
+		public virtual async Task InsertTransaction(ITransactionEnvelope signedTransactionEnvelope, LockContext lockContext) {
 			if(this.EventPoolEnabled) {
-				await this.ChainPoolDal.InsertTransactionEntry(transactionEnvelope, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception).ConfigureAwait(false);
+				await this.ChainPoolDal.InsertTransactionEntry(signedTransactionEnvelope, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception).ConfigureAwait(false);
 
 				if(this.SaveTransactionEnvelopes) {
-					using SafeArrayHandle envelope = transactionEnvelope.DehydrateEnvelope();
+					using SafeArrayHandle envelope = signedTransactionEnvelope.DehydrateEnvelope();
 
 					string publicPath = this.GetPublicPath();
 
@@ -94,7 +95,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 
 					// save it for future use
-					await FileExtensions.OpenWriteAsync(Path.Combine(publicPath, transactionEnvelope.Contents.Uuid.ToString()), envelope).ConfigureAwait(false);
+					await FileExtensions.OpenWriteAsync(Path.Combine(publicPath, signedTransactionEnvelope.Contents.Uuid.ToString()), envelope).ConfigureAwait(false);
 				}
 			}
 		}
@@ -124,7 +125,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				ITransactionEnvelope envelope = null;
 
 				if(this.SaveTransactionEnvelopes && File.Exists(trxfile)) {
-					SafeArrayHandle trxBytes = ByteArray.WrapAndOwn(File.ReadAllBytes(trxfile));
+					SafeArrayHandle trxBytes = SafeArrayHandle.WrapAndOwn(File.ReadAllBytes(trxfile));
 
 					envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ITransactionEnvelope>(trxBytes);
 

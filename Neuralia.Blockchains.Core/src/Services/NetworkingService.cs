@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
+using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
@@ -23,11 +27,13 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Tools.Locking;
 using Nito.AsyncEx.Synchronous;
+using Org.BouncyCastle.Utilities;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Services {
 	public interface INetworkingService : IDisposableExtended {
 
+		Task<bool> TestP2pPort();
 		NetworkingService.NetworkingStatuses NetworkingStatus { get; set; }
 		bool IsStarted { get; }
 		IConnectionStore ConnectionStore { get; }
@@ -57,6 +63,8 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		Task Initialize();
 
+		void UrgentClearConnections();
+		
 		void PostNetworkMessage(SafeArrayHandle data, PeerConnection connection);
 
 		Task ForwardValidGossipMessage(IGossipMessageSet gossipMessageSet, PeerConnection connection);
@@ -72,11 +80,17 @@ namespace Neuralia.Blockchains.Core.Services {
 		event Action Started;
 
 		event Func<LockContext, Task> IpAddressChanged;
+
+		bool InAppointmentWindow { get; }
+		bool InAppointmentWindowProximity { get; }
+		
+		bool IsInAppointmentWindow(DateTime appointment);
 	}
 
 	public interface INetworkingService<R> : INetworkingService
 		where R : IRehydrationFactory {
 
+		bool IsNetworkAvailable { get; }
 		IWorkflowCoordinator<IWorkflow<R>, R> WorkflowCoordinator { get; }
 
 		IMainMessageFactory<R> MessageFactory { get; }
@@ -86,6 +100,10 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		IConnectionsManager<R> ConnectionsManager { get; }
 
+		void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
+		void UnregisterValidationServer(BlockchainType blockchainType);
+		void AddAppointmentWindow(DateTime appointment, TimeSpan window);
+		
 		void RegisterChain(BlockchainType chainType, ChainSettings chainSettings, INetworkRouter transactionchainNetworkRouting, R rehydrationFactory, IGossipMessageFactory<R> mainChainMessageFactory, Func<SoftwareVersion, bool> versionValidationCallback);
 	}
 
@@ -113,8 +131,12 @@ namespace Neuralia.Blockchains.Core.Services {
 		protected readonly Dictionary<BlockchainType, ChainInfo<R>> supportedChains = new Dictionary<BlockchainType, ChainInfo<R>>();
 
 		protected readonly ITimeService timeService;
+		
+		protected readonly IPortMappingService portMappingService;
 
-		public NetworkingService(IGuidService guidService, IHttpService httpService, IFileFetchService fileFetchService, IDataAccessService dataAccessService, IInstantiationService<R> instantiationService, IGlobalsService globalsService, ITimeService timeService) {
+		private IAppointmentsValidatorProvider appointmentsValidatorProvider;
+		
+		public NetworkingService(IGuidService guidService, IHttpService httpService, IFileFetchService fileFetchService, IDataAccessService dataAccessService, IInstantiationService<R> instantiationService, IGlobalsService globalsService, ITimeService timeService, IPortMappingService portMappingService) {
 			this.instantiationService = instantiationService;
 			this.globalsService = globalsService;
 			this.timeService = timeService;
@@ -122,6 +144,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.httpService = httpService;
 			this.fileFetchService = fileFetchService;
 			this.dataAccessService = dataAccessService;
+			this.portMappingService = portMappingService;
 
 			this.ServiceSet = this.CreateServiceSet();
 		}
@@ -130,9 +153,15 @@ namespace Neuralia.Blockchains.Core.Services {
 		
 		public GeneralSettings GeneralSettings { get; private set; }
 
+		public Task<bool> TestP2pPort() {
+			return PortTester.TestPort();
+		}
+
 		public NetworkingService.NetworkingStatuses NetworkingStatus { get; set; } = NetworkingService.NetworkingStatuses.Stoped;
 
 		public event Func<LockContext, Task> IpAddressChanged;
+
+		
 		public event Action Started;
 		public event Action<int> PeerConnectionsCountUpdated;
 
@@ -143,11 +172,31 @@ namespace Neuralia.Blockchains.Core.Services {
 		public Dictionary<BlockchainType, ChainSettings> ChainSettings {
 			get { return this.supportedChains.ToDictionary(t => t.Key, t => t.Value.ChainSettings); }
 		}
+		
 
 		/// <summary>
 		///     Return the list of confirmed and active peer connections we have
 		/// </summary>
 		public int CurrentPeerCount => this.IsStarted ? this.ConnectionStore.ActiveConnectionsCount : 0;
+
+		/// <summary>
+		/// to be called in urgency only, to clear some ram
+		/// </summary>
+		public void UrgentClearConnections() {
+
+			this.ChainRehydrationFactories.Clear();
+			
+			this.supportedChains.Clear();
+			
+			try {
+				this.ConnectionStore.UrgentClearConnections();
+			} catch {
+				// do nothing
+			}
+	
+			// this is normal, this method is not a normal method.
+			throw new ApplicationException();
+		}
 
 		public virtual async Task Initialize() {
 			if(GlobalSettings.Instance.NetworkId == 0) {
@@ -217,7 +266,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				this.IsStarted = false;
 			} catch(Exception ex) {
-				NLog.Default.Error(ex, "failed to stop connetion listener");
+				NLog.Default.Error(ex, "failed to stop connection listener");
 
 				throw;
 			} finally {
@@ -242,6 +291,32 @@ namespace Neuralia.Blockchains.Core.Services {
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Active;
 			}
 		}
+		
+		#region Appointment validation servers
+			
+			
+			public bool InAppointmentWindow => this.appointmentsValidatorProvider.InAppointmentWindow;
+
+			public bool InAppointmentWindowProximity => this.appointmentsValidatorProvider.InAppointmentWindowProximity;
+
+			public bool IsInAppointmentWindow(DateTime appointment) {
+				return this.appointmentsValidatorProvider.IsInAppointmentWindow(appointment);
+			}
+
+			public void AddAppointmentWindow(DateTime appointment, TimeSpan window) {
+				this.appointmentsValidatorProvider.AddAppointmentWindow(appointment, window);
+			}
+		
+		
+			public void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
+				this.appointmentsValidatorProvider.RegisterValidationServer(blockchainType, appointmentWindows, appointmentValidatorDelegate);
+			}
+
+			public void UnregisterValidationServer(BlockchainType blockchainType) {
+				this.appointmentsValidatorProvider.UnregisterValidationServer(blockchainType);
+			}
+	
+		#endregion
 
 		public void PostNetworkMessage(SafeArrayHandle data, PeerConnection connection) {
 			MessagingManager<R>.MessageReceivedTask messageTask = new MessagingManager<R>.MessageReceivedTask(data, connection);
@@ -269,6 +344,8 @@ namespace Neuralia.Blockchains.Core.Services {
 			MessagingManager<R>.PostNewGossipMessageTask forwardTask = new MessagingManager<R>.PostNewGossipMessageTask(gossipMessageSet);
 			this.messagingManager.ReceiveTask(forwardTask);
 		}
+
+		
 
 		/// <summary>
 		///     Register a new available transactionchain for the networking and routing purposes
@@ -375,6 +452,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			this.connectionListener = new ConnectionListener(this.connectionStore.LocalPort, this.ServiceSet);
 			this.workflowCoordinator = new WorkflowCoordinator<IWorkflow<R>, R>(this.ServiceSet);
 			this.messageFactory = new MainMessageFactory<R>(this.ServiceSet);
+			this.appointmentsValidatorProvider = new AppointmentsValidatorProvider();
 		}
 
 		protected virtual async Task StartWorkers() {
@@ -520,6 +598,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		public IConnectionStore ConnectionStore => this.connectionStore;
 
+		public bool IsNetworkAvailable => this.connectionStore?.GetIsNetworkAvailable??false;
 		public IWorkflowCoordinator<IWorkflow<R>, R> WorkflowCoordinator => this.workflowCoordinator;
 
 		public IConnectionListener ConnectionListener => this.connectionListener;
@@ -540,6 +619,7 @@ namespace Neuralia.Blockchains.Core.Services {
 		///     the service that will manage all netowrk messaging
 		/// </summary>
 		protected IMessagingManager<R> messagingManager;
+
 
 	#endregion
 
@@ -582,6 +662,12 @@ namespace Neuralia.Blockchains.Core.Services {
 					this.connectionStore?.Dispose();
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "Failed to dispose of connection manager");
+				}
+				try {
+					this.appointmentsValidatorProvider?.Dispose();
+					this.appointmentsValidatorProvider = null;
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to dispose of validation server");
 				}
 			}
 

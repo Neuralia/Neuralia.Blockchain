@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public BlockId AnnouncementBlockId { get; set; } = new BlockId();
 		public TransactionId DeclarationTransactionId { get; set; } = new TransactionId();
 		public AccountId AccountId { get; set; } = new AccountId();
-		public int MasterTransactionIndex { get; set; }
+		public int IndexedTransactionIndex { get; set; }
 
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {
 
@@ -28,7 +28,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			this.DeclarationTransactionId.Dehydrate(dehydrator);
 
-			AdaptiveInteger1_4 number = new AdaptiveInteger1_4((uint) this.MasterTransactionIndex);
+			AdaptiveInteger1_4 number = new AdaptiveInteger1_4((uint) this.IndexedTransactionIndex);
 			number.Dehydrate(dehydrator);
 		}
 
@@ -42,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			AdaptiveInteger1_4 number = new AdaptiveInteger1_4();
 			number.Rehydrate(rehydrator);
-			this.MasterTransactionIndex = (int) number.Value;
+			this.IndexedTransactionIndex = (int) number.Value;
 		}
 
 		public virtual HashNodeList GetStructuresArray() {
@@ -53,7 +53,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			nodeList.Add(this.AccountId);
 
 			nodeList.Add(this.DeclarationTransactionId.GetStructuresArray());
-			nodeList.Add(this.MasterTransactionIndex);
+			nodeList.Add(this.IndexedTransactionIndex);
 
 			return nodeList;
 		}
@@ -62,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("AnnouncementBlockId", this.AnnouncementBlockId);
 			jsonDeserializer.SetProperty("AccountId", this.AccountId);
 			jsonDeserializer.SetProperty("DeclarationTransactionId", this.DeclarationTransactionId);
-			jsonDeserializer.SetProperty("MasterTransactionIndex", this.MasterTransactionIndex);
+			jsonDeserializer.SetProperty("IndexedTransactionIndex", this.IndexedTransactionIndex);
 
 		}
 
@@ -75,7 +75,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		}
 
 		protected virtual void Copy(PublishedAddress newAddress) {
-			newAddress.MasterTransactionIndex = this.MasterTransactionIndex;
+			newAddress.IndexedTransactionIndex = this.IndexedTransactionIndex;
 			newAddress.AnnouncementBlockId = new BlockId(this.AnnouncementBlockId.Value);
 			newAddress.DeclarationTransactionId = new TransactionId(this.DeclarationTransactionId);
 			newAddress.AccountId = new AccountId(this.AccountId);

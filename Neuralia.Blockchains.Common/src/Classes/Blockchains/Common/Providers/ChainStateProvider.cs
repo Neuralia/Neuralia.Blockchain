@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
@@ -22,6 +24,7 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralium.Blockchains.Neuralium.Classes.NeuraliumChain;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
 
@@ -31,14 +34,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public bool IsChainSynced { get; }
 		public bool IsChainDesynced { get; }
 
-		public void InsertModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key);
-		public void UpdateModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key);
-		public ICryptographicKey GetModeratorKey(byte keyId);
-
-		public T GetModeratorKey<T>(byte keyId)
+		public Task InsertModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key);
+		public Task UpdateModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key, bool keyChange);
+		public Task UpdateModeratorExpectedNextKeyIndex(byte keyId, long keySequenceId, long keyIndex);
+		public Task<ICryptographicKey> GetModeratorKey(byte keyId);
+		public Task<(ICryptographicKey key, KeyUseIndexSet keyIndex)> GetModeratorKeyAndIndex(byte keyId);
+		public Task<KeyUseIndexSet> GetModeratorKeyIndex(byte keyId);
+		
+		public Task<T> GetModeratorKey<T>(byte keyId)
 			where T : class, ICryptographicKey;
 
-		public SafeArrayHandle GetModeratorKeyBytes(byte keyId);
+		public Task<SafeArrayHandle> GetModeratorKeyBytes(byte keyId);
 
 		public Enums.ChainSyncState GetChainSyncState();
 
@@ -69,9 +75,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task SetMinimumVersionAllowed(string value);
 		Task SetMaxBlockInterval(int value);
 		Task SetAllowGossipPresentations(bool value);
-		Task SetMiningPassword(long value);
-		Task SetMiningAutograph(byte[] value);
-		Task SetLastMiningRegistrationUpdate(DateTime? value);
 
 		string[] SetChainInceptionField(DateTime value);
 		string[] SetLastBlockHashField(byte[] value);
@@ -94,9 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		string[] SetMinimumVersionAllowedField(string value);
 		string[] SetMaxBlockIntervalField(int value);
 		string[] SetAllowGossipPresentationsField(bool value);
-		string[] SetMiningPasswordField(long value);
-		string[] SetMiningAutographField(byte[] value);
-		string[] SetLastMiningRegistrationUpdateField(DateTime? value);
+		string[] SetLastBlockXmssKeySignaturePathCacheField(byte[] value);
 
 		Task UpdateFields(IEnumerable<Func<IChainStateProvider, string[]>> actions);
 		Task UpdateFields(Func<IChainStateProvider, string[]> action);
@@ -129,7 +130,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where MODERATOR_KEYS_SNAPSHOT : class, IChainStateModeratorKeysEntry<CHAIN_STATE_SNAPSHOT, MODERATOR_KEYS_SNAPSHOT>, new() {
 
 		private const string BLOCKS_ID_FILE = "block.id";
-		private const int MAX_CONCURRENT_READERS = 9;
 
 		/// <summary>
 		///     allow parallel readers, one writer
@@ -152,7 +152,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.timeService = centralCoordinator.BlockchainServiceSet.TimeService;
 		}
 
-		protected bool IsMaster => this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SerializationType == AppSettingsBase.SerializationTypes.Master;
+		protected bool IsMain => this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SerializationType == AppSettingsBase.SerializationTypes.Main;
 
 		private CHAIN_STATE_DAL ChainStateDal {
 			get {
@@ -185,7 +185,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public DateTime ChainInception {
-			get { return this.GetField(entry => DateTime.SpecifyKind(entry.ChainInception, DateTimeKind.Utc)); }
+			get { return this.GetField(entry => DateTime.SpecifyKind(entry.ChainInception, DateTimeKind.Utc)).WaitAndUnwrapException(); }
 			set => this.SetChainInception(value).WaitAndUnwrapException();
 		}
 
@@ -200,7 +200,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public byte[] LastBlockHash {
-			get { return this.GetField(entry => entry.LastBlockHash); }
+			get { return this.GetField(entry => entry.LastBlockHash).WaitAndUnwrapException(); }
 			set => this.SetLastBlockHash(value).WaitAndUnwrapException();
 		}
 
@@ -215,7 +215,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public DateTime LastBlockTimestamp {
-			get { return this.GetField(entry => entry.LastBlockTimestamp); }
+			get { return this.GetField(entry => entry.LastBlockTimestamp).WaitAndUnwrapException(); }
 			set => this.SetLastBlockTimestamp(value).WaitAndUnwrapException();
 		}
 
@@ -230,7 +230,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public ushort LastBlockLifespan {
-			get { return this.GetField(entry => entry.LastBlockLifespan); }
+			get { return this.GetField(entry => entry.LastBlockLifespan).WaitAndUnwrapException(); }
 			set => this.SetLastBlockLifespan(value).WaitAndUnwrapException();
 		}
 
@@ -245,7 +245,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public ChainStateEntryFields.BlockInterpretationStatuses BlockInterpretationStatus {
-			get { return this.GetField(entry => entry.BlockInterpretationStatus); }
+			get { return this.GetField(entry => entry.BlockInterpretationStatus).WaitAndUnwrapException(); }
 			set => this.SetBlockInterpretationStatus(value).WaitAndUnwrapException();
 		}
 
@@ -260,7 +260,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public byte[] GenesisBlockHash {
-			get { return this.GetField(entry => entry.GenesisBlockHash); }
+			get { return this.GetField(entry => entry.GenesisBlockHash).WaitAndUnwrapException(); }
 			set => this.SetGenesisBlockHash(value).WaitAndUnwrapException();
 		}
 
@@ -279,7 +279,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public long BlockHeight {
-			get { return this.GetField(entry => entry.BlockHeight); }
+			get { return this.GetField(entry => entry.BlockHeight).WaitAndUnwrapException(); }
 			set => this.SetBlockHeight(value).WaitAndUnwrapException();
 		}
 
@@ -311,7 +311,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public long DiskBlockHeight {
-			get { return this.GetField(entry => entry.DiskBlockHeight); }
+			get { return this.GetField(entry => entry.DiskBlockHeight).WaitAndUnwrapException(); }
 			set => this.SetDiskBlockHeight(value).WaitAndUnwrapException();
 		}
 
@@ -332,13 +332,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			// finally, if we are a master, we write the block id into the path
-			if(this.IsMaster && this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.NodeShareType().HasBlocks) {
+			if(this.IsMain && this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.NodeShareType().HasBlocks) {
 
 				try {
 					//TODO: can this be made async?
 					byte[] bytes = new byte[sizeof(long)];
 
-					TypeSerializer.Serialize(value, bytes);
+					TypeSerializer.Serialize(value, in bytes);
 
 					string path = this.GetBlocksIdFilePath();
 					FileExtensions.EnsureFileExists(path, this.centralCoordinator.FileSystem);
@@ -356,7 +356,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public long DownloadBlockHeight {
-			get { return this.GetField(entry => entry.DownloadBlockHeight); }
+			get { return this.GetField(entry => entry.DownloadBlockHeight).WaitAndUnwrapException(); }
 			set => this.SetDownloadBlockHeight(value).WaitAndUnwrapException();
 		}
 
@@ -381,7 +381,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public long PublicBlockHeight {
 			get {
-				long publicHeight = this.GetField(entry => entry.PublicBlockHeight);
+				long publicHeight = this.GetField(entry => entry.PublicBlockHeight).WaitAndUnwrapException();
 				long blockHeight = this.DiskBlockHeight;
 
 				//make sure it is always at least worth the block height
@@ -417,7 +417,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public int DigestHeight {
-			get { return this.GetField(entry => entry.DigestHeight); }
+			get { return this.GetField(entry => entry.DigestHeight).WaitAndUnwrapException(); }
 			set => this.SetDigestHeight(value).WaitAndUnwrapException();
 		}
 
@@ -432,7 +432,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public long DigestBlockHeight {
-			get { return this.GetField(entry => entry.DigestBlockHeight); }
+			get { return this.GetField(entry => entry.DigestBlockHeight).WaitAndUnwrapException(); }
 			set => this.SetDigestBlockHeight(value).WaitAndUnwrapException();
 		}
 
@@ -447,7 +447,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public byte[] LastDigestHash {
-			get { return this.GetField(entry => entry.LastDigestHash); }
+			get { return this.GetField(entry => entry.LastDigestHash).WaitAndUnwrapException(); }
 			set => this.SetLastDigestHash(value).WaitAndUnwrapException();
 		}
 
@@ -462,7 +462,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public DateTime LastDigestTimestamp {
-			get { return this.GetField(entry => entry.LastDigestTimestamp); }
+			get { return this.GetField(entry => entry.LastDigestTimestamp).WaitAndUnwrapException(); }
 			set => this.SetLastDigestTimestamp(value).WaitAndUnwrapException();
 		}
 
@@ -477,7 +477,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public int PublicDigestHeight {
-			get { return this.GetField(entry => entry.PublicDigestHeight); }
+			get { return this.GetField(entry => entry.PublicDigestHeight).WaitAndUnwrapException(); }
 			set => this.SetPublicDigestHeight(value).WaitAndUnwrapException();
 		}
 
@@ -492,7 +492,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public DateTime LastSync {
-			get { return this.GetField(entry => entry.LastSync); }
+			get { return this.GetField(entry => entry.LastSync).WaitAndUnwrapException(); }
 			set => this.SetLastSync(value).WaitAndUnwrapException();
 		}
 
@@ -507,7 +507,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public string MaximumVersionAllowed {
-			get { return this.GetField(entry => entry.MaximumVersionAllowed); }
+			get { return this.GetField(entry => entry.MaximumVersionAllowed).WaitAndUnwrapException(); }
 			set => this.SetMaximumVersionAllowed(value).WaitAndUnwrapException();
 		}
 
@@ -522,7 +522,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public string MinimumWarningVersionAllowed {
-			get { return this.GetField(entry => entry.MinimumWarningVersionAllowed); }
+			get { return this.GetField(entry => entry.MinimumWarningVersionAllowed).WaitAndUnwrapException(); }
 			set => this.SetMinimumWarningVersionAllowed(value).WaitAndUnwrapException();
 		}
 
@@ -537,7 +537,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public string MinimumVersionAllowed {
-			get { return this.GetField(entry => entry.MinimumVersionAllowed); }
+			get { return this.GetField(entry => entry.MinimumVersionAllowed).WaitAndUnwrapException(); }
 			set => this.SetMinimumVersionAllowed(value).WaitAndUnwrapException();
 		}
 
@@ -552,7 +552,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public int MaxBlockInterval {
-			get { return this.GetField(entry => entry.MaxBlockInterval); }
+			get { return this.GetField(entry => entry.MaxBlockInterval).WaitAndUnwrapException(); }
 			set => this.SetMaxBlockInterval(value).WaitAndUnwrapException();
 		}
 
@@ -567,10 +567,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public bool AllowGossipPresentations {
-			get { return this.GetField(entry => entry.AllowGossipPresentations); }
+			get { return this.GetField(entry => entry.AllowGossipPresentations).WaitAndUnwrapException(); }
 			set => this.SetAllowGossipPresentations(value).WaitAndUnwrapException();
 		}
 
+		public byte[] LastBlockXmssKeySignaturePathCache {
+			get { return this.GetField(entry => entry.LastBlockXmssKeySignaturePathCache).WaitAndUnwrapException(); }
+			set => this.SetLastBlockXmssKeySignaturePathCache(value).WaitAndUnwrapException();
+		}
+
+		public string[] SetLastBlockXmssKeySignaturePathCacheField(byte[] value) {
+			this.chainStateEntry.Value.entry.LastBlockXmssKeySignaturePathCache = value;
+
+			return new[] {nameof(this.chainStateEntry.Value.entry.LastBlockXmssKeySignaturePathCache)};
+		}
+
+		public Task SetLastBlockXmssKeySignaturePathCache(byte[] value) {
+			return this.UpdateFields(prov => prov.SetLastBlockXmssKeySignaturePathCacheField(value));
+		}
+		
 		public string[] SetAllowGossipPresentationsField(bool value) {
 			this.chainStateEntry.Value.entry.AllowGossipPresentations = value;
 
@@ -579,51 +594,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task SetAllowGossipPresentations(bool value) {
 			return this.UpdateFields(prov => prov.SetAllowGossipPresentationsField(value));
-		}
-
-		public long MiningPassword {
-			get { return this.GetField(entry => entry.MiningPassword); }
-			set => this.SetMiningPassword(value).WaitAndUnwrapException();
-		}
-
-		public string[] SetMiningPasswordField(long value) {
-			this.chainStateEntry.Value.entry.MiningPassword = value;
-
-			return new[] {nameof(this.chainStateEntry.Value.entry.MiningPassword)};
-		}
-
-		public Task SetMiningPassword(long value) {
-			return this.UpdateFields(prov => prov.SetMiningPasswordField(value));
-		}
-
-		public byte[] MiningAutograph {
-			get { return this.GetField(entry => entry.MiningAutograph); }
-			set => this.SetMiningAutograph(value).WaitAndUnwrapException();
-		}
-
-		public string[] SetMiningAutographField(byte[] value) {
-			this.chainStateEntry.Value.entry.MiningAutograph = value;
-
-			return new[] {nameof(this.chainStateEntry.Value.entry.MiningAutograph)};
-		}
-
-		public Task SetMiningAutograph(byte[] value) {
-			return this.UpdateFields(prov => prov.SetMiningAutographField(value));
-		}
-
-		public DateTime? LastMiningRegistrationUpdate {
-			get { return this.GetField(entry => entry.LastMiningRegistrationUpdate); }
-			set => this.SetLastMiningRegistrationUpdate(value).WaitAndUnwrapException();
-		}
-
-		public string[] SetLastMiningRegistrationUpdateField(DateTime? value) {
-			this.chainStateEntry.Value.entry.LastMiningRegistrationUpdate = value;
-
-			return new[] {nameof(this.chainStateEntry.Value.entry.LastMiningRegistrationUpdate)};
-		}
-
-		public Task SetLastMiningRegistrationUpdate(DateTime? value) {
-			return this.UpdateFields(prov => prov.SetLastMiningRegistrationUpdateField(value));
 		}
 
 		public bool IsChainSynced => this.GetChainSyncState() == Enums.ChainSyncState.Synchronized;
@@ -711,22 +681,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public ICryptographicKey GetModeratorKey(byte keyId) {
+		public Task<ICryptographicKey> GetModeratorKey(byte keyId) {
 			return this.GetModeratorKey<ICryptographicKey>(keyId);
 		}
 
-		public SafeArrayHandle GetModeratorKeyBytes(byte keyId) {
-			MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.GetJoinedField(entry => entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId), true);
+		public async Task<SafeArrayHandle> GetModeratorKeyBytes(byte keyId) {
+			MODERATOR_KEYS_SNAPSHOT chainKeyEntry = await GetJoinedField(entry => entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId), true).ConfigureAwait(false);
 
-			return ByteArray.Wrap(chainKeyEntry?.PublicKey);
+			return SafeArrayHandle.Wrap(chainKeyEntry?.PublicKey);
 		}
 
-		public T GetModeratorKey<T>(byte keyId)
+		public async Task<T> GetModeratorKey<T>(byte keyId)
 			where T : class, ICryptographicKey {
 
-			using SafeArrayHandle bytes = this.GetModeratorKeyBytes(keyId);
+			using SafeArrayHandle bytes = await GetModeratorKeyBytes(keyId).ConfigureAwait(false);
 
-			if(bytes == null) {
+			if(bytes == null && bytes.IsZero) {
 				return null;
 			}
 
@@ -736,14 +706,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		}
 
+		public async Task<(ICryptographicKey key, KeyUseIndexSet keyIndex)> GetModeratorKeyAndIndex(byte keyId) {
+			var key = await GetModeratorKey(keyId).ConfigureAwait(false);
+			var index = await GetModeratorKeyIndex(keyId).ConfigureAwait(false);
+
+			return (key, index);
+		}
+
+		public async Task<KeyUseIndexSet> GetModeratorKeyIndex(byte keyId) {
+			MODERATOR_KEYS_SNAPSHOT chainKeyEntry = await GetJoinedField(entry => entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId), true).ConfigureAwait(false);
+
+			return (chainKeyEntry.ExpectedNextKeySequenceId, chainKeyEntry.ExpectedNextKeyIndex);
+		}
+		
 		/// <summary>
 		///     insert a new moderator key in the chainstate for quick access
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public void InsertModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key) {
+		public Task InsertModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key) {
 
-			this.UpdateJoinedFields(() => {
+			return this.UpdateJoinedFields(() => {
 				MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.chainStateEntry?.entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId);
 
 				if(chainKeyEntry != null) {
@@ -754,6 +737,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				chainKeyEntry.OrdinalId = keyId;
 				chainKeyEntry.IsCurrent = true;
+				chainKeyEntry.ExpectedNextKeySequenceId = 0;
+				chainKeyEntry.ExpectedNextKeyIndex = 0;
 				chainKeyEntry.PublicKey = key?.ToExactByteArrayCopy();
 				chainKeyEntry.DeclarationTransactionId = transactionId.ToString();
 
@@ -764,10 +749,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     update a moderator key
 		/// </summary>
+		/// <param name="transactionId"></param>
+		/// <param name="keyId"></param>
 		/// <param name="key"></param>
+		/// <param name="keyChange"></param>
 		/// <returns></returns>
-		public void UpdateModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key) {
-			this.UpdateJoinedFields(() => {
+		public Task UpdateModeratorKey(TransactionId transactionId, byte keyId, SafeArrayHandle key, bool keyChange) {
+			return this.UpdateJoinedFields(() => {
 				MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.chainStateEntry?.entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId);
 
 				if(chainKeyEntry == null) {
@@ -780,9 +768,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				chainKeyEntry.PublicKey = key?.ToExactByteArrayCopy();
 				chainKeyEntry.DeclarationTransactionId = transactionId.ToString();
+
+				if(keyChange) {
+					chainKeyEntry.ExpectedNextKeySequenceId += 1;
+					chainKeyEntry.ExpectedNextKeyIndex = 0;
+				}
 			});
 		}
 
+		public Task UpdateModeratorExpectedNextKeyIndex(byte keyId, long keySequenceId, long keyIndex) {
+			return this.UpdateJoinedFields(() => {
+				MODERATOR_KEYS_SNAPSHOT chainKeyEntry = this.chainStateEntry?.entry.ModeratorKeys.SingleOrDefault(k => k.OrdinalId == keyId);
+
+				if(chainKeyEntry == null) {
+					throw new ApplicationException($"Moderator key with ordinal {keyId} does not exist.");
+				}
+
+				chainKeyEntry.ExpectedNextKeySequenceId = keySequenceId;
+				chainKeyEntry.ExpectedNextKeyIndex = keyIndex;
+			});
+		}
+		
 		/// <summary>
 		///     determine if a block height falls within the jurisdiction of a digest
 		/// </summary>
@@ -799,7 +805,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					return this.ChainStateDal.PerformOperationAsync(async db => {
 
 						if(this.chainStateEntry == null) {
-							this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
+							this.chainStateEntry = (await ChainStateDal.LoadSimpleState(db).ConfigureAwait(false), false);
 						}
 
 						EntityEntry<CHAIN_STATE_SNAPSHOT> dbEntry = db.Context.Entry(this.chainStateEntry.Value.entry);
@@ -827,7 +833,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <returns></returns>
 		protected bool BlockIdChanged() {
-			if(this.IsMaster) {
+			if(this.IsMain) {
 				// as a master, we dont bother with this
 				return false;
 			}
@@ -848,92 +854,92 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected virtual CHAIN_STATE_SNAPSHOT CreateNewEntry() {
 			CHAIN_STATE_SNAPSHOT chainStateEntry = new CHAIN_STATE_SNAPSHOT();
 
-			chainStateEntry.ChainInception = DateTime.MinValue;
+			chainStateEntry.ChainInception = DateTimeEx.MinValue;
 			chainStateEntry.DownloadBlockHeight = 0;
 			chainStateEntry.DiskBlockHeight = 0;
 			chainStateEntry.BlockHeight = 0;
 			chainStateEntry.PublicBlockHeight = 0;
-			chainStateEntry.LastBlockTimestamp = DateTime.MinValue;
+			chainStateEntry.LastBlockTimestamp = DateTimeEx.MinValue;
 			chainStateEntry.LastBlockLifespan = 0;
 			chainStateEntry.BlockInterpretationStatus = ChainStateEntryFields.BlockInterpretationStatuses.Blank;
 
 			chainStateEntry.DigestHeight = 0;
-			chainStateEntry.LastDigestTimestamp = DateTime.MinValue;
+			chainStateEntry.LastDigestTimestamp = DateTimeEx.MinValue;
 			chainStateEntry.MaxBlockInterval = 0;
 
-			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(0, 0, 1, 5).ToString();
-			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(0, 0, 1, 5).ToString();
-			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(0, 0, 1, 5).ToString();
+			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(BlockchainConstants.DefaultVersion).ToString();
+			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(BlockchainConstants.DefaultVersion).ToString();
+			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(BlockchainConstants.DefaultVersion).ToString();
 
 			return chainStateEntry;
 		}
 
-		protected T GetField<T>(Func<CHAIN_STATE_SNAPSHOT, T> function) {
+		protected async Task<T> GetField<T>(Func<CHAIN_STATE_SNAPSHOT, T> function) {
 
-			using(this.asyncLocker.ReaderLock()) {
+			using(await asyncLocker.ReaderLockAsync().ConfigureAwait(false)) {
 				if((this.chainStateEntry != null) && !this.BlockIdChanged()) {
 					return function(this.chainStateEntry?.entry);
 				}
 			}
 
-			using(this.asyncLocker.WriterLock()) {
+			using(await asyncLocker.WriterLockAsync().ConfigureAwait(false)) {
 				if((this.chainStateEntry != null) && !this.BlockIdChanged()) {
 					return function(this.chainStateEntry?.entry);
 				}
 
-				Repeater.Repeat(() => {
-					this.ChainStateDal.PerformOperation(db => {
+				await Repeater.RepeatAsync(() => {
+					return ChainStateDal.PerformOperationAsync(async db => {
 
-						this.chainStateEntry = (this.ChainStateDal.LoadSimpleState(db), false);
+                        chainStateEntry = (await ChainStateDal.LoadSimpleState(db).ConfigureAwait(false), false);
 					});
-				});
+				}).ConfigureAwait(false);
 
 				return function(this.chainStateEntry?.entry);
 			}
 		}
 
-		protected void UpdateJoinedFields(Action action) {
+		protected async Task UpdateJoinedFields(Action action) {
 
-			using(this.asyncLocker.WriterLock()) {
+			using(await asyncLocker.WriterLockAsync().ConfigureAwait(false)) {
 
-				Repeater.Repeat(() => {
-					this.ChainStateDal.PerformOperation(db => {
+				await Repeater.RepeatAsync(() => {
+					return ChainStateDal.PerformOperationAsync(async db => {
 
-						// always refresh the entry from the database
-						this.chainStateEntry = (this.ChainStateDal.LoadFullState(db), true);
+                        // always refresh the entry from the database
+                        chainStateEntry = (await ChainStateDal.LoadFullState(db).ConfigureAwait(false), true);
 
 						// since the entry is detached and not tracked, we attach it here
-						db.Context.Attach(this.chainStateEntry.Value.entry).State = EntityState.Modified;
+						db.Context.Attach(chainStateEntry.Value.entry).State = EntityState.Modified;
 
 						action();
 
-						db.SaveChanges();
+						await db.SaveChangesAsync().ConfigureAwait(false);
 					});
-				});
+				}).ConfigureAwait(false);
 			}
 		}
 
-		protected T GetJoinedField<T>(Func<CHAIN_STATE_SNAPSHOT, T> function, bool force) {
+		protected async Task<T> GetJoinedField<T>(Func<CHAIN_STATE_SNAPSHOT, T> function, bool force) {
 
 			if(!force) {
-				using(this.asyncLocker.ReaderLock()) {
+				using(await asyncLocker.ReaderLockAsync().ConfigureAwait(false)) {
 					if((this.chainStateEntry != null) && this.chainStateEntry.Value.full) {
 						return function(this.chainStateEntry?.entry);
 					}
 				}
 			}
 
-			using(this.asyncLocker.WriterLock()) {
+			using(await asyncLocker.ReaderLockAsync().ConfigureAwait(false)) {
 				if(!force && (this.chainStateEntry != null) && this.chainStateEntry.Value.full) {
 					return function(this.chainStateEntry?.entry);
 				}
 
-				Repeater.Repeat(() => {
-					this.ChainStateDal.PerformOperation(db => {
+				await Repeater.RepeatAsync(() => {
+					return ChainStateDal.PerformOperationAsync(async db => {
 
-						this.chainStateEntry = (this.ChainStateDal.LoadFullState(db), true);
+                        chainStateEntry = (await ChainStateDal.LoadFullState(db).ConfigureAwait(false), true);
 					});
-				});
+				}).ConfigureAwait(false);
 
 				return function(this.chainStateEntry?.entry);
 			}

@@ -1,3 +1,4 @@
+using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Services;
 
 namespace Neuralia.Blockchains.Core.Tools {
@@ -23,6 +24,8 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		public IInstantiationService InstantiationService => this.GetService<IInstantiationService>();
 
+		public IPortMappingService PortMappingService => this.GetService<IPortMappingService>();
+		
 		public T GetService<T>()
 			where T : class {
 			return DIService.Instance.GetService<T>(this.chainType);

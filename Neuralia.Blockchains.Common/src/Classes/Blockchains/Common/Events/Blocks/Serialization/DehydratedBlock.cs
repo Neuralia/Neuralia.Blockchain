@@ -112,7 +112,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			for(int i = 0; i < count; i++) {
 				BlockChannelUtils.BlockChannelTypes channelId = (BlockChannelUtils.BlockChannelTypes) rehydrator.ReadUShort();
-				SafeArrayHandle channelData = rehydrator.ReadNonNullableArray();
+				SafeArrayHandle channelData = (SafeArrayHandle)rehydrator.ReadNonNullableArray();
 
 				dataChannels[channelId] = channelData;
 			}
@@ -137,6 +137,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		}
 
+		public void Clear() {
+			this.dataChannels.Entries.Clear();
+		}
+		
 		public void Rehydrate(ChannelsEntries<IDataRehydrator> dataChannels) {
 
 			this.Rehydrate(dataChannels.ConvertAll(rehydrator => (SafeArrayHandle) rehydrator.ReadArray()));
@@ -148,7 +152,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				this.RehydratedBlock = rehydrationFactory.CreateBlock(this);
 
 				if(buildOffsets) {
-					this.RehydratedBlock.BuildMasterTransactionOffsets();
+					this.RehydratedBlock.BuildIndexedTransactionOffsets();
 				}
 
 				this.RehydratedBlock.Rehydrate(this, rehydrationFactory);

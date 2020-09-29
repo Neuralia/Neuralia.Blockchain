@@ -8,41 +8,50 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.General.Versions {
 
 	public class ComponentVersion : IBinarySerializable, ITreeHashable {
+		private byte minor;
 
-		public ComponentVersion() {
-			this.Major = new AdaptiveShort1_2();
-			this.Minor = new AdaptiveShort1_2();
+		public const byte MAX_COMPRESSED_MAJOR_VERSION = 0xF;
+		public const byte MAX_COMPRESSED_MINOR_VERSION = 0x7;
+		public const byte MAX_MINOR_VERSION = 0x7F;
+		public const byte COMPRESSED_FLAG = 0x80;
+		public const byte COMPRESSED_MAJOR_BIT_OFFSET = 3;
+		
+		public ComponentVersion() : this((ushort)0,(byte)0) {
+
 		}
 
-		public ComponentVersion(AdaptiveShort1_2 major, AdaptiveShort1_2 minor) {
+		public ComponentVersion(AdaptiveShort1_2 major, byte minor) : this(major.Value, minor) {
+
+		}
+
+		public ComponentVersion(ushort major, byte minor) {
 			this.Major = major;
 			this.Minor = minor;
 		}
 
-		public ComponentVersion(ushort major, ushort minor) {
-			this.Major = major;
-			this.Minor = minor;
+		public ComponentVersion(string version) : this(version.Replace("(", "").Replace(")", "").Split('.')){
+			
 		}
 
-		public ComponentVersion(string version) {
+		public ComponentVersion(string[] version) : this( ushort.Parse(version[0]), byte.Parse(version[1])) {
 
-			string[] entries = version.Replace("(", "").Replace(")", "").Split('.');
-
-			this.Major = ushort.Parse(entries[0]);
-			this.Minor = ushort.Parse(entries[1]);
 		}
 
-		public ComponentVersion(string[] version) {
-
-			this.Major = ushort.Parse(version[0]);
-			this.Minor = ushort.Parse(version[1]);
-		}
-
-		public ComponentVersion(int major, int minor) : this((ushort) major, (ushort) minor) {
+		public ComponentVersion(int major, int minor) : this((ushort) major, (byte) minor) {
 		}
 
 		public AdaptiveShort1_2 Major { get; }
-		public AdaptiveShort1_2 Minor { get; }
+
+		public byte Minor {
+			get { return this.minor; }
+			set {
+				if(value > MAX_MINOR_VERSION) {
+					throw new ArgumentOutOfRangeException($"Minor can not be larger than {MAX_MINOR_VERSION}", nameof(Minor));
+				}
+
+				this.minor = value;
+			}
+		}
 
 		public bool IsVersionSet => (this.Major != 0) || (this.Minor != 0);
 
@@ -50,20 +59,38 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 		public virtual void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.Major.Rehydrate(rehydrator);
-			this.Minor.Rehydrate(rehydrator);
+			byte firstByte = rehydrator.ReadByte();
+			
+			if((firstByte & COMPRESSED_FLAG) != 1) {
+				
+				this.Minor = (byte)(firstByte & MAX_COMPRESSED_MINOR_VERSION);
+				this.Major.Value = (ushort)((firstByte >> COMPRESSED_MAJOR_BIT_OFFSET) & MAX_COMPRESSED_MAJOR_VERSION);
+			} else {
+				this.Minor = (byte)(firstByte & ~COMPRESSED_FLAG);
+				this.Major.Rehydrate(rehydrator);
+			}
 		}
 
 		public virtual void Dehydrate(IDataDehydrator dehydrator) {
-			this.Major.Dehydrate(dehydrator);
-			this.Minor.Dehydrate(dehydrator);
+			
+			bool compressed = this.Major.Value <= MAX_COMPRESSED_MAJOR_VERSION && this.Minor <= MAX_COMPRESSED_MINOR_VERSION;
+
+			if(compressed) {
+				byte compressedValue = (byte)(this.Minor & MAX_COMPRESSED_MINOR_VERSION);
+				compressedValue |= (byte)((this.Major.Value & MAX_COMPRESSED_MAJOR_VERSION) << COMPRESSED_MAJOR_BIT_OFFSET);
+
+				dehydrator.Write(compressedValue);
+			} else {
+				dehydrator.Write((byte)(this.Minor | COMPRESSED_FLAG));
+				this.Major.Dehydrate(dehydrator);
+			}
 		}
 
 		public virtual HashNodeList GetStructuresArray() {
 			HashNodeList hashNodeList = new HashNodeList();
 
 			hashNodeList.Add(this.Major.Value);
-			hashNodeList.Add(this.Minor.Value);
+			hashNodeList.Add(this.Minor);
 
 			return hashNodeList;
 		}
@@ -88,7 +115,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 		}
 
 		public override string ToString() {
-			return $"{this.Major.Value}.{this.Minor.Value}";
+			return $"{this.Major.Value}.{this.Minor}";
 		}
 
 		public override bool Equals(object obj) {
@@ -125,7 +152,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 			return !(c1 == c2);
 		}
 
-		public static bool operator ==(ComponentVersion c1, (ushort major, ushort minor) c2) {
+		public static bool operator ==(ComponentVersion c1, (ushort major, byte minor) c2) {
 			if(ReferenceEquals(null, c1)) {
 				return false;
 			}
@@ -133,7 +160,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 			return (c1.Major == c2.major) && (c1.Minor == c2.minor);
 		}
 
-		public static bool operator !=(ComponentVersion c1, (ushort major, ushort minor) c2) {
+		public static bool operator !=(ComponentVersion c1, (ushort major, byte minor) c2) {
 			return !(c1 == c2);
 		}
 
@@ -234,7 +261,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 		}
 
 		public override string ToString() {
-			return $"{this.Type.Value.Value}.{this.Major.Value}.{this.Minor.Value}";
+			return $"{this.Type.Value.Value}.{this.Major.Value}.{this.Minor}";
 		}
 
 		public override bool Equals(object obj) {
@@ -271,7 +298,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 			return !(c1 == c2);
 		}
 
-		public static bool operator ==(ComponentVersion<T> c1, (ushort major, ushort minor) c2) {
+		public static bool operator ==(ComponentVersion<T> c1, (ushort major, byte minor) c2) {
 			if(ReferenceEquals(null, c1)) {
 				return false;
 			}
@@ -279,7 +306,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 			return (ComponentVersion) c1 == c2;
 		}
 
-		public static bool operator !=(ComponentVersion<T> c1, (ushort major, ushort minor) c2) {
+		public static bool operator !=(ComponentVersion<T> c1, (ushort major, byte minor) c2) {
 			return !(c1 == c2);
 		}
 

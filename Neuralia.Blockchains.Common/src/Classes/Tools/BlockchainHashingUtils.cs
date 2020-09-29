@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Genesis;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
@@ -13,6 +15,7 @@ using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Tools {
 	public static class BlockchainHashingUtils {
@@ -26,7 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 		public static (SafeArrayHandle sha2, SafeArrayHandle sha3, int nonceHash) HashSecretComboKey(ISecretComboWalletKey secretWalletKey) {
 
-			return HashingUtils.HashSecretComboKey(secretWalletKey.PublicKey, secretWalletKey.PromisedNonce1, secretWalletKey.PromisedNonce2);
+			return HashingUtils.HashSecretComboKey(((IWalletKey) secretWalletKey).PublicKey, secretWalletKey.PromisedNonce1, secretWalletKey.PromisedNonce2);
 		}
 
 		/// <summary>
@@ -54,7 +57,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 					try {
 						hasher = s.HasherPool.GetObject();
 
-						return GenerateBlockTransactionHash(transactionEnvelope, hasher);
+						return GenerateBlockTransactionHash(t, hasher);
 					} finally {
 						if(hasher != null) {
 							s.HasherPool.PutObject(hasher);
@@ -81,7 +84,7 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			return HashingUtils.Hash3(structures, hasher);
 
 		}
-
+		
 		public static HashNodeList GenerateRejectedTransactionSetNodeList(IEnumerable<RejectedTransaction> rejectedTransactions) {
 
 			HashNodeList results = new HashNodeList();
@@ -92,14 +95,14 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 				// perform lazy loading of the transaction hash.
 				//note: this feature is important, as it will allow us to perform yielding of hashing, and clear memory as we go instead of keeping everything all at once.
-				results.Add(new HashNodeList.LazyHashNode<RejectedTransaction, BlockHashingState>(rejectedTransaction, (t, s) => {
+				results.Add(new HashNodeList.LazyHashNode<RejectedTransaction, BlockHashingState>(rejectedTransaction, (r, s) => {
 
 					Sha3SakuraTree hasher = null;
 
 					try {
 						hasher = s.HasherPool.GetObject();
 
-						return GenerateRejectedTransactionHash(rejectedTransaction, hasher);
+						return GenerateRejectedTransactionHash(r, hasher);
 					} finally {
 						if(hasher != null) {
 							s.HasherPool.PutObject(hasher);
@@ -110,15 +113,22 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 			return results;
 		}
+		
+		public static SafeArrayHandle GenerateBlockchainMessageHash(IMessageEnvelope envelope) {
+			using(HashNodeList structure = envelope.GetStructuresArray()) {
+				return HashingUtils.Hash3(structure);
+			}
 
-		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope, AccountId multiSizgAccountId) {
-
-			return GenerateTransactionHash(envelope, envelope.Contents.RehydratedTransaction, multiSizgAccountId);
 		}
 
-		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope, ITransaction transaction, AccountId multiSizgAccountId) {
+		public static SafeArrayHandle GenerateEnvelopedTransactionHash(ITransactionEnvelope envelope, AccountId multiSigAccountId) {
 
-			using HashNodeList structures = transaction.GetStructuresArrayMultiSig(multiSizgAccountId);
+			return GenerateEnvelopedTransactionHash(envelope, envelope.Contents.RehydratedEvent, multiSigAccountId);
+		}
+
+		public static SafeArrayHandle GenerateEnvelopedTransactionHash(ITransactionEnvelope envelope, ITransaction transaction, AccountId multiSigAccountId) {
+
+			using HashNodeList structures = transaction.GetStructuresArrayMultiSig(multiSigAccountId);
 
 			structures.Add(envelope.GetTransactionHashingStructuresArray());
 
@@ -126,27 +136,54 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 		}
 
-		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope) {
-			return GenerateTransactionHash(envelope, envelope.Contents.RehydratedTransaction);
+		public static SafeArrayHandle GenerateEnvelopedTransactionHash(ITransactionEnvelope envelope) {
+			return GenerateEnvelopedTransactionHash(envelope, envelope.Contents.RehydratedEvent);
 		}
 
-		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope, ITransaction transaction) {
+		public static SafeArrayHandle GenerateTransactionHash(ITransaction transaction) {
 			using HashNodeList structures = transaction.GetStructuresArray();
-
-			structures.Add(envelope.GetTransactionHashingStructuresArray());
+			
+			return HashingUtils.Hash3(structures);
+		}
+		
+		public static SafeArrayHandle GenerateEnvelopedTransactionHash(ITransactionEnvelope envelope, ITransaction transaction) {
+			using HashNodeList structures = GenerateEnvelopedTransactionStructures(envelope, transaction);
 
 			return HashingUtils.Hash3(structures);
 
 		}
 
-		public static SafeArrayHandle GenerateTransactionHash(ITransactionEnvelope envelope, Sha3SakuraTree hasher) {
-			using HashNodeList structures = envelope.Contents.RehydratedTransaction.GetStructuresArray();
+		public static SafeArrayHandle GenerateEnvelopedTransactionHash(ITransactionEnvelope envelope, Sha3SakuraTree hasher) {
+			using HashNodeList structures = GenerateEnvelopedTransactionStructures(envelope, envelope.Contents.RehydratedEvent);
+			
+			return HashingUtils.Hash3(structures, hasher);
+		}
+		
+		private static HashNodeList GenerateTransactionStructures(ITransaction transaction) {
+			return transaction.GetStructuresArray();
+		}
+		
+		/// <summary>
+		/// transactions have to hash both the transaction and the envelope extra fields.
+		/// </summary>
+		/// <param name="envelope"></param>
+		/// <param name="transaction"></param>
+		/// <returns></returns>
+		private static HashNodeList GenerateEnvelopedTransactionStructures(ITransactionEnvelope envelope, ITransaction transaction) {
+			using HashNodeList structures = GenerateTransactionStructures(envelope.Contents.RehydratedEvent);
 
 			structures.Add(envelope.GetTransactionHashingStructuresArray());
-
-			return HashingUtils.Hash3(structures, hasher);
-
+			
+			return structures;
 		}
+		
+		public static SafeArrayHandle GeneratePOWHash(IPOWEnvelope envelope) {
+
+			using HashNodeList structures = envelope.GetPOWStructuresArray();
+
+			return HashingUtils.Hash3(structures);
+		}
+
 
 		public static SafeArrayHandle GenerateBlockTransactionHash(ITransaction transaction) {
 
@@ -209,8 +246,8 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 
 						using HashNodeList structures = new HashNodeList();
 
-						structures.Add(entry.Key);
-						structures.Add(entry.Value);
+						structures.Add(e.Key);
+						structures.Add(e.Value);
 
 						return HashingUtils.Hash3(structures, hasher);
 

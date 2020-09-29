@@ -1,5 +1,6 @@
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Cryptography.Hash {
 	/// <summary>
@@ -18,9 +19,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.Hash {
 			Sha3ExternalDigest sha3Digest = (Sha3ExternalDigest) this.digest;
 
 			sha3Digest.BlockUpdate(message);
-			sha3Digest.DoFinalReturn(out SafeArrayHandle result);
+			sha3Digest.DoFinalReturn2(out ByteArray result);
 
-			return result;
+			return (SafeArrayHandle)result;
 		}
 	}
 }

@@ -7,6 +7,7 @@ using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
+using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
@@ -29,7 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 		protected readonly Dictionary<BlockchainType, MiningRegistrationParameters> chainMiningRegistrationParameters = new Dictionary<BlockchainType, MiningRegistrationParameters>();
 
-		public BlockchainNetworkingService(IBlockchainGuidService guidService, IHttpService httpService, IFileFetchService fileFetchService, IDataAccessService dataAccessService, IBlockchainInstantiationService instantiationService, IGlobalsService globalsService, IBlockchainTimeService timeService) : base(guidService, httpService, fileFetchService, dataAccessService, instantiationService, globalsService, timeService) {
+		public BlockchainNetworkingService(IBlockchainGuidService guidService, IHttpService httpService, IFileFetchService fileFetchService, IDataAccessService dataAccessService, IBlockchainInstantiationService instantiationService, IGlobalsService globalsService, IBlockchainTimeService timeService, IPortMappingService portMappingService) : base(guidService, httpService, fileFetchService, dataAccessService, instantiationService, globalsService, timeService, portMappingService) {
 		}
 
 		public Dictionary<BlockchainType, MiningRegistrationParameters> ChainMiningRegistrationParameters => this.chainMiningRegistrationParameters;

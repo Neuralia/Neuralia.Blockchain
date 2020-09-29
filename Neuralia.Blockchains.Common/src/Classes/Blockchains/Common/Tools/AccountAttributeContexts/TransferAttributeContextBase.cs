@@ -6,7 +6,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.AccountAt
 	public abstract class TransferAttributeContextBase {
 
 		public void Rehydrate(byte[] context) {
-			this.Rehydrate(ByteArray.Wrap(context));
+			this.Rehydrate(SafeArrayHandle.Wrap(context));
 		}
 
 		public void Rehydrate(SafeArrayHandle context) {

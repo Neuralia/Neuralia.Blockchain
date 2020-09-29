@@ -30,16 +30,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		public readonly DigestChannelType ChainOptions;
 
 		public readonly DigestChannelType JointAccountSnapshot;
-		public readonly DigestChannelType StandardAccountKeys;
-		public readonly DigestChannelType StandardAccountSnapshot;
+		
+		public readonly DigestChannelType UserAccountKeys;
+		public readonly DigestChannelType UserAccountSnapshot;
+		
+		public readonly DigestChannelType ServerAccountKeys;
+		public readonly DigestChannelType ServerAccountSnapshot;
 
+		public readonly DigestChannelType ModeratorAccountKeys;
+		public readonly DigestChannelType ModeratorAccountSnapshot;
+		
 		static DigestChannelTypes() {
 		}
 
 		private DigestChannelTypes() : base(1000) {
 
-			this.StandardAccountSnapshot = this.CreateBaseConstant();
-			this.StandardAccountKeys = this.CreateBaseConstant();
+			this.UserAccountSnapshot = this.CreateBaseConstant();
+			this.UserAccountKeys = this.CreateBaseConstant();
+			this.ServerAccountSnapshot = this.CreateBaseConstant();
+			this.ServerAccountKeys = this.CreateBaseConstant();
 			this.JointAccountSnapshot = this.CreateBaseConstant();
 			this.AccreditationCertificates = this.CreateBaseConstant();
 			this.ChainOptions = this.CreateBaseConstant();

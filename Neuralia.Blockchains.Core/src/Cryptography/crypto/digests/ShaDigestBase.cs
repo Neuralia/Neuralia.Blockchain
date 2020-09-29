@@ -1,17 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.SHA3;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Crypto;
 
 namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
-	public abstract class ShaDigestBase : IDigest, IDisposableExtended {
+	public abstract class ShaDigestBase : IHashDigest, IDisposableExtended {
 
 		private const int BYTE_LENGTH = 64;
-		private SafeArrayHandle data = SafeArrayHandle.Create();
+		private ByteArray data;
 
 		private List<object> datas;
 		protected int DigestLength;
@@ -44,7 +46,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 		public void BlockUpdate(byte[] input, int inOff, int length) {
 			if(this.preFixed) {
-				this.data.Entry.CopyFrom(ref input, inOff, this.prefixedOffset, length);
+				this.data.CopyFrom(ref input, inOff, this.prefixedOffset, length);
 				this.prefixedOffset += length;
 			} else {
 				this.LazyLoadDatas();
@@ -57,9 +59,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 		public int DoFinal(byte[] output, int outOff) {
 
 			if(this is Sha3ExternalDigest sha3) {
-				sha3.DoFinalReturn(out SafeArrayHandle hash);
+				sha3.DoFinalReturn2(out ByteArray hash);
 
-				hash.Entry.CopyTo(output, 0, outOff, hash.Length);
+				hash.CopyTo(output, 0, outOff, hash.Length);
 
 				hash.Return();
 			} else {
@@ -87,7 +89,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 		public void BlockUpdate(SafeArrayHandle input, int inOff, int length) {
 			if(this.preFixed) {
-				this.data.Entry.CopyFrom(input.Entry, inOff, this.prefixedOffset, length);
+				this.data.CopyFrom(input.Entry, inOff, this.prefixedOffset, length);
 				this.prefixedOffset += length;
 			} else {
 				this.LazyLoadDatas();
@@ -120,9 +122,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 			}
 		}
 
-		public int DoFinal(byte[] output, int outOff, out SafeArrayHandle result) {
+		public int DoFinal(byte[] output, int outOff, out ByteArray result) {
 
-			this.DoFinalReturn(out result);
+			this.DoFinalReturn2(out result);
 
 			return this.DigestLength;
 		}
@@ -133,7 +135,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 			return result.ToExactByteArray();
 		}
 
-		public void DoFinalReturn(out SafeArrayHandle hash) {
+		public void DoFinalReturn2(out ByteArray hash) {
 
 			this.DoFinalReturn(out ByteArray result);
 			hash = result;
@@ -147,12 +149,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 				int offset = 0;
 
 				foreach(object item in this.datas) {
-					if(item is SafeArrayHandle block) {
-						this.data.Entry.CopyFrom(block.Entry, 0, offset, block.Length);
+					if(item is ByteArray blockArray) {
+						this.data.CopyFrom(blockArray, 0, offset, blockArray.Length);
+						offset += blockArray.Length;
+					}if(item is SafeArrayHandle block) {
+						this.data.CopyFrom(block.Entry, 0, offset, block.Length);
 						offset += block.Length;
-					} else if(item is ValueTuple<byte[], int, int> array) {
+					}  else if(item is ValueTuple<byte[], int, int> array) {
 						byte[] buffer = array.Item1;
-						this.data.Entry.CopyFrom(ref buffer, array.Item2, offset, array.Item3);
+						this.data.CopyFrom(ref buffer, array.Item2, offset, array.Item3);
 						offset += array.Item3;
 					} else if(item is byte smallByte) {
 						this.data[offset] = smallByte;
@@ -163,7 +168,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.crypto.digests {
 
 			if(this.sha is SHA3Managed sha3) {
 				// this is a special case where we can use the MemoryBlock directly.
-				hash = sha3.CustomComputeHash(this.data.Entry, 0, this.length);
+				hash = sha3.CustomComputeHash(this.data, 0, this.length);
 
 			} else {
 				hash = ByteArray.WrapAndOwn(this.sha.ComputeHash(this.data.Bytes, this.data.Offset, this.length));

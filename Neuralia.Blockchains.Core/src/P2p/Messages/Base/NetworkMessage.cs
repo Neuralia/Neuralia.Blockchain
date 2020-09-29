@@ -1,8 +1,8 @@
 using System;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
-using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
@@ -13,6 +13,7 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 
 		short WorkflowType { get; }
 		void Dehydrate(IDataDehydrator dr);
+		void Rehydrate(IDataRehydrator dr, IRehydrationFactory rehydrationFactory);
 	}
 
 	public interface INetworkMessage<R> : INetworkMessage
@@ -44,6 +45,10 @@ namespace Neuralia.Blockchains.Core.P2p.Messages.Base {
 		public virtual void Dehydrate(IDataDehydrator dr) {
 			dr.Write(this.WorkflowType);
 			this.Version.Dehydrate(dr);
+		}
+
+		public void Rehydrate(IDataRehydrator dr, IRehydrationFactory rehydrationFactory) {
+			this.Rehydrate(dr, (R)rehydrationFactory);
 		}
 
 		public virtual void Rehydrate(IDataRehydrator dr, R rehydrationFactory) {

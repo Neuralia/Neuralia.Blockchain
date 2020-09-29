@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 	public interface IUserWalletFileInfo : ISingleEntryWalletFileInfo {
 
-		Dictionary<Guid, IAccountFileInfo> Accounts { get; }
+		Dictionary<string, IAccountFileInfo> Accounts { get; }
 
 		string WalletPath { get; }
 		Task<IUserWallet> WalletBase(LockContext lockContext);
@@ -48,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 	public abstract class UserWalletFileInfo<ENTRY_TYPE> : SingleEntryWalletFileInfo<ENTRY_TYPE>, IUserWalletFileInfo<ENTRY_TYPE>
 		where ENTRY_TYPE : UserWallet {
 
-		public readonly Dictionary<Guid, IAccountFileInfo> accounts = new Dictionary<Guid, IAccountFileInfo>();
+		public readonly Dictionary<string, IAccountFileInfo> accounts = new Dictionary<string, IAccountFileInfo>();
 		private readonly string walletCryptoFile;
 
 		private ENTRY_TYPE wallet;
@@ -58,7 +58,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			this.walletCryptoFile = this.serialisationFal.GetWalletCryptoFilePath();
 		}
 
-		public Dictionary<Guid, IAccountFileInfo> Accounts => this.accounts;
+		public Dictionary<string, IAccountFileInfo> Accounts => this.accounts;
 
 		public string WalletPath => this.serialisationFal.GetWalletFolderPath();
 
@@ -238,6 +238,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			}, data);
 		}
 
+		protected override void DisposeAll() {
+			base.DisposeAll();
+			
+			foreach(IAccountFileInfo account in this.accounts.Values) {
+				account?.Dispose();
+			}
+		}
+
 		protected override async Task CreateDbFile(LiteDBDAL litedbDal, LockContext lockContext) {
 			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				litedbDal.CreateDbFile<ENTRY_TYPE, Guid>(i => i.Id);
@@ -288,7 +296,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 					this.EncryptionInfo.Secret = () => this.WalletSecurityDetails.WalletPassphraseBytes;
 
-					ByteArray cryptoParameterSimpleBytes = ByteArray.Wrap(await this.serialisationFal.TransactionalFileSystem.ReadAllBytesAsync(this.walletCryptoFile).ConfigureAwait(false));
+					using SafeArrayHandle cryptoParameterSimpleBytes = SafeArrayHandle.Wrap(await this.serialisationFal.TransactionalFileSystem.ReadAllBytesAsync(this.walletCryptoFile).ConfigureAwait(false));
 					this.EncryptionInfo.EncryptionParameters = EncryptorParameters.RehydrateEncryptor(cryptoParameterSimpleBytes);
 				}
 			}

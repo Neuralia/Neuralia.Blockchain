@@ -23,7 +23,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public List<DATA_SLICE> RemainingSlices => this.Slices.Where(c => c.Downloaded == false).ToList();
 
 		[JsonIgnore]
-		public bool IsComplete => this.Slices.All(c => c.Downloaded);
+		public virtual bool IsComplete => this.Slices.All(c => c.Downloaded);
 
 		public bool IsFileCompleted(FILE_KEY id) {
 
@@ -69,6 +69,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 	}
 
 	public class BlockFilesetSyncManifest : FilesetSyncManifest<BlockId, BlockChannelUtils.BlockChannelTypes, BlockFilesetSyncManifest.BlockSyncingDataSlice> {
+		public bool IsWeb { get; set; } = false;
+
 		public BlockFilesetSyncManifest() : base(BlockId.ToString, id => new BlockId(id)) {
 
 		}
@@ -76,6 +78,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public override string KeyToString() {
 			return this.Key.ToString();
 		}
+
+		public override bool IsComplete => base.IsComplete || this.IsWeb;
 
 		public override string FileKeyToString(BlockChannelUtils.BlockChannelTypes fileKey) {
 			return fileKey.ToString();

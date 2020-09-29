@@ -54,7 +54,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 		public void SetMessageContent(IDataRehydrator bufferRehydrator) {
 
 			// The data is wrapped in metadata. we need to unwrap it.
-			using(SafeArrayHandle unWrappedMessage = bufferRehydrator.ReadArrayToEnd()) {
+			using(SafeArrayHandle unWrappedMessage = (SafeArrayHandle)bufferRehydrator.ReadArrayToEnd()) {
 
 				// throw an exception to avoid bugs
 				if((unWrappedMessage == null) || unWrappedMessage.IsEmpty) {

@@ -4,6 +4,8 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossip.Metadata {
 	public class TransactionGossipMessageMetadataDetails : IGossipMessageMetadataDetails {
+		
+		public const int TYPE = 3;
 		public TransactionGossipMessageMetadataDetails() {
 		}
 
@@ -12,6 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 		}
 
 		public bool IsPresentation { get; set; }
+		
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
@@ -31,6 +34,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 			return hashNodeList;
 		}
 
-		public byte Type => 3;
+		public byte Type => TYPE;
 	}
 }

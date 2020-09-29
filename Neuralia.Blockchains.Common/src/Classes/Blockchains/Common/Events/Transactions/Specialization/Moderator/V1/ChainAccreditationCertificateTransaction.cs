@@ -60,9 +60,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public List<AccountId> PermittedAccounts { get; } = new List<AccountId>();
 		public AccreditationCertificateType CertificateType { get; set; }
 
-		public override HashNodeList GetStructuresArray() {
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
 
-			HashNodeList nodeList = base.GetStructuresArray();
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
 			nodeList.Add(this.CertificateId);
 			nodeList.Add(this.CertificateVersion);
@@ -118,7 +118,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			}
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => new[] {this.AssignedAccount}.ToImmutableList();
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.All;
+		public override AccountId[] ImpactedAccounts =>this.TargetAccounts;
+		public override AccountId[] TargetAccounts => new[] {this.AssignedAccount};
 
 		protected override void RehydrateContents(ChannelsEntries<IDataRehydrator> dataChannels, ITransactionRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(dataChannels, rehydrationFactory);

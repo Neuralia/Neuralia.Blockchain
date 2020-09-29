@@ -2,6 +2,7 @@ using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
@@ -41,11 +42,11 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 			return this.SendFinalMessage(this.ClientConnection, message);
 		}
 
-		private bool SendBytes(ByteArray data) {
+		private bool SendBytes(SafeArrayHandle data) {
 			return this.SendBytes(this.ClientConnection, data);
 		}
 
-		private bool SendFinalBytes(ByteArray data) {
+		private bool SendFinalBytes(SafeArrayHandle data) {
 			return this.SendFinalBytes(this.ClientConnection, data);
 		}
 	}

@@ -23,32 +23,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exception
 
 	public class KeyEventException : BlockchainEventException {
 
-		public KeyEventException(Guid accountUuid, string keyName, int attempt, Exception ex = null) : base(ex) {
-			this.AccountUuid = accountUuid;
+		public KeyEventException(string accountCode, string keyName, int attempt, Exception ex = null) : base(ex) {
+			this.AccountCode = accountCode;
 			this.KeyName = keyName;
 			this.Attempt = attempt;
 		}
 
-		public Guid AccountUuid { get; }
+		public string AccountCode { get; }
 		public string KeyName { get; }
 		public int Attempt { get; }
 	}
 
 	public class KeyFileMissingException : KeyEventException {
 
-		public KeyFileMissingException(Guid accountUuid, string keyName, int attempt) : base(accountUuid, keyName, attempt) {
+		public KeyFileMissingException(string accountCode, string keyName, int attempt) : base(accountCode, keyName, attempt) {
 		}
 	}
 
 	public class KeyPassphraseMissingException : KeyEventException {
 
-		public KeyPassphraseMissingException(Guid accountUuid, string keyName, int attempt) : base(accountUuid, keyName, attempt) {
+		public KeyPassphraseMissingException(string accountCode, string keyName, int attempt) : base(accountCode, keyName, attempt) {
 		}
 	}
 
 	public class KeyDecryptionException : KeyEventException {
 
-		public KeyDecryptionException(Guid accountUuid, string keyName, Exception ex) : base(accountUuid, keyName, 1, ex) {
+		public KeyDecryptionException(string accountCode, string keyName, Exception ex) : base(accountCode, keyName, 1, ex) {
 		}
 	}
 

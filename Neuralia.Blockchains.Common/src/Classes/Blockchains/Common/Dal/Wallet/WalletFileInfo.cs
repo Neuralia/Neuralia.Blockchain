@@ -12,21 +12,61 @@ using Neuralia.Blockchains.Core.Cryptography.Passphrases;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx.Synchronous;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
-	public class EncryptionInfo {
+	public class EncryptionInfo : IDisposableExtended {
 		public bool Encrypt { get; set; }
 
 		public IEncryptorParameters EncryptionParameters { get; set; }
 
 		public Func<SafeArrayHandle> Secret { get; set; }
+
+		private FileEncryptor.FileEncryptorContextHandler contextHandler;
+		public FileEncryptor.FileEncryptorContextHandler ContextHandler {
+			get {
+				if(this.contextHandler == null) {
+					this.contextHandler = new FileEncryptor.FileEncryptorContextHandler();
+
+					this.contextHandler.PasswordBytes = this.Secret();
+				}
+
+				return this.contextHandler;
+			}
+		}
+		
+	#region Dispose
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+
+			if(disposing && !this.IsDisposed) {
+
+				this.contextHandler?.Dispose();
+			}
+
+			this.IsDisposed = true;
+		}
+
+		~EncryptionInfo() {
+			this.Dispose(false);
+		}
+
+	#endregion
 	}
 
-	public interface IWalletFileInfo {
+	public interface IWalletFileInfo : IDisposableExtended {
 		string Filename { get; }
 		SafeArrayHandle Filebytes { get; }
 		WalletPassphraseDetails WalletSecurityDetails { get; }
@@ -385,5 +425,37 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 			return Task.CompletedTask;
 		}
+		
+	#region disposable
+
+		public bool IsDisposed { get; private set; }
+
+		public void Dispose() {
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing) {
+
+			if(disposing && !this.IsDisposed) {
+				this.DisposeAll();
+			}
+
+			this.IsDisposed = true;
+		}
+
+		~WalletFileInfo() {
+			this.Dispose(false);
+		}
+
+		protected virtual void DisposeAll() {
+
+			this.WalletSecurityDetails?.Dispose();
+			this.ClearEncryptionInfo();
+			this.ClearCached(null);
+			this.Reset(null).WaitAndUnwrapException();
+		}
+
+	#endregion
 	}
 }

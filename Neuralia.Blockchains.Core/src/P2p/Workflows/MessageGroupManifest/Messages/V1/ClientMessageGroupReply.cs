@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.V1 {
@@ -29,7 +29,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest.Messages.
 			int count = rehydrator.ReadInt();
 
 			for(int i = 0; i < count; i++) {
-				this.gossipMessageSets.Add(rehydrator.ReadNonNullableArray());
+				this.gossipMessageSets.Add((SafeArrayHandle)rehydrator.ReadNonNullableArray());
 			}
 		}
 

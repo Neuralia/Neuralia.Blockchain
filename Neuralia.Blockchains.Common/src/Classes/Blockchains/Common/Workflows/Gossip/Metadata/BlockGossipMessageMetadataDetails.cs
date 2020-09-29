@@ -9,6 +9,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 	/// </summary>
 	public class BlockGossipMessageMetadataDetails : IGossipMessageMetadataDetails {
 
+		public const int TYPE = 1;
 		public BlockGossipMessageMetadataDetails() {
 		}
 
@@ -36,6 +37,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 			return hashNodeList;
 		}
 
-		public byte Type => 2;
+		public byte Type => TYPE;
 	}
 }

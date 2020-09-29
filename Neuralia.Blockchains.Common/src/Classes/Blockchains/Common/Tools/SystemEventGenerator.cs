@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.Moderation.Appointments;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
@@ -130,12 +131,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return AccountCreationStepEvent(stepName, creationStepSet.CurrentIncrementStep(), creationStepSet.Total);
 		}
 
-		public static SystemEventGenerator AccountCreationEndedEvent(Guid accountUuid) {
+		public static SystemEventGenerator AccountCreationEndedEvent(string accountCode) {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.AccountCreationEnded;
 
-			generator.Parameters = new object[] {new {accountUuid}};
+			generator.Parameters = new object[] {new {accountCode}};
 
 			return generator;
 		}
@@ -150,12 +151,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return generator;
 		}
 
-		public static SystemEventGenerator KeyGenerationPercentageEvent(string keyName, int percentage) {
+		public static SystemEventGenerator KeyGenerationPercentageEvent(string keyName, int percentage, long? tree = null, int? layer = null) {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.KeyGenerationPercentageUpdate;
 
-			generator.Parameters = new object[] {keyName, percentage};
+			List<object> parameters = new List<object>() { keyName, percentage };
+			if (tree.HasValue && layer.HasValue)
+			{
+				parameters.Add(tree.Value);
+				parameters.Add(layer.Value);
+			}
+
+			generator.Parameters = parameters.ToArray();
 
 			return generator;
 		}
@@ -258,6 +266,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			return generator;
 		}
+		
+		public static SystemEventGenerator Error(BlockchainType chainId, string message) {
+			SystemEventGenerator generator = new SystemEventGenerator();
+
+			generator.EventType = BlockchainSystemEventTypes.Instance.Error;
+			generator.Parameters = new object[] {chainId.Value, message};
+
+			return generator;
+		}
+		
 
 		public static SystemEventGenerator BlockInserted(long blockId, DateTime timestamp, string hash, long publicBlockId, int lifespan) {
 			SystemEventGenerator generator = new SystemEventGenerator();
@@ -350,6 +368,65 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return generator;
 		}
 
+		#region Puzzles
+			public static SystemEventGenerator AppointmentPuzzleBegin(int secretCode, List<(string puzzle, string instructions)> puzzles) {
+				SystemEventGenerator generator = new SystemEventGenerator();
+
+				generator.EventType = BlockchainSystemEventTypes.Instance.AppointmentPuzzleBegin;
+
+				generator.Parameters = new object[] {secretCode, puzzles.Select(e => e.puzzle).ToList(), puzzles.Select(e => e.instructions).ToList()};
+
+				return generator;
+			}
+			public static SystemEventGenerator AppointmentVerificationCompleted(bool verified, long? AppointmentConfirmationId) {
+				SystemEventGenerator generator = new SystemEventGenerator();
+
+				generator.EventType = BlockchainSystemEventTypes.Instance.AppointmentVerificationCompleted;
+
+				generator.Parameters = new object[] {verified, AppointmentConfirmationId};
+
+				return generator;
+			}
+			public static SystemEventGenerator InvalidPuzzleEngineVersion(int requiredVersion, int minimumSupportedVersion, int maximumSupportedVersion) {
+				SystemEventGenerator generator = new SystemEventGenerator();
+
+				generator.EventType = BlockchainSystemEventTypes.Instance.InvalidPuzzleEngineVersion;
+
+				generator.Parameters = new object[] {requiredVersion, minimumSupportedVersion, maximumSupportedVersion};
+
+				return generator;
+			}
+		#endregion
+			
+		#region POW
+			public static SystemEventGenerator POWBegin(long difficulty) {
+				SystemEventGenerator generator = new SystemEventGenerator();
+
+				generator.EventType = BlockchainSystemEventTypes.Instance.POWBegin;
+
+				generator.Parameters = new object[] {difficulty};
+
+				return generator;
+			}
+			public static SystemEventGenerator POWIteration(long nonce, long difficulty) {
+				SystemEventGenerator generator = new SystemEventGenerator();
+
+				generator.EventType = BlockchainSystemEventTypes.Instance.POWIteration;
+				generator.Parameters = new object[] {nonce, difficulty};
+
+				return generator;
+			}
+
+			public static SystemEventGenerator POWSolution(long nonce, int solution, long difficulty) {
+				SystemEventGenerator generator = new SystemEventGenerator();
+
+				generator.EventType = BlockchainSystemEventTypes.Instance.POWSolution;
+				generator.Parameters = new object[] {nonce, solution, difficulty};
+
+				return generator;
+			}
+		#endregion
+			
 		public class CreationStepSet {
 
 			public CreationStepSet(int total) {
@@ -404,25 +481,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			}
 
 			public SystemEventGenerator CreatingPresentationTransaction => AccountPublicationStepEvent("Creating Presentation Transaction", this.CurrentIncrementStep(), this.Total);
-			public SystemEventGenerator PerformingPOW => AccountPublicationStepEvent("Performing Proof of work", this.CurrentIncrementStep(), this.Total);
 
-			public SystemEventGenerator PerformingPOWIteration(int nonce, int difficulty) {
-				SystemEventGenerator generator = new SystemEventGenerator();
 
-				generator.EventType = BlockchainSystemEventTypes.Instance.AccountPublicationPOWNonceIteration;
-				generator.Parameters = new object[] {nonce, difficulty};
-
-				return generator;
-			}
-
-			public SystemEventGenerator FoundPOWSolution(int nonce, int difficulty, List<int> powSolutions) {
-				SystemEventGenerator generator = new SystemEventGenerator();
-
-				generator.EventType = BlockchainSystemEventTypes.Instance.AccountPublicationPOWNonceFound;
-				generator.Parameters = new object[] {nonce, difficulty, powSolutions};
-
-				return generator;
-			}
 		}
 
 	#region Transactions
@@ -463,12 +523,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return generator;
 		}
 
-		public static SystemEventGenerator TransactionReceived(List<AccountId> impactedLocalPublishedAccounts, List<Guid> impactedLocalPublishedAccountsUuids, List<AccountId> impactedLocalDispatchedAccounts, List<Guid> impactedLocalDispatchedAccountsUuids, TransactionId transactionId) {
+		public static SystemEventGenerator TransactionReceived(List<AccountId> impactedLocalPublishedAccounts, List<string> impactedLocalPublishedAccountCodes, List<AccountId> impactedLocalDispatchedAccounts, List<string> impactedLocalDispatchedAccountCodes, TransactionId transactionId) {
 			SystemEventGenerator generator = new SystemEventGenerator();
 
 			generator.EventType = BlockchainSystemEventTypes.Instance.TransactionReceived;
 
-			generator.Parameters = new object[] {transactionId != null ? transactionId.ToString() : "", /*transactionId*/ impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalPublishedAccounts*/ impactedLocalPublishedAccountsUuids.ToArray(), /*impactedLocalPublishedAccountsUuids*/ impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalDispatchedAccounts*/ impactedLocalPublishedAccounts.ToArray() /*impactedLocalDispatchedAccountsUuids*/};
+			generator.Parameters = new object[] {transactionId != null ? transactionId.ToString() : "", /*transactionId*/ impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalPublishedAccounts*/ impactedLocalPublishedAccountCodes.ToArray(), /*impactedLocalPublishedAccountCodes*/ impactedLocalPublishedAccounts.Select(a => a.ToString()).ToArray(), /*impactedLocalDispatchedAccounts*/ impactedLocalPublishedAccounts.ToArray() /*impactedLocalDispatchedAccountCodes*/};
 
 			return generator;
 		}

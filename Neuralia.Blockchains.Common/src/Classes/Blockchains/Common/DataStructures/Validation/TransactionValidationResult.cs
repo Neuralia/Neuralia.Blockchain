@@ -35,17 +35,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public readonly TransactionValidationErrorCode INVALID_JOINT_SIGNATURE_ACCOUNT_COUNT;
 		public readonly TransactionValidationErrorCode INVALID_JOINT_SIGNATURE_ACCOUNTs;
 		public readonly TransactionValidationErrorCode INVALID_POW_SOLUTION;
-
-		public readonly TransactionValidationErrorCode INVALID_POW_SOLUTIONS_COUNT;
-
+		
 		public readonly TransactionValidationErrorCode INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION;
 		public readonly TransactionValidationErrorCode INVALID_SUPERKEY_KEY_TYPE;
 		public readonly TransactionValidationErrorCode INVALID_TRANSACTION_KEY_TYPE;
 
 		public readonly TransactionValidationErrorCode INVALID_TRANSACTION_XMSS_KEY_BIT_SIZE;
 		public readonly TransactionValidationErrorCode INVALID_TRANSACTION_XMSS_KEY_TYPE;
+		public readonly TransactionValidationErrorCode INVALID_KEY_TYPE;
 		public readonly TransactionValidationErrorCode ONLY_ONE_TRANSACTION_PER_SCOPE;
-
+		public readonly TransactionValidationErrorCode INVALID_PRESENTATION_ENVELOPE_SIGNATURE;
+		public readonly TransactionValidationErrorCode USER_ACCOUNT_PRESENTATION_NO_APPOINTMENT_CODE;
+		
 		static TransactionValidationErrorCodes() {
 		}
 
@@ -56,7 +57,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 			this.CreateBaseConstant(ref this.INVALID_JOINT_KEY_ACCOUNT, nameof(this.INVALID_JOINT_KEY_ACCOUNT));
 			this.CreateBaseConstant(ref this.INVALID_JOINT_SIGNATURE, nameof(this.INVALID_JOINT_SIGNATURE));
 
-			this.CreateBaseConstant(ref this.INVALID_POW_SOLUTIONS_COUNT, nameof(this.INVALID_POW_SOLUTIONS_COUNT));
 			this.CreateBaseConstant(ref this.INVALID_POW_SOLUTION, nameof(this.INVALID_POW_SOLUTION));
 			this.CreateBaseConstant(ref this.INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION, nameof(this.INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION));
 			this.CreateBaseConstant(ref this.ONLY_ONE_TRANSACTION_PER_SCOPE, nameof(this.ONLY_ONE_TRANSACTION_PER_SCOPE));
@@ -69,7 +69,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 			this.CreateBaseConstant(ref this.INVALID_SUPERKEY_KEY_TYPE, nameof(this.INVALID_SUPERKEY_KEY_TYPE));
 			this.CreateBaseConstant(ref this.INVALID_TRANSACTION_KEY_TYPE, nameof(this.INVALID_TRANSACTION_KEY_TYPE));
-
+			this.CreateBaseConstant(ref this.INVALID_PRESENTATION_ENVELOPE_SIGNATURE, nameof(this.INVALID_PRESENTATION_ENVELOPE_SIGNATURE));
+			this.CreateBaseConstant(ref this.USER_ACCOUNT_PRESENTATION_NO_APPOINTMENT_CODE, nameof(this.USER_ACCOUNT_PRESENTATION_NO_APPOINTMENT_CODE));
+			this.CreateBaseConstant(ref this.INVALID_KEY_TYPE, nameof(this.INVALID_KEY_TYPE));
+			
+			
 			//this.PrintValues(";");		
 		}
 

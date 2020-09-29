@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync.Messages;
@@ -14,6 +15,7 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
+using Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest.Messages;
 using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -22,7 +24,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 	public interface IMainChainMessageFactory : IGossipMessageFactory<IBlockchainEventsRehydrationFactory> {
 
 		IChainSyncMessageFactory GetChainSyncMessageFactory();
-
+		IAppointmentRequestMessageFactory GetAppointmentRequestMessageFactory();
+		
 		IBlockchainGossipMessageSet CreateTransactionCreatedGossipMessageSet<GOSSIP_MESSAGE_SET, GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>(ITransactionEnvelope envelope)
 			where GOSSIP_MESSAGE_SET : BlockchainGossipMessageSet<GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>, new()
 			where GOSSIP_MESSAGE_TYPE : TransactionCreatedGossipMessage<EVENT_ENVELOPE_TYPE>, new()
@@ -34,12 +37,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet<GOSSIP_MESSAGE_SET, GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>(IMessageEnvelope envelope)
 			where GOSSIP_MESSAGE_SET : BlockchainGossipMessageSet<GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>, new()
 			where GOSSIP_MESSAGE_TYPE : BlockchainMessageCreatedGossipMessage<EVENT_ENVELOPE_TYPE>, new()
-			where EVENT_ENVELOPE_TYPE : class, IMessageEnvelope, new();
+			where EVENT_ENVELOPE_TYPE : class, ISignedMessageEnvelope, new();
 
 		IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet(GossipHeader header);
 		IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet(IMessageEnvelope envelope);
 
 		IBlockchainGossipMessageSet CreateBlockCreatedGossipMessageSet(GossipHeader header);
+		
 
 		/// <summary>
 		///     here we ensure that the messsage is properly hashed.
@@ -72,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			where GOSSIP_MESSAGE_TYPE : BlockchainGossipWorkflowTriggerMessage<EVENT_ENVELOPE_TYPE>, new()
 			where EVENT_ENVELOPE_TYPE : class, IEnvelope<EVENT_TYPE>
 			where EVENT_ENVELOPE_IMPLEMENTATION_TYPE : class, EVENT_ENVELOPE_TYPE, new()
-			where EVENT_TYPE : class, IBinarySerializable;
+			where EVENT_TYPE : class, IDehydrateBlockchainEvent;
 
 		GOSSIP_MESSAGE_SET CreateEmptyGossipMessageSet<GOSSIP_MESSAGE_SET, GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>()
 			where GOSSIP_MESSAGE_SET : BlockchainGossipMessageSet<GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>, new()
@@ -83,7 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			where GOSSIP_MESSAGE_SET : BlockchainGossipMessageSet<GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>, new()
 			where GOSSIP_MESSAGE_TYPE : BlockchainGossipWorkflowTriggerMessage<EVENT_ENVELOPE_TYPE>, new()
 			where EVENT_ENVELOPE_TYPE : class, IEnvelope<EVENT_TYPE>
-			where EVENT_TYPE : class, IBinarySerializable;
+			where EVENT_TYPE : class, IDehydrateBlockchainEvent;
 
 		M CreateMessageSet<M, T, H>()
 			where M : INetworkMessageSet2<T, H, IBlockchainEventsRehydrationFactory>, new()
@@ -104,14 +108,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		public BlockchainType ChainType => this.chainType;
 
 		public abstract IChainSyncMessageFactory GetChainSyncMessageFactory();
+		public abstract IAppointmentRequestMessageFactory GetAppointmentRequestMessageFactory();
 
-		public override ITargettedMessageSet<IBlockchainEventsRehydrationFactory> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
+		public override ITargettedMessageSet<IBlockchainEventsRehydrationFactory> Rehydrate(SafeArrayHandle data, TargettedHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 			//TODO: should there be anything here?
-			IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
+			using IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-			SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+			using SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
 			NetworkMessageSet.ResetAfterHeader(dr);
-			IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
+			using IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
 
 			short workflowType = 0;
 
@@ -126,8 +131,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			switch(workflowType) {
 				case WorkflowIDs.CHAIN_SYNC:
 
-					return this.GetChainSyncMessageFactory().RehydrateMessage(data, header, rehydrationFactory);
+					return this.GetChainSyncMessageFactory().Rehydrate(data, header, rehydrationFactory);
+				case WorkflowIDs.APPOINTMENT_REQUEST:
 
+					return this.GetAppointmentRequestMessageFactory().Rehydrate(data, header, rehydrationFactory);
 				default:
 
 					throw new ApplicationException("Workflow message factory not found");
@@ -136,7 +143,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 
 		public override IGossipMessageSet RehydrateGossipMessage(SafeArrayHandle data, GossipHeader header, IBlockchainEventsRehydrationFactory rehydrationFactory) {
 
-			IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
+			using IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
 			SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
 			NetworkMessageSet.ResetAfterHeader(dr);
@@ -144,7 +151,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			short workflowType = 0;
 			ComponentVersion<SimpleUShort> version = null;
 
-			IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
+			using IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
 
 			workflowType = messageRehydrator.ReadShort();
 			version = messageRehydrator.Rehydrate<ComponentVersion<SimpleUShort>>();
@@ -174,6 +181,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 
 					break;
 
+				
 				case GossipWorkflowIDs.MESSAGE_RECEIVED:
 
 					if(version == (1, 0)) {
@@ -191,6 +199,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 				throw new ApplicationException("Invalid message type or version");
 			}
 
+			messageSet.MessageBytes = messageBytes.Branch();
+
 			((IBlockchainGossipMessageRWSet) messageSet).RWBaseHeader = header; // set the header explicitely
 			messageSet.RehydrateRest(dr, rehydrationFactory);
 
@@ -204,16 +214,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			where EVENT_ENVELOPE_TYPE : class, ITransactionEnvelope, new();
 
 		public abstract IBlockchainGossipMessageSet CreateTransactionCreatedGossipMessageSet(GossipHeader header);
-		public abstract IBlockchainGossipMessageSet CreateTransactionCreatedGossipMessageSet(ITransactionEnvelope transaction);
 
-		public abstract IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet<GOSSIP_MESSAGE_SET, GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>(IMessageEnvelope message)
+		public abstract IBlockchainGossipMessageSet CreateTransactionCreatedGossipMessageSet(ITransactionEnvelope signedTransaction);
+
+		public abstract IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet<GOSSIP_MESSAGE_SET, GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>(IMessageEnvelope signedMessage)
 			where GOSSIP_MESSAGE_SET : BlockchainGossipMessageSet<GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>, new()
 			where GOSSIP_MESSAGE_TYPE : BlockchainMessageCreatedGossipMessage<EVENT_ENVELOPE_TYPE>, new()
-			where EVENT_ENVELOPE_TYPE : class, IMessageEnvelope, new();
+			where EVENT_ENVELOPE_TYPE : class, ISignedMessageEnvelope, new();
 
 		public abstract IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet(GossipHeader header);
-		public abstract IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet(IMessageEnvelope message);
-
+		public abstract IBlockchainGossipMessageSet CreateBlockchainMessageCreatedGossipMessageSet(IMessageEnvelope signedMessage);
 		public abstract IBlockchainGossipMessageSet CreateBlockCreatedGossipMessageSet(GossipHeader header);
 
 		/// <summary>
@@ -222,7 +232,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 		/// <param name="gossipMessageSet"></param>
 		public void HashGossipMessage(IBlockchainGossipMessageSet gossipMessageSet) {
 
-			HashingUtils.HashGossipMessageSet(gossipMessageSet);
+			HashingUtils.SetHashGossipMessageSet(gossipMessageSet);
 		}
 
 		/// <summary>
@@ -312,7 +322,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			where GOSSIP_MESSAGE_TYPE : BlockchainGossipWorkflowTriggerMessage<EVENT_ENVELOPE_TYPE>, new()
 			where EVENT_ENVELOPE_TYPE : class, IEnvelope<EVENT_TYPE>
 			where EVENT_ENVELOPE_IMPLEMENTATION_TYPE : class, EVENT_ENVELOPE_TYPE, new()
-			where EVENT_TYPE : class, IBinarySerializable {
+			where EVENT_TYPE : class, IDehydrateBlockchainEvent {
 
 			GOSSIP_MESSAGE_SET messageSet = this.CreateEmptyGossipMessageSet<GOSSIP_MESSAGE_SET, GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>();
 
@@ -343,7 +353,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messa
 			where GOSSIP_MESSAGE_SET : BlockchainGossipMessageSet<GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>, new()
 			where GOSSIP_MESSAGE_TYPE : BlockchainGossipWorkflowTriggerMessage<EVENT_ENVELOPE_TYPE>, new()
 			where EVENT_ENVELOPE_TYPE : class, IEnvelope<EVENT_TYPE>
-			where EVENT_TYPE : class, IBinarySerializable {
+			where EVENT_TYPE : class, IDehydrateBlockchainEvent {
 
 			GOSSIP_MESSAGE_SET messageSet = this.CreateEmptyGossipMessageSet<GOSSIP_MESSAGE_SET, GOSSIP_MESSAGE_TYPE, EVENT_ENVELOPE_TYPE>();
 

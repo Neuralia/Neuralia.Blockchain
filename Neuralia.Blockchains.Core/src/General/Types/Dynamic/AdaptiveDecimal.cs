@@ -5,6 +5,7 @@ using LiteDB;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Network.ReadingContexts;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -14,7 +15,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 	///     one possible extra byte if there are leading zeros either in the integral or the fraction.
 	///     . so the maximum size it will take is 18 bytes.
 	/// </summary>
-	public class AdaptiveDecimal : ITreeHashable, IBinarySerializable, IEquatable<AdaptiveDecimal>, IComparable<decimal>, IComparable<AdaptiveDecimal> {
+	public class AdaptiveDecimal : ITreeHashable, IBinarySerializable, IJsonValue, IEquatable<AdaptiveDecimal>, IComparable<decimal>, IComparable<AdaptiveDecimal>, IValue<decimal> {
 
 		private const long BYTES_7 = 0xFFFFFFFFFFFFFF;
 		private const int MAX_DECIMALS = 16;
@@ -414,6 +415,10 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 		public override string ToString() {
 			return this.Value.ToString();
+		}
+
+		public void JsonWriteValue(string name, JsonDeserializer jsonDeserializer) {
+			jsonDeserializer.SetProperty(name, this.Value);
 		}
 
 		private delegate void CopyDataDelegate(in Span<byte> longbytes, int srcOffset, int start, int length);

@@ -17,6 +17,7 @@ using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
@@ -47,13 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		private const int FULL_BLOCK_UNIT_COUNT = 100;
 		private const int INTERPOLATED_MAJOR_UNIT_COUNT = 5;
 		private const int INTERPOLATED_MINOR_UNIT_COUNT = 1;
-
-		/// <summary>
-		///     this is a hack
-		///     TODO: improve this, a static variable is bad
-		/// </summary>
-		private static DateTime lastClearTimedout = DateTime.MinValue;
-
+		
 		private readonly RateCalculator rateCalculator = new RateCalculator();
 		private bool shutdownRequest;
 
@@ -99,7 +94,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					this.working = true;
 				}
 				await this.PerformSyncWork(workflow, taskRoutingContext, lockContext).ConfigureAwait(false);
-			} finally {
+			} 
+			catch(OutOfMemoryException oex) {
+				// thats bad, lets clear everything
+
+				this.LoadedBlocks.Clear();
+				GC.Collect();
+					
+				throw;
+			}
+			finally {
 				lock(this.uniqueLocker) {
 					this.working = false;
 				}
@@ -115,7 +119,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return;
 			}
 
-			if(!this.centralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded) {
+			if(!this.centralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded || ! await centralCoordinator.ChainComponentProvider.WalletProviderBase.HasAccount(lockContext).ConfigureAwait(false)) {
 				return;
 			}
 
@@ -129,7 +133,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			long currentBlockHeight = startBlockHeight;
 
-			List<IWalletAccount> syncableAccounts = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(currentBlockHeight + 1, lockContext).ConfigureAwait(false);
+			List<IWalletAccount> syncableAccounts = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(currentBlockHeight, currentBlockHeight, lockContext).ConfigureAwait(false);
 
 			if(!syncableAccounts.Any()) {
 				// no syncing possible
@@ -175,15 +179,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
-
-				// now we ensure that all timed out in the wallet are updated
-				if(lastClearTimedout < DateTime.Now) {
-					bool changed = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ResetAllTimedOut(lockContext).ConfigureAwait(false);
-
-					// do it again, but not too often. if we did not change anything, perhaps
-					//TODO: review this timeout. 
-					lastClearTimedout = DateTime.Now.AddMinutes(10);
-				}
 
 				NLog.Default.Verbose("Wallet sync completed");
 			} catch(Exception ex) {

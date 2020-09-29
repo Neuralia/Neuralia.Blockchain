@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 
 		public SecureString WalletPassphrase { get; private set; }
 
-		public SafeArrayHandle WalletPassphraseBytes => this.WalletPassphrase == null ? null : ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString()));
+		public SafeArrayHandle WalletPassphraseBytes => this.WalletPassphrase == null ? null : SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(this.WalletPassphrase.ConvertToUnsecureString()));
 
 		/// <summary>
 		///     An explicit flag to determine if we should encrypt the wallet
@@ -102,8 +102,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Passphrases {
 			}
 		}
 
-		private string GenerateKeyScoppedName(Guid identityUuid, string keyname) {
-			return $"{identityUuid.ToString()}-{keyname}";
+		private string GenerateKeyScoppedName(string accountCode, string keyname) {
+			return $"{accountCode.ToString()}-{keyname}";
 		}
 
 		protected override void DisposeAll() {

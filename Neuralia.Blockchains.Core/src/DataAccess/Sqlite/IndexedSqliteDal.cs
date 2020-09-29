@@ -79,25 +79,30 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return Task.CompletedTask;
 		}
 
-		protected long GetKeyGroup(long key) {
-			return this.FindIndex(key).index;
+		protected IndexedSqliteDbContext.IndexSet GetKeyGroup(long key) {
+			return new IndexedSqliteDbContext.IndexSet(this.FindIndex(key).index, "");
 		}
+		
+		protected IndexedSqliteDbContext.IndexSet GetKeyGroup(AccountId key) {
+			string type = "";
 
-		protected long GetKeyGroup(AccountId key) {
-			return this.FindIndex(key.SequenceId).index;
+			if(key.AccountType != Enums.AccountTypes.Unknown) {
+				type = key.AccountType.ToString().ToLower();
+			}
+			return new IndexedSqliteDbContext.IndexSet(this.FindIndex(key.SequenceId).index, type);
 		}
 
 		/// <summary>
 		///     Run a set of operations, each on their own file
 		/// </summary>
 		/// <param name="operations"></param>
-		public void PerformProcessingSet(Dictionary<long, List<Action<DBCONTEXT>>> operations) {
+		public void PerformProcessingSet(Dictionary<AccountId, List<Action<DBCONTEXT>>> operations) {
 
 			// group them by keyGroups
 
-			IEnumerable<IGrouping<long, KeyValuePair<long, List<Action<DBCONTEXT>>>>> groups = operations.GroupBy(e => this.GetKeyGroup(e.Key));
+			var groups = operations.GroupBy(e => this.GetKeyGroup(e.Key));
 
-			foreach(IGrouping<long, KeyValuePair<long, List<Action<DBCONTEXT>>>> group in groups) {
+			foreach(var group in groups) {
 
 				foreach(List<Action<DBCONTEXT>> operation in group.Select(g => g.Value)) {
 					this.PerformOperations(operation, group.Key);
@@ -109,7 +114,23 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 			LockContext lockContext = null;
 
-			Dictionary<long, List<Func<DBCONTEXT, Task>>> wrappedOperations = operations.ToDictionary(e => e.Key, e => e.Value.Select(o => {
+			Dictionary<AccountId, List<Func<DBCONTEXT, Task>>> wrappedOperations = operations.ToDictionary(e => new AccountId(e.Key, Enums.AccountTypes.Unknown), e => e.Value.Select(o => {
+
+				Task Func(DBCONTEXT db) {
+					return o(db, lockContext);
+				}
+
+				return (Func<DBCONTEXT, Task>) Func;
+			}).ToList());
+
+			return this.PerformProcessingSetHoldTransactions(wrappedOperations);
+		}
+		
+		public Task<List<(DBCONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSetHoldTransactions(Dictionary<AccountId, List<Func<DBCONTEXT, LockContext, Task>>> operations) {
+
+			LockContext lockContext = null;
+
+			Dictionary<AccountId, List<Func<DBCONTEXT, Task>>> wrappedOperations = operations.ToDictionary(e => e.Key, e => e.Value.Select(o => {
 
 				Task Func(DBCONTEXT db) {
 					return o(db, lockContext);
@@ -126,16 +147,16 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		/// </summary>
 		/// <param name="operations"></param>
 		/// <returns></returns>
-		public async Task<List<(DBCONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSetHoldTransactions(Dictionary<long, List<Func<DBCONTEXT, Task>>> operations) {
+		public async Task<List<(DBCONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSetHoldTransactions(Dictionary<AccountId, List<Func<DBCONTEXT, Task>>> operations) {
 
 			// group them by keyGroups
 			List<(DBCONTEXT db, IDbContextTransaction transaction)> transactions = new List<(DBCONTEXT db, IDbContextTransaction transaction)>();
 
 			try {
 
-				IEnumerable<IGrouping<long, List<Func<DBCONTEXT, Task>>>> groups = operations.GroupBy(e => this.GetKeyGroup(e.Key), d => d.Value);
+				var groups = operations.GroupBy(e => this.GetKeyGroup(e.Key), d => d.Value);
 
-				foreach(IGrouping<long, List<Func<DBCONTEXT, Task>>> group in groups) {
+				foreach(var group in groups) {
 
 					(DBCONTEXT db, IDbContextTransaction transaction) transaction = await this.BeginHoldingTransaction(group.Key).ConfigureAwait(false);
 					transactions.Add(transaction);
@@ -195,13 +216,13 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return results;
 		}
 
-		public bool AnyAll(Func<DBCONTEXT, bool> operation, List<long> ids) {
+		public bool AnyAll(Func<DBCONTEXT, bool> operation, List<IndexedSqliteDbContext.IndexSet> ids) {
 
-			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
+			var groups = ids.GroupBy(e => e);
 
-			foreach(long index in groups.Select(g => g.Key)) {
+			foreach(var index in groups) {
 
-				if(this.PerformOperation(operation, index)) {
+				if(this.PerformOperation(operation, index.Key)) {
 					return true;
 				}
 			}
@@ -209,13 +230,17 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return false;
 		}
 
-		public async Task<bool> AnyAllAsync(Func<DBCONTEXT, Task<bool>> operation, List<long> ids) {
+		public Task<bool> AnyAllAsync(Func<DBCONTEXT, Task<bool>> operation, List<AccountId> ids) {
+			return this.AnyAllAsync(operation, ids.Select(e => this.GetKeyGroup(e)).ToList());
+		}
 
-			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
+		public async Task<bool> AnyAllAsync(Func<DBCONTEXT, Task<bool>> operation, List<IndexedSqliteDbContext.IndexSet> ids) {
 
-			foreach(long index in groups.Select(g => g.Key)) {
+			var groups = ids.GroupBy(e => e);
 
-				if(await this.PerformOperationAsync(operation, index).ConfigureAwait(false)) {
+			foreach(var index in groups) {
+
+				if(await this.PerformOperationAsync(operation, index.Key).ConfigureAwait(false)) {
 					return true;
 				}
 			}
@@ -223,29 +248,37 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return false;
 		}
 
-		public List<T> QueryAll<T>(Func<DBCONTEXT, List<T>> operation, List<long> ids) {
+		public List<T> QueryAll<T>(Func<DBCONTEXT, List<T>> operation, List<IndexedSqliteDbContext.IndexSet> ids) {
 
-			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
+			var groups = ids.GroupBy(e => e);
 
 			List<T> results = new List<T>();
 
-			foreach(long index in groups.Select(g => g.Key)) {
+			foreach(var index in groups) {
 
-				results.AddRange(this.PerformOperation(operation, index));
+				results.AddRange(this.PerformOperation(operation, index.Key));
 			}
 
 			return results;
 		}
 
-		public async Task<List<T>> QueryAllAsync<T>(Func<DBCONTEXT, Task<List<T>>> operation, List<long> ids) {
+		public Task<List<T>> QueryAllAsync<T>(Func<DBCONTEXT, Task<List<T>>> operation, List<long> ids) {
+			return this.QueryAllAsync(operation, ids.Select(e => new IndexedSqliteDbContext.IndexSet(e)).ToList());
+		}
+		
+		public Task<List<T>> QueryAllAsync<T>(Func<DBCONTEXT, Task<List<T>>> operation, List<AccountId> ids) {
+			return this.QueryAllAsync(operation, ids.Select(e => this.GetKeyGroup(e)).ToList());
+		}
 
-			IEnumerable<IGrouping<long, long>> groups = ids.GroupBy(this.GetKeyGroup);
+		public async Task<List<T>> QueryAllAsync<T>(Func<DBCONTEXT, Task<List<T>>> operation, List<IndexedSqliteDbContext.IndexSet> ids) {
+
+			var groups = ids.GroupBy(e => e);
 
 			List<T> results = new List<T>();
 
-			foreach(long index in groups.Select(g => g.Key)) {
+			foreach(var index in groups) {
 
-				results.AddRange(await this.PerformOperation(operation, index).ConfigureAwait(false));
+				results.AddRange(await this.PerformOperationAsync(operation, index.Key).ConfigureAwait(false));
 			}
 
 			return results;
@@ -266,7 +299,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			base.InitContext(db);
 		}
 
-		protected void InitContext(DBCONTEXT db, long index) {
+		protected void InitContext(DBCONTEXT db, IndexedSqliteDbContext.IndexSet index) {
 
 			db.SetGroupIndex(index, this.groupSize);
 
@@ -320,8 +353,8 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 					if(contents[0] is string filename) {
 						initializer = dbx => this.InitContext(dbx, filename);
-					} else if(contents[0] is long index) {
-						initializer = dbx => this.InitContext(dbx, index);
+					} else if(contents[0] is IndexedSqliteDbContext.IndexSet indexEntry) {
+						initializer = dbx => this.InitContext(dbx, indexEntry);
 					}
 
 					using(DBCONTEXT db = this.CreateContext(initializer)) {
@@ -336,13 +369,87 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 		}
 
-		public async Task<(DBCONTEXT db, IDbContextTransaction transaction)> BeginHoldingTransaction(long index) {
+		protected override async Task PerformInnerContextOperationAsync(Func<DBCONTEXT, Task> action, params object[] contents) {
+			using(await this.locker.LockAsync().ConfigureAwait(false)) {
+				try {
+					Action<DBCONTEXT> initializer = null;
+
+					if(contents[0] is string filename) {
+						initializer = dbx => this.InitContext(dbx, filename);
+					} else if(contents[0] is IndexedSqliteDbContext.IndexSet indexEntry) {
+						initializer = dbx => this.InitContext(dbx, indexEntry);
+					}
+
+					await using(DBCONTEXT db = this.CreateContext(initializer)) {
+						await action(db).ConfigureAwait(false);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "exception occured during an indexed Entity Framework action");
+
+					throw;
+				}
+			}
+		}
+
+		protected override async Task<T> PerformInnerContextOperationAsync<T>(Func<DBCONTEXT, Task<T>> action, params object[] contents) {
+			using(await this.locker.LockAsync().ConfigureAwait(false)) {
+				try {
+					Action<DBCONTEXT> initializer = null;
+
+					if(contents[0] is string filename) {
+						initializer = dbx => this.InitContext(dbx, filename);
+					} else if(contents[0] is IndexedSqliteDbContext.IndexSet indexEntry) {
+						initializer = dbx => this.InitContext(dbx, indexEntry);
+					}
+
+					await using(DBCONTEXT db = this.CreateContext(initializer)) {
+						return await action(db).ConfigureAwait(false);
+					}
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "exception occured during an indexed Entity Framework action");
+
+					throw;
+				}
+			}
+		}
+
+		public async Task<(DBCONTEXT db, IDbContextTransaction transaction)> BeginHoldingTransaction(IndexedSqliteDbContext.IndexSet index) {
 
 			DBCONTEXT db = this.CreateContext(dbx => this.InitContext(dbx, index));
 
 			IDbContextTransaction transaction = await db.Database.BeginTransactionAsync().ConfigureAwait(false);
 
 			return (db, transaction);
+		}
+		
+		protected static readonly Dictionary<(Type, IndexedSqliteDbContext.IndexSet), HashSet<string>> SplitDbCreatedCache = new Dictionary<(Type, IndexedSqliteDbContext.IndexSet), HashSet<string>>();
+
+		protected override void EnsureDatabaseCreated(DBCONTEXT ctx) {
+			
+			string path = this.GetDbPath(ctx);
+
+			Type type = this.GetType();
+
+			var key = (type, ctx.Index);
+			if(!SplitDbCreatedCache.ContainsKey(key)) {
+				SplitDbCreatedCache.Add(key, new HashSet<string>());
+			}
+
+			if(!SplitDbCreatedCache[key].Contains(path)) {
+				if(!File.Exists(path)) {
+
+					NLog.Default.Verbose("Ensuring that the Sqlite database '{0}' exists and tables are created", path);
+
+					// let's make sure the database exists and is created
+					ctx.EnsureCreated();
+
+					this.EnsureVersionCreated(ctx);
+
+					NLog.Default.Verbose("Sqlite database '{0}' structure creation completed.", path);
+				}
+
+				SplitDbCreatedCache[key].Add(path);
+			}
 		}
 	}
 }

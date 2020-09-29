@@ -4,8 +4,10 @@ using LiteDB;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snapshots;
 using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Specialized;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 
@@ -24,7 +26,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => uint.Parse(bson.AsString.ToString()));
 
 			BsonMapper.Global.RegisterType(uri => uri.ToString(), bson => ulong.Parse(bson.AsString.ToString()));
+			
+			BsonMapper.Global.RegisterType(uri => uri.Ticks, bson => TimeSpan.FromTicks(bson.AsInt64));
+			BsonMapper.Global.RegisterType(uri => uri.HasValue?(long)uri.Value.Ticks:(long?)null, bson => {
+				if(bson.IsNull) {
+					return (TimeSpan?)null;
+				}
 
+				return (TimeSpan?) TimeSpan.FromTicks(bson.AsInt64);
+			});
+			
 			RegisterArrayTypes();
 
 			RegisterAmount();
@@ -57,8 +68,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterArrayTypes() {
 
-			BsonMapper.Global.RegisterType(uri => uri.ToExactByteArray(), bson => (SafeArrayHandle) ByteArray.Create(bson.AsBinary));
-			BsonMapper.Global.RegisterType(uri => uri.ToExactByteArray(), bson => ByteArray.Create(bson.AsBinary));
+			BsonMapper.Global.RegisterType<SafeArrayHandle>(uri => {
+
+				return uri.ToExactByteArray();
+			}, bson => {
+
+				return SafeArrayHandle.Create(bson.AsBinary);
+			});
+			BsonMapper.Global.RegisterType<ByteArray>(uri => uri.ToExactByteArray(), bson => ByteArray.Create(bson.AsBinary));
 		}
 
 		public static void RegisterWalletSnaphostTypes() {
@@ -93,8 +110,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 
 		public static void RegisterKeyUseIndexSet() {
 
-			BsonMapper.Global.Entity<KeyUseIndexSet>().Ignore(x => x.Clone);
 			BsonMapper.Global.RegisterType(uri => uri?.ToString(), bson => new KeyUseIndexSet(bson.AsString));
+			
+			BsonMapper.Global.RegisterType(uri => uri?.ToString(), bson => new IdKeyUseIndexSet(bson.AsString));
 		}
 
 		public static void RegisterAccountId() {

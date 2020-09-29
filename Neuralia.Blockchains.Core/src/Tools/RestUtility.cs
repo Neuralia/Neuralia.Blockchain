@@ -1,12 +1,21 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using RestSharp;
 
 namespace Neuralia.Blockchains.Core.Tools {
-	public class RestUtility {
+	public interface IRestUtility
+	{
+		Task<IRestResponse> Put(string url, string action, Dictionary<string, object> parameters, Dictionary<string, byte[]> files = null);
+		Task<IRestResponse> Post(string url, string action, Dictionary<string, object> parameters, Dictionary<string, byte[]> files = null);
+		Task<IRestResponse> Get(string url, string action);
+	}
 
+	public class RestUtility : IRestUtility {
+		
 		public enum Modes {
+			None,
 			FormData,
 			XwwwFormUrlencoded
 		}
@@ -30,6 +39,8 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		}
 
+		public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(5);
+		
 		public Task<IRestResponse> Put(string url, string action, Dictionary<string, object> parameters, Dictionary<string, byte[]> files = null) {
 
 			return this.PerformCall(url, action, Method.PUT, parameters, files);
@@ -57,7 +68,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			if(this.mode == Modes.FormData) {
 				request.AlwaysMultipartFormData = true;
-			} else {
+			} else if(this.mode == Modes.XwwwFormUrlencoded) {
 				request.AddHeader("Content-Type", "application/x-www-form-urlencoded");
 			}
 
@@ -78,7 +89,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				}
 			}
 
-			request.Timeout = 5000; // 5 seconds
+			request.Timeout = (int)this.Timeout.TotalMilliseconds;
 
 			return client.ExecuteAsync(request);
 

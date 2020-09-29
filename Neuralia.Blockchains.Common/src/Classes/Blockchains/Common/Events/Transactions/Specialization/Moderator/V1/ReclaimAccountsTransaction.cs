@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Tools.Serialization;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
@@ -19,8 +20,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public List<AccountReset> Accounts { get; } = new List<AccountReset>();
 
-		public override HashNodeList GetStructuresArray() {
-			HashNodeList nodeList = base.GetStructuresArray();
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
 			nodeList.Add(this.Accounts.Count);
 
@@ -44,8 +45,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			});
 		}
 
-		public override ImmutableList<AccountId> TargetAccounts => this.Accounts.Select(r => r.Account).ToImmutableList();
-
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.Range;
+		public override AccountId[] ImpactedAccounts =>this.TargetAccounts;
+		public override AccountId[] TargetAccounts => this.Accounts.Select(r => r.Account).ToArray();
+		
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 

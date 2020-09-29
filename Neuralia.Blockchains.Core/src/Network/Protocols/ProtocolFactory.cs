@@ -90,8 +90,8 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 		}
 
-		public ByteArray CreateHandshake() {
-			ByteArray handShakeSimpleBytes = ByteArray.Create(HANDSHAKE_PROTOCOL_SIZE);
+		public SafeArrayHandle CreateHandshake() {
+			SafeArrayHandle handShakeSimpleBytes = SafeArrayHandle.Create(HANDSHAKE_PROTOCOL_SIZE);
 			handShakeSimpleBytes[0] = 13; // the magic start number
 			handShakeSimpleBytes[1] = MessageBuilder.ProtocolVersion.Version;
 			handShakeSimpleBytes[2] = MessageBuilder.ProtocolVersion.Revision;
@@ -215,10 +215,10 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 				if(bytes.Length <= MAXIMUM_NO_COMPRESSION_SIZE) {
 
 					//TODO: how could we avoid a copy here just to increase by 1 byte?
-					ByteArray other = ByteArray.Create(bytes.Length + 1);
+					SafeArrayHandle other = SafeArrayHandle.Create(bytes.Length + 1);
 
 					// move it all by 1 byte for the flag
-					bytes.Entry.CopyTo(other, 0, 1, bytes.Length);
+					bytes.CopyTo(other, 0, 1, bytes.Length);
 					other[0] = (byte) CompressionFlags.NotCompressed;
 
 					return other;

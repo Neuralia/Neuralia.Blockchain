@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -6,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Extensions;
@@ -45,11 +47,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		}
 
 		private const string BACKUP_PATH_NAME = "backup";
+		private readonly object cleanLocker = new object();
 
 		private const uint HRFileLocked = 0x80070020;
 		private const uint HRPortionOfFileLocked = 0x80070021;
 
-		private readonly List<Task> cleaningTasks = new List<Task>();
+		private readonly WrapperConcurrentQueue<Action> cleaningOperations = new WrapperConcurrentQueue<Action>();
+		private Task cleaningTask;
 
 		private readonly List<(string name, FilesystemTypes type)> exclusions;
 
@@ -70,7 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			this.physicalFileSystem = fileSystem ?? FileSystemWrapper.CreatePhysical();
 			this.activeFileSystem = this.physicalFileSystem;
 			this.walletsPath = walletsPath;
-			this.exclusions = exclusions;
+			this.exclusions = exclusions; 
 		}
 
 		public FileSystemWrapper FileSystem => this.activeFileSystem;
@@ -137,11 +141,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			return (errorCode == HRFileLocked) || (errorCode == HRPortionOfFileLocked);
 		}
 
+		private void AddCleaningTask(Action operation) {
+			lock(this.cleanLocker) {
+				this.cleaningOperations.Enqueue(operation);
+
+				if(this.cleaningTask != null && this.cleaningTask.IsCompleted) {
+					this.cleaningTask = null;
+				}
+
+				if(this.cleaningTask == null) {
+					this.cleaningTask = Task.Run(() => {
+
+						while(this.cleaningOperations.TryDequeue(out Action op)) {
+							try {
+								op();
+							} catch (Exception ex){
+								Log.Debug(ex, "Error while running wallet cleaning action");
+							}
+						}
+					});
+				}
+			}
+		}
+
 		private void ClearCleaningTasks() {
 
 			try {
-				foreach(Task task in this.cleaningTasks.Where(t => t.IsCompleted).ToArray()) {
-					this.cleaningTasks.Remove(task);
+				lock(this.cleanLocker) {
+					this.cleaningOperations.Clear();
+					this.cleaningTask = null;
 				}
 			} catch(Exception ex) {
 				// nothing to do
@@ -152,11 +180,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			this.ClearCleaningTasks();
 
 			try {
-				if(this.cleaningTasks.Any()) {
+				bool cleaning = false;
+
+				lock(this.cleanLocker) {
+					cleaning = this.cleaningTask != null && !this.cleaningTask.IsCompleted;
+				}
+
+				if(cleaning) {
 					try {
-						await Task.WhenAll(this.cleaningTasks.ToList()).HandleTimeout(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+						this.cleaningTask?.Wait(TimeSpan.FromSeconds(20));
 					} catch(Exception ex) {
 						NLog.Default.Error(ex, "Failed to process cleaning tasks.");
+					} finally {
+						this.cleaningTask = null;
 					}
 				}
 			} finally {
@@ -220,8 +256,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			FileSystemWrapper memoryFileSystem = this.activeFileSystem;
 
-			this.cleaningTasks.Add(Task.Run(() => this.DeleteFolderStructure(memoryFileSystem.GetDirectoryEntryUnconditional(this.walletsPath), memoryFileSystem)));
-
+			this.AddCleaningTask(() => this.DeleteFolderStructure(memoryFileSystem.GetDirectoryEntryUnconditional(this.walletsPath), memoryFileSystem));
+			
 			this.activeFileSystem = this.physicalFileSystem;
 			this.fileStatuses.Clear();
 			this.initialFileStructure.Clear();
@@ -240,7 +276,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 				FileSystemWrapper memoryFileSystem = this.activeFileSystem;
 
 				// let all changes go, we release it all
-				this.cleaningTasks.Add(Task.Run(() => this.DeleteFolderStructure(memoryFileSystem.GetDirectoryEntryUnconditional(this.walletsPath), memoryFileSystem)));
+				this.AddCleaningTask(() => this.DeleteFolderStructure(memoryFileSystem.GetDirectoryEntryUnconditional(this.walletsPath), memoryFileSystem));
 
 				this.activeFileSystem = this.physicalFileSystem;
 				this.fileStatuses.Clear();

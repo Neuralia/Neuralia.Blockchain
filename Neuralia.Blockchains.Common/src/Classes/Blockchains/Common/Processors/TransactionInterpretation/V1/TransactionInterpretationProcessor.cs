@@ -9,11 +9,12 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Speci
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Widgets;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.General.V1;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
@@ -35,9 +36,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshot, new() {
 
 		protected readonly CENTRAL_COORDINATOR centralCoordinator;
-		private readonly ChainConfigurations.FastKeyTypes enabledFastKeyTypes;
+		private readonly ChainConfigurations.KeyDictionaryTypes enabledKeyDictionaryTypes;
 
-		private readonly Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys;
+		private readonly Dictionary<(AccountId accountId, byte ordinal), byte[]> keyDictionary;
 		private readonly TransactionImpactSet.OperationModes operationMode;
 
 		private ImmutableList<AccountId> dispatchedAccounts;
@@ -61,8 +62,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 			this.TransactionImpactSets = new TransactionImpactSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT>(this.centralCoordinator.ChainId, this.centralCoordinator.ChainName);
 
-			this.fastKeys = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnableFastKeyIndex ? new Dictionary<(AccountId accountId, byte ordinal), byte[]>() : null;
-			this.enabledFastKeyTypes = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnabledFastKeyTypes;
+			this.keyDictionary = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnableKeyDictionaryIndex ? new Dictionary<(AccountId accountId, byte ordinal), byte[]>() : null;
+			this.enabledKeyDictionaryTypes = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.EnabledKeyDictionaryTypes;
 		}
 
 		protected IAccreditationCertificateProvider AccreditationCertificateProvider => this.centralCoordinator.ChainComponentProvider.AccreditationCertificateProviderBase;
@@ -163,8 +164,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			return this.snapshotCacheSet.GetEntriesModificationStack();
 		}
 
-		public Dictionary<(AccountId accountId, byte ordinal), byte[]> GetImpactedFastKeys() {
-			return this.fastKeys;
+		public Dictionary<(AccountId accountId, byte ordinal), byte[]> GetImpactedKeyDictionary() {
+			return this.keyDictionary;
 		}
 
 		public virtual async Task ApplyBlockElectionsInfluence(List<IFinalElectionResults> publicationResult, Dictionary<TransactionId, ITransaction> transactions, LockContext lockContext) {
@@ -322,7 +323,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			// here we group them by impacted account
 			Dictionary<AccountId, List<TransactionId>> accountsTransactions = new Dictionary<AccountId, List<TransactionId>>();
 
-			void AddTranaction(AccountId account, TransactionId transactionId) {
+			void AddTransaction(AccountId account, TransactionId transactionId) {
 				if(!accountsTransactions.ContainsKey(account)) {
 					accountsTransactions.Add(account, new List<TransactionId>());
 				}
@@ -341,7 +342,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 						impactingLocals.Add(transaction.TransactionId, transaction);
 					}
 
-					AddTranaction(transaction.TransactionId.Account, transaction.TransactionId);
+					AddTransaction(transaction.TransactionId.Account, transaction.TransactionId);
 				}
 
 				// we still need to check the target, since we may send transactions between accounts that we own
@@ -357,7 +358,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 						if(!impactingLocals.ContainsKey(transaction.TransactionId)) {
 							impactingLocals.Add(transaction.TransactionId, transaction);
 						}
-					} else {
+					} else  if(transaction.TargetType == Enums.TransactionTargetTypes.All || (transaction.TargetType == Enums.TransactionTargetTypes.Range && transaction.ImpactedAccounts.Contains(account))) {
 						if(!impactingExternals.ContainsKey(transaction.TransactionId)) {
 							impactingExternals.Add(transaction.TransactionId, (transaction, account));
 						}
@@ -365,7 +366,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 					// now all the accounts targetted by this transaction
 					foreach(AccountId subaccount in trackedAccounts) {
-						AddTranaction(subaccount, transaction.TransactionId);
+						AddTransaction(subaccount, transaction.TransactionId);
 					}
 				}
 			}
@@ -413,7 +414,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				}
 			}
 
-			await this.TransactionImpactSets.InterpretTransaction(transaction, blockId, impactedSnapshots, this.fastKeys, this.enabledFastKeyTypes, this.operationMode, this.snapshotCacheSet, isLocal, isDispatched, this.TransactionRejected, lockContext).ConfigureAwait(false);
+			await this.TransactionImpactSets.InterpretTransaction(transaction, blockId, impactedSnapshots, this.keyDictionary, this.enabledKeyDictionaryTypes, this.operationMode, this.snapshotCacheSet, isLocal, isDispatched, this.TransactionRejected, lockContext).ConfigureAwait(false);
 
 		}
 

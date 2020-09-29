@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using LiteDB;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Compression;
@@ -9,6 +10,7 @@ using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Serialization;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
@@ -18,11 +20,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		Guid Id { get; set; }
 
+		KeyAddress KeyAddress { get; set; }
 		long DecommissionedTime { get; set; }
 
-		Guid AccountUuid { get; set; }
-		long KeySequenceId { get; set; }
-		int Ordinal { get; set; }
+		string AccountCode { get; set; }
 		byte[] Key { get; set; }
 
 		long AnnouncementBlockId { get; set; }
@@ -39,9 +40,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		public long DecommissionedTime { get; set; } = DateTimeEx.CurrentTime.Ticks;
 
-		public Guid AccountUuid { get; set; }
-		public int Ordinal { get; set; }
-		public long KeySequenceId { get; set; }
+		public string AccountCode { get; set; }
+		public KeyAddress KeyAddress { get; set; }
 		public byte[] Key { get; set; }
 		public long AnnouncementBlockId { get; set; }
 		public TransactionId DeclarationTransactionId { get; set; }
@@ -49,16 +49,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public virtual void Copy(IWalletKey key) {
 
 			this.Id = key.Id;
-			this.AccountUuid = key.AccountUuid;
+			this.AccountCode = key.AccountCode;
 			this.AnnouncementBlockId = key.AnnouncementBlockId.Value;
-			this.Ordinal = key.KeyAddress.OrdinalId;
 			this.DeclarationTransactionId = key.KeyAddress.DeclarationTransactionId.Clone;
-			this.KeySequenceId = key.KeySequenceId;
+			this.KeyAddress = key.KeyAddress.Clone();
 
-			string keyDeserialized = JsonSerializer.Serialize(key, JsonUtils.CreateSerializerSettings());
-			SafeArrayHandle bytes = Compressors.GeneralPurposeCompressor.Compress(ByteArray.WrapAndOwn(Encoding.UTF8.GetBytes(keyDeserialized)));
+			var dehydrator = DataSerializationFactory.CreateDehydrator();
+			key.Dehydrate(dehydrator);
+			using var keyBytes = dehydrator.ToArray();
+			
+			using SafeArrayHandle bytes = Compressors.GeneralPurposeCompressor.Compress(keyBytes);
 			this.Key = bytes.ToExactByteArrayCopy();
-			bytes.Return();
 		}
 	}
 }

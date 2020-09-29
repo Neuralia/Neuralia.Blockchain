@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -23,7 +24,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		public abstract class HashNode : IHashNode {
 
-			public abstract SafeArrayHandle Data { get; }
+			public abstract SafeArrayHandle Data { get; protected set; }
 			public abstract bool IsEmpty { get; }
 
 		#region Dispose
@@ -62,13 +63,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				this.Data = data;
 			}
 
-			public override SafeArrayHandle Data { get; }
-			public override bool IsEmpty => this.Data?.IsEmpty ?? true;
+			public override SafeArrayHandle Data { get; protected set;}
+			public override bool IsEmpty => this.Data?.IsNull ?? true;
 
 			protected override void DisposeAll() {
 				base.DisposeAll();
 
 				this.Data?.Dispose();
+				this.Data = null;
+			}
+
+			public override string ToString() {
+				return this.Data?.Entry.ToBase58();
 			}
 		}
 
@@ -99,6 +105,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 #endif
 					return this.action(this.entry, this.state);
 				}
+				protected set { throw new NotImplementedException(); }
 			}
 
 			public override bool IsEmpty => this.action == null;
@@ -306,12 +313,26 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 			return this;
 		}
+		
+		public HashNodeList Add(TimeSpan value) {
+			return this.Add(value.Ticks);
+		}
+
+		public HashNodeList Add(TimeSpan? value) {
+			if(value == null) {
+				this.AddNull();
+			} else {
+				this.Add(value.Value);
+			}
+
+			return this;
+		}
 
 		public HashNodeList Add(SafeArrayHandle array) {
 			if(array == null) {
 				this.AddNull();
 			} else {
-				this.Add(new ArrayHashNode(array.Branch()));
+				this.AddOwn(array.Branch());
 			}
 
 			return this;
@@ -326,31 +347,33 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		private HashNodeList AddOwn(byte[] array) {
-			this.Add(new ArrayHashNode(ByteArray.Create(array)));
+			this.Add(new ArrayHashNode(SafeArrayHandle.Create(array)));
 
 			return this;
 		}
 
 		public HashNodeList Add(byte[] array) {
-			this.Add(new ArrayHashNode(ByteArray.Wrap(array)));
+			this.Add(new ArrayHashNode(SafeArrayHandle.Wrap(array)));
 
 			return this;
 		}
 
 		public HashNodeList Add(ByteArray array) {
-			this.Add(new ArrayHashNode(ByteArray.Wrap(array)));
-
-			return this;
+			return this.Add(SafeArrayHandle.Wrap(array));
 		}
 
 		public HashNodeList AddOwn(ByteArray array) {
-			this.Add(new ArrayHashNode(ByteArray.Create(array)));
+			return this.AddOwn((SafeArrayHandle)array);
+		}
+		
+		public HashNodeList AddOwn(SafeArrayHandle array) {
+			this.Add(new ArrayHashNode(array));
 
 			return this;
 		}
 
 		public HashNodeList Add(ref byte[] array, int length) {
-			this.Add(new ArrayHashNode(ByteArray.Create(array, length)));
+			this.Add(new ArrayHashNode(SafeArrayHandle.Create(array, length)));
 
 			return this;
 		}
@@ -363,7 +386,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList Add(Enum entry) {
-			return this.Add(entry.ToString());
+			return this.Add(Convert.ChangeType(entry, entry.GetTypeCode()));
 		}
 
 		public HashNodeList Add(object obj) {
@@ -443,7 +466,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		public HashNodeList AddNull() {
-			this.Add(ByteArray.Empty());
+			this.AddOwn(ByteArray.Empty());
 
 			return this;
 		}
@@ -512,10 +535,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 		public HashNodeList Add(HashNodeList nodeList) {
 			if(nodeList != null) {
-				this.nodes.AddRange(nodeList.nodes.Where(n => (n != null) && !n.IsEmpty));
+				this.nodes.AddRange(nodeList.nodes.Where(n => n != null).Select(n => {
+					if(n.IsEmpty) {
+						return new ArrayHashNode((SafeArrayHandle) ByteArray.Empty());
+					}
+
+					return n;
+				}).ToList());
 
 #if LOG_SOURCE
-				var indices = nodeList.nodes.Where(n => (n != null) && !n.IsEmpty).Select((e, i) => i).ToList();
+				var indices = nodeList.nodes.Where(n => n != null).Select((e, i) => i).ToList();
 
 				foreach(var index in indices) {
 					this.Sources.Add(nodeList.Sources[index]);

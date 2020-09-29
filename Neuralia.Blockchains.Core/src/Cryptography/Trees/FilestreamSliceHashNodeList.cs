@@ -50,7 +50,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 
 				if(i == 0) {
 					// return the file size
-					ByteArray size = ByteArray.Create(sizeof(long));
+					SafeArrayHandle size = SafeArrayHandle.Create(sizeof(long));
 					TypeSerializer.Serialize(this.sizeSize, size.Span);
 
 					return size;
@@ -74,8 +74,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 					this.fileStream.Read(localBuffer, 0, length);
 				}
 
-				ByteArray result = ByteArray.Create(localBuffer.Length);
-				result.CopyFrom(localBuffer.AsSpan());
+				SafeArrayHandle result = SafeArrayHandle.Create(localBuffer.Length);
+				result.Entry.CopyFrom(localBuffer.AsSpan());
 
 				return result;
 			}

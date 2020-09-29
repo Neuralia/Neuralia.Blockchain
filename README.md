@@ -1,6 +1,6 @@
 # Neuralia.Blockchain
 
-##### Version:  Release Candidate V
+##### Version:  Release Candidate VI
 
 The essential blockchain components of the Neuralia Blockchain.
 
@@ -19,6 +19,8 @@ The base Blockchain implementation
 
  - Neuralia.Blockchains.Tools
  - Neuralia.BouncyCastle
+ - Neuralia.NClap
+ - Neuralia.Open.Nat
 
 Then, simply invoke pack.sh
 > ./pack.sh

@@ -15,6 +15,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		int ChainStateId { get; set; }
 		MODEL_SNAPSHOT ChainStateEntry { get; set; }
 
+		long ExpectedNextKeyIndex { get; set; }
+		long ExpectedNextKeySequenceId { get; set; }
+		
 		byte[] PublicKey { get; set; }
 
 		string DeclarationTransactionId { get; set; }

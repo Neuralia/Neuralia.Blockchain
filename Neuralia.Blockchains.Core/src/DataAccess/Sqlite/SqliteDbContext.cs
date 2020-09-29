@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Core.Extensions;
 
@@ -11,6 +12,8 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		string FolderPath { get; set; }
 
 		string GetDbPath();
+
+		Task Vacuum();
 	}
 
 	public abstract class SqliteDbContext : EntityFrameworkContext<DbContext>, ISqliteDbContext {
@@ -56,6 +59,10 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 					builder(modelBuilder);
 				}
 			}
+		}
+
+		public Task Vacuum() {
+			return this.Context.Database.ExecuteSqlCommandAsync("VACUUM;");
 		}
 	}
 }

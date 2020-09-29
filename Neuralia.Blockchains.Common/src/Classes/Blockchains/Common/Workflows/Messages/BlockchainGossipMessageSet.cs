@@ -3,6 +3,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializatio
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
+using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages {
 

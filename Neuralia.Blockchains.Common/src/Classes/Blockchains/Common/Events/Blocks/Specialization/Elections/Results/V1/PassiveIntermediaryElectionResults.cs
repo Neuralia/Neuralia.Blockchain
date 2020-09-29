@@ -31,15 +31,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			adaptiveLong.Rehydrate(rehydrator);
 			int count = (int) adaptiveLong.Value;
 
-			SafeArrayHandle typeBytes = rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, count));
+			SafeArrayHandle typeBytes = (SafeArrayHandle)rehydrator.ReadArray(SpecialIntegerSizeArray.GetbyteSize(SpecialIntegerSizeArray.BitSizes.B0d5, count));
 			using SpecialIntegerSizeArray electorTypesArray = new SpecialIntegerSizeArray(SpecialIntegerSizeArray.BitSizes.B0d5, typeBytes, count);
 
 			this.ElectedCandidates.Clear();
 			AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId> parameters = new AccountIdGroupSerializer.AccountIdGroupSerializerRehydrateParameters<AccountId>();
 
-			parameters.RehydrateExtraData = (accountId, offset, index, dh) => {
+			parameters.RehydrateExtraData = (accountId, offset, index, totalIndex, dh) => {
 
-				this.ElectedCandidates.Add(accountId, (Enums.MiningTiers) electorTypesArray[index]);
+				this.ElectedCandidates.Add(accountId, (Enums.MiningTiers) electorTypesArray[totalIndex]);
 			};
 
 			AccountIdGroupSerializer.Rehydrate(rehydrator, true, parameters);

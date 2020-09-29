@@ -21,6 +21,7 @@ using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
@@ -184,8 +185,17 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 					try {
 						this.CleanTimeouts();
 
-						await this.DisatchMessageQueues().ConfigureAwait(false);
-					} catch(Exception ex) {
+						await this.DispatchMessageQueues().ConfigureAwait(false);
+					} 
+					catch(OutOfMemoryException oex) {
+						// thats bad, lets clear everything
+
+						this.peerMessageQueues.Clear();
+						GC.Collect();
+					
+						throw;
+					}
+					catch(Exception ex) {
 						//TODO: what shouldwe do here?
 					}
 
@@ -341,9 +351,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			}
 		}
 
-		private async Task DisatchMessageQueues() {
+		private Task DispatchMessageQueues() {
 			this.CheckShouldCancel();
 
+		
 			List<Action> actions = new List<Action>();
 
 			// let's retry those who were not sent
@@ -372,7 +383,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 					}
 
 					// lets mark it all as we have a manifest in progress
-					PeerMessageQueue.MessageSendSession messageSendSession = new PeerMessageQueue.MessageSendSession();
+					var messageSendSession = new PeerMessageQueue.MessageSendSession();
 					messageSendSession.Connection = queue.Connection;
 
 					List<IGossipMessageSet> messages = new List<IGossipMessageSet>();
@@ -407,6 +418,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			}
 
 			IndependentActionRunner.Run(actions.ToArray());
+			
+			return Task.CompletedTask;
 		}
 
 		protected void SendPeerGossipMessageGroup(PeerMessageQueue.MessageSendSession messageSendSession, PeerMessageQueue queue) {

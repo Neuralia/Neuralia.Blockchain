@@ -1,5 +1,4 @@
 using System;
-using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
@@ -9,6 +8,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
@@ -22,69 +22,68 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages {
 		public PeerListRequestMessageFactory(ServiceSet<R> serviceSet) : base(serviceSet) {
 		}
 
-		public override ITargettedMessageSet<R> RehydrateMessage(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory) {
-			using(IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data)) {
+		public override ITargettedMessageSet<R> Rehydrate(SafeArrayHandle data, TargettedHeader header, R rehydrationFactory) {
+			using IDataRehydrator dr = DataSerializationFactory.CreateRehydrator(data);
 
-				SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
-				NetworkMessageSet.ResetAfterHeader(dr);
+			using SafeArrayHandle messageBytes = NetworkMessageSet.ExtractMessageBytes(dr);
+			NetworkMessageSet.ResetAfterHeader(dr);
 
-				using(IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes)) {
+			using IDataRehydrator messageRehydrator = DataSerializationFactory.CreateRehydrator(messageBytes);
 
-					ITargettedMessageSet<R> messageSet = null;
+			ITargettedMessageSet<R> messageSet = null;
 
-					try {
-						if(data?.Length == 0) {
-							throw new ApplicationException("null message");
-						}
+			try {
+				if(data?.Length == 0) {
+					throw new ApplicationException("null message");
+				}
 
-						short workflowType = 0;
-						ComponentVersion<SimpleUShort> version = null;
+				short workflowType = 0;
+				ComponentVersion<SimpleUShort> version = null;
 
-						messageRehydrator.Peek(rehydrator => {
-							workflowType = rehydrator.ReadShort();
+				messageRehydrator.Peek(rehydrator => {
+					workflowType = rehydrator.ReadShort();
 
-							if(workflowType != WorkflowIDs.PEER_LIST_REQUEST) {
-								throw new ApplicationException("Invalid workflow type");
-							}
-
-							version = rehydrator.Rehydrate<ComponentVersion<SimpleUShort>>();
-						});
-
-						switch(version.Type.Value) {
-							case TRIGGER_ID:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreatePeerListRequestWorkflowTriggerSet(header);
-								}
-
-								break;
-
-							case SERVER_REPLY_ID:
-
-								if(version == (1, 0)) {
-									messageSet = this.CreateServerPeerListRequestSet(header);
-								}
-
-								break;
-
-							default:
-
-								throw new ApplicationException("invalid message type");
-						}
-
-						if(messageSet?.BaseMessage == null) {
-							throw new ApplicationException("Invalid message type or version");
-						}
-
-						messageSet.Header = header; // set the header explicitely
-						messageSet.RehydrateRest(dr, rehydrationFactory);
-					} catch(Exception ex) {
-						NLog.Default.Error(ex, "Invalid data sent");
+					if(workflowType != WorkflowIDs.PEER_LIST_REQUEST) {
+						throw new ApplicationException("Invalid workflow type");
 					}
 
-					return messageSet;
+					version = rehydrator.Rehydrate<ComponentVersion<SimpleUShort>>();
+				});
+
+				switch(version.Type.Value) {
+					case TRIGGER_ID:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreatePeerListRequestWorkflowTriggerSet(header);
+						}
+
+						break;
+
+					case SERVER_REPLY_ID:
+
+						if(version == (1, 0)) {
+							messageSet = this.CreateServerPeerListRequestSet(header);
+						}
+
+						break;
+
+					default:
+
+						throw new ApplicationException("invalid message type");
 				}
+
+				if(messageSet?.BaseMessage == null) {
+					throw new ApplicationException("Invalid message type or version");
+				}
+
+				messageSet.Header = header; // set the header explicitely
+				messageSet.RehydrateRest(dr, rehydrationFactory);
+			} catch(Exception ex) {
+				NLog.Default.Error(ex, "Invalid data sent");
 			}
+
+			return messageSet;
+
 		}
 
 	#region Explicit Creation methods

@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Tools;
 using Serilog;
 
 namespace Neuralia.Blockchains.Core.Tools {
@@ -17,7 +18,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		private long cachedCurrentMemory;
 		private long cachedVirtualMemory;
-		private DateTime lastCheck = DateTime.MinValue;
+		private DateTime lastCheck = DateTimeEx.MinValue;
 
 		private Process myProcess;
 
@@ -120,7 +121,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				}
 				
 				//TODO: using VirtualMemorySize64 is not right. we should investigate the best way to get true total memory dynamically
-				await UpdateProcessInfo(appSettingsBase.TotalUsableMemory == 0).ConfigureAwait(false);
+				await this.UpdateProcessInfo(appSettingsBase.TotalUsableMemory == 0).ConfigureAwait(false);
 
 				long currentMemory = this.cachedCurrentMemory;
 				long virtualMemory = appSettingsBase.TotalUsableMemory;

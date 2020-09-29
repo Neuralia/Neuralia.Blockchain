@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		string Contents { get; set; }
 
-		byte Status { get; set; }
+		WalletTransactionHistory.TransactionStatuses Status { get; set; }
 		string Note { get; set; }
 		bool Local { get; set; }
 	}
@@ -42,7 +42,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		public string Contents { get; set; }
 
-		public byte Status { get; set; }
+		public TransactionStatuses Status { get; set; }
 
 		public string Note { get; set; }
 

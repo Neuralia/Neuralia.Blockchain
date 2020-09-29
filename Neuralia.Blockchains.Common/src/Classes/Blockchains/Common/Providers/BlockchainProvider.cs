@@ -3,8 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AppointmentRegistry;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AppointmentRegistry.GossipMessages;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AppointmentRegistry.PeerEntries;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.AppointmentRegistry;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Appointments;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.ExternalAPI;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
@@ -16,28 +21,39 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Serialization;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Appointments;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Elections;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.Moderation.Appointments;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization.Moderator.V1;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.BlockInsertionTransaction;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.SerializationTransactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.System;
 using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
+using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
+using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Cryptography;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.Blockchains.Tools.Serialization;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
 
@@ -45,8 +61,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IBlockchainProvider : IChainProvider {
 		IEventPoolProvider ChainEventPoolProvider { get; }
 
-		Task InsertLocalTransaction(ITransactionEnvelope transactionEnvelope, string note, CorrelationContext correlationContext, LockContext lockContext);
-		Task InsertGossipTransaction(ITransactionEnvelope transactionEnvelope, LockContext lockContext);
+		Task InsertLocalTransaction(ITransactionEnvelope signedTransactionEnvelope, string note,  WalletTransactionHistory.TransactionStatuses status, CorrelationContext correlationContext, LockContext lockContext);
+		Task InsertGossipTransaction(ITransactionEnvelope signedTransactionEnvelope, LockContext lockContext);
 
 		Task<bool> InstallGenesisBlock(IGenesisBlock genesisBlock, IDehydratedBlock dehydratedBlock, LockContext lockContext);
 
@@ -55,10 +71,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<bool> InsertBlock(IBlock block, IDehydratedBlock dehydratedBlock, bool syncWallet, LockContext context, bool useTransaction = true);
 
 		Task<bool> InstallDigest(int digestId, LockContext lockContext);
-
-		Task HandleBlockchainMessage(IBlockchainMessage message, IDehydratedBlockchainMessage dehydratedMessage, LockContext lockContext);
-
+		
+		Task HandleBlockchainMessage(IBlockchainMessage message, IMessageEnvelope messageEnvelope, LockContext lockContext);
 		long GetBlockHeight();
+		int GetDigestHeight();
 		BlockchainInfo GetBlockchainInfo();
 
 		bool AttemptLockBlockDownload(BlockId blockId);
@@ -78,6 +94,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 	}
 
+	public static class BlockchainProvider {
+
+	}
+
 	public abstract class BlockchainProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainProvider, IBlockchainProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
@@ -91,8 +111,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected readonly IBlockchainTimeService timeService;
 
 		private IEventPoolProvider chainEventPoolProvider;
-
+		
 		private long lastIncompleteBlock;
+		
 
 		public BlockchainProvider(CENTRAL_COORDINATOR centralCoordinator) {
 			this.CentralCoordinator = centralCoordinator;
@@ -103,11 +124,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected CENTRAL_COORDINATOR CentralCoordinator { get; }
 
-        /// <summary>
-        ///     allows to lock a block for a download operation.
-        /// </summary>
-        /// <returns>true if lock was acquired, false if not.</returns>
-        public bool AttemptLockBlockDownload(BlockId blockId) {
+		/// <summary>
+		///     allows to lock a block for a download operation.
+		/// </summary>
+		/// <returns>true if lock was acquired, false if not.</returns>
+		public bool AttemptLockBlockDownload(BlockId blockId) {
 			lock(this.blockDownloadLockCacheLocker) {
 				foreach(KeyValuePair<BlockId, DateTime> timedOut in this.blockDownloadLockCache.Where(e => e.Value < (DateTimeEx.CurrentTime - TimeSpan.FromSeconds(30)))) {
 					this.blockDownloadLockCache.Remove(timedOut.Key);
@@ -131,16 +152,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-        /// <summary>
-        ///     run a method while ensuring that no insert or interpret is in process.
-        /// </summary>
-        /// <param name="action"></param>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
-        public async Task<T> PerformAtomicChainHeightOperation<T>(Func<LockContext, Task<T>> action, LockContext lockContext) {
+		/// <summary>
+		///     run a method while ensuring that no insert or interpret is in process.
+		/// </summary>
+		/// <param name="action"></param>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		public async Task<T> PerformAtomicChainHeightOperation<T>(Func<LockContext, Task<T>> action, LockContext lockContext) {
 			if(action != null) {
-				using(LockHandle handle = await insertBlockLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-					using(LockHandle handle2 = await interpretBlockLocker.LockAsync(handle).ConfigureAwait(false)) {
+				using(LockHandle handle = await this.insertBlockLocker.LockAsync(lockContext).ConfigureAwait(false)) {
+					using(LockHandle handle2 = await this.interpretBlockLocker.LockAsync(handle).ConfigureAwait(false)) {
 						return await action(handle2).ConfigureAwait(false);
 					}
 				}
@@ -159,57 +180,50 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return this.chainEventPoolProvider;
 			}
 		}
-
+		
 		/// <summary>
 		///     Here is where we insert our own transactions into the cache, and the network
 		/// </summary>
-		/// <param name="transactionEnvelope"></param>
+		/// <param name="signedTransactionEnvelope"></param>
 		/// <exception cref="ApplicationException"></exception>
-		public virtual async Task InsertLocalTransaction(ITransactionEnvelope transactionEnvelope, string note, CorrelationContext correlationContext, LockContext lockContext) {
+		public virtual async Task InsertLocalTransaction(ITransactionEnvelope signedTransactionEnvelope, string note,  WalletTransactionHistory.TransactionStatuses status , CorrelationContext correlationContext, LockContext lockContext) {
 			//TODO: getting here would be a hack by an ill intended peer, should we log the peer's bad behavior?
-			if(transactionEnvelope.Contents.RehydratedTransaction is IGenesisAccountPresentationTransaction) {
+			if(signedTransactionEnvelope.Contents.RehydratedEvent is IGenesisAccountPresentationTransaction) {
 				throw new ApplicationException("Genesis transactions can not be added this way");
 			}
 
-			NLog.Default.Verbose($"Inserting new local transaction with Id {transactionEnvelope.Contents.Uuid}");
+			NLog.Default.Verbose($"Inserting new local transaction with Id {signedTransactionEnvelope.Contents.Uuid}");
 
 			// ok, now we will want to send out a gossip message to inform others that we have a new transaction.
 
 			// first step, lets add this new transaction to our own wallet pool
-			await IndependentActionRunner.RunAsync(lockContext, lc => {
-				return Repeater.RepeatAsync(() => {
-					return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertLocalTransactionCacheEntry(transactionEnvelope, lc);
-				});
-			}, lc => {
-				ITransaction transaction = transactionEnvelope.Contents.RehydratedTransaction;
-
-				return Repeater.RepeatAsync(() => {
-					return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertTransactionHistoryEntry(transaction, note, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight, lc);
-				});
-			}).ConfigureAwait(false);
+			ITransaction transaction = signedTransactionEnvelope.Contents.RehydratedEvent;
 
 			try {
-				await Repeater.RepeatAsync(() => this.AddTransactionToEventPool(transactionEnvelope)).ConfigureAwait(false);
+				await CentralCoordinator.ChainComponentProvider.WalletProviderBase.InsertTransactionHistoryEntry(transaction, note, CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight, status, lockContext).ConfigureAwait(false);
+			} catch(Exception ex) {
+				NLog.Default.Error(ex, "failed to add transaction to local history");
+			}
+
+			try {
+				await Repeater.RepeatAsync(() => this.AddTransactionToEventPool(signedTransactionEnvelope, lockContext)).ConfigureAwait(false);
 			} catch(Exception ex) {
 				NLog.Default.Error(ex, "failed to add transaction to local event pool");
 			}
 
-			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionCreated(transactionEnvelope.Contents.Uuid));
-
-			// ok, we are ready. lets send it out to the world!!  :)
-			await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.DispatchLocalTransactionAsync(transactionEnvelope, correlationContext, lockContext).ConfigureAwait(false);
+			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionCreated(signedTransactionEnvelope.Contents.Uuid));
 		}
 
 		/// <summary>
 		///     We received a transaction as a gossip message. lets add it to our
 		///     transaction cache if required
 		/// </summary>
-		/// <param name="transactionEnvelope"></param>
+		/// <param name="signedTransactionEnvelope"></param>
 		/// <param name="lockContext"></param>
-		public virtual Task InsertGossipTransaction(ITransactionEnvelope transactionEnvelope, LockContext lockContext) {
-			NLog.Default.Verbose($"Received new gossip transaction with Id {transactionEnvelope.Contents.Uuid} from peers.");
+		public virtual Task InsertGossipTransaction(ITransactionEnvelope signedTransactionEnvelope, LockContext lockContext) {
+			NLog.Default.Verbose($"Received new gossip transaction with Id {signedTransactionEnvelope.Contents.Uuid} from peers.");
 
-			return this.AddTransactionToEventPool(transactionEnvelope);
+			return this.AddTransactionToEventPool(signedTransactionEnvelope, lockContext);
 		}
 
 		public virtual async Task<bool> InstallGenesisBlock(IGenesisBlock genesisBlock, IDehydratedBlock dehydratedBlock, LockContext context) {
@@ -224,7 +238,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SerializeBlock(dehydratedBlock);
 
 				// if fast keys are enabled, then we create the base directory and first file
-				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.EnsureFastKeysIndex();
+				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.EnsureKeyDictionaryIndex();
 
 				// thats it really. now we have our block, lets update our chain stats.
 
@@ -255,9 +269,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					await chainStateProvider.UpdateFields(actions).ConfigureAwait(false);
 
 					// store the promised next signature if it is secret
-					if(genesisBlock.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-						chainStateProvider.InsertModeratorKey(new TransactionId(), genesisBlock.SignatureSet.NextModeratorKey, genesisBlock.SignatureSet.ConvertToDehydratedKey());
-					}
+					// if(genesisBlock.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
+					// 	chainStateProvider.InsertModeratorKey(new TransactionId(), genesisBlock.SignatureSet.NextModeratorKey, genesisBlock.SignatureSet.ConvertToDehydratedKey());
+					// }
 				}).ConfigureAwait(false);
 			} catch(Exception ex) {
 				NLog.Default.Fatal(ex, "Failed to insert genesis blocks into our model.");
@@ -296,10 +310,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}, lockContext);
 		}
 
+		/// <summary>
+		/// update the block signature delta cache
+		/// </summary>
+		/// <param name="block"></param>
+		/// <returns></returns>
+		protected virtual async Task<SafeArrayHandle> UpdateModeratorKeyDelta(IBlock block) {
+			SafeArrayHandle lastBlockXmssKeySignaturePathCache = null;
+
+			if(block.SignatureSet.BlockAccountSignature is XmssBlockAccountSignature xmssBlockAccountSignature) {
+				var entry = await this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKeyAndIndex(block.SignatureSet.ModeratorKey).ConfigureAwait(false);
+
+				if(entry.key is IXmssCryptographicKey xmssCryptographicKey) {
+					lastBlockXmssKeySignaturePathCache = SafeArrayHandle.CreateClone(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockXmssKeySignaturePathCache);
+
+					using XMSSProvider provider = new XMSSProvider(xmssCryptographicKey.HashType, xmssCryptographicKey.BackupHashType, xmssCryptographicKey.TreeHeight, GlobalSettings.ApplicationSettings.XmssThreadMode);
+
+					provider.Initialize();
+
+					if(lastBlockXmssKeySignaturePathCache == null || lastBlockXmssKeySignaturePathCache.IsZero) {
+						using var cache = provider.CreateSignaturePathCache();
+						lastBlockXmssKeySignaturePathCache = (SafeArrayHandle) cache.Save();
+					}
+
+					lastBlockXmssKeySignaturePathCache = provider.UpdateFromSignature(xmssBlockAccountSignature.Autograph, lastBlockXmssKeySignaturePathCache);
+				}
+			}
+
+			return lastBlockXmssKeySignaturePathCache;
+		}
+		
 		public virtual async Task<bool> InsertBlock(IBlock block, IDehydratedBlock dehydratedBlock, bool syncWallet, LockContext lockContext, bool useTransaction = true) {
 
 			// make sure we have enough memory to proceed.
-			if(!(await CentralCoordinator.CheckAvailableMemory().ConfigureAwait(false))) {
+			if(!(await this.CentralCoordinator.CheckAvailableMemory().ConfigureAwait(false))) {
 				throw new ApplicationException("Not enough memory. cannot insert.");
 			}
 
@@ -354,6 +398,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							// lets store the block hash
 							actions.Add(prov => prov.SetLastBlockHashField(block.Hash.ToExactByteArrayCopy()));
 
+							SafeArrayHandle lastBlockXmssKeySignaturePathCache = await this.UpdateModeratorKeyDelta(block).ConfigureAwait(false);
+							
+							if(lastBlockXmssKeySignaturePathCache != null && ! lastBlockXmssKeySignaturePathCache.IsZero) {
+								actions.Add(prov => prov.SetLastBlockXmssKeySignaturePathCacheField(lastBlockXmssKeySignaturePathCache.ToExactByteArrayCopy()));
+							}
+
 							await chainStateProvider.UpdateFields(actions).ConfigureAwait(false);
 
 							if(chainStateProvider.DiskBlockHeight == chainStateProvider.PublicBlockHeight) {
@@ -361,19 +411,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 								this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastSync = DateTimeEx.CurrentTime;
 							}
 
-							//TODO: joing this with the previous updateFields
 							// store the promised next signature if it is secret
-							if(block.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-								chainStateProvider.UpdateModeratorKey(new TransactionId(), block.SignatureSet.NextModeratorKey, block.SignatureSet.ConvertToDehydratedKey());
-							} else if((block.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID) && ((XmssBlockNextAccountSignature) block.SignatureSet.NextBlockAccountSignature).KeyChange) {
-								chainStateProvider.UpdateModeratorKey(new TransactionId(), block.SignatureSet.NextModeratorKey, block.SignatureSet.ConvertToDehydratedKey());
+							// if(block.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
+							// 	chainStateProvider.UpdateModeratorKey(new TransactionId(), block.SignatureSet.NextModeratorKey, block.SignatureSet.ConvertToDehydratedKey());
+							// } else 
+							if(block.SignatureSet.BlockAccountSignature is XmssBlockAccountSignature xmssBlockAccountSignature) {
+								await chainStateProvider.UpdateModeratorExpectedNextKeyIndex(xmssBlockAccountSignature.KeyAddress.OrdinalId, xmssBlockAccountSignature.KeyAddress.KeyUseIndex.KeyUseSequenceId.Value, xmssBlockAccountSignature.KeyAddress.KeyUseIndex.KeyUseIndex+1).ConfigureAwait(false);
 							}
+
+							if(block.SignatureSet.NextModeratorKey == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID){
+
+								if(((XmssBlockNextAccountSignature) block.SignatureSet.NextBlockAccountSignature).KeyChange) {
+									var details = block.SignatureSet.ConvertToDehydratedKey();
+
+									if(details.HasValue) {
+										await chainStateProvider.UpdateModeratorKey(new TransactionId(), block.SignatureSet.NextModeratorKey, details.Value.bytes, true).ConfigureAwait(false);
+
+										// reset the cache
+										chainStateProvider.LastBlockXmssKeySignaturePathCache = null;
+									}
+								}
+							}
+							
 						}).ConfigureAwait(false);
 					}
 
 					if(useTransaction) {
 						using IBlockInsertionTransactionProcessor blockStateSnapshotProcessor = this.CreateBlockInsertionTransactionProcessor(block.SignatureSet.NextModeratorKey);
 
+						await blockStateSnapshotProcessor.CreateSnapshot().ConfigureAwait(false);
+						
 						await InsertBlockData().ConfigureAwait(false);
 
 						blockStateSnapshotProcessor.Commit();
@@ -481,7 +548,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						return;
 					}
 
-					this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateGeneralImpact(block, transactionalProcessor, handle);
+					await CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateGeneralImpact(block, transactionalProcessor, handle).ConfigureAwait(false);
 
 					await this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.InterpretNewBlockSnapshots(block, transactionalProcessor, handle).ConfigureAwait(false);
 				}
@@ -615,7 +682,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// now validate
 
 			try {
-				ValidationResult result = await this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateDigest(digest, true).ConfigureAwait(false);
+				ValidationResult result = await this.CentralCoordinator.ChainComponentProvider.ChainValidationProviderBase.ValidateDigest(digest, true, lockContext).ConfigureAwait(false);
 
 				if(result.Invalid) {
 					// failed to validate digest
@@ -643,7 +710,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					chainStateProvider.LastDigestTimestamp = this.timeService.GetTimestampDateTime(digest.Timestamp.Value, chainStateProvider.ChainInception);
 					chainStateProvider.LastBlockHash = digest.BlockHash.Entry.ToExactByteArrayCopy();
 
-					chainStateProvider.UpdateModeratorKey(new TransactionId(), digest.BlockSignatureSet.NextModeratorKey, digest.BlockSignatureSet.ConvertToDehydratedKey());
+					if(digest.BlockSignatureSet.BlockAccountSignature is XmssBlockAccountSignature xmssBlockAccountSignature) {
+						await chainStateProvider.UpdateModeratorExpectedNextKeyIndex(xmssBlockAccountSignature.KeyAddress.OrdinalId, xmssBlockAccountSignature.KeyAddress.KeyUseIndex.KeyUseSequenceId.Value, xmssBlockAccountSignature.KeyAddress.KeyUseIndex.KeyUseIndex+1).ConfigureAwait(false);
+					}
+
+					if(((XmssBlockNextAccountSignature) digest.BlockSignatureSet.NextBlockAccountSignature).KeyChange) {
+						var details = digest.BlockSignatureSet.ConvertToDehydratedKey();
+
+						if(details.HasValue) {
+							await chainStateProvider.UpdateModeratorKey(new TransactionId(), digest.BlockSignatureSet.NextModeratorKey, details.Value.bytes, true).ConfigureAwait(false);
+						}
+					}
 
 					if(chainStateProvider.DigestBlockHeight > chainStateProvider.BlockHeight) {
 						// ok, this digest is ahead for us, we must now update the snapshot state
@@ -679,12 +756,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return true;
 		}
 
-		public virtual Task HandleBlockchainMessage(IBlockchainMessage message, IDehydratedBlockchainMessage dehydratedMessage, LockContext lockContext) {
+		public virtual Task HandleBlockchainMessage(IBlockchainMessage message, IMessageEnvelope messageEnvelope, LockContext lockContext) {
+
 			//save the message if we need so
 			if(this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.MessageSavingMode == AppSettingsBase.MessageSavingModes.Enabled) {
 				try {
 					// first and most important, add it to our archive
-					this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SerializeBlockchainMessage(dehydratedMessage);
+					this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SerializeBlockchainMessage(messageEnvelope.Contents);
 				} catch(Exception ex) {
 					NLog.Default.Fatal(ex, "Failed to serialize message!.");
 
@@ -692,7 +770,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					throw;
 				}
 			}
-
+			
 			return Task.CompletedTask;
 		}
 
@@ -745,7 +823,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					string cachePath = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetGeneralCachePath();
 
 					using(SerializationTransactionProcessor serializationTransactionProcessor = new SerializationTransactionProcessor(cachePath, this.CentralCoordinator.FileSystem)) {
-						this.CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateGeneralImpact(synthesizedBlockInstance, serializationTransactionProcessor, lockContext);
+						await CentralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateGeneralImpact(synthesizedBlockInstance, serializationTransactionProcessor, lockContext).ConfigureAwait(false);
 
 						this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight = synthesizedBlockInstance.BlockId;
 						serializationTransactionProcessor.Commit();
@@ -814,18 +892,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						token.ThrowIfCancellationRequested();
 
 						// loop all accounts :)
-						for(long accountSequenceId = 1; accountSequenceId <= digest.LastStandardAccountId; accountSequenceId++) {
+						List<AccountId> accounts = new List<AccountId>();
+
+						for(long accountSequenceId = 1; accountSequenceId <= digest.LastUserAccountId; accountSequenceId++) {
+							accounts.Add(new AccountId(accountSequenceId, Enums.AccountTypes.User));
+						}
+						for(long accountSequenceId = 1; accountSequenceId <= digest.LastServerAccountId; accountSequenceId++) {
+							accounts.Add(new AccountId(accountSequenceId, Enums.AccountTypes.Server));
+						}
+						for(long accountSequenceId = 1; accountSequenceId <= digest.LastModeratorAccountId; accountSequenceId++) {
+							accounts.Add(new AccountId(accountSequenceId, Enums.AccountTypes.Moderator));
+						}
+
+						foreach(var accountId in accounts){
 							token.ThrowIfCancellationRequested();
-
-							AccountId accountId = new AccountId(accountSequenceId, Enums.AccountTypes.Standard);
-
+						
 							IAccountSnapshotDigestChannelCard accountCard = null;
 
 							// determine if its one of ours
 							IWalletAccount localAccount = walletAccounts.SingleOrDefault(a => a.PublicAccountId == accountId);
 
 							if(localAccount != null) {
-								accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccount(accountSequenceId);
+								accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccount(accountId.ToLongRepresentation());
 
 								// ok, this is one of ours, we will need to update the wallet snapshot
 								await provider.UpdateWalletSnapshotFromDigest(accountCard, lc).ConfigureAwait(false);
@@ -838,12 +926,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 								//TODO: perform this
 								if(accountCard == null) {
-									accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccount(accountSequenceId);
+									accountCard = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccount(accountId.ToLongRepresentation());
 								}
 
 								await this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.UpdateSnapshotDigestFromDigest(accountCard).ConfigureAwait(false);
 
-								List<IStandardAccountKeysDigestChannelCard> accountKeyCards = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccountKeyCards(accountSequenceId);
+								List<IStandardAccountKeysDigestChannelCard> accountKeyCards = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadDigestStandardAccountKeyCards(accountId.ToLongRepresentation());
 
 								foreach(IStandardAccountKeysDigestChannelCard digestKey in accountKeyCards) {
 									await this.CentralCoordinator.ChainComponentProvider.AccountSnapshotsProviderBase.UpdateAccountKeysFromDigest(digestKey).ConfigureAwait(false);
@@ -904,13 +992,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     Ensure a transaction is added to our chain event pool
 		/// </summary>
-		/// <param name="transactionEnvelope"></param>
-		protected async Task AddTransactionToEventPool(ITransactionEnvelope transactionEnvelope) {
+		/// <param name="signedTransactionEnvelope"></param>
+		/// <param name="lockContext"></param>
+		protected async Task AddTransactionToEventPool(ITransactionEnvelope signedTransactionEnvelope, LockContext lockContext) {
 			if(this.ChainEventPoolProvider.EventPoolEnabled) {
-				NLog.Default.Verbose($"inserting transaction {transactionEnvelope.Contents.Uuid} into the chain pool. " + (this.ChainEventPoolProvider.SaveTransactionEnvelopes ? "The whole body will be saved" : "Only metadata will be saved"));
+				NLog.Default.Verbose($"inserting transaction {signedTransactionEnvelope.Contents.Uuid} into the chain pool. " + (this.ChainEventPoolProvider.SaveTransactionEnvelopes ? "The whole body will be saved" : "Only metadata will be saved"));
 
 				// ok, we are saving the transactions to the transaction pool. first lets save the metadata to the pool
-				await this.ChainEventPoolProvider.InsertTransaction(transactionEnvelope).ConfigureAwait(false);
+				await this.ChainEventPoolProvider.InsertTransaction(signedTransactionEnvelope, lockContext).ConfigureAwait(false);
 			}
 		}
 
@@ -933,6 +1022,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public long GetBlockHeight() {
 			return this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
+		}
+
+		public int GetDigestHeight() {
+			return this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DigestHeight;
 		}
 
 		public BlockchainInfo GetBlockchainInfo() {

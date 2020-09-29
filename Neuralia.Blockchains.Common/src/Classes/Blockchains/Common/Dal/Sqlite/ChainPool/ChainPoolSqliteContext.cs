@@ -1,3 +1,4 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainPool;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
@@ -23,6 +24,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 				eb.Property(b => b.TransactionId).ValueGeneratedNever();
 				eb.HasIndex(b => b.TransactionId).IsUnique();
 				eb.ToTable("PublicTransactions");
+				
+				eb.Property(c => c.Expiration).HasConversion(v => v.ToUniversalTime(), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+				eb.Property(c => c.Timestamp).HasConversion(v => v.ToUniversalTime(), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
 			});
 		}
 	}

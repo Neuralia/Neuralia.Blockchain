@@ -19,7 +19,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private readonly CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings;
 
-		public CreationTimeTransactionSelectionMethod(long blockId, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings) : base(blockId, configuration, chainStateProvider, walletProvider, electionContext) {
+		public CreationTimeTransactionSelectionMethod(long blockId, IChainMiningStatusProvider chainMiningStatusProvider, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, CreationTimeTransactionSelectionStrategySettings creationTimeTransactionSelectionStrategySettings) : base(blockId, chainMiningStatusProvider, configuration, chainStateProvider, walletProvider, electionContext) {
 			this.creationTimeTransactionSelectionStrategySettings = creationTimeTransactionSelectionStrategySettings;
 		}
 

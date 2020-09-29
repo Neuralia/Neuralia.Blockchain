@@ -1,4 +1,7 @@
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
@@ -17,6 +20,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 	/// </summary>
 	public class SecretComboWalletKey : SecretWalletKey, ISecretComboWalletKey {
 
+		public SecretComboWalletKey() {
+		}
+		
+		protected override ComponentVersion<CryptographicKeyType> SetIdentity() {
+			return (CryptographicKeyTypes.Instance.SecretCombo, 1,0);
+		}
+		
 		public long PromisedNonce1 { get; set; }
 
 		public long PromisedNonce2 { get; set; }

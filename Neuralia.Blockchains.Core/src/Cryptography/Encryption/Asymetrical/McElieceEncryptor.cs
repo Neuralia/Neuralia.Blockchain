@@ -1,5 +1,7 @@
 using System;
 using Neuralia.Blockchains.Core.Cryptography.crypto.digests;
+using Neuralia.Blockchains.Core.Cryptography.Hash;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -23,9 +25,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 			Sha256 = 1,
 			Sha512 = 2,
 			Sha3_256 = 3,
-			Sha3_512 = 4,
-			Blake2_256 = 5,
-			Blake2_512 = 6
+			Sha3_512 = 4
 		}
 
 		public const int DEFAULT_M = 13;
@@ -69,20 +69,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical {
 			}
 		}
 
-		public static IDigest DigestCreator(string algo) {
+		public static IHashDigest DigestCreator(string algo) {
 			switch(algo) {
-				case Utils.SHA2_256:
+				case McElieceUtils.SHA2_256:
 					return new Sha256DotnetDigest();
-				case Utils.SHA2_512:
+				case McElieceUtils.SHA2_512:
 					return new Sha512DotnetDigest();
-				case Utils.SHA3_256:
+				case McElieceUtils.SHA3_256:
 					return new Sha3ExternalDigest(256);
-				case Utils.SHA3_512:
+				case McElieceUtils.SHA3_512:
 					return new Sha3ExternalDigest(512);
-				case Utils.BLAKE2_256:
-					return new Blake2bDigest(256);
-				case Utils.BLAKE2_512:
-					return new Blake2bDigest(512);
 				default:
 					throw new ArgumentException();
 			}

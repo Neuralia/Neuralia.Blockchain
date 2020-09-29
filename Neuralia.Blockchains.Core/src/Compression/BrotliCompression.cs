@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 					this.CompressData(input, output, level);
 
-					return ByteArray.Create(output);
+					return SafeArrayHandle.Create(output);
 				}
 			}
 		}
@@ -53,7 +53,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 
 				this.DecompressData(input, output);
 
-				return ByteArray.Create(output);
+				return SafeArrayHandle.Create(output);
 			}
 		}
 

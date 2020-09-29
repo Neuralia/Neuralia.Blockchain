@@ -221,13 +221,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			}
 
-			// next thing, lets check if we still have room for more connections
-			if(!this.CheckStaturatedConnections(serverHandshake)) {
 
-				NLog.Default.Verbose("We are saturated. too many connections");
-
-				return null;
-			}
 
 			// ok, we just received a trigger, lets examine it
 			NLog.Default.Verbose($"Received correlation id {this.CorrelationId}");
@@ -257,6 +251,14 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			this.ClientConnection.SetGeneralSettings(this.triggerMessage.Message.generalSettings);
 
+			// next thing, lets check if we still have room for more connections
+			if(!this.CheckStaturatedConnections(serverHandshake)) {
+
+				NLog.Default.Verbose("We are saturated. too many connections");
+
+				return null;
+			}
+			
 			// now we check the blockchains and the version they allow
 			foreach(KeyValuePair<BlockchainType, ChainSettings> chainSetting in this.triggerMessage.Message.nodeInfo.GetChainSettings()) {
 
@@ -277,6 +279,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			// let's record what we got
 			this.ClientConnection.NodeAddressInfo.RealPort = this.triggerMessage.Message.listeningPort;
 
+			
 			// and check if their connection port is true and available
 			serverHandshake.Message.Connectable = await this.PerformCounterConnection().ConfigureAwait(false);
 
@@ -325,8 +328,16 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			AppSettingsBase.WhitelistedNode whiteList = GlobalSettings.ApplicationSettings.Whitelist.SingleOrDefault(e => e.Ip == this.ClientConnection.Ip);
 
-			if(this.networkingService.ConnectionStore.ConnectionsSaturated) {
-
+			bool isSaturated = false;
+			if (this.ClientConnection.NodeAddressInfo.PeerInfo.PeerType == Enums.PeerTypes.Mobile)
+			{
+				isSaturated = this.networkingService.ConnectionStore.MobileConnectionsSaturated;
+				NLog.Default.Verbose($"{this.networkingService.ConnectionStore.ActiveMobileConnectionsCount} mobile connections already.");
+			}
+			
+			if(isSaturated || this.networkingService.ConnectionStore.ConnectionsSaturated) {
+				
+				
 				// well, we have no more room
 				if((whiteList != null) && (whiteList.AcceptanceType == AppSettingsBase.WhitelistedNode.AcceptanceTypes.Always)) {
 					// ok, thats fine, we will take this peer anyways, it is absolutely whitelisted
@@ -334,7 +345,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					// too bad, we are saturated, we must refuse
 					serverHandshake.Message.Status = ServerHandshake<R>.HandshakeStatuses.ConnectionsSaturated;
 
-					NLog.Default.Verbose("We received a connection but we already have too many. rejecting nicely");
+					NLog.Default.Verbose($"We received a connection {this.ClientConnection.NodeAddressInfo.PeerInfo.PeerType} but we already have too many ({this.networkingService.ConnectionStore.ActiveConnectionsCount} total, {this.networkingService.ConnectionStore.ActiveMobileConnectionsCount} mobile). rejecting nicely... ");
 
 					this.SendFinal(serverHandshake);
 

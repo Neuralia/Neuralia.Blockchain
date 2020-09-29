@@ -3,8 +3,10 @@ using System.Linq;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.AccreditationCertificates;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -65,7 +67,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 				for(int i = 0; i < count; i++) {
 
-					SafeArrayHandle data = rehydrator.ReadNonNullableArray();
+					SafeArrayHandle data = (SafeArrayHandle)rehydrator.ReadNonNullableArray();
 
 					this.Certificates.Add(factory.RehydrateMetadata(data));
 				}
@@ -104,6 +106,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				}
 			}
 
+		}
+		
+		public override HashNodeList GetStructuresArray() {
+			HashNodeList nodesList = base.GetStructuresArray();
+
+			nodesList.Add(this.EncryptedMessage);
+			nodesList.Add(this.AccountId);
+			nodesList.Add(this.DelegateAccountId);
+			
+			nodesList.Add((byte)this.MiningTier);
+			
+			nodesList.Add(this.Certificates.Count);
+
+			foreach(AccreditationCertificateMetadata entry in this.Certificates) {
+				nodesList.Add(entry);
+			}
+
+			return nodesList;
+		}
+
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+			
+			jsonDeserializer.SetProperty("EncryptedMessage", this.EncryptedMessage);
+			jsonDeserializer.SetProperty("AccountId", this.AccountId);
+			jsonDeserializer.SetProperty("DelegateAccountId", this.DelegateAccountId);
+			
+			jsonDeserializer.SetProperty("MiningTier", this.MiningTier.ToString());
+			
+			jsonDeserializer.SetArray("Certificates", this.Certificates);
 		}
 
 		protected override ComponentVersion<BlockchainMessageType> SetIdentity() {

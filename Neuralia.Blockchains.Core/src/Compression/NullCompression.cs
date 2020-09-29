@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Compression {
 			using(RecyclableMemoryStream output = (RecyclableMemoryStream) MemoryUtils.Instance.recyclableMemoryStreamManager.GetStream("compress")) {
 				stream.CopyTo(output);
 
-				return ByteArray.Create(output);
+				return SafeArrayHandle.Create(output);
 			}
 		}
 

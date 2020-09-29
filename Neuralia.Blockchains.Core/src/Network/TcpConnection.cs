@@ -6,20 +6,21 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.Network.Protocols;
 using Neuralia.Blockchains.Core.Network.ReadingContexts;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
 using Nito.AsyncEx;
-using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
 
@@ -29,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		IPMode IPMode { get; }
 		NetworkEndPoint EndPoint { get; }
 		ConnectionState State { get; }
-
+		double Latency { get; }
 		Guid ReportedUuid { get; }
 		Guid InternalUuid { get; }
 		bool IsConnectedUuidProvidedSet { get; }
@@ -59,6 +60,20 @@ namespace Neuralia.Blockchains.Core.Network {
 	}
 
 	public static class TcpConnection {
+		private static bool? ipv6Supported;
+
+		public static bool IPv6Supported {
+			get {
+				if(!ipv6Supported.HasValue) {
+					ipv6Supported = false;
+					if(GlobalSettings.ApplicationSettings.IPProtocol.HasFlag(IPMode.IPv6)) {
+						ipv6Supported = Socket.OSSupportsIPv6;
+					}
+				}
+
+				return ipv6Supported.Value;
+			}
+		}
 
 		public delegate void ExceptionOccured(Exception exception, ITcpConnection connection);
 
@@ -88,11 +103,14 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <exception cref="P2pException"></exception>
 		public static async Task<bool> PerformCounterConnection(IPAddress address, int port) {
 			Socket counterSocket = null;
-
+			
 			try {
-
+				var node = new NodeAddressInfo(address, NodeInfo.Unknown);
+				
 				//TODO: this can be made more efficient by releasing the thread but keeping the timeout.
-				IPEndPoint endpoint = new IPEndPoint(address, port);
+				
+				// make sure we are in the right ip format
+				var endpoint = new IPEndPoint(node.AdjustedAddress, port);
 
 				if(NodeAddressInfo.IsAddressIpV4(endpoint.Address)) {
 					counterSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -108,21 +126,23 @@ namespace Neuralia.Blockchains.Core.Network {
 				counterSocket.InitializeSocketParameters();
 
 				Task<bool> task = Task.Factory.FromAsync(counterSocket.BeginConnect(endpoint, null, null), result => {
-						try {
-							if(counterSocket.Connected && (counterSocket.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length)) {
-								return true;
-							}
-						} catch {
+					try {
+						if(counterSocket.Connected && (counterSocket.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length)) {
 
+							return true;
 						}
+					} catch {
 
-						return false;
-					}, TaskCreationOptions.None);
+					}
 
-					return await task.HandleTimeout(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+					return false;
+				}, TaskCreationOptions.None);
 
-			} catch {
+				return await task.HandleTimeout(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+
+			} catch(Exception ex) {
 				// do nothing, we got our answer
+
 			} finally {
 
 				try {
@@ -292,12 +312,15 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <summary>
 		///     a timestamp to know when we should check the connection for keepalive
 		/// </summary>
-		private DateTime NextConnectedAliveCheck { get; set; } = DateTime.MinValue;
+		private DateTime NextConnectedAliveCheck { get; set; } = DateTimeEx.MinValue;
 
 		protected Guid ConnectionId { get; } = Guid.NewGuid();
+		
 
 		private bool IsDisposing { get; set; }
 
+		public double Latency { get; private set; } = Double.MaxValue;
+		
 		// A UUiD we set and use itnernally
 		public Guid InternalUuid { get; } = Guid.NewGuid();
 
@@ -328,7 +351,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					this.Write(bytes);
 				}
 			} catch(Exception e) {
-				P2pException he = new P2pException("Could not send data as an error occured.", P2pException.Direction.Send, P2pException.Severity.Casual, e);
+				var he = new P2pException("Could not send data as an error occured.", P2pException.Direction.Send, P2pException.Severity.Casual, e);
 				this.Close();
 
 				throw he;
@@ -489,12 +512,15 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.handshakeBytes.Entry = bytes.Entry;
 			this.handshakeStatus = HandshakeStatuses.VersionSentNoBytes;
 
+			var startHandshake = DateTime.Now;
 			//Send handshake
 			this.SendHandshakeVersion();
 
 			// now wait for the handshake to complete
 			this.resetEvent.Wait(TimeSpan.FromSeconds(30));
 
+			this.Latency = (DateTime.Now - startHandshake).TotalSeconds;
+			
 			if(this.handshakeStatus != HandshakeStatuses.Completed) {
 
 				this.Dispose();
@@ -547,7 +573,13 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback) {
 
-			this.StartReceivingData(handshakeCallback);
+			var startHandshake = DateTime.Now;
+			
+			this.StartReceivingData(bytes => {
+				this.Latency = (DateTime.Now - startHandshake).TotalSeconds;
+				//Invoke
+				handshakeCallback(bytes);
+			});
 		}
 
 		private static void AddConnectionState(TcpConnection<READING_CONTEXT> connection) {
@@ -579,7 +611,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					// an exception occured. but alert only if we should, otherwise let the connection die silently.
 
 					if(this.alertExceptions) {
-						P2pException exception = new P2pException("A serious exception occured while receiving data from the socket.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
+						var exception = new P2pException("A serious exception occured while receiving data from the socket.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
 
 						try {
 							this.Close();
@@ -684,7 +716,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private async Task ReadHandshake(CancellationToken cancellationNeuralium = default) {
 
-			bool dataRead = false;
+			var dataRead = false;
 			READING_CONTEXT read = default;
 
 			DateTime timeout = DateTime.Now + TimeSpan.FromSeconds(30);
@@ -713,7 +745,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			// can we find a complete frame?
 			if(!read.IsEmpty && (read.Length == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length)) {
 
-				byte[] counterBytes = new byte[read.Length];
+				var counterBytes = new byte[read.Length];
 				read.CopyTo(counterBytes, 0, 0, counterBytes.Length);
 
 				if(counterBytes.SequenceEqual(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES)) {
@@ -789,10 +821,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		protected async Task ReadMessage(TcpConnection.MessageBytesReceived callback, CancellationToken cancellationNeuralium = default) {
 			SafeArrayHandle mainBuffer = null;
 
-			int bytesCopied = 0;
-			int sizeByteSize = 0;
+			var bytesCopied = 0;
+			var sizeByteSize = 0;
 
-			int tryAttempt = 0;
+			var tryAttempt = 0;
 
 			READING_CONTEXT read = default;
 
@@ -816,10 +848,10 @@ namespace Neuralia.Blockchains.Core.Network {
 
 					// first thing, extract the message size
 
-					int segmentOffset = 0;
+					var segmentOffset = 0;
 
 					// first we always read the message size
-					int messageSize = 0;
+					var messageSize = 0;
 
 					if(sizeByteSize == 0) {
 						try {
@@ -1016,7 +1048,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private void Dispose(bool disposing) {
 
-			bool disposingChanged = false;
+			var disposingChanged = false;
 
 			using(this.disposeLocker.Lock()) {
 

@@ -13,55 +13,54 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 		//TODO: adjust this
 		public const int DEFAULT_XMSSMT_TREE_HEIGHT = 6 * 2; //20;
 		public const int DEFAULT_XMSSMT_TREE_LAYERS = 2; //2;
-		public const Enums.KeyHashBits DEFAULT_HASH_BITS = Enums.KeyHashBits.SHA3_512;
-
+		public const Enums.KeyHashType DEFAULT_HASH_BITS = Enums.KeyHashType.SHA3_512;
+		public const Enums.KeyHashType DEFAULT_BACKUP_HASH_BITS = Enums.KeyHashType.SHA2_512;
+		
 		protected XMSSMTEngine xmssmt;
 
-		public XMSSMTProvider() : this(DEFAULT_HASH_BITS, Enums.ThreadMode.Half) {
+		public XMSSMTProvider() : this(DEFAULT_HASH_BITS, DEFAULT_BACKUP_HASH_BITS, Enums.ThreadMode.Half) {
 		}
 
-		public XMSSMTProvider(Enums.KeyHashBits hashBits, Enums.ThreadMode threadMode = Enums.ThreadMode.Half) : this(hashBits, DEFAULT_XMSSMT_TREE_HEIGHT, DEFAULT_XMSSMT_TREE_LAYERS, threadMode) {
+		public XMSSMTProvider(Enums.KeyHashType hashType, Enums.KeyHashType backupHashType, Enums.ThreadMode threadMode ) : this(hashType, backupHashType, DEFAULT_XMSSMT_TREE_HEIGHT, DEFAULT_XMSSMT_TREE_LAYERS, threadMode) {
 		}
 
-		public XMSSMTProvider(Enums.KeyHashBits hashBits, int treeHeight, int treeLayers, Enums.ThreadMode threadMode = Enums.ThreadMode.Half) : this(hashBits, threadMode, treeHeight, treeLayers) {
-
-		}
-
-		public XMSSMTProvider(Enums.KeyHashBits hashBits, Enums.ThreadMode threadMode = Enums.ThreadMode.Half, int treeHeight = DEFAULT_XMSSMT_TREE_HEIGHT, int treeLayers = DEFAULT_XMSSMT_TREE_LAYERS) : base(hashBits, treeHeight, threadMode) {
+		public XMSSMTProvider(Enums.KeyHashType hashType, Enums.KeyHashType backupHashType , byte treeHeight , byte treeLayers , Enums.ThreadMode threadMode) : base(hashType, backupHashType, treeHeight, threadMode) {
 			this.TreeLayers = treeLayers;
 		}
 
 		public override int MaximumHeight => this.xmssmt?.MaximumIndex ?? 0;
-		public int TreeLayers { get; }
+		public byte TreeLayers { get; }
 
 		public override void Reset() {
 			this.xmssmt?.Dispose();
-			this.excutionContext?.Dispose();
+			this.ExcutionContext?.Dispose();
 
-			this.excutionContext = this.GetNewExecutionContext();
+			this.ExcutionContext = this.GetNewExecutionContext();
 
 			//TODO: make modes configurable
-			this.xmssmt = new XMSSMTEngine(XMSSOperationModes.Both, this.threadMode, this.excutionContext, this.TreeHeight, this.TreeLayers);
+			this.xmssmt = new XMSSMTEngine(XMSSOperationModes.Both, this.threadMode, this.ExcutionContext, this.TreeHeight, this.TreeLayers);
 		}
 
-		public async Task<(ByteArray privateKey, ByteArray publicKey)> GenerateKeys(bool buildCache = true, Func<int, long, int, Task> progressCallback = null) {
-			(XMSSMTPrivateKey xmssmtPrivateKey, XMSSMTPublicKey xmssmtPublicKey) = await this.xmssmt.GenerateKeys(buildCache, progressCallback).ConfigureAwait(false);
+		public async Task<(SafeArrayHandle privateKey, SafeArrayHandle publicKey)> GenerateKeys(bool buildCache = true, Func<int, long, int, Task> progressCallback = null) {
+			
+			XMSSMTPublicKey xmssmtPublicKey = null;
+			XMSSMTPrivateKey xmssmtPrivateKey = null;
 
-			ByteArray publicKey = xmssmtPublicKey.SaveKey();
-			ByteArray privateKey = xmssmtPrivateKey.SaveKey();
-
-			return (privateKey, publicKey);
-		}
-
-		public Task<(ByteArray signature, ByteArray nextPrivateKey)> Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
-			return this.Sign(content.Entry, privateKey.Entry);
+			try {
+				(xmssmtPrivateKey, xmssmtPublicKey) = await this.xmssmt.GenerateKeys(buildCache, progressCallback).ConfigureAwait(false);
+				
+				return (xmssmtPrivateKey.SaveKey(), xmssmtPublicKey.SaveKey());
+			} finally {
+				xmssmtPublicKey?.Dispose();
+				xmssmtPrivateKey?.Dispose();
+			}
 		}
 
 		public XMSSMTPrivateKey CreatePrivateKey() {
-			return new XMSSMTPrivateKey(this.excutionContext);
+			return new XMSSMTPrivateKey(this.ExcutionContext);
 		}
 
-		public XMSSMTPrivateKey LoadPrivateKey(ByteArray privateKey) {
+		public XMSSMTPrivateKey LoadPrivateKey(SafeArrayHandle privateKey) {
 
 			XMSSMTPrivateKey loadedPrivateKey = this.CreatePrivateKey();
 			loadedPrivateKey.LoadKey(privateKey);
@@ -69,47 +68,49 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			return loadedPrivateKey;
 		}
 
-		public async Task<(ByteArray signature, ByteArray nextPrivateKey)> Sign(ByteArray content, ByteArray privateKey) {
+		public async Task<(SafeArrayHandle signature, SafeArrayHandle nextPrivateKey)> Sign(SafeArrayHandle content, SafeArrayHandle privateKey) {
 
-			XMSSMTPrivateKey loadedPrivateKey = this.LoadPrivateKey(privateKey);
+			using XMSSMTPrivateKey loadedPrivateKey = this.LoadPrivateKey(privateKey);
 
-			ByteArray result = await this.Sign(content, loadedPrivateKey).ConfigureAwait(false);
+			SafeArrayHandle result = await this.Sign(content, loadedPrivateKey).ConfigureAwait(false);
 
 			// export the new private key
-			ByteArray nextPrivateKey = loadedPrivateKey.SaveKey();
-
-			loadedPrivateKey.Dispose();
-
+			SafeArrayHandle nextPrivateKey = loadedPrivateKey.SaveKey();
+			
 			return (result, nextPrivateKey);
 		}
 
-		public async Task<ByteArray> Sign(ByteArray content, XMSSMTPrivateKey privateKey) {
+		public async Task<SafeArrayHandle> Sign(SafeArrayHandle content, XMSSMTPrivateKey privateKey) {
 
-			NLog.Default.Verbose($"Singing message using XMSS^MT (Key index: {privateKey.Index} of {this.MaximumHeight}, Tree height: {this.TreeHeight}, Tree layers: {this.TreeLayers}, Hash bits: {this.HashBits})");
+			NLog.Default.Verbose($"Singing message using XMSS^MT (Key index: {privateKey.Index} of {this.MaximumHeight}, Tree height: {this.TreeHeight}, Tree layers: {this.TreeLayers}, Hash bits: {this.HashType})");
 
-			ByteArray signature = await this.xmssmt.Sign(content, privateKey).ConfigureAwait(false);
+			SafeArrayHandle signature = (SafeArrayHandle)await this.xmssmt.Sign(content.Entry, privateKey).ConfigureAwait(false);
 
 			// this is important, increment our key index
 			privateKey.IncrementIndex(this.xmssmt);
 
 			return signature;
 		}
-
+		
 		public override Task<bool> Verify(SafeArrayHandle message, SafeArrayHandle signature, SafeArrayHandle publicKey) {
 
-			return this.Verify(message.Entry, signature.Entry, publicKey.Entry);
+			return this.xmssmt.Verify(signature.Entry, message.Entry, publicKey.Entry);
 		}
+		
+		public override SafeArrayHandle SetPrivateKeyIndex(int index, SafeArrayHandle privateKey) {
+			using XMSSMTPrivateKey loadedPrivateKey = this.LoadPrivateKey(privateKey);
 
-		public Task<bool> Verify(ByteArray message, ByteArray signature, ByteArray publicKey) {
-
-			return this.xmssmt.Verify(signature, message, publicKey);
+			loadedPrivateKey.Index = index;
+			
+			// export the new private key
+			return loadedPrivateKey.SaveKey();
 		}
 
 		protected override void DisposeAll() {
 			base.DisposeAll();
 
 			this.xmssmt?.Dispose();
-			this.excutionContext?.Dispose();
+			this.ExcutionContext?.Dispose();
 		}
 
 		public override int GetMaxMessagePerKey() {

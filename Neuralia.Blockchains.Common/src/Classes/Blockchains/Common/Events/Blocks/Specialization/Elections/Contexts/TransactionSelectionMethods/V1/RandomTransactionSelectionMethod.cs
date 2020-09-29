@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		private readonly RandomTransactionSelectionStrategySettings randomTransactionSelectionStrategySettings;
 
-		public RandomTransactionSelectionMethod(long blockId, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, RandomTransactionSelectionStrategySettings randomTransactionSelectionStrategySettings) : base(blockId, configuration, chainStateProvider, walletProvider, electionContext) {
+		public RandomTransactionSelectionMethod(long blockId, IChainMiningStatusProvider chainMiningStatusProvider, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext, RandomTransactionSelectionStrategySettings randomTransactionSelectionStrategySettings) : base(blockId, chainMiningStatusProvider, configuration, chainStateProvider, walletProvider, electionContext) {
 
 			this.randomTransactionSelectionStrategySettings = randomTransactionSelectionStrategySettings;
 		}

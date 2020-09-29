@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 		}
 
 		protected override SafeArrayHandle GenerateHash(SafeArrayHandle entry, IxxHash hasher) {
-			return hasher.Hash(entry.Span);
+			return (SafeArrayHandle)hasher.Hash(entry.Span);
 		}
 
 		public ulong HashULong(IHashNodeList nodeList) {

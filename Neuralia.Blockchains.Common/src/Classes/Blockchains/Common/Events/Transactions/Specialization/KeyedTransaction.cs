@@ -1,13 +1,14 @@
 ﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.Blockchain.Utils;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Specialization {
 
-	public interface IKeyedTransaction : IMasterTransaction {
+	public interface IKeyedTransaction : IIndexedTransaction {
 		KeySet Keyset { get; }
 	}
 
@@ -19,8 +20,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 		public KeySet Keyset { get; } = new KeySet();
 
-		public override HashNodeList GetStructuresArray() {
-			HashNodeList nodeList = base.GetStructuresArray();
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
 			nodeList.Add(this.Keyset);
 

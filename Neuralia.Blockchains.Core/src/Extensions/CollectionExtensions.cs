@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Core.Extensions {
 	public static class CollectionExtensions {
@@ -111,6 +113,13 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			foreach((T key, U value) in other) {
 				collection.Add(key, value);
 			}
+		}
+
+		public static ByteArray ToArray(this BitArray array) {
+
+			byte[] bytes = new byte[(int)Math.Ceiling((double)array.Count/8)];
+			array.CopyTo(bytes, 0);
+			return ByteArray.WrapAndOwn(bytes);
 		}
 	}
 }

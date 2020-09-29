@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels;
@@ -27,9 +28,12 @@ using Serilog;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	public interface IChainDataWriteProvider : IChainDataLoadProvider {
+		void ClearBlocksCache();
 		void SerializeBlock(IDehydratedBlock dehydratedBlock);
 		void SerializeBlockchainMessage(IDehydratedBlockchainMessage dehydratedBlockchainMessage);
-
+		Task CacheAppointmentMessage(Guid messageId, SafeArrayHandle envelope);
+		Task ClearCachedAppointmentMessages(List<Guid> messageIds);
+		
 		void SaveDigestChannelDescription(int digestId, BlockchainDigestDescriptor blockchainDigestDescriptor);
 
 		void WriteDigestFile(DigestChannelSet digestChannelSet, DigestChannelType channelId, int indexId, int fileId, uint partIndex, SafeArrayHandle data);
@@ -37,16 +41,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		DigestChannelSet RecreateDigestChannelSet(int digestId, BlockchainDigestSimpleChannelSetDescriptor blockchainDigestDescriptor);
 		void UpdateCurrentDigest(IBlockchainDigest digest);
 		void SaveDigestHeader(int digestId, SafeArrayHandle digestHeader);
-		Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal, LockContext lockContext = null);
+		Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashType hashType, Enums.KeyHashType BackupHashType, byte ordinal, LockContext lockContext = null);
 
 		Task CacheUnvalidatedBlockGossipMessage(IBlockEnvelope unvalidatedBlockEnvelope, long xxHash);
 		Task ClearCachedUnvalidatedBlockGossipMessage(long blockId);
 
 		void TruncateBlockFileSizes(long blockId, Dictionary<string, long> fileSizes);
 
-		void EnsureFastKeysIndex();
+		void EnsureKeyDictionaryIndex();
 
 		Task RunTransactionalActions(List<Func<LockContext, Task>> serializationActions, SerializationTransactionProcessor serializationTransactionProcessor);
+		Task SaveCachedPOWState(POWState state, string key);
+		void ClearCachedPOWState(string key);
 	}
 
 	public interface IChainDataWriteProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataWriteProvider
@@ -77,6 +83,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected new IBlockchainEventSerializationFalReadWrite BlockchainEventSerializationFal => (IBlockchainEventSerializationFalReadWrite) base.BlockchainEventSerializationFal;
 
+		public void ClearBlocksCache() {
+			this.blocksCache.Clear();
+		}
+		
 		public void SerializeBlock(IDehydratedBlock dehydratedBlock) {
 
 			using(this.blockLocker.Lock()) {
@@ -125,7 +135,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// get our message bytes
 				SafeArrayHandle messageBytes = dehydratedBlockchainMessage.Dehydrate();
 
-				Guid uuid = dehydratedBlockchainMessage.RehydratedMessage.Uuid;
+				Guid uuid = dehydratedBlockchainMessage.RehydratedEvent.Uuid;
 
 				// ok, now we create our new entry. lets create the directory structure and blocks file if it does not exist
 				string messagesFile = this.GetMessagesFile(uuid);
@@ -145,6 +155,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				this.BlockchainEventSerializationFal.InsertMessagesEntry(messagesFile, messageBytes);
 			}
+		}
+
+		public Task CacheAppointmentMessage(Guid messageId, SafeArrayHandle envelope) {
+			
+			string filePath = this.GetAppointmentMessageFilePath(messageId);
+
+			FileExtensions.EnsureDirectoryStructure(this.GetAppointmentMessagesCacheFolderPath());
+			
+			if(this.fileSystem.FileExists(filePath)){
+				return Task.CompletedTask;
+			}
+			
+			return this.fileSystem.WriteAllBytesAsync(filePath, envelope.ToExactByteArray());
+		}
+
+		public Task ClearCachedAppointmentMessages(List<Guid> messageIds) {
+			FileExtensions.EnsureDirectoryStructure(this.GetAppointmentMessagesCacheFolderPath());
+
+			foreach(var messageId in messageIds) {
+				string filePath = this.GetAppointmentMessageFilePath(messageId);
+				
+				if(this.fileSystem.FileExists(filePath)){
+					try {
+						this.fileSystem.DeleteFile(filePath);
+					} catch(Exception ex) {
+						Log.Error(ex, $"failed to clear cached appointment message with Id {messageId}");
+					}
+				}
+			}
+			return Task.CompletedTask;
 		}
 
 		public void SaveDigestChannelDescription(int digestId, BlockchainDigestDescriptor blockchainDigestDescriptor) {
@@ -187,11 +227,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public void EnsureFastKeysIndex() {
+		public void EnsureKeyDictionaryIndex() {
 
 			using(this.transactionalLocker.Lock()) {
-				if(this.FastKeyEnabled(GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || this.FastKeyEnabled(GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
-					this.BlockchainEventSerializationFal.EnsureFastKeysIndex();
+				if(this.KeyDictionaryEnabled(GlobalsService.TRANSACTION_KEY_ORDINAL_ID) || this.KeyDictionaryEnabled(GlobalsService.MESSAGE_KEY_ORDINAL_ID)) {
+					this.BlockchainEventSerializationFal.EnsureKeyDictionaryIndex();
 				}
 			}
 		}
@@ -242,33 +282,56 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 			}
 		}
+		
+		public Task SaveCachedPOWState(POWState state, string key) {
+			
+			string cachePath = this.GetPOWCachePath();
+
+			FileExtensions.EnsureDirectoryStructure(cachePath);
+
+			string filename = Path.Combine(cachePath, key.CleanInvalidFileNameCharacters());
+			
+			return this.fileSystem.WriteAllTextAsync(filename, System.Text.Json.JsonSerializer.Serialize(state));
+		}
+		
+		public void ClearCachedPOWState(string key) {
+			try {
+				string filename = Path.Combine(this.GetPOWCachePath(), key.CleanInvalidFileNameCharacters());
+
+				if(this.fileSystem.FileExists(filename)) {
+					this.fileSystem.DeleteFile(filename);
+				}
+			} catch(Exception ex) {
+				NLog.Default.Error(ex, "Failed to clear POW cache entry");
+			}
+		}
 
 	#region imports from Serialization Service
 
-		public async Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashBits hashBits, byte ordinal, LockContext lockContext = null) {
+		public async Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashType hashType, Enums.KeyHashType backupBitSize, byte ordinal, LockContext lockContext = null) {
 
 			using(await this.transactionalLocker.LockAsync(lockContext).ConfigureAwait(false)) {
 
 				async Task Action() {
 					using(key) {
-						await this.BlockchainEventSerializationFal.SaveAccountKeyIndex(accountId, key, treeHeight, hashBits, ordinal).ConfigureAwait(false);
+						await this.BlockchainEventSerializationFal.SaveAccountKeyIndex(accountId, key, treeHeight, hashType, backupBitSize, ordinal).ConfigureAwait(false);
 					}
 				}
 
 				if(this.serializationTransactionProcessor != null) {
 
-					(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashBits hashBits)? keyData = await this.ChainDataLoadProvider.LoadAccountKeyFromIndex(accountId, ordinal).ConfigureAwait(false);
-					SerializationFastKeysOperations undoOperation = null;
+					(SafeArrayHandle keyBytes, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)? keyData = await this.ChainDataLoadProvider.LoadAccountKeyFromIndex(accountId, ordinal).ConfigureAwait(false);
+					SerializationKeyDictionaryOperations undoOperation = null;
 
 					// we undo if we had a previous key. otherwise, leave it there as junk
 					if(keyData.HasValue && (keyData.Value != default)) {
-						undoOperation = new SerializationFastKeysOperations(this);
+						undoOperation = new SerializationKeyDictionaryOperations(this);
 						undoOperation.AccountId = accountId;
 						undoOperation.Ordinal = ordinal;
 						undoOperation.Key.Entry = keyData.Value.keyBytes.Entry;
 						undoOperation.TreeHeight = keyData.Value.treeheight;
-						undoOperation.HashBits = keyData.Value.hashBits;
-
+						undoOperation.HashType = keyData.Value.hashType;
+						undoOperation.BackupHashType = keyData.Value.backupHashType;
 					}
 
 					this.serializationTransactionProcessor.AddOperation(Action, undoOperation);

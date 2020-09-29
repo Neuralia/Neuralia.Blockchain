@@ -165,6 +165,26 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 				});
 			}, contents);
 		}
+		
+		protected Task<T> PerformTransactionAsync<T>(Func<DBCONTEXT, Task<T>> process, params object[] contents) {
+			return this.PerformInnerContextOperationAsync(db => {
+				return db.Database.CreateExecutionStrategy().ExecuteAsync(async () => {
+					await using(IDbContextTransaction transaction = await db.Database.BeginTransactionAsync().ConfigureAwait(false)) {
+						try {
+							var result = await process(db).ConfigureAwait(false);
+
+							await transaction.CommitAsync().ConfigureAwait(false);
+
+							return result;
+						} catch(Exception e) {
+							await transaction.RollbackAsync().ConfigureAwait(false);
+
+							throw;
+						}
+					}
+				});
+			}, contents);
+		}
 
 		protected virtual void PerformContextOperations(DBCONTEXT db, IEnumerable<Action<DBCONTEXT>> processes) {
 			foreach(Action<DBCONTEXT> process in processes) {

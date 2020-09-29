@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.ChainState;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.BlockInsertionTransaction {
 
@@ -26,8 +29,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 		Dictionary<string, long> FileSizes { get; set; }
 		SafeArrayHandle BlockIdFile { get; }
 		SafeArrayHandle ModeratorKey { get; }
+		KeyUseIndexSet ModeratorKeyIndex { get; }
 		byte ModeratorKeyOrdinal { get; }
-		void CreateSnapshot();
+		Task CreateSnapshot();
 		void Commit();
 		void UnCommit();
 		void Rollback();
@@ -64,8 +68,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 
 		public SafeArrayHandle BlockIdFile { get; } = SafeArrayHandle.Create();
 		public SafeArrayHandle ModeratorKey { get; } = SafeArrayHandle.Create();
+		public KeyUseIndexSet ModeratorKeyIndex { get; set; } = new KeyUseIndexSet();
 
-		public void CreateSnapshot() {
+		public async Task CreateSnapshot() {
 
 			this.restored = false;
 			IChainStateProvider chainStateProvider = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase;
@@ -79,10 +84,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 			this.LastBlockHash.Entry = ByteArray.WrapAndOwn(chainStateProvider.LastBlockHash);
 			this.BlockInsertionStatus = (int) chainStateProvider.BlockInterpretationStatus;
 
-			if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-				this.ModeratorKey.Entry = chainStateProvider.GetModeratorKeyBytes(this.ModeratorKeyOrdinal).Entry;
-			} else if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID) {
-				this.ModeratorKey.Entry = chainStateProvider.GetModeratorKeyBytes(this.ModeratorKeyOrdinal).Entry;
+			// if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
+			// 	this.ModeratorKey.Entry = chainStateProvider.GetModeratorKeyBytes(this.ModeratorKeyOrdinal).Entry;
+			// } else 
+			if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID) {
+				this.ModeratorKey.Entry = (await chainStateProvider.GetModeratorKeyBytes(ModeratorKeyOrdinal).ConfigureAwait(false)).Entry;
+				this.ModeratorKeyIndex = await chainStateProvider.GetModeratorKeyIndex(this.ModeratorKeyOrdinal).ConfigureAwait(false);
 			}
 
 			this.BlockIndex = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.FindBlockIndex(this.DiskBlockHeight);
@@ -133,10 +140,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 			});
 
 			actions.Add(() => {
-				if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
-					chainStateProvider.UpdateModeratorKey(new TransactionId(), this.ModeratorKeyOrdinal, this.ModeratorKey);
-				} else if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID) {
-					chainStateProvider.UpdateModeratorKey(new TransactionId(), this.ModeratorKeyOrdinal, this.ModeratorKey);
+				// if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_SEQUENTIAL_ID) {
+				// 	chainStateProvider.UpdateModeratorKey(new TransactionId(), this.ModeratorKeyOrdinal, this.ModeratorKey);
+				// } else 
+				if(this.ModeratorKeyOrdinal == GlobalsService.MODERATOR_BLOCKS_KEY_XMSS_ID) {
+					chainStateProvider.UpdateModeratorKey(new TransactionId(), this.ModeratorKeyOrdinal, this.ModeratorKey, false).WaitAndUnwrapException();
+					chainStateProvider.UpdateModeratorExpectedNextKeyIndex(this.ModeratorKeyOrdinal, this.ModeratorKeyIndex.KeyUseSequenceId.Value, this.ModeratorKeyIndex.KeyUseIndex).WaitAndUnwrapException();
 				}
 			});
 

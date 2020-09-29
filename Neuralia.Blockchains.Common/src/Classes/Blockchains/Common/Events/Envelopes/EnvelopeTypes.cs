@@ -30,16 +30,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 	public sealed class EnvelopeTypes : UShortConstantSet<EnvelopeType> {
 
 		public readonly EnvelopeType Block;
-		public readonly EnvelopeType Message;
-		public readonly EnvelopeType Transaction;
+		public readonly EnvelopeType SignedMessage;
+		public readonly EnvelopeType SignedTransaction;
+		public readonly EnvelopeType PresentationTransaction;
+		public readonly EnvelopeType InitiationAppointment;
+		public readonly EnvelopeType ModeratorSignedMessage;
 
 		static EnvelopeTypes() {
 		}
 
 		private EnvelopeTypes() : base(50) {
-			this.Transaction = this.CreateBaseConstant();
-			this.Message = this.CreateBaseConstant();
+			this.SignedTransaction = this.CreateBaseConstant();
+			this.SignedMessage = this.CreateBaseConstant();
 			this.Block = this.CreateBaseConstant();
+			this.PresentationTransaction = this.CreateBaseConstant();
+			this.InitiationAppointment = this.CreateBaseConstant();
+			this.ModeratorSignedMessage = this.CreateBaseConstant();
 		}
 
 		public static EnvelopeTypes Instance { get; } = new EnvelopeTypes();

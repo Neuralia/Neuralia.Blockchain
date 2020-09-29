@@ -51,7 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						T entry = litedbDal.GetOne<T>(k => k.TransactionId == transactionId.ToString());
 
 						if((entry != null) && entry.Local) {
-							entry.Status = (byte) status;
+							entry.Status = status;
 							litedbDal.Update(entry);
 						}
 					}

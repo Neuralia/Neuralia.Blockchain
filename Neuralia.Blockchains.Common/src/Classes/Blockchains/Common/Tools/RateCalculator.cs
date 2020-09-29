@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		public string CalculateSyncingRate(long remaining) {
 
 			if(this.insertionHistory.Any()) {
-				SyncHistory[] entries = this.insertionHistory.ToArray().Where(e => e.timestamp != DateTime.MinValue).ToArray();
+				SyncHistory[] entries = this.insertionHistory.ToArray().Where(e => e.timestamp != DateTimeEx.MinValue).ToArray();
 
 				SyncHistory min = entries.MinBy(e => e.timestamp).First();
 				SyncHistory max = entries.MaxBy(e => e.timestamp).First();

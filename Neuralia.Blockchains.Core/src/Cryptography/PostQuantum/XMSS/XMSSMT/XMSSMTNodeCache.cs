@@ -6,9 +6,9 @@ using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
@@ -17,21 +17,21 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 		// versioning information
 		public readonly byte Major = 1;
 		public readonly byte Minor = 0;
-		public readonly byte Revision = 0;
 
 		public XMSSMTNodeCache() {
 
 		}
 
-		public XMSSMTNodeCache(int height, int layers, int digestSize) {
+		public XMSSMTNodeCache(int height, int layers, int digestSize, int backupDigestSize) {
 			this.Height = (byte) height;
 			this.Layers = (byte) layers;
 			this.ReducedHeight = (byte) (this.Height / this.Layers);
 			this.DigestSize = (byte) digestSize;
+			this.BackupDigestSize = (byte) backupDigestSize;
 
 			for(int layer = 0; layer < this.Layers; layer++) {
 				for(int tree = 0; tree < (1 << ((this.Layers - 1 - layer) * this.ReducedHeight)); tree++) {
-					this.CachesTree.AddSafe((tree, layer), new XMSSNodeCache(this.ReducedHeight, this.DigestSize));
+					this.CachesTree.AddSafe((tree, layer), new XMSSNodeCache(this.ReducedHeight, this.DigestSize, this.BackupDigestSize));
 				}
 			}
 		}
@@ -41,6 +41,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 		public bool IsChanged { get; private set; }
 		public byte Height { get; private set; }
 		public byte DigestSize { get; private set; }
+		public byte BackupDigestSize { get; private set; }
+		
 		public byte ReducedHeight { get; }
 		public byte Layers { get; private set; }
 
@@ -54,12 +56,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			dehydrator.Write(this.Major);
 			dehydrator.Write(this.Minor);
-			dehydrator.Write(this.Revision);
 
 			dehydrator.Write(this.Height);
 			dehydrator.Write(this.Layers);
 			dehydrator.Write(this.DigestSize);
-
+			dehydrator.Write(this.BackupDigestSize);
+			
 			IEnumerable<IGrouping<int, KeyValuePair<XMSSMTreeId, XMSSNodeCache>>> layerGroups = this.CachesTree.GroupBy(e => e.Key.Layer);
 
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
@@ -87,12 +89,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			int major = rehydrator.ReadByte();
 			int minor = rehydrator.ReadByte();
-			int revision = rehydrator.ReadByte();
 
 			this.Height = rehydrator.ReadByte();
 			this.Layers = rehydrator.ReadByte();
 			this.DigestSize = rehydrator.ReadByte();
-
+			this.BackupDigestSize = rehydrator.ReadByte();
+			
 			this.CachesTree.Clear();
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 			adaptiveLong.Rehydrate(rehydrator);
@@ -133,7 +135,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray().Release();
+			return dehydrator.ToReleasedArray();
 		}
 
 	#region disposable

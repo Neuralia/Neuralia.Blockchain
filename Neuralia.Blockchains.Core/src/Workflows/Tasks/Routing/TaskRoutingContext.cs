@@ -207,7 +207,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Tasks.Routing {
 		}
 
 		private DateTime GetAbsoluteTimeout(TimeSpan timeout) {
-			return timeout == TimeSpan.MaxValue ? DateTime.MaxValue : DateTimeEx.CurrentTime.Add(timeout);
+			return timeout == TimeSpan.MaxValue ? DateTimeEx.MaxValue : DateTimeEx.CurrentTime.Add(timeout);
 		}
 
 		public void ResetChildTasks() {

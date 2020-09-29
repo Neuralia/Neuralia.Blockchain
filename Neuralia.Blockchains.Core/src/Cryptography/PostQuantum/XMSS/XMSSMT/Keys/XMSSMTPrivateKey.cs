@@ -2,10 +2,10 @@
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
-using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
@@ -18,7 +18,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.XmssExecutionContext = xmssExecutionContext;
 
 			this.HeaderPart = new KeyHeaderPart(this.XmssExecutionContext.DigestSize);
-			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
+			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize, this.XmssExecutionContext.BackupDigestSize);
 
 			this.NoncePart = new KeyNoncePart(0) {NodeCache = new XMSSMTNodeCache()};
 			this.NoncePart.Nonces = new XMSSNonceSet();
@@ -30,7 +30,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.XmssExecutionContext = xmssExecutionContext;
 
 			this.HeaderPart = new KeyHeaderPart(this.XmssExecutionContext.DigestSize);
-			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
+			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize, this.XmssExecutionContext.BackupDigestSize);
 
 			this.HeaderPart.Index = other.HeaderPart.Index;
 			this.HeaderPart.Height = other.HeaderPart.Height;
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 			this.NoncePart = new KeyNoncePart(this.HeaderPart.LeafCount);
 			this.NoncePart.Nonces = new XMSSNonceSet(other.NoncePart.Nonces.Nonces);
-			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize);
+			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize, xmssExecutionContext.BackupDigestSize);
 		}
 
 		/// <summary>
@@ -57,7 +57,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.XmssExecutionContext = xmssExecutionContext;
 
 			this.HeaderPart = new KeyHeaderPart(this.XmssExecutionContext.DigestSize);
-			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize);
+			this.SecretPart = new KeySecretPart(this.XmssExecutionContext.DigestSize, this.XmssExecutionContext.BackupDigestSize);
 
 			this.HeaderPart.LeafCount = 1 << (heigth / layer);
 			this.HeaderPart.Index = index;
@@ -72,7 +72,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 			this.NoncePart = new KeyNoncePart(this.HeaderPart.LeafCount);
 			this.NoncePart.Nonces = new XMSSNonceSet(nonces.Nonces);
-			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize);
+			this.NoncePart.NodeCache = new XMSSMTNodeCache(this.HeaderPart.Height, this.HeaderPart.Layers, xmssExecutionContext.DigestSize, xmssExecutionContext.BackupDigestSize);
 		}
 
 		// versioning information
@@ -119,6 +119,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			get => this.SecretPart.Root;
 			set => this.SecretPart.Root = value;
 		}
+		
+		public ByteArray BackupRoot {
+			get => this.SecretPart.BackupRoot;
+			set => this.SecretPart.BackupRoot = value;
+		}
 
 		public ByteArray SecretPrf {
 			get => this.SecretPart.SecretPrf;
@@ -142,24 +147,24 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 		protected override void DisposeAll() {
 			base.DisposeAll();
 
+			this.HeaderPart.Dispose();
 			this.SecretPart.Dispose();
+			this.NoncePart.Dispose();
 		}
 
-		public override void LoadKey(ByteArray keyBytes) {
+		public override void LoadKey(SafeArrayHandle keyBytes) {
 
 			BrotliCompression compression = new BrotliCompression();
 			using SafeArrayHandle deflatedPrivateKey = compression.Decompress(keyBytes);
 
-			base.LoadKey(deflatedPrivateKey.Entry);
+			base.LoadKey(deflatedPrivateKey);
 		}
 
-		public override ByteArray SaveKey() {
-			using ByteArray privateKey = base.SaveKey();
+		public override SafeArrayHandle SaveKey() {
+			using SafeArrayHandle privateKey = base.SaveKey();
 
 			BrotliCompression compression = new BrotliCompression();
-			SafeArrayHandle compressedPrivateKey = compression.Compress(privateKey);
-
-			return compressedPrivateKey.Entry;
+			return compression.Compress(privateKey);
 		}
 
 		protected override void Rehydrate(IDataRehydrator rehydrator) {
@@ -211,11 +216,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			this.HeaderPart.Index += 1;
 		}
 
-		public class KeyHeaderPart : IBinarySerializable {
+		public class KeyHeaderPart : IBinarySerializable, IDisposableExtended {
 
 			public readonly byte Major = 1;
 			public readonly byte Minor = 0;
-			public readonly byte Revision = 0;
 
 			public KeyHeaderPart(int digestSize) {
 				this.DigestSize = digestSize;
@@ -245,7 +249,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 				int major = rehydrator.ReadByte();
 				int minor = rehydrator.ReadByte();
-				int revision = rehydrator.ReadByte();
 
 				AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 				adaptiveLong.Rehydrate(rehydrator);
@@ -262,7 +265,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 				dehydrator.Write(this.Major);
 				dehydrator.Write(this.Minor);
-				dehydrator.Write(this.Revision);
 
 				AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
 				adaptiveLong.Value = this.Index;
@@ -276,24 +278,56 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 				dehydrator.WriteRawArray(this.PublicSeed);
 			}
+			
+		#region disposable
+
+			public bool IsDisposed { get; private set; }
+
+			public void Dispose() {
+				this.Dispose(true);
+				GC.SuppressFinalize(this);
+			}
+
+			private void Dispose(bool disposing) {
+
+				if(disposing && !this.IsDisposed) {
+					this.DisposeAll();
+				}
+
+				this.IsDisposed = true;
+			}
+
+			protected virtual void DisposeAll() {
+				this.PublicSeed?.Dispose();
+			}
+
+			~KeyHeaderPart() {
+				this.Dispose(false);
+			}
+
+		#endregion
 		}
 
 		public class KeySecretPart : IBinarySerializable, IDisposableExtended {
 
-			public KeySecretPart(int digestSize) {
+			public KeySecretPart(int digestSize, int backupDigestSize) {
 				this.DigestSize = digestSize;
+				this.BackupDigestSize = backupDigestSize;
 			}
 
 			private int DigestSize { get; }
-
+			private int BackupDigestSize { get; }
+			
 			public ByteArray SecretSeed { get; set; }
 			public ByteArray Root { get; set; }
+			public ByteArray BackupRoot { get; set; }
 			public ByteArray SecretPrf { get; set; }
 
 			public void Rehydrate(IDataRehydrator rehydrator) {
 				this.SecretSeed = rehydrator.ReadArray(this.DigestSize);
 				this.SecretPrf = rehydrator.ReadArray(this.DigestSize);
 				this.Root = rehydrator.ReadArray(this.DigestSize);
+				this.BackupRoot = rehydrator.ReadArray(this.BackupDigestSize);
 			}
 
 			public void Dehydrate(IDataDehydrator dehydrator) {
@@ -301,6 +335,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 				dehydrator.WriteRawArray(this.SecretSeed);
 				dehydrator.WriteRawArray(this.SecretPrf);
 				dehydrator.WriteRawArray(this.Root);
+				dehydrator.WriteRawArray(this.BackupRoot);
 			}
 
 		#region disposable
@@ -323,6 +358,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 			protected virtual void DisposeAll() {
 				this.Root?.Dispose();
+				this.BackupRoot?.Dispose();
 				this.SecretPrf?.Dispose();
 				this.SecretSeed?.Dispose();
 			}
@@ -335,7 +371,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 
 		}
 
-		public class KeyNoncePart : IBinarySerializable {
+		public class KeyNoncePart : IBinarySerializable, IDisposableExtended {
 			public KeyNoncePart(int leafCount) {
 				this.LeafCount = leafCount;
 			}
@@ -354,8 +390,36 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT.Keys {
 			public void Dehydrate(IDataDehydrator dehydrator) {
 				this.NodeCache.Dehydrate(dehydrator);
 
-				this.Nonces.Dehydrate(dehydrator);
+				this.Nonces.Dehydrate(dehydrator, this.LeafCount);
 			}
+			
+		#region disposable
+
+			public bool IsDisposed { get; private set; }
+
+			public void Dispose() {
+				this.Dispose(true);
+				GC.SuppressFinalize(this);
+			}
+
+			private void Dispose(bool disposing) {
+
+				if(disposing && !this.IsDisposed) {
+					this.DisposeAll();
+				}
+
+				this.IsDisposed = true;
+			}
+
+			protected virtual void DisposeAll() {
+				this.NodeCache?.Dispose();
+			}
+
+			~KeyNoncePart() {
+				this.Dispose(false);
+			}
+
+		#endregion
 		}
 	}
 }

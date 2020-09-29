@@ -1,19 +1,25 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Validation;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Messages {
 
-	public interface IGenerateNewMessageWorkflow<out CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IEventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public interface IGenerateNewMessageWorkflow<out CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ENVELOPE_TYPE> : IEventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
+		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> 
+		where ENVELOPE_TYPE : class, IMessageEnvelope{
 	}
 
 	/// <summary>
@@ -21,28 +27,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 	/// </summary>
 	/// <typeparam name="CENTRAL_COORDINATOR"></typeparam>
 	/// <typeparam name="CHAIN_COMPONENT_PROVIDER"></typeparam>
-	public abstract class GenerateNewMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ASSEMBLY_PROVIDER> : EventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ASSEMBLY_PROVIDER, IMessageEnvelope>, IGenerateNewMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public abstract class GenerateNewMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER,ENVELOPE_TYPE> : EventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ENVELOPE_TYPE, IDehydratedBlockchainMessage, IBlockchainMessage, BlockchainMessageType>, IGenerateNewMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER,ENVELOPE_TYPE>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
-		where ASSEMBLY_PROVIDER : IAssemblyProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
-
+		where ENVELOPE_TYPE : class, IMessageEnvelope {
+		
+		
 		public GenerateNewMessageWorkflow(CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
 
 		}
 
-		protected override async Task EventGenerationCompleted(IMessageEnvelope envelope, LockContext lockContext) {
-
-			//  we add it to our trusted cache, until it gets confirmed.
-
-			try {
-				await this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.DispatchNewMessage(envelope, this.correlationContext).ConfigureAwait(false);
-				NLog.Default.Information("Dispatch of miner registration blockchain message completed");
-			} catch(Exception ex) {
-				NLog.Default.Error(ex, "Failed to dispatch miner registration blockchain message");
-			}
+		
+		protected virtual ChainNetworkingProvider.MessageDispatchTypes MessageDispatchType => ChainNetworkingProvider.MessageDispatchTypes.GeneralMessage;
+		
+		protected override Task Dispatch(LockContext lockContext) {
+			return this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.DispatchNewMessage(this.envelope, this.correlationContext, this.MessageDispatchType);
 		}
-
-		protected override void ValidationFailed(IMessageEnvelope envelope, ValidationResult results) {
+		
+		protected override void ValidationFailed(ENVELOPE_TYPE envelope, ValidationResult results) {
 			base.ValidationFailed(envelope, results);
 
 			//TODO: any error message for blockchain messages?
@@ -54,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected override Task ExceptionOccured(Exception ex) {
 			return base.ExceptionOccured(ex);
 
-			// if(ex is EventGenerationException evex && evex.Envelope is IMessageEnvelope envelope) {
+			// if(ex is EventGenerationException evex && evex.Envelope is ENVELOPE_TYPE envelope) {
 			// 	this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionError(envelope.Contents.Uuid, null), this.correlationContext);
 			// }
 		}
@@ -62,16 +64,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected override async Task PerformSanityChecks(LockContext lockContext) {
 			await base.PerformSanityChecks(lockContext).ConfigureAwait(false);
 
-			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
+			
+		}
+		protected override Task SignEnvelope(IWalletProvider walletProvider, CancellationToken token, LockContext lockContext) {
+			return Task.CompletedTask;
+		}
 
-			if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.CurrentPeerCount < chainConfiguration.MinimumDispatchPeerCount) {
-
-				if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.NoPeerConnections) {
-					throw new EventGenerationException("Failed to create message. We are not connected to any peers on the p2p network");
-				}
-
-				throw new EventGenerationException($"Failed to create message. We do not have enough peers. we need a minimum of {chainConfiguration.MinimumDispatchPeerCount}");
-			}
+		protected override TimeSpan GetEnvelopeExpiration() {
+			return TimeSpan.FromHours(3);
+		}
+		
+		protected override WalletGenerationCache.DispatchEventTypes GetEventType() {
+			return Wallet.Account.WalletGenerationCache.DispatchEventTypes.Message;
+		}
+		
+		protected override string GetEventSubType() {
+			return "message";
 		}
 	}
 }

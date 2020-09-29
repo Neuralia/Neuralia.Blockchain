@@ -14,13 +14,14 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Acco
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Types;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.TransactionInterpretation.V1;
 using Neuralia.Blockchains.Common.Classes.Configuration;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
+using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -61,7 +62,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		IChainOptionsSnapshot CreateNewChainOptionsSnapshots();
 
 		Task ProcessSnapshotImpacts(ISnapshotHistoryStackSet snapshotsModificationHistoryStack);
-		List<Func<LockContext, Task>> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys);
+		List<Func<LockContext, Task>> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> keyDictionary);
 	}
 
 	public interface IAccountSnapshotsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IAccountSnapshotsProvider
@@ -378,13 +379,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			ISnapshotHistoryStackSet<STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> specializedSnapshotsModificationHistoryStack = this.GetSpecializedSnapshotsModificationHistoryStack(snapshotsModificationHistoryStack);
 
-			Dictionary<long, List<Func<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledSimpleTransactions = specializedSnapshotsModificationHistoryStack.CompileStandardAccountHistorySets<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT>(this.PrepareNewStandardAccountSnapshots, this.PrepareUpdateStandardAccountSnapshots, this.PrepareDeleteStandardAccountSnapshots);
-			Dictionary<long, List<Func<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledJointTransactions = specializedSnapshotsModificationHistoryStack.CompileJointAccountHistorySets<JOINT_ACCOUNT_SNAPSHOT_CONTEXT>(this.PrepareNewJointAccountSnapshots, this.PrepareUpdateJointAccountSnapshots, this.PrepareDeleteJointAccountSnapshots);
-			Dictionary<long, List<Func<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledAccountKeysTransactions = specializedSnapshotsModificationHistoryStack.CompileStandardAccountKeysHistorySets<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT>(this.PrepareNewAccountKeysSnapshots, this.PrepareUpdateAccountKeysSnapshots, this.PrepareDeleteAccountKeysSnapshots);
+			Dictionary<AccountId, List<Func<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledStandardTransactions = specializedSnapshotsModificationHistoryStack.CompileStandardAccountHistorySets<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT>(this.PrepareNewStandardAccountSnapshots, this.PrepareUpdateStandardAccountSnapshots, this.PrepareDeleteStandardAccountSnapshots);
+			Dictionary<AccountId, List<Func<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledJointTransactions = specializedSnapshotsModificationHistoryStack.CompileJointAccountHistorySets<JOINT_ACCOUNT_SNAPSHOT_CONTEXT>(this.PrepareNewJointAccountSnapshots, this.PrepareUpdateJointAccountSnapshots, this.PrepareDeleteJointAccountSnapshots);
+			Dictionary<AccountId, List<Func<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledAccountKeysTransactions = specializedSnapshotsModificationHistoryStack.CompileStandardAccountKeysHistorySets<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT>(this.PrepareNewAccountKeysSnapshots, this.PrepareUpdateAccountKeysSnapshots, this.PrepareDeleteAccountKeysSnapshots);
 			Dictionary<long, List<Func<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledAccreditationCertificatesTransactions = specializedSnapshotsModificationHistoryStack.CompileAccreditationCertificatesHistorySets<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT>(this.PrepareNewAccreditationCertificatesSnapshots, this.PrepareUpdateAccreditationCertificatesSnapshots, this.PrepareDeleteAccreditationCertificatesSnapshots);
 			Dictionary<long, List<Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledChainOptionsTransactions = specializedSnapshotsModificationHistoryStack.CompileChainOptionsHistorySets<CHAIN_OPTIONS_SNAPSHOT_CONTEXT>(this.PrepareNewChainOptionSnapshots, this.PrepareUpdateChainOptionSnapshots, this.PrepareDeleteChainOptionSnapshots);
 
-			return this.RunCompiledTransactionSets(compiledSimpleTransactions, compiledJointTransactions, compiledAccountKeysTransactions, compiledAccreditationCertificatesTransactions, compiledChainOptionsTransactions);
+			return this.RunCompiledTransactionSets(compiledStandardTransactions, compiledJointTransactions, compiledAccountKeysTransactions, compiledAccreditationCertificatesTransactions, compiledChainOptionsTransactions);
 
 		}
 
@@ -393,26 +394,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// </summary>
 		/// <param name="snapshotsModificationHistoryStack"></param>
 		/// <returns></returns>
-		public List<Func<LockContext, Task>> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys) {
+		public List<Func<LockContext, Task>> PrepareKeysSerializationTasks(Dictionary<(AccountId accountId, byte ordinal), byte[]> keyDictionary) {
 			List<Func<LockContext, Task>> serializationActions = new List<Func<LockContext, Task>>();
 
 			BlockChainConfigurations configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
-			if(fastKeys != null) {
-				bool hasTransactions = configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Transactions);
-				bool hasMessages = configuration.EnabledFastKeyTypes.HasFlag(ChainConfigurations.FastKeyTypes.Messages);
+			if(keyDictionary != null) {
+				bool hasTransactions = configuration.EnabledKeyDictionaryTypes.HasFlag(ChainConfigurations.KeyDictionaryTypes.Transactions);
+				bool hasMessages = configuration.EnabledKeyDictionaryTypes.HasFlag(ChainConfigurations.KeyDictionaryTypes.Messages);
 
-				foreach(((AccountId accountId, byte ordinal), byte[] value) in fastKeys) {
+				foreach(((AccountId accountId, byte ordinal), byte[] value) in keyDictionary) {
 					if((accountId.SequenceId >= Constants.FIRST_PUBLIC_ACCOUNT_NUMBER) && (((ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) && hasTransactions) || ((ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) && hasMessages))) {
 
 						serializationActions.Add(async lockContext => {
 
-							ByteArray publicKey = ByteArray.Wrap(value);
+							using SafeArrayHandle publicKey = SafeArrayHandle.Wrap(value);
 
 							ICryptographicKey cryptoKey = KeyFactory.RehydrateKey(DataSerializationFactory.CreateRehydrator(publicKey));
 
 							if(cryptoKey is XmssCryptographicKey xmssCryptographicKey) {
-								await this.centralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveAccountKeyIndex(accountId, xmssCryptographicKey.Key.Clone(), xmssCryptographicKey.TreeHeight, xmssCryptographicKey.BitSize, ordinal, lockContext).ConfigureAwait(false);
+								await this.centralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveAccountKeyIndex(accountId, xmssCryptographicKey.PublicKey.Clone(), xmssCryptographicKey.TreeHeight, xmssCryptographicKey.HashType, xmssCryptographicKey.BackupHashType, ordinal, lockContext).ConfigureAwait(false);
 							}
 						});
 
@@ -426,7 +427,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public async Task<List<IAccountSnapshot>> LoadAccountSnapshots(List<AccountId> accountIds) {
 			List<ACCOUNT_SNAPSHOT> results = new List<ACCOUNT_SNAPSHOT>();
 
-			results.AddRange(await this.StandardAccountSnapshotsDal.LoadAccounts(accountIds.Where(a => a.AccountType == Enums.AccountTypes.Standard).ToList()).ConfigureAwait(false));
+			results.AddRange(await this.StandardAccountSnapshotsDal.LoadAccounts(accountIds.Where(a => a.IsStandard).ToList()).ConfigureAwait(false));
 			results.AddRange(await this.JointAccountSnapshotsDal.LoadAccounts(accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).ToList()).ConfigureAwait(false));
 
 			return results.Cast<IAccountSnapshot>().ToList();
@@ -485,7 +486,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public async Task UpdateSnapshotDigestFromDigest(IAccountSnapshotDigestChannelCard accountSnapshotDigestChannelCard) {
-			if(accountSnapshotDigestChannelCard is IStandardAccountSnapshotDigestChannelCard simpleAccountSnapshotDigestChannelCard) {
+			if(accountSnapshotDigestChannelCard is IStandardAccountSnapshotDigestChannelCard standardAccountSnapshotDigestChannelCard) {
 				STANDARD_ACCOUNT_SNAPSHOT entry = new STANDARD_ACCOUNT_SNAPSHOT();
 
 				accountSnapshotDigestChannelCard.ConvertToSnapshotEntry(entry, this.GetCardUtils());
@@ -622,17 +623,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		}
 
-		protected virtual async Task RunCompiledTransactionSets(Dictionary<long, List<Func<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledSimpleTransactions, Dictionary<long, List<Func<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledJointTransactions, Dictionary<long, List<Func<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledAccountKeysTransactions, Dictionary<long, List<Func<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledAccreditationCertificatesTransactions, Dictionary<long, List<Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledChainOptionsTransactions) {
+		protected virtual async Task RunCompiledTransactionSets(Dictionary<AccountId, List<Func<STANDARD_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledStandardTransactions, Dictionary<AccountId, List<Func<JOINT_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledJointTransactions, Dictionary<AccountId, List<Func<STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledAccountKeysTransactions, Dictionary<long, List<Func<ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledAccreditationCertificatesTransactions, Dictionary<long, List<Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext, Task>>> compiledChainOptionsTransactions) {
 
-			List<(STANDARD_ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> simpleTransactions = null;
+			List<(STANDARD_ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> standardTransactions = null;
 			List<(JOINT_ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> jointTransactions = null;
 			List<(STANDARD_ACCOUNT_KEYS_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> accountKeysTransactions = null;
 			List<(ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> accreditationCertificatesTransactions = null;
 			List<(CHAIN_OPTIONS_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)> chainOptionsTransactions = null;
 
 			try {
-				if(compiledSimpleTransactions != null) {
-					simpleTransactions = await this.StandardAccountSnapshotsDal.PerformProcessingSet(compiledSimpleTransactions).ConfigureAwait(false);
+				if(compiledStandardTransactions != null) {
+					standardTransactions = await this.StandardAccountSnapshotsDal.PerformProcessingSet(compiledStandardTransactions).ConfigureAwait(false);
 				}
 
 				if(compiledJointTransactions != null) {
@@ -668,7 +669,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 				}
 
-				List<(DbContext, IDbContextTransaction transaction)> simple = simpleTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList();
+				List<(DbContext, IDbContextTransaction transaction)> simple = standardTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList();
 				List<(DbContext, IDbContextTransaction transaction)> joint = jointTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList();
 				List<(DbContext, IDbContextTransaction transaction)> keys = accountKeysTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList();
 				List<(DbContext, IDbContextTransaction transaction)> certificates = accreditationCertificatesTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList();
@@ -704,7 +705,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 				}
 
-				ClearTransactions(simpleTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList());
+				ClearTransactions(standardTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList());
 				ClearTransactions(jointTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList());
 				ClearTransactions(accountKeysTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList());
 				ClearTransactions(accreditationCertificatesTransactions?.Select(e => ((DbContext) e.db, e.transaction)).ToList());
@@ -813,17 +814,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return Path.Combine(this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetChainStorageFilesPath(), TRANACTION_ACCOUNTS_DIRECTORY);
 		}
 
-		private STANDARD_ACCOUNT_SNAPSHOT_DAL simpleAccountSnapshotDal;
+		private STANDARD_ACCOUNT_SNAPSHOT_DAL standardAccountSnapshotDal;
 
 		protected STANDARD_ACCOUNT_SNAPSHOT_DAL StandardAccountSnapshotsDal {
 			get {
 				lock(this.locker) {
-					if(this.simpleAccountSnapshotDal == null) {
-						this.simpleAccountSnapshotDal = this.centralCoordinator.ChainDalCreationFactory.CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(GROUP_SIZE, this.GetStandardAccountSnapshotsPath(), this.centralCoordinator.BlockchainServiceSet, this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SerializationType);
+					if(this.standardAccountSnapshotDal == null) {
+						this.standardAccountSnapshotDal = this.centralCoordinator.ChainDalCreationFactory.CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(GROUP_SIZE, this.GetStandardAccountSnapshotsPath(), this.centralCoordinator.BlockchainServiceSet, this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SerializationType);
 					}
 				}
 
-				return this.simpleAccountSnapshotDal;
+				return this.standardAccountSnapshotDal;
 			}
 		}
 
@@ -903,6 +904,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	#region snapshot operations
 
 		protected virtual Task<STANDARD_ACCOUNT_SNAPSHOT> PrepareNewStandardAccountSnapshots(STANDARD_ACCOUNT_SNAPSHOT_CONTEXT db, AccountId accountId, AccountId temporaryHashId, IStandardAccountSnapshot source, LockContext lockContext) {
+			
 			STANDARD_ACCOUNT_SNAPSHOT snapshot = new STANDARD_ACCOUNT_SNAPSHOT();
 			this.CardUtils.Copy(source, snapshot);
 

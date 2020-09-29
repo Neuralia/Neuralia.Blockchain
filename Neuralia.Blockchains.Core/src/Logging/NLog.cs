@@ -10,7 +10,12 @@ namespace Neuralia.Blockchains.Core.Logging {
 	public class NLog {
 
 		public enum LoggerTypes {
-			All, Default, IPCrawler, Connections, Messages
+			All, 
+			Standard, 
+			// Standard loggers: (if you add a standard logger, please remember to modify EnableLoggers() accordingly
+			Default, Connections, Messages,
+			// Opt-in loggers:
+			IPCrawler, UPnP
 		}
 		
 		public static readonly HashSet<LoggerTypes> EnabledLoggers = new HashSet<LoggerTypes>();
@@ -22,24 +27,31 @@ namespace Neuralia.Blockchains.Core.Logging {
 		public static IPassthroughLogger Connections => GetLogger(LoggerTypes.Connections);
 		public static IPassthroughLogger Messages => GetLogger(LoggerTypes.Messages);
 		
+		public static IPassthroughLogger UPnP => GetLogger(LoggerTypes.UPnP);
+		
 		public static void EnableLoggers(AppSettingsBase appSettings) {
 
 			EnabledLoggers.Clear();
 			EnableAll = false;
 			
-			if(appSettings.EnabledLoggers.Count == 0 || appSettings.EnabledLoggers.All(s => s == LoggerTypes.All)) {
+			if(appSettings.EnabledLoggers.Contains(LoggerTypes.All)) {
 				EnableAll = true;
-
 				return;
 			}
 
-			foreach(var s in appSettings.EnabledLoggers.Where(s => s != LoggerTypes.All)) {
+			if (appSettings.EnabledLoggers.Contains(LoggerTypes.Standard)) //default AppSetting
+			{
+				EnableLogger(LoggerTypes.Default);
+				EnableLogger(LoggerTypes.Connections);
+				EnableLogger(LoggerTypes.Messages);
+			}
+
+			foreach(var s in appSettings.EnabledLoggers.Where(s => s != LoggerTypes.All && s != LoggerTypes.Standard)) {
 				EnableLogger(s);
 			}
 		}
 		
 		public static void EnableLogger(LoggerTypes loggertype) {
-
 			if(!EnabledLoggers.Contains(loggertype)) {
 				EnabledLoggers.Add(loggertype);
 			}

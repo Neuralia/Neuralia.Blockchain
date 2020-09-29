@@ -14,10 +14,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 		private readonly string filename;
 
 		static LiteDBDAL() {
-			// register mapping types
-			BsonMapper.Global.RegisterType(wrapper => wrapper.Bytes, bson => {
-				return ByteArray.Create(bson.AsBinary);
-			});
+
 		}
 
 		public LiteDBDAL(string filename) {
@@ -62,6 +59,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Dal {
 			}
 		}
 
+		public Task OpenAsync(Func<LiteDatabase, Task> process) {
+			using(LiteDatabase db = this.GetDatabase()) {
+				return process(db);
+			}
+		}
+		
 		public Task<T> OpenAsync<T>(Func<LiteDatabase, Task<T>> process) {
 			using(LiteDatabase db = this.GetDatabase()) {
 				return process(db);

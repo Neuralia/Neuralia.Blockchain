@@ -1,6 +1,7 @@
 using System;
 using LiteDB;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account {
 
@@ -10,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		byte KeyOrdinalId { get; set; }
 
-		KeyUseIndexSet KeyUseIndex { get; set; }
+		IdKeyUseIndexSet KeyUseIndex { get; set; }
 
 		string EventId { get; set; }
 		byte EventType { get; set; }
@@ -25,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public ObjectId Id { get; set; }
 
 		public byte KeyOrdinalId { get; set; }
-		public KeyUseIndexSet KeyUseIndex { get; set; }
+		public IdKeyUseIndexSet KeyUseIndex { get; set; }
 		public string EventId { get; set; }
 
 		public byte EventType { get; set; }

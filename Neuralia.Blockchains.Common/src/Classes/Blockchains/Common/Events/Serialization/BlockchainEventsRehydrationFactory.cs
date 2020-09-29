@@ -64,7 +64,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 		IOperation CreateTransactionOperation(IDataRehydrator rehydrator);
 
 		ITransaction CreateTransaction(IDehydratedTransaction dehydratedTransaction);
-		IMasterTransaction CreateMasterTransaction(IDehydratedTransaction dehydratedTransaction);
+		
+		IIndexedTransaction CreateIndexedTransaction(IDehydratedTransaction dehydratedTransaction);
 	}
 
 	public interface IBlockchainEventsRehydrationFactory : IBlockRehydrationFactory, IMessageRehydrationFactory, ITransactionRehydrationFactory, IEnvelopeRehydrationFactory, IDigestRehydrationFactory {
@@ -87,7 +88,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 
 		public abstract BlockChannelUtils.BlockChannelTypes CompressedBlockchainChannels { get; }
 
-		public abstract IMasterTransaction CreateMasterTransaction(IDehydratedTransaction dehydratedTransaction);
+		public abstract IIndexedTransaction CreateIndexedTransaction(IDehydratedTransaction dehydratedTransaction);
 
 		//		public abstract TransactionSerializationMap CreateTransactionDehydrationMap(byte type, byte major, byte minor, ByteArray keyLengths);
 
@@ -160,10 +161,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializ
 
 			IGossipMessageMetadataDetails gossipMessageMetadataDetails = null;
 
-			if(type == 1) {
-				// nothing
-			} else if(type == 2) {
+			if(type == BlockGossipMessageMetadataDetails.TYPE) {
 				gossipMessageMetadataDetails = new BlockGossipMessageMetadataDetails();
+			}
+			else if(type == BlockchainMessageGossipMessageMetadataDetails.TYPE) {
+				gossipMessageMetadataDetails = new BlockchainMessageGossipMessageMetadataDetails();
+			}
+			else if(type == TransactionGossipMessageMetadataDetails.TYPE) {
+				gossipMessageMetadataDetails = new TransactionGossipMessageMetadataDetails();
 			}
 
 			gossipMessageMetadataDetails?.Rehydrate(rehydrator);

@@ -153,7 +153,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			using(BinaryReader br = new BinaryReader(fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read))) {
 				br.BaseStream.Seek(start, SeekOrigin.Begin);
 
-				return ByteArray.WrapAndOwn(br.ReadBytes(count));
+				return SafeArrayHandle.WrapAndOwn(br.ReadBytes(count));
 			}
 		}
 
@@ -161,7 +161,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			await using(Stream stream = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 				stream.Seek(start, SeekOrigin.Begin);
 
-				ByteArray bytes = ByteArray.Create(count);
+				SafeArrayHandle bytes = SafeArrayHandle.Create(count);
 				await stream.ReadAsync(bytes.Memory).ConfigureAwait(false);
 
 				return bytes;
@@ -169,7 +169,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		}
 
 		public static SafeArrayHandle ReadAllBytes(string filename, FileSystemWrapper fileSystem) {
-			return ByteArray.WrapAndOwn(fileSystem.ReadAllBytes(filename));
+			return SafeArrayHandle.WrapAndOwn(fileSystem.ReadAllBytes(filename));
 		}
 
 		/// <summary>
@@ -182,7 +182,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			await using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 				await using(BufferedStream bs = new BufferedStream(fs)) {
 
-					ByteArray buffer = ByteArray.Create((int) bs.Length);
+					SafeArrayHandle buffer = SafeArrayHandle.Create((int) bs.Length);
 					long bytesLeft = buffer.Length;
 					int offset = 0;
 
@@ -208,7 +208,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 			await using(Stream fs = fileSystem.OpenFile(filename, FileMode.Open, FileAccess.Read, FileShare.Read)) {
 				await using(BufferedStream bs = new BufferedStream(fs)) {
 
-					ByteArray buffer = ByteArray.Create((int) bs.Length);
+					SafeArrayHandle buffer = SafeArrayHandle.Create((int) bs.Length);
 					long bytesLeft = buffer.Length;
 					int offset = 0;
 

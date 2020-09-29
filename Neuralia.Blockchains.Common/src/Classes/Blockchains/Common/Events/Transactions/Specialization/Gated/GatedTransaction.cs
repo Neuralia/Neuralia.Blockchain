@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.JointSignatureTypes;
+using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
@@ -22,9 +23,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public uint CorrelationId { get; set; }
 		public AccountId SenderAccountId => this.TransactionId.Account;
 
-		public override HashNodeList GetStructuresArray() {
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
 
-			HashNodeList nodeList = base.GetStructuresArray();
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
 			nodeList.Add(this.TermsOfUseAccepted);
 			nodeList.Add(this.CorrelationId);
@@ -40,9 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			jsonDeserializer.SetProperty("SenderAccountId", this.SenderAccountId);
 			jsonDeserializer.SetProperty("CorrelationId", this.CorrelationId);
 		}
-
-		public override ImmutableList<AccountId> TargetAccounts => new[] {this.SenderAccountId}.ToImmutableList();
-
+		
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 

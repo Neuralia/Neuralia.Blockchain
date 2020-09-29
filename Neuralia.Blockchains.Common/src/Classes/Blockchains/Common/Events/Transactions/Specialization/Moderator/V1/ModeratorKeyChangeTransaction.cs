@@ -1,7 +1,9 @@
-﻿using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Keys;
+﻿using System.Linq;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -10,39 +12,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 	public interface IModeratorKeyChangeTransaction : IModerationKeyedTransaction, IKeychange {
 
 		ICryptographicKey NewCryptographicKey { get; }
-		Enums.KeyTypes KeyType { get; }
+		byte OrdinalId  { get; }
 	}
 
 	public abstract class ModeratorKeyChangeTransaction : ModerationKeyedTransaction, IModeratorKeyChangeTransaction {
 
-		private byte ordinalId;
+		public byte OrdinalId => this.NewCryptographicKey?.Ordinal??0;
 
 		public ModeratorKeyChangeTransaction() {
 			// used by rehydrationonly
 		}
 
-		public ModeratorKeyChangeTransaction(byte ordinalId, ICryptographicKey cryptographicKey) {
-			this.ordinalId = ordinalId;
-			this.KeyType = cryptographicKey.Type;
-			this.Keyset.Add(cryptographicKey, ordinalId);
+		public ModeratorKeyChangeTransaction(ICryptographicKey cryptographicKey) {
+			this.Keyset.Add(cryptographicKey);
 		}
 
-		public ModeratorKeyChangeTransaction(byte ordinalId, Enums.KeyTypes keyType) {
-			this.ordinalId = ordinalId;
-			this.KeyType = keyType;
-			this.Keyset.Add(ordinalId, this.KeyType);
+		public ModeratorKeyChangeTransaction(byte ordinalId, CryptographicKeyType keyType) {
+			this.Keyset.Add(ordinalId, keyType);
 		}
 
-		public ICryptographicKey NewCryptographicKey => this.Keyset.Keys[this.ordinalId];
+		public ICryptographicKey NewCryptographicKey => this.Keyset.Keys.Values.SingleOrDefault();
 
-		public Enums.KeyTypes KeyType { get; private set; }
+		public override Enums.TransactionTargetTypes TargetType => Enums.TransactionTargetTypes.All;
+		public override AccountId[] ImpactedAccounts =>this.TargetAccounts;
+		public override AccountId[] TargetAccounts =>  this.GetSenderList();
 
-		public override HashNodeList GetStructuresArray() {
+		public override HashNodeList GetStructuresArray(Enums.MutableStructureTypes types) {
 
-			HashNodeList nodeList = base.GetStructuresArray();
+			HashNodeList nodeList = base.GetStructuresArray(types);
 
-			nodeList.Add((byte) this.KeyType);
-			nodeList.Add(this.ordinalId);
+			nodeList.Add(this.OrdinalId);
 
 			return nodeList;
 		}
@@ -51,22 +50,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 			base.JsonDehydrate(jsonDeserializer);
 
 			//
-			jsonDeserializer.SetProperty("ordinalId", this.ordinalId);
-			jsonDeserializer.SetProperty("KeyType", this.KeyType);
+			jsonDeserializer.SetProperty("ordinalId", this.OrdinalId);
 		}
 
 		protected override void RehydrateHeader(IDataRehydrator rehydrator) {
 			base.RehydrateHeader(rehydrator);
 
-			this.ordinalId = rehydrator.ReadByte();
-			this.KeyType = (Enums.KeyTypes) rehydrator.ReadByte();
 		}
 
 		protected override void DehydrateHeader(IDataDehydrator dehydrator) {
 			base.DehydrateHeader(dehydrator);
-
-			dehydrator.Write(this.ordinalId);
-			dehydrator.Write((byte) this.KeyType);
 		}
 
 		protected override ComponentVersion<TransactionType> SetIdentity() {

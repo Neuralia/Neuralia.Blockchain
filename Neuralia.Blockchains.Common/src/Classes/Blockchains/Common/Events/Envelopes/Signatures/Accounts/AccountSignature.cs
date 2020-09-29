@@ -6,41 +6,39 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes.Signatures.Accounts {
 
-	public interface IAccountSignature : ITreeHashable, IBinarySerializable, IJsonSerializable {
+	public interface IAccountSignature : IAccountSignatureBase {
 
-		byte Version { get; }
 		SafeArrayHandle Autograph { get; }
 	}
 
-	public class AccountSignature : IAccountSignature {
+	public class AccountSignature : AccountSignatureBase, IAccountSignature {
 
-		public byte Version { get; private set; } = 1;
 		public SafeArrayHandle Autograph { get; } = SafeArrayHandle.Create();
 
-		public virtual HashNodeList GetStructuresArray() {
-			HashNodeList nodelist = new HashNodeList();
+		public override HashNodeList GetStructuresArray() {
+			HashNodeList nodelist = base.GetStructuresArray();
 
-			nodelist.Add(this.Version);
 			nodelist.Add(this.Autograph);
 
 			return nodelist;
 		}
 
-		public virtual void Dehydrate(IDataDehydrator dehydrator) {
+		public override void Dehydrate(IDataDehydrator dehydrator) {
 
-			dehydrator.Write(this.Version);
+			base.Dehydrate(dehydrator);
 			dehydrator.WriteNonNullable(this.Autograph);
 		}
 
-		public virtual void Rehydrate(IDataRehydrator rehydrator) {
+		public override void Rehydrate(IDataRehydrator rehydrator) {
 
-			this.Version = rehydrator.ReadByte();
+			base.Rehydrate(rehydrator);
 			this.Autograph.Entry = rehydrator.ReadNonNullableArray();
 
 		}
 
-		public virtual void JsonDehydrate(JsonDeserializer jsonDeserializer) {
-			jsonDeserializer.SetProperty("Version", this.Version);
+		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
+			base.JsonDehydrate(jsonDeserializer);
+			
 			jsonDeserializer.SetProperty("Autograph", this.Autograph);
 		}
 	}

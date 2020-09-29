@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		public enum QuestionTransactionSection : byte {
 
-			ConfirmedMasterTransactions = 1,
+			ConfirmedIndexedTransactions = 1,
 			ConfirmedTransactions = 2,
 			RejectedTransactions = 3,
 			Block = 4
@@ -43,8 +43,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
 
-			jsonDeserializer.SetProperty(nameof(this.BlockId), this.BlockId.ToString());
-			jsonDeserializer.SetProperty(nameof(this.TransactionIndex), this.TransactionIndex == null ? "" : this.TransactionIndex.ToString());
+			jsonDeserializer.SetProperty(nameof(this.BlockId), this.BlockId);
+			jsonDeserializer.SetProperty(nameof(this.TransactionIndex), this.TransactionIndex == null ? null : this.TransactionIndex);
 
 			jsonDeserializer.SetProperty(nameof(this.SelectedTransactionSection), this.SelectedTransactionSection.ToString());
 			jsonDeserializer.SetProperty(nameof(this.SelectedComponent), this.SelectedComponent.ToString());

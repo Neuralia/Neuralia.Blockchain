@@ -1,4 +1,5 @@
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions.Tags.Widgets.Addresses;
+using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -16,7 +17,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			HashNodeList nodelist = base.GetStructuresArray();
 
 			nodelist.Add(this.KeyAddress);
-
+			
 			return nodelist;
 		}
 

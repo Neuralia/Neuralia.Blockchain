@@ -22,11 +22,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public ushort Major {
 			get => this.CertificateVersion.Major.Value;
-			set => this.CertificateVersion = new ComponentVersion(value, this.CertificateVersion.Minor.Value);
+			set => this.CertificateVersion = new ComponentVersion(value, this.CertificateVersion.Minor);
 		}
 
 		public ushort Minor {
-			get => this.CertificateVersion.Minor.Value;
+			get => this.CertificateVersion.Minor;
 			set => this.CertificateVersion = new ComponentVersion(this.CertificateVersion.Major.Value, value);
 		}
 

@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 
-			MiningTierUtils.RehydrateMiningSet<ushort, AdaptiveShort1_2>(this.MiningTierTotals, 0, rehydrator, v => (ushort) v);
+			MiningTierUtils.RehydrateUShortMiningSet(this.MiningTierTotals, rehydrator, 0);
 		}
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {

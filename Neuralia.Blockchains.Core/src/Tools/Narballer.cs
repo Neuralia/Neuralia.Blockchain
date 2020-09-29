@@ -6,13 +6,13 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Core.General.Types.Simple;
 using Neuralia.Blockchains.Tools.Serialization;
 using Serilog;
 
@@ -88,7 +88,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 					string filepath = this.MakeFullPath(file.Name);
 
-					SafeArrayHandle fileBytes = FileExtensions.ReadAllBytes(filepath, this.fileSystem);
+					using SafeArrayHandle fileBytes = FileExtensions.ReadAllBytes(filepath, this.fileSystem);
 
 					file.Offset = offset;
 					file.Hash = this.HashBytes(fileBytes);
@@ -102,7 +102,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			header.Dehydrate(headerDehydrator);
 
-			SafeArrayHandle headerBytes = headerDehydrator.ToArray();
+			using SafeArrayHandle headerBytes = headerDehydrator.ToArray();
 
 			FileExtensions.WriteAllBytes(headerFilePath, headerBytes, this.fileSystem);
 
@@ -131,7 +131,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			FileExtensions.EnsureDirectoryStructure(outpath, this.fileSystem);
 
-			SafeArrayHandle headerBytes = FileExtensions.ReadAllBytes(headerFilePath, this.fileSystem);
+			using SafeArrayHandle headerBytes = FileExtensions.ReadAllBytes(headerFilePath, this.fileSystem);
 			NarballHeader header = new NarballHeader();
 
 			using(IDataRehydrator headerRehydrator = DataSerializationFactory.CreateRehydrator(headerBytes)) {
@@ -142,47 +142,47 @@ namespace Neuralia.Blockchains.Core.Tools {
 				throw new ApplicationException("No files found in the header.");
 			}
 
-			using(BinaryReader br = new BinaryReader(this.fileSystem.OpenFile(bodyFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))) {
+			using BinaryReader br = new BinaryReader(this.fileSystem.OpenFile(bodyFilePath, FileMode.Open, FileAccess.Read, FileShare.Read));
 
-				List<Action> actions = new List<Action>();
+			List<Action> actions = new List<Action>();
 
-				foreach(NarballHeader.NarballHeaderEntry file in header.Files) {
+			foreach(NarballHeader.NarballHeaderEntry file in header.Files) {
 
-					actions.Add(() => {
-						try {
+				actions.Add(() => {
+					try {
 
-							if((filter == null) || filter.Any(f => f.EndsWith(file.Name))) {
-								br.BaseStream.Seek(file.Offset, SeekOrigin.Begin);
-								ByteArray bytes = ByteArray.WrapAndOwn(br.ReadBytes(file.Length));
+						if((filter == null) || filter.Any(f => f.EndsWith(file.Name, true, null))) {
+							br.BaseStream.Seek(file.Offset, SeekOrigin.Begin);
+							using SafeArrayHandle bytes = SafeArrayHandle.WrapAndOwn(br.ReadBytes(file.Length));
 
-								if(file.Hash != this.HashBytes(bytes)) {
-									throw new ApplicationException($"hash for file {file.Name} was different. invalid data.");
-								}
-
-								string fullname = Path.Combine(outpath, file.Name);
-
-								try {
-									if(this.fileSystem.FileExists(fullname)) {
-										this.fileSystem.DeleteFile(fullname);
-									}
-								} catch {
-									// give it a try, but continue if it fails just in case
-								}
-
-								FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(fullname), this.fileSystem);
-
-								FileExtensions.WriteAllBytes(fullname, bytes, this.fileSystem);
+							if(file.Hash != this.HashBytes(bytes)) {
+								throw new ApplicationException($"hash for file {file.Name} was different. invalid data.");
 							}
-						} catch(Exception ex) {
-							NLog.Default.Fatal(ex, $"Failed to restore wallet file {file.Name} from nar package.");
 
-							throw;
+							string fullname = Path.Combine(outpath, file.Name);
+
+							try {
+								if(this.fileSystem.FileExists(fullname)) {
+									this.fileSystem.DeleteFile(fullname);
+								}
+							} catch {
+								// give it a try, but continue if it fails just in case
+							}
+
+							FileExtensions.EnsureDirectoryStructure(Path.GetDirectoryName(fullname), this.fileSystem);
+
+							FileExtensions.WriteAllBytes(fullname, bytes, this.fileSystem);
 						}
-					});
-				}
+					} catch(Exception ex) {
+						NLog.Default.Fatal(ex, $"Failed to restore wallet file {file.Name} from nar package.");
 
-				IndependentActionRunner.Run(actions.ToArray());
+						throw;
+					}
+				});
 			}
+
+			IndependentActionRunner.Run(actions.ToArray());
+
 		}
 
 		public void Clear(string packagePath) {
@@ -226,12 +226,8 @@ namespace Neuralia.Blockchains.Core.Tools {
 		}
 
 		private int HashBytes(SafeArrayHandle fileBytes) {
-
-			using(HashNodeList nodes = new HashNodeList()) {
-				nodes.Add(fileBytes);
-
-				return HashingUtils.HashxxTree32(nodes);
-			}
+			
+			return HashingUtils.XxHash32(fileBytes);
 		}
 
 		private static (string header, string body) MakeFileNames(string filename) {

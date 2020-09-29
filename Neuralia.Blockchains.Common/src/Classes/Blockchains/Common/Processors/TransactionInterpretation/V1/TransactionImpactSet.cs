@@ -55,13 +55,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		public OverrideSetAction<InterpretTransactionAccountsFuncParameter> InterpretTransactionAccountsFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionAccountsFuncParameter>();
 		public OverrideSetAction<InterpretTransactionStandardAccountKeysFuncParameter> InterpretTransactionStandardAccountKeysFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionStandardAccountKeysFuncParameter>();
-		public OverrideSetAction<CollectStandardAccountFastKeysFuncParameter> CollectStandardAccountFastKeysFuncOverrideSetAction { get; } = new OverrideSetAction<CollectStandardAccountFastKeysFuncParameter>();
+		public OverrideSetAction<CollectStandardAccountKeyDictionaryFuncParameter> CollectStandardAccountKeyDictionaryFuncOverrideSetAction { get; } = new OverrideSetAction<CollectStandardAccountKeyDictionaryFuncParameter>();
 		public OverrideSetAction<InterpretTransactionAccreditationCertificatesFuncParameter> InterpretTransactionAccreditationCertificatesFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionAccreditationCertificatesFuncParameter>();
 		public OverrideSetAction<InterpretTransactionChainOptionsFuncParameter> InterpretTransactionChainOptionsFuncOverrideSetAction { get; } = new OverrideSetAction<InterpretTransactionChainOptionsFuncParameter>();
 
 		public OverrideSetFunc<InterpretTransactionVerificationFuncParameter, (bool valid, RejectionCode rejectionCode)> InterpretTransactionVerificationFuncOverrideSetAction { get; } = new OverrideSetFunc<InterpretTransactionVerificationFuncParameter, (bool valid, RejectionCode rejectionCode)>();
 
-		public async Task InterpretTransaction(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys, ChainConfigurations.FastKeyTypes enabledFastKeyTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected, LockContext lockContext) {
+		public async Task InterpretTransaction(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> keyDictionary, ChainConfigurations.KeyDictionaryTypes enabledKeyDictionaryTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected, LockContext lockContext) {
 			// if we must run a simulation, we do so
 			bool accept = true;
 			RejectionCode code = RejectionCodes.Instance.NONE;
@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				try {
 					snapshotCache.BeginTransaction();
 
-					bool? results = await this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, null, enabledFastKeyTypes, TransactionImpactSet.OperationModes.Simulated, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected, lockContext).ConfigureAwait(false);
+					bool? results = await this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, null, enabledKeyDictionaryTypes, TransactionImpactSet.OperationModes.Simulated, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected, lockContext).ConfigureAwait(false);
 
 					if(results.HasValue && (results.Value == false)) {
 						//throw new UnrecognizedElementException(this.blockchainType, this.chainName);
@@ -110,7 +110,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				try {
 					snapshotCache.BeginTransaction();
 
-					bool? results = await this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, fastKeys, enabledFastKeyTypes, operationMode, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected, lockContext).ConfigureAwait(false);
+					bool? results = await this.RunInterpretationFunctions(transaction, blockId, impactedSnapshots, keyDictionary, enabledKeyDictionaryTypes, operationMode, snapshotCache, isLocalAccount, isDispatchedAccount, TransactionRejected, lockContext).ConfigureAwait(false);
 
 					// ok, lets run the real thing
 					if(results.HasValue && (results.Value == false)) {
@@ -130,7 +130,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			}
 		}
 
-		private async Task<bool?> RunInterpretationFunctions(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> fastKeys, ChainConfigurations.FastKeyTypes enabledFastKeyTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected, LockContext lockContext) {
+		private async Task<bool?> RunInterpretationFunctions(ITransaction transaction, long blockId, SnapshotKeySet impactedSnapshots, Dictionary<(AccountId accountId, byte ordinal), byte[]> keyDictionary, ChainConfigurations.KeyDictionaryTypes enabledKeyDictionaryTypes, TransactionImpactSet.OperationModes operationMode, ISnapshotCacheSetInternal<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCache, bool isLocalAccount, bool isDispatchedAccount, Action<TransactionId, RejectionCode> TransactionRejected, LockContext lockContext) {
 
 			bool? hasRunAny = null;
 			List<AccountId> accounts = impactedSnapshots.standardAccounts.ToList();
@@ -165,29 +165,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				}
 			}
 
-			if((fastKeys != null) && (operationMode == TransactionImpactSet.OperationModes.Real)) {
+			if((keyDictionary != null) && (operationMode == TransactionImpactSet.OperationModes.Real)) {
 
-				CollectStandardAccountFastKeysFuncParameter parameter = new CollectStandardAccountFastKeysFuncParameter();
+				CollectStandardAccountKeyDictionaryFuncParameter parameter = new CollectStandardAccountKeyDictionaryFuncParameter();
 				parameter.blockId = blockId;
-				parameter.types = enabledFastKeyTypes;
+				parameter.types = enabledKeyDictionaryTypes;
 
-				bool hasRun = await this.CollectStandardAccountFastKeysFuncOverrideSetAction.Run(transaction, parameter, lockContext).ConfigureAwait(false);
+				bool hasRun = await this.CollectStandardAccountKeyDictionaryFuncOverrideSetAction.Run(transaction, parameter, lockContext).ConfigureAwait(false);
 
 				//TODO: should this one be considered in the run bool?
 				// if(!hasRunAny.HasValue || hasRunAny.Value != true) {
 				// 	hasRunAny = hasRun;
 				// }
-				List<FastKeyMetadata> fastKeysdatas = parameter.results;
+				List<KeyDictionaryMetadata> fastKeysdatas = parameter.results;
 
 				// update the public keys, if any
 				if(fastKeysdatas != null) {
-					foreach(FastKeyMetadata entry in fastKeysdatas) {
+					foreach(KeyDictionaryMetadata entry in fastKeysdatas) {
 						(AccountId AccountId, byte Ordinal) key = (entry.AccountId, entry.Ordinal);
 
-						if(fastKeys.ContainsKey(key)) {
-							fastKeys[key] = entry.PublicKey;
+						if(keyDictionary.ContainsKey(key)) {
+							keyDictionary[key] = entry.PublicKey;
 						} else {
-							fastKeys.Add(key, entry.PublicKey);
+							keyDictionary.Add(key, entry.PublicKey);
 						}
 					}
 				}
@@ -246,7 +246,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.InterpretTransactionVerificationFuncOverrideSetAction.AddOverrideSet(interpretTransactionVerificationFuncOverrideSetAction);
 		}
 
-		public void RegisterTransactionImpactSet<T>(Func<T, SnapshotKeySet, LockContext, Task> getImpactedSnapshotsFunc, Func<T, InterpretTransactionAccountsFuncParameter, LockContext, Task> interpretTransactionAccountsFunc = null, Func<T, InterpretTransactionStandardAccountKeysFuncParameter, LockContext, Task> interpretTransactionStandardAccountKeysFunc = null, Func<T, CollectStandardAccountFastKeysFuncParameter, LockContext, Task> collectStandardAccountFastKeysFunc = null, Func<T, InterpretTransactionChainOptionsFuncParameter, LockContext, Task> interpretTransactionChainOptionsFunc = null, Func<T, InterpretTransactionAccreditationCertificatesFuncParameter, LockContext, Task> interpretTransactionAccreditationCertificatesFunc = null) {
+		public void RegisterTransactionImpactSet<T>(Func<T, SnapshotKeySet, LockContext, Task> getImpactedSnapshotsFunc, Func<T, InterpretTransactionAccountsFuncParameter, LockContext, Task> interpretTransactionAccountsFunc = null, Func<T, InterpretTransactionStandardAccountKeysFuncParameter, LockContext, Task> interpretTransactionStandardAccountKeysFunc = null, Func<T, CollectStandardAccountKeyDictionaryFuncParameter, LockContext, Task> collectStandardAccountKeyDictionaryFunc = null, Func<T, InterpretTransactionChainOptionsFuncParameter, LockContext, Task> interpretTransactionChainOptionsFunc = null, Func<T, InterpretTransactionAccreditationCertificatesFuncParameter, LockContext, Task> interpretTransactionAccreditationCertificatesFunc = null) {
 
 			if(getImpactedSnapshotsFunc == null) {
 				throw new ArgumentNullException($"{nameof(getImpactedSnapshotsFunc)} cannot be null");
@@ -257,19 +257,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.GetImpactedSnapshotsFuncOverrideSetAction.AddSet(getImpactedSnapshotsFunc);
 			this.InterpretTransactionAccountsFuncOverrideSetAction.AddSet(interpretTransactionAccountsFunc);
 			this.InterpretTransactionStandardAccountKeysFuncOverrideSetAction.AddSet(interpretTransactionStandardAccountKeysFunc);
-			this.CollectStandardAccountFastKeysFuncOverrideSetAction.AddSet(collectStandardAccountFastKeysFunc);
+			this.CollectStandardAccountKeyDictionaryFuncOverrideSetAction.AddSet(collectStandardAccountKeyDictionaryFunc);
 
 			this.InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet(interpretTransactionAccreditationCertificatesFunc);
 			this.InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet(interpretTransactionChainOptionsFunc);
 		}
 
-		public void RegisterTransactionImpactSetOverride<C, P>(Func<C, SnapshotKeySet, Func<P, SnapshotKeySet, LockContext, Task>, LockContext, Task> getImpactedSnapshotsFunc = null, Func<C, InterpretTransactionAccountsFuncParameter, Func<P, InterpretTransactionAccountsFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionAccountsFunc = null, Func<C, InterpretTransactionStandardAccountKeysFuncParameter, Func<P, InterpretTransactionStandardAccountKeysFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionStandardAccountKeysFunc = null, Func<C, CollectStandardAccountFastKeysFuncParameter, Func<P, CollectStandardAccountFastKeysFuncParameter, LockContext, Task>, LockContext, Task> collectStandardAccountFastKeysFunc = null, Func<C, InterpretTransactionChainOptionsFuncParameter, Func<P, InterpretTransactionChainOptionsFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionChainOptionsFunc = null, Func<C, InterpretTransactionAccreditationCertificatesFuncParameter, Func<P, InterpretTransactionAccreditationCertificatesFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionAccreditationCertificatesFunc = null)
+		public void RegisterTransactionImpactSetOverride<C, P>(Func<C, SnapshotKeySet, Func<P, SnapshotKeySet, LockContext, Task>, LockContext, Task> getImpactedSnapshotsFunc = null, Func<C, InterpretTransactionAccountsFuncParameter, Func<P, InterpretTransactionAccountsFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionAccountsFunc = null, Func<C, InterpretTransactionStandardAccountKeysFuncParameter, Func<P, InterpretTransactionStandardAccountKeysFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionStandardAccountKeysFunc = null, Func<C, CollectStandardAccountKeyDictionaryFuncParameter, Func<P, CollectStandardAccountKeyDictionaryFuncParameter, LockContext, Task>, LockContext, Task> collectStandardAccountKeyDictionaryFunc = null, Func<C, InterpretTransactionChainOptionsFuncParameter, Func<P, InterpretTransactionChainOptionsFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionChainOptionsFunc = null, Func<C, InterpretTransactionAccreditationCertificatesFuncParameter, Func<P, InterpretTransactionAccreditationCertificatesFuncParameter, LockContext, Task>, LockContext, Task> interpretTransactionAccreditationCertificatesFunc = null)
 			where C : P {
 
 			this.GetImpactedSnapshotsFuncOverrideSetAction.AddSet(getImpactedSnapshotsFunc);
 			this.InterpretTransactionAccountsFuncOverrideSetAction.AddSet(interpretTransactionAccountsFunc);
 			this.InterpretTransactionStandardAccountKeysFuncOverrideSetAction.AddSet(interpretTransactionStandardAccountKeysFunc);
-			this.CollectStandardAccountFastKeysFuncOverrideSetAction.AddSet(collectStandardAccountFastKeysFunc);
+			this.CollectStandardAccountKeyDictionaryFuncOverrideSetAction.AddSet(collectStandardAccountKeyDictionaryFunc);
 
 			this.InterpretTransactionAccreditationCertificatesFuncOverrideSetAction.AddSet(interpretTransactionAccreditationCertificatesFunc);
 			this.InterpretTransactionChainOptionsFuncOverrideSetAction.AddSet(interpretTransactionChainOptionsFunc);
@@ -287,10 +287,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			public TransactionImpactSet.OperationModes operationModes { get; set; }
 		}
 
-		public class CollectStandardAccountFastKeysFuncParameter {
+		public class CollectStandardAccountKeyDictionaryFuncParameter {
 			public long blockId { get; set; }
-			public ChainConfigurations.FastKeyTypes types { get; set; }
-			public List<FastKeyMetadata> results { get; set; }
+			public ChainConfigurations.KeyDictionaryTypes types { get; set; }
+			public List<KeyDictionaryMetadata> results { get; set; }
 		}
 
 		public class InterpretTransactionChainOptionsFuncParameter {
@@ -315,7 +315,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		}
 	}
 
-	public class FastKeyMetadata {
+	public class KeyDictionaryMetadata {
 		public AccountId AccountId { get; set; }
 		public byte Ordinal { get; set; }
 		public byte[] PublicKey { get; set; }

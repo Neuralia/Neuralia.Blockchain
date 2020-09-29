@@ -101,6 +101,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 				this.writer.WriteString(name, time);
 			} else if(entry is Enum @enum) {
 				this.writer.WriteString(name, @enum.ToString());
+			} else if(value is IJsonValue jsonValue) {
+				jsonValue.JsonWriteValue(name, this);
 			} else if(value is IJsonSerializable serializable) {
 				this.SetProperty(name, serializable);
 			} else {
@@ -221,8 +223,8 @@ namespace Neuralia.Blockchains.Core.Serialization {
 			} else if(entry is Enum @enum) {
 				this.writer.WriteStringValue(@enum.ToString());
 			} else if(value is IJsonSerializable serializable) {
-				this.WriteObject(s => {
-					serializable.JsonDehydrate(this);
+				this.WriteObject(s2 => {
+					serializable.JsonDehydrate(s2);
 				});
 
 			} else {

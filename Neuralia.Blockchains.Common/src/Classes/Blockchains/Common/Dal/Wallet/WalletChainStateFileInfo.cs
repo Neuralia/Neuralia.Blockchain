@@ -48,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				this.chainState = chainState;
 
 				await this.RunDbOperation((litedbDal, lc) => {
-					litedbDal.Insert(chainState, c => c.AccountUuid);
+					litedbDal.Insert(chainState, c => c.AccountCode);
 
 					return Task.CompletedTask;
 				}, handle).ConfigureAwait(false);
@@ -69,7 +69,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		protected override Task CreateDbFile(LiteDBDAL litedbDal, LockContext lockContext) {
-			litedbDal.CreateDbFile<WalletAccountChainState, Guid>(i => i.AccountUuid);
+			litedbDal.CreateDbFile<WalletAccountChainState, string>(i => i.AccountCode);
 
 			return Task.CompletedTask;
 		}

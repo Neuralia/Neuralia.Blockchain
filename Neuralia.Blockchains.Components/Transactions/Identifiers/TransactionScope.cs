@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Components.Transactions.Identifiers {
 		public TransactionScope(TransactionScope other) : this(other.Value) {
 		}
 
-		public TransactionScope(string scope) : this(ushort.Parse(scope, CultureInfo.InvariantCulture)) {
+		public TransactionScope(string scope) : this(FromString(scope)) {
 
 		}
 

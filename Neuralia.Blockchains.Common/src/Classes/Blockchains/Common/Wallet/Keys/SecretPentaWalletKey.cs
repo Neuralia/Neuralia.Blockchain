@@ -1,12 +1,15 @@
+using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 
 	public interface ISecretPentaWalletKey : ISecretDoubleWalletKey {
 
-		QTeslaWalletKey ThirdKey { get; set; }
-		QTeslaWalletKey FourthKey { get; set; }
+		XmssWalletKey ThirdKey { get; set; }
+		XmssMTWalletKey FourthKey { get; set; }
 		XmssMTWalletKey FifthKey { get; set; }
 	}
 
@@ -15,6 +18,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 	/// </summary>
 	public abstract class SecretPentaWalletKey : SecretDoubleWalletKey, ISecretPentaWalletKey {
 
+		public SecretPentaWalletKey() {
+		}
+		
+		protected override ComponentVersion<CryptographicKeyType> SetIdentity() {
+			return (CryptographicKeyTypes.Instance.SecretPenta, 1,0);
+		}
+		
 		public override HashNodeList GetStructuresArray() {
 			HashNodeList nodeList = base.GetStructuresArray();
 
@@ -25,8 +35,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			return nodeList;
 		}
 
-		public QTeslaWalletKey ThirdKey { get; set; }
-		public QTeslaWalletKey FourthKey { get; set; }
+		public XmssWalletKey ThirdKey { get; set; }
+		public XmssMTWalletKey FourthKey { get; set; }
 		public XmssMTWalletKey FifthKey { get; set; }
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -58,14 +68,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 			bool isNull = rehydrator.ReadBool();
 
 			if(isNull == false) {
-				this.ThirdKey = walletKeyHelper.CreateKey<QTeslaWalletKey>(rehydrator);
+				this.ThirdKey = walletKeyHelper.CreateKey<XmssWalletKey>(rehydrator);
 				this.ThirdKey.Rehydrate(rehydrator);
 			}
 
 			isNull = rehydrator.ReadBool();
 
 			if(isNull == false) {
-				this.FourthKey = walletKeyHelper.CreateKey<QTeslaWalletKey>(rehydrator);
+				this.FourthKey = walletKeyHelper.CreateKey<XmssMTWalletKey>(rehydrator);
 				this.FourthKey.Rehydrate(rehydrator);
 			}
 

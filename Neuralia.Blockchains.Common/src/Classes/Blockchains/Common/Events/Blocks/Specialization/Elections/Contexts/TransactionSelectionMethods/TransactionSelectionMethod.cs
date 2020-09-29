@@ -20,13 +20,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 	public abstract class TransactionSelectionMethod : Versionable<TransactionSelectionMethodType>, ITransactionSelectionMethod {
 		protected readonly long blockId;
+
+		protected readonly IChainMiningStatusProvider chainMiningStatusProvider;
 		protected readonly IChainStateProvider chainStateProvider;
 		protected readonly BlockChainConfigurations configuration;
 		protected readonly IElectionContext electionContext;
 
 		protected readonly IWalletProvider walletProvider;
 
-		public TransactionSelectionMethod(long blockId, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext) {
+		public TransactionSelectionMethod(long blockId, IChainMiningStatusProvider chainMiningStatusProvider, BlockChainConfigurations configuration, IChainStateProvider chainStateProvider, IWalletProvider walletProvider, IElectionContext electionContext) {
+			this.chainMiningStatusProvider = chainMiningStatusProvider;
 			this.walletProvider = walletProvider;
 			this.blockId = blockId;
 			this.electionContext = electionContext;
@@ -36,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 		protected int MaximumTransactionCount {
 			get {
-				Enums.MiningTiers miningTier = BlockchainUtilities.GetMiningTier(this.configuration, this.chainStateProvider.DigestHeight);
+				var miningTier = chainMiningStatusProvider.MiningTier;
 
 				if(this.electionContext.MaximumElectedTransactionCount.ContainsKey(miningTier)) {
 					return this.electionContext.MaximumElectedTransactionCount[miningTier];

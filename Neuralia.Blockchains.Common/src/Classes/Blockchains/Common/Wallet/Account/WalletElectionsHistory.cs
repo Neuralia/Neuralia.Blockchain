@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		DateTime Timestamp { get; set; }
 
-		AccountId DelegateAccount { get; set; }
+		string DelegateAccount { get; set; }
 
 		Enums.MiningTiers MiningTier { get; set; }
 
@@ -29,7 +29,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 
 		public DateTime Timestamp { get; set; }
 
-		public AccountId DelegateAccount { get; set; }
+		public string DelegateAccount { get; set; }
 		public Enums.MiningTiers MiningTier { get; set; }
 		public string SelectedTransactions { get; set; }
 	}

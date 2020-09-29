@@ -4,9 +4,11 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Cryptography.Hash;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Addresses;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Utils;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Org.BouncyCastle.Crypto;
@@ -40,7 +42,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 		private Action<int> processChainParallelGenerate;
 
 		public WotsPlus(Enums.ThreadMode threadMode, XMSSExecutionContext xmssExecutionContext) {
-
 			this.WinternitzParameter = WINTERNITZ_PARAMETER;
 			this.WinternitzParameterZeroBased = WINTERNITZ_PARAMETER - 1;
 			this.logWinternitz = XMSSCommonUtils.Log2(this.WinternitzParameter);
@@ -104,9 +105,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 				ThrowException3(key.Length);
 			}
 
-			ByteArray hashEntry = XMSSCommonUtils.HashEntry(XMSSCommonUtils.HashCodes.F, key, buffer, this.xmssExecutionContext);
-
-			return hashEntry;
+			return XMSSCommonUtils.HashEntry(XMSSCommonUtils.HashCodes.F, key, buffer, this.xmssExecutionContext, XMSSCommonUtils.HashTypes.Regular);
 
 		#region ThrowExceptions
 
@@ -140,7 +139,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 			adrs.KeyAndMask = nonce2;
 
-			ByteArray result = XMSSCommonUtils.PRF(privateSeed, adrs, this.xmssExecutionContext);
+			ByteArray result = XMSSCommonUtils.PRF(privateSeed, adrs, this.xmssExecutionContext, XMSSCommonUtils.HashTypes.Regular);
 
 			adrs.KeyAndMask = previousKeyAndMask;
 
@@ -270,11 +269,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 			for(int i = 0; i < this.Len; i++) {
 				threadContext.OtsHashAddress.ChainAddress = i;
 
-				ByteArray wotsPrivateKey = this.GeneratePrivateKey(privateSeed, nonce2, threadContext.OtsHashAddress);
+				using ByteArray wotsPrivateKey = this.GeneratePrivateKey(privateSeed, nonce2, threadContext.OtsHashAddress);
 
 				// this should not be parallel since it is part of a threadpool higher up
 				pk[i] = this.Chain(wotsPrivateKey, 0, this.WinternitzParameterZeroBased, publicSeed, threadContext);
-				wotsPrivateKey.Return();
 			}
 
 			// restore the original
@@ -442,23 +440,18 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 			int previousHashAddress = threadContext.OtsHashAddress.HashAddress;
 			int previousKeyAndMask = threadContext.OtsHashAddress.KeyAndMask;
-
 			for(int stepIndex = 0; stepIndex < steps; stepIndex++) {
 
 				threadContext.OtsHashAddress.HashAddress = index + stepIndex;
 				threadContext.OtsHashAddress.KeyAndMask = 0;
-				ByteArray key = XMSSCommonUtils.PRF(publicSeed, threadContext.OtsHashAddress, this.xmssExecutionContext);
+				using ByteArray key = XMSSCommonUtils.PRF(publicSeed, threadContext.OtsHashAddress, this.xmssExecutionContext, XMSSCommonUtils.HashTypes.Regular);
 				threadContext.OtsHashAddress.KeyAndMask = 1;
-				ByteArray bitmask = XMSSCommonUtils.PRF(publicSeed, threadContext.OtsHashAddress, this.xmssExecutionContext);
+				using ByteArray bitmask = XMSSCommonUtils.PRF(publicSeed, threadContext.OtsHashAddress, this.xmssExecutionContext, XMSSCommonUtils.HashTypes.Regular);
 
 				XMSSCommonUtils.Xor(tmp, tmp, bitmask);
-
-				ByteArray prevTmp = tmp;
+				
+				using ByteArray prevTmp = tmp;
 				tmp = this.Hash(key, tmp);
-
-				prevTmp.Return();
-				key.Return();
-				bitmask.Return();
 			}
 
 			threadContext.OtsHashAddress.HashAddress = previousHashAddress;
@@ -534,7 +527,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 		public class ThreadContext : IDisposableExtended {
 			public readonly int Count;
-			public readonly IDigest Digest;
+			public readonly IHashDigest Digest;
 
 			private readonly ByteArray IndexBuffer;
 
@@ -594,9 +587,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.WOTS {
 
 				if(disposing && !this.IsDisposed) {
 
-					this.TmpAdrs1.Dispose();
-					this.TmpAdrs2.Dispose();
-
+					this.XmssExecutionContext.OtsHashAddressPool.PutObject(this.TmpAdrs1);
+					this.XmssExecutionContext.OtsHashAddressPool.PutObject(this.TmpAdrs2);
+					this.XmssExecutionContext.DigestPool.PutObject(this.Digest);
+					
 					this.IndexBuffer.Dispose();
 					this.StartHash.Dispose();
 

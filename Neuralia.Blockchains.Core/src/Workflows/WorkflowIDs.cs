@@ -9,6 +9,8 @@ namespace Neuralia.Blockchains.Core.Workflows {
 
 		public const short CHAIN_SYNC = 5;
 
+		public const short APPOINTMENT_REQUEST = 6;
+		
 		public const short DEBUG = 999;
 	}
 }

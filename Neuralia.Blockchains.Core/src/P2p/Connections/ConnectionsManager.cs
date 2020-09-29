@@ -82,7 +82,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		private DateTime? nextAction;
 
-		private DateTime nextHubContact = DateTime.MinValue;
+		private DateTime nextHubContact = DateTimeEx.MinValue;
 		private DateTime? nextUpdateNodeCountAction;
 
 		public ConnectionsManager(ServiceSet<R> serviceSet) : base(1000) {
@@ -204,7 +204,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			} else {
 				connectionManagerActivityInfo = new ConnectionManagerActivityInfo(nodeActivityInfo);
 
-				connectionManagerActivityInfo.lastConnectionAttempt = DateTime.MinValue;
+				connectionManagerActivityInfo.lastConnectionAttempt = DateTimeEx.MinValue;
 				connectionManagerActivityInfo.lastPeerListRequestAttempt = DateTimeEx.CurrentTime; // since we get the list during the handshake
 
 				this.peerActivityInfo.Add(connectionManagerActivityInfo.ScoppedIp, connectionManagerActivityInfo);
@@ -716,7 +716,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			/// <summary>
 			///     when did we last try to run the full try 3 times set
 			/// </summary>
-			public readonly DateTime lastConnectionSetAttempt = DateTime.MinValue;
+			public readonly DateTime lastConnectionSetAttempt = DateTimeEx.MinValue;
 
 			/// <summary>
 			///     how many times did we try to connect?
@@ -730,9 +730,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			public bool inProcess;
 
-			public DateTime lastConnectionAttempt = DateTime.MinValue;
+			public DateTime lastConnectionAttempt = DateTimeEx.MinValue;
 
-			public DateTime lastPeerListRequestAttempt = DateTime.MinValue;
+			public DateTime lastPeerListRequestAttempt = DateTimeEx.MinValue;
 
 			/// <summary>
 			///     how many times have we connected to this peer successfully before

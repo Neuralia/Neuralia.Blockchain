@@ -47,8 +47,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			return base.PerformOperationAsync(process);
 		}
 
-		public CHAIN_STATE_SNAPSHOT LoadFullState(CHAIN_STATE_CONTEXT db) {
-			CHAIN_STATE_SNAPSHOT entry = db.ChainMetadatas.AsNoTracking().Include(e => e.ModeratorKeys).SingleOrDefault();
+		public async Task<CHAIN_STATE_SNAPSHOT> LoadFullState(CHAIN_STATE_CONTEXT db) {
+			CHAIN_STATE_SNAPSHOT entry = await db.ChainMetadatas.AsNoTracking().Include(e => e.ModeratorKeys).SingleOrDefaultAsync().ConfigureAwait(false);
 
 			if(entry != null) {
 				return entry;
@@ -59,14 +59,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			EntityEntry<CHAIN_STATE_SNAPSHOT> dbEntry = db.Entry(entry);
 			db.ChainMetadatas.Add(entry);
 
-			db.SaveChanges();
+			await db.SaveChangesAsync().ConfigureAwait(false);
 
 			return entry;
 		}
 
-		public CHAIN_STATE_SNAPSHOT LoadSimpleState(CHAIN_STATE_CONTEXT db) {
+		public async Task<CHAIN_STATE_SNAPSHOT> LoadSimpleState(CHAIN_STATE_CONTEXT db) {
 
-			CHAIN_STATE_SNAPSHOT entry = db.ChainMetadatas.AsNoTracking().OrderBy(e => e.Id).Take(1).SingleOrDefault();
+			CHAIN_STATE_SNAPSHOT entry = await db.ChainMetadatas.AsNoTracking().OrderBy(e => e.Id).Take(1).SingleOrDefaultAsync().ConfigureAwait(false);
 
 			if(entry != null) {
 				return entry;
@@ -77,7 +77,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			EntityEntry<CHAIN_STATE_SNAPSHOT> dbEntry = db.Entry(entry);
 			db.ChainMetadatas.Add(entry);
 
-			db.SaveChanges();
+			await db.SaveChangesAsync().ConfigureAwait(false);
 
 			return entry;
 		}

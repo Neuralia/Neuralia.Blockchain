@@ -24,9 +24,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		public override void JsonDehydrate(JsonDeserializer jsonDeserializer) {
 			base.JsonDehydrate(jsonDeserializer);
 
-			jsonDeserializer.SetProperty(nameof(this.BlockId), this.BlockId.ToString());
-			jsonDeserializer.SetProperty(nameof(this.Offset), this.Offset.ToString());
-			jsonDeserializer.SetProperty(nameof(this.Length), this.Length.ToString());
+			jsonDeserializer.SetProperty(nameof(this.BlockId), this.BlockId);
+			jsonDeserializer.SetProperty(nameof(this.Offset), this.Offset);
+			jsonDeserializer.SetProperty(nameof(this.Length), this.Length);
 		}
 
 		public override void Rehydrate(IDataRehydrator rehydrator) {

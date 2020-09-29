@@ -28,7 +28,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 		public readonly MessageValidationErrorCode INVALID_MESSAGE_XMSS_KEY_BIT_SIZE;
 		public readonly MessageValidationErrorCode INVALID_MESSAGE_XMSS_KEY_TYPE;
-
+		public readonly MessageValidationErrorCode INVALID_MODERATOR_MESSAGE_XMSS_KEY_TYPE;
+		
 		static MessageValidationErrorCodes() {
 		}
 
@@ -36,6 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 			this.CreateBaseConstant(ref this.INVALID_MESSAGE_XMSS_KEY_BIT_SIZE, nameof(this.INVALID_MESSAGE_XMSS_KEY_BIT_SIZE));
 			this.CreateBaseConstant(ref this.INVALID_MESSAGE_XMSS_KEY_TYPE, nameof(this.INVALID_MESSAGE_XMSS_KEY_TYPE));
+			this.CreateBaseConstant(ref this.INVALID_MODERATOR_MESSAGE_XMSS_KEY_TYPE, nameof(this.INVALID_MESSAGE_XMSS_KEY_TYPE));
 
 			//this.PrintValues(";");		
 		}

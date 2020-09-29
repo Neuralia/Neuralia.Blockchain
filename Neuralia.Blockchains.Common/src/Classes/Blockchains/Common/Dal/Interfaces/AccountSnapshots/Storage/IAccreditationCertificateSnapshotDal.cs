@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage.Bases;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Storage {
@@ -23,5 +24,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		Task UpdateSnapshotDigestFromDigest(Func<ACCREDITATION_CERTIFICATE_SNAPSHOT_CONTEXT, Task> operation, ACCREDITATION_CERTIFICATE_SNAPSHOT accountSnapshotEntry);
 
 		Task<List<(ACCREDITATION_CERTIFICATE_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCREDITATION_CERTIFICATE_SNAPSHOT_CONTEXT, LockContext, Task>>> actions);
+
 	}
 }

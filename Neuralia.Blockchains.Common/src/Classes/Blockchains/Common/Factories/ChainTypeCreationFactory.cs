@@ -5,27 +5,32 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snapshots;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Cryptography.Keys;
+using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
+using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 	public interface IChainTypeCreationFactory {
 		IWalletAccount CreateNewWalletAccount();
 
-		IWalletKey CreateNewWalletKey(Enums.KeyTypes keyType);
+		IValidatorProtocol CreateValidatorProtocol(BlockchainType blockchainType);
+		
+		IWalletKey CreateNewWalletKey(CryptographicKeyType keyType);
 		IXmssWalletKey CreateNewXmssWalletKey();
 		IXmssMTWalletKey CreateNewXmssMTWalletKey();
-		IQTeslaWalletKey CreateNewQTeslaWalletKey();
 		ISecretWalletKey CreateNewSecretWalletKey();
 		ISecretComboWalletKey CreateNewSecretComboWalletKey();
 		ISecretDoubleWalletKey CreateNewSecretDoubleWalletKey();
 		ISecretPentaWalletKey CreateNewSecretPentaWalletKey();
-		INtruWalletKey CreateNewNtruWalletKey();
+		INTRUPrimeWalletKey CreateNewNTRUPrimeWalletKey();
+		INTRUWalletKey CreateNewNTRUWalletKey();
 		IMcElieceWalletKey CreateNewMcElieceWalletKey();
 
 		IUserWallet CreateNewUserWallet();
 		WalletKeyHistory CreateNewWalletKeyHistory();
 
 		WalletAccountKeyLog CreateNewWalletAccountKeyLog();
-		IWalletTransactionCache CreateNewWalletAccountTransactionCache();
+		IWalletGenerationCache CreateNewWalletAccountGenerationCache();
 		IWalletTransactionHistory CreateNewWalletAccountTransactionHistory();
 		IWalletElectionsHistory CreateNewWalletElectionsHistoryEntry();
 		WalletElectionCache CreateNewWalletAccountElectionCache();
@@ -46,6 +51,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		CENTRAL_COORDINATOR CentralCoordinator { get; }
 
 		IChainDataWriteProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> CreateChainDataWriteProvider();
+		
 	}
 
 	public abstract class ChainTypeCreationFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainTypeCreationFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -58,63 +64,69 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 
 		public CENTRAL_COORDINATOR CentralCoordinator { get; }
 
-		public IWalletKey CreateNewWalletKey(Enums.KeyTypes keyType) {
+		public IValidatorProtocol CreateValidatorProtocol(BlockchainType blockchainType) {
+			return new ValidatorProtocol1(blockchainType);
+		}
+
+		public IWalletKey CreateNewWalletKey(CryptographicKeyType keyType) {
 			IWalletKey key = null;
 
-			if(keyType == Enums.KeyTypes.XMSS) {
+			if(keyType == CryptographicKeyTypes.Instance.XMSS) {
 				key = this.CreateNewXmssWalletKey();
 			}
 
-			if(keyType == Enums.KeyTypes.XMSSMT) {
+			if(keyType == CryptographicKeyTypes.Instance.XMSSMT) {
 				key = this.CreateNewXmssMTWalletKey();
 			}
-
-			if(keyType == Enums.KeyTypes.QTESLA) {
-				key = this.CreateNewQTeslaWalletKey();
+			
+			if(keyType == CryptographicKeyTypes.Instance.NTRUPrime) {
+				key = this.CreateNewNTRUPrimeWalletKey();
+			}
+			
+			if(keyType == CryptographicKeyTypes.Instance.NTRU) {
+				key = this.CreateNewNTRUWalletKey();
 			}
 
-			if(keyType == Enums.KeyTypes.Secret) {
+			if(keyType == CryptographicKeyTypes.Instance.MCELIECE) {
+				key = this.CreateNewMcElieceWalletKey();
+			}
+
+			if(keyType == CryptographicKeyTypes.Instance.Secret) {
 				key = this.CreateNewSecretWalletKey();
 			}
 
-			if(keyType == Enums.KeyTypes.SecretCombo) {
+			if(keyType == CryptographicKeyTypes.Instance.SecretCombo) {
 				key = this.CreateNewSecretComboWalletKey();
 			}
 
-			if(keyType == Enums.KeyTypes.SecretDouble) {
+			if(keyType == CryptographicKeyTypes.Instance.SecretDouble) {
 				key = this.CreateNewSecretDoubleWalletKey();
 			}
 
-			if(keyType == Enums.KeyTypes.SecretPenta) {
+			if(keyType == CryptographicKeyTypes.Instance.SecretPenta) {
 				key = this.CreateNewSecretPentaWalletKey();
 			}
-
-			if(keyType == Enums.KeyTypes.NTRU) {
-				key = this.CreateNewNtruWalletKey();
-			}
-
-			if(keyType == Enums.KeyTypes.MCELIECE) {
-				key = this.CreateNewMcElieceWalletKey();
+			if(keyType == CryptographicKeyTypes.Instance.TripleXMSS) {
+				key = this.CreateNewTripleXmssWalletKey();
 			}
 
 			if(key == null) {
 				throw new ApplicationException("Unsupported key type");
 			}
-
-			key.KeyType = keyType;
-
+			
 			return key;
 		}
 
 		public abstract IWalletAccount CreateNewWalletAccount();
 		public abstract IXmssWalletKey CreateNewXmssWalletKey();
 		public abstract IXmssMTWalletKey CreateNewXmssMTWalletKey();
-		public abstract IQTeslaWalletKey CreateNewQTeslaWalletKey();
 		public abstract ISecretWalletKey CreateNewSecretWalletKey();
 		public abstract ISecretComboWalletKey CreateNewSecretComboWalletKey();
 		public abstract ISecretDoubleWalletKey CreateNewSecretDoubleWalletKey();
 		public abstract ISecretPentaWalletKey CreateNewSecretPentaWalletKey();
-		public abstract INtruWalletKey CreateNewNtruWalletKey();
+		public abstract ITripleXmssWalletKey CreateNewTripleXmssWalletKey();
+		public abstract INTRUPrimeWalletKey CreateNewNTRUPrimeWalletKey();
+		public abstract INTRUWalletKey CreateNewNTRUWalletKey();
 		public abstract IMcElieceWalletKey CreateNewMcElieceWalletKey();
 
 		public abstract IUserWallet CreateNewUserWallet();
@@ -123,7 +135,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		public abstract WalletAccountKeyLog CreateNewWalletAccountKeyLog();
 		public abstract WalletAccountChainState CreateNewWalletAccountChainState();
 		public abstract IWalletAccountChainStateKey CreateNewWalletAccountChainStateKey();
-		public abstract IWalletTransactionCache CreateNewWalletAccountTransactionCache();
+		public abstract IWalletGenerationCache CreateNewWalletAccountGenerationCache();
 		public abstract IWalletTransactionHistory CreateNewWalletAccountTransactionHistory();
 		public abstract IWalletElectionsHistory CreateNewWalletElectionsHistoryEntry();
 		public abstract WalletElectionCache CreateNewWalletAccountElectionCache();

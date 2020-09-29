@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.Acco
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Locking;

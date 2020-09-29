@@ -1,6 +1,7 @@
 using System;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
@@ -9,7 +10,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 	public interface IBlockchainGuidService : IGuidService {
 		AccountId CreateTemporaryAccountId();
-		AccountId CreateTemporaryAccountId(Guid guid);
+		AccountId CreateTemporaryAccountId(string accountCode);
 
 		TransactionId CreateTransactionId(AccountId accountId, DateTime chainInception);
 		TransactionId CreateTransactionId(long accountSequenceId, Enums.AccountTypes accountType, DateTime chainInception);
@@ -47,15 +48,15 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		}
 
 		public AccountId CreateTemporaryAccountId() {
-			return this.CreateTemporaryAccountId(this.Create());
+			return this.CreateTemporaryAccountId(this.CreateAccountCode());
 		}
 
-		public AccountId CreateTemporaryAccountId(Guid tempGuid) {
+		public AccountId CreateTemporaryAccountId(string accountCode) {
 
 			// hash the temporary guid
 			using xxHasher64 hasher = new xxHasher64();
 
-			return new AccountId(hasher.HashLong(tempGuid.ToByteArray()), Enums.AccountTypes.Presentation);
+			return new AccountId(hasher.HashLong(accountCode.GetBytes()), Enums.AccountTypes.Presentation);
 		}
 	}
 }

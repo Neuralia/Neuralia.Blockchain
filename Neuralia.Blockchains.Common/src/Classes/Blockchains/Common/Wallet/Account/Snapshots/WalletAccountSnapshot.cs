@@ -5,6 +5,7 @@ using System.Linq;
 using LiteDB;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
+using Neuralia.Blockchains.Core;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snapshots {
 	public interface IWalletAccountSnapshot : IAccountSnapshot {
@@ -21,6 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.
 
 		[BsonId]
 		public long AccountId { get; set; }
+		public Enums.AccountTypes AccountType { get; set; }
 
 		public long InceptionBlockId { get; set; }
 		public byte TrustLevel { get; set; }

@@ -4,67 +4,87 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Neuralia.Blockchains.Core.Extensions;
-using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 	public class XMSSNodeCache : IDisposableExtended, IBinarySerializable {
 
+		public enum XMSSCacheModes:byte {
+			Heuristic= 1,
+			AllButFirst= 2,
+			All = 3
+		}
 		public const int LEVELS_TO_CACHE_ABSOLUTELY = 5;
 
 		// versioning information
 		public readonly byte Major = 1;
 		public readonly byte Minor = 0;
 
-		private readonly ConcurrentDictionary<XMSSNodeId, ByteArray> nodes = new ConcurrentDictionary<XMSSNodeId, ByteArray>();
-		public readonly byte Revision = 0;
+		private readonly ConcurrentDictionary<XMSSNodeId, (ByteArray root, ByteArray backupRoot)> nodes = new ConcurrentDictionary<XMSSNodeId, (ByteArray root, ByteArray backupRoot)>();
 
 		public XMSSNodeCache() {
 
 		}
 
-		public XMSSNodeCache(int height, int digestSize) {
+		public XMSSNodeCache(int height, int digestSize, int backupDigestSize, XMSSCacheModes cacheMode = XMSSCacheModes.Heuristic) {
 			this.Height = (byte) height;
 			this.DigestSize = (byte) digestSize;
+			this.BackupDigestSize = (byte) backupDigestSize;
+			this.CacheMode = cacheMode;
 		}
 
 		public bool IsChanged { get; private set; }
-		public byte Height { get; private set; }
+		public byte Height { get; set; }
 		public byte DigestSize { get; private set; }
+		public byte BackupDigestSize { get; private set; }
+		public XMSSCacheModes CacheMode { get; set; }
 
-		public ByteArray this[XMSSNodeId id] {
+		public (ByteArray root, ByteArray backupRoot) this[XMSSNodeId id] {
 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
-			get => !this.nodes.ContainsKey(id) ? null : this.nodes[id].Clone();
-
+			get => !this.nodes.ContainsKey(id) ? (null, null) : (this.nodes[id].root.Clone(), this.nodes[id].backupRoot.Clone());
 		}
 
+		public (ByteArray root, ByteArray backupRoot) GetOriginals(XMSSNodeId id) {
+			return !this.nodes.ContainsKey(id) ? (null, null) : (this.nodes[id].root, this.nodes[id].backupRoot);
+		}
+		
 		public List<XMSSNodeId> NodeIds => this.nodes.Keys.ToList();
 
 		public void Dehydrate(IDataDehydrator dehydrator) {
 
 			dehydrator.Write(this.Major);
 			dehydrator.Write(this.Minor);
-			dehydrator.Write(this.Revision);
 
 			dehydrator.Write(this.Height);
 			dehydrator.Write(this.DigestSize);
-
-			dehydrator.Write((ushort) this.nodes.Count);
-
+			dehydrator.Write(this.BackupDigestSize);
+			
+			dehydrator.Write((byte)this.CacheMode);
+			
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
+			adaptiveLong.Value = this.nodes.Count;
+			adaptiveLong.Dehydrate(dehydrator);
 
-			foreach((XMSSNodeId key, ByteArray value) in this.nodes) {
+			foreach((XMSSNodeId key, var value) in this.nodes) {
 
 				adaptiveLong.Value = key.Index;
 				adaptiveLong.Dehydrate(dehydrator);
+				
 				dehydrator.Write((byte) key.Height);
 
-				dehydrator.Write(value.IsEmpty);
+				dehydrator.Write(value.root.IsEmpty);
 
-				if(!value.IsEmpty) {
-					dehydrator.WriteRawArray(value);
+				if(!value.root.IsEmpty) {
+					dehydrator.WriteRawArray(value.root);
+				}
+				
+				dehydrator.Write(value.backupRoot.IsEmpty);
+
+				if(!value.backupRoot.IsEmpty) {
+					dehydrator.WriteRawArray(value.backupRoot);
 				}
 			}
 		}
@@ -72,14 +92,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		public void Rehydrate(IDataRehydrator rehydrator) {
 			int major = rehydrator.ReadByte();
 			int minor = rehydrator.ReadByte();
-			int revision = rehydrator.ReadByte();
 
 			this.Height = rehydrator.ReadByte();
 			this.DigestSize = rehydrator.ReadByte();
-
-			ushort count = rehydrator.ReadUShort();
-
+			this.BackupDigestSize = rehydrator.ReadByte();
+			this.CacheMode = (XMSSCacheModes)rehydrator.ReadByte();
+			
 			AdaptiveLong1_9 adaptiveLong = new AdaptiveLong1_9();
+			adaptiveLong.Rehydrate(rehydrator);
+			int count = (int)adaptiveLong.Value;
+
 			this.nodes.Clear();
 
 			for(int i = 0; i < count; i++) {
@@ -97,31 +119,58 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 				} else {
 					buffer = ByteArray.Create();
 				}
+				
+				isEmpty = rehydrator.ReadBool();
 
-				this.nodes.AddSafe((index, height), buffer);
+				ByteArray backupbuffer = null;
+
+				if(!isEmpty) {
+					backupbuffer = rehydrator.ReadArray(this.BackupDigestSize);
+				} else {
+					backupbuffer = ByteArray.Create();
+				}
+
+				this.nodes.AddSafe((index, height), (buffer, backupbuffer));
 			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void Cache(XMSSNodeId id, ByteArray node) {
+		public void Cache(XMSSNodeId id, (ByteArray root, ByteArray backupRoot) node, bool force = false) {
 			if(this.nodes.ContainsKey(id)) {
 				return;
 			}
 
 			// if this is true, we cache no matter what
-			bool forceCache = id.Height >= (this.Height - 1 - LEVELS_TO_CACHE_ABSOLUTELY);
+			bool cache = false;
+
+			if(force || this.CacheMode == XMSSCacheModes.All) {
+				cache = true;
+			}
+			else if(this.CacheMode == XMSSCacheModes.AllButFirst) {
+				cache = id.Height != 0;
+			}
+			else if(this.CacheMode == XMSSCacheModes.Heuristic) {
+				cache = id.Height >= (this.Height - LEVELS_TO_CACHE_ABSOLUTELY);
+			}
 
 			//TODO; add heuristics and more sophisticated logics
-			if(forceCache) {
+			if(cache) {
 				this.IsChanged = true;
-				this.nodes.AddSafe(id, node.Clone());
+				this.nodes.AddSafe(id, (node.root.Clone(), node.backupRoot?.Clone()));
 			}
+		}
+
+		public void Clear() {
+			this.nodes.Clear();
 		}
 
 		public void ClearNodes(List<XMSSNodeId> excludeNodes) {
 			foreach(XMSSNodeId id in excludeNodes) {
 				if(this.nodes.ContainsKey(id)) {
-					this.nodes[id]?.Return();
+					
+					this.nodes[id].root?.Return();
+					this.nodes[id].backupRoot?.Return();
+					
 					this.nodes.RemoveSafe(id);
 					this.IsChanged = true;
 				}
@@ -139,7 +188,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 
 			this.Dehydrate(dehydrator);
 
-			return dehydrator.ToArray().Release();
+			return dehydrator.ToReleasedArray();
 		}
 
 	#region disposable
@@ -154,8 +203,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		protected virtual void Dispose(bool disposing) {
 
 			if(disposing && !this.IsDisposed) {
-				foreach(ByteArray entry in this.nodes.Values) {
-					entry?.Dispose();
+				foreach(var entry in this.nodes.Values) {
+					entry.root?.Dispose();
+					entry.backupRoot?.Dispose();
 				}
 			}
 

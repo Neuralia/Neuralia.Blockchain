@@ -123,7 +123,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 					this.chunkBufferMemHandle.Dispose();
 				} catch {
 				}
-
+				
+				try {
+					this.chunkBuffer.Dispose();
+				} catch {
+				}
+				
 				this.chunkBufferPtr = null;
 			}
 
@@ -196,7 +201,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.SHA3 {
 
 			if(cbSize > 0) //some left over
 			{
-				this.buffer.CopyFrom((ReadOnlySpan<byte>) array, ibStart, this.buffLength, cbSize);
+				this.buffer.CopyFrom(ref array, ibStart, this.buffLength, cbSize);
 
 				this.buffLength += cbSize;
 			}

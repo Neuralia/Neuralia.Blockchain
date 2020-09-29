@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Passphrases;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Core.DataAccess.Dal;
 using Neuralia.Blockchains.Tools.Locking;
 
@@ -67,7 +68,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					// lets check the last one inserted, make sure it was a lower key height than ours now
 
 					// -1 is for keys without an index. otherwise we check it
-					if(walletAccountKeyLog.KeyUseIndex?.KeyUseIndex.Value != -1) {
+					if(walletAccountKeyLog.KeyUseIndex?.KeyUseIndex != -1) {
 						WalletAccountKeyLog last = null;
 
 						if(litedbDal.CollectionExists<WalletAccountKeyLog>()) {
@@ -95,11 +96,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			return this.ConfirmKeyLogEntry(confirmationBlockId.ToString(), Enums.BlockchainEventTypes.Block, confirmationBlockId, null, lockContext);
 		}
 
-		public Task<bool> ConfirmKeyLogTransactionEntry(TransactionId transactionId, KeyUseIndexSet keyUseIndexSet, long confirmationBlockId, LockContext lockContext) {
-			return this.ConfirmKeyLogEntry(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction, confirmationBlockId, keyUseIndexSet, lockContext);
+		public Task<bool> ConfirmKeyLogTransactionEntry(TransactionId transactionId, IdKeyUseIndexSet idKeyUseIndexSet, long confirmationBlockId, LockContext lockContext) {
+			return this.ConfirmKeyLogEntry(transactionId.ToString(), Enums.BlockchainEventTypes.Transaction, confirmationBlockId, idKeyUseIndexSet, lockContext);
 		}
 
-		public async Task<bool> ConfirmKeyLogEntry(string eventId, Enums.BlockchainEventTypes eventType, long confirmationBlockId, KeyUseIndexSet keyUseIndexSet, LockContext lockContext) {
+		public async Task<bool> ConfirmKeyLogEntry(string eventId, Enums.BlockchainEventTypes eventType, long confirmationBlockId, IdKeyUseIndexSet idKeyUseIndexSet, LockContext lockContext) {
 			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				bool result = await this.RunDbOperation((litedbDal, lc) => {
 					// lets check the last one inserted, make sure it was a lower key height than ours now
@@ -114,8 +115,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						return Task.FromResult(false);
 					}
 
-					if((keyUseIndexSet != null) && (entry.KeyUseIndex != keyUseIndexSet)) {
-						throw new ApplicationException($"Failed to confirm keylog entry for event '{eventId}'. Expected key use index to be '{keyUseIndexSet}' but found '{entry.KeyUseIndex}' instead.");
+					if((idKeyUseIndexSet != null) && (entry.KeyUseIndex != idKeyUseIndexSet)) {
+						throw new ApplicationException($"Failed to confirm keylog entry for event '{eventId}'. Expected key use index to be '{idKeyUseIndexSet}' but found '{entry.KeyUseIndex}' instead.");
 					}
 
 					entry.ConfirmationBlockId = confirmationBlockId;

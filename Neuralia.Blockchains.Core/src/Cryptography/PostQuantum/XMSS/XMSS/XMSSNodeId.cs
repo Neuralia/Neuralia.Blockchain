@@ -6,7 +6,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 		}
 
 		public override string ToString() {
-			return $"(index: {this.Index}, height: {this.Height})";
+			return $"(height: {this.Height}, index: {this.Index})";
 		}
 
 		public bool Equals(XMSSNodeId other) {

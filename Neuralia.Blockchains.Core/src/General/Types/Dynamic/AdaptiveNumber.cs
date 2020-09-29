@@ -3,11 +3,14 @@ using System.Text.Json.Serialization;
 using LiteDB;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.Network.ReadingContexts;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
-	public abstract class AdaptiveNumber<T> : ITreeHashable, IBinarySerializable, IEquatable<AdaptiveNumber<T>>, IComparable<T>, IComparable<AdaptiveNumber<T>>
+	
+	
+	public abstract class AdaptiveNumber<T> : ITreeHashable, IBinarySerializable, IJsonValue, IEquatable<AdaptiveNumber<T>>, IComparable<T>, IComparable<AdaptiveNumber<T>>, IValue<T>
 		where T : struct, IComparable, IConvertible, IFormattable, IComparable<T>, IEquatable<T> {
 
 		private T value;
@@ -127,14 +130,14 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 				}
 			}
 
-			(int serializationByteSize, int adjustedSerializationByteExtraSize, int bitValues) adjusted = this.AdjustSerializationByteSize(serializationByteSize);
+			(int serializationByteSize1, var _, int bitValues) = this.AdjustSerializationByteSize(serializationByteSize);
 
 			// ensure the important type bits are set too
 
-			byte[] shrunkBytes = new byte[adjusted.serializationByteSize];
+			byte[] shrunkBytes = new byte[serializationByteSize1];
 
 			// serialize the first byte, combination of 4 bits for the serialization type, and the firs 4 bits of our value
-			shrunkBytes[0] = (byte) ((byte) adjusted.bitValues & this.LowerMask);
+			shrunkBytes[0] = (byte) ((byte) bitValues & this.LowerMask);
 			byte tempId = (byte) ((byte) convertedValue & this.HigherMask);
 			shrunkBytes[0] |= (byte) (tempId << this.Offset);
 
@@ -160,11 +163,11 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 		private int ReadData(Func<byte> readFirstByte, CopyDataDelegate copyBytes) {
 			byte firstByte = readFirstByte();
 
-			(int serializationByteSize, int adjustedSerializationByteExtraSize, int bitValues) specs = this.ReadByteSpecs(firstByte);
+			(int serializationByteSize, var _, var _) = this.ReadByteSpecs(firstByte);
 
 			Span<byte> longbytes = stackalloc byte[8];
 
-			int readLength = specs.serializationByteSize - 1;
+			int readLength = serializationByteSize - 1;
 
 			copyBytes(longbytes, 0, readLength);
 
@@ -173,7 +176,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 			buffer <<= 8 - this.Offset;
 			buffer |= (byte) (firstByte >> this.Offset);
 
-			buffer = this.prepareBuffer(buffer, firstByte);
+			buffer = this.PrepareBuffer(buffer, firstByte);
 
 			this.Value = this.ConvertTypeTo(buffer);
 
@@ -183,7 +186,7 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 		protected abstract T ConvertTypeTo(ulong buffer);
 		protected abstract ulong ConvertTypeFrom(T value);
 
-		protected virtual ulong prepareBuffer(ulong buffer, byte firstByte) {
+		protected virtual ulong PrepareBuffer(ulong buffer, byte firstByte) {
 			return buffer;
 		}
 
@@ -227,6 +230,10 @@ namespace Neuralia.Blockchains.Core.General.Types.Dynamic {
 
 		public override string ToString() {
 			return this.Value.ToString();
+		}
+
+		public void JsonWriteValue(string name, JsonDeserializer jsonDeserializer) {
+			jsonDeserializer.SetProperty(name, this.Value);
 		}
 
 		private delegate void CopyDataDelegate(in Span<byte> longbytes, int start, int length);
