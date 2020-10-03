@@ -315,6 +315,10 @@ namespace Neuralia.Blockchains.Core.Services {
 			public void UnregisterValidationServer(BlockchainType blockchainType) {
 				this.appointmentsValidatorProvider.UnregisterValidationServer(blockchainType);
 			}
+
+			protected void EnableVerificationWindow() {
+				this.appointmentsValidatorProvider.EnableVerificationWindow();
+			}
 	
 		#endregion
 
@@ -429,7 +433,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 				if(this.optionsInterpreter.HasOption(RoutingHeader.Options.IPConfirmation)) {
 					// ok, this is a VERY special case. if we are contacted by an IP Validator, we must respond very quickly, and this special workflow allows us to do that
-					this.HandleIpValidatorRequest(buffer, connection);
+					await HandleIpValidatorRequest(buffer, connection).ConfigureAwait(false);
 				} else {
 					PeerConnection peerConnection = this.connectionStore.AddNewIncomingConnection(connection);
 					await this.HandleDataReceivedEvent<HandshakeTrigger<R>>(buffer, peerConnection).ConfigureAwait(false);
@@ -540,11 +544,12 @@ namespace Neuralia.Blockchains.Core.Services {
 		///     so its all done here in top priority
 		/// </summary>
 		/// <param name="buffer"></param>
-		protected virtual void HandleIpValidatorRequest(SafeArrayHandle buffer, ITcpConnection connection) {
+		protected virtual Task HandleIpValidatorRequest(SafeArrayHandle buffer, ITcpConnection connection) {
 
 			//TODO: what should happen by default here?
 			// we dont know what to do with this
 
+			return Task.CompletedTask;
 		}
 
 		/// <summary>

@@ -14,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 		IClientChainSyncWorkflow CreateChainSynchWorkflow(FileSystemWrapper fileSystem);
 		ISyncWalletWorkflow CreateSyncWalletWorkflow();
-		IClientAppointmentRequestWorkflow CreateAppointmentRequestWorkflow(Guid? requesterId, long? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode);
+		IClientAppointmentRequestWorkflow CreateAppointmentRequestWorkflow(Guid? requesterId, int? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode);
 	}
 
 	public abstract class ClientChainWorkflowFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IClientChainWorkflowFactory<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -31,6 +31,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Facto
 
 		public abstract ISyncWalletWorkflow CreateSyncWalletWorkflow();
 		
-		public abstract IClientAppointmentRequestWorkflow CreateAppointmentRequestWorkflow(Guid? requesterId, long? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode);
+		public abstract IClientAppointmentRequestWorkflow CreateAppointmentRequestWorkflow(Guid? requesterId, int? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode);
 	}
 }

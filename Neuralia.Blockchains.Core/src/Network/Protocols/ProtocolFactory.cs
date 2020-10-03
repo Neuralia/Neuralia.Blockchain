@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Network.Protocols.SplitMessages;
 using Neuralia.Blockchains.Core.Network.Protocols.V1;
@@ -12,7 +13,7 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Network.Protocols {
 	public class ProtocolFactory {
 
-		public delegate void CompressedMessageBytesReceived(SafeArrayHandle compressedMessageBytes, ISplitMessageEntry splitMessageEntry = null);
+		public delegate Task CompressedMessageBytesReceived(SafeArrayHandle compressedMessageBytes, ISplitMessageEntry splitMessageEntry = null);
 
 		public enum CompressionFlags : byte {
 			NotCompressed = 0,
@@ -321,7 +322,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 			}
 		}
 
-		public void HandleCompetedMessage(IMessageEntry entry, TcpConnection.MessageBytesReceived callback, IProtocolTcpConnection connection) {
+		public Task HandleCompetedMessage(IMessageEntry entry, TcpConnection.MessageBytesReceived callback, IProtocolTcpConnection connection) {
 
 			IMessageRouter router = null;
 
@@ -336,7 +337,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 					throw new NotSupportedException("Unsupported protocol version");
 			}
 
-			router.HandleCompletedMessage(entry, (compressedMessageBytes, splitMessageEntry) => {
+			return router.HandleCompletedMessage(entry, async (compressedMessageBytes, splitMessageEntry) => {
 				SafeArrayHandle originalMessage = this.DecompressMessage(compressedMessageBytes);
 
 				if(splitMessageEntry != null) {
@@ -350,7 +351,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols {
 				}
 
 				// thats it, thats our final message!
-				callback(originalMessage);
+				await callback(originalMessage).ConfigureAwait(false);
 
 			}, connection);
 		}

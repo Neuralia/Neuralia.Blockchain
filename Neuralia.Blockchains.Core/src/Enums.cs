@@ -188,6 +188,13 @@ namespace Neuralia.Blockchains.Core {
 			All = Fixed |  Mutable
 		}
 		
+		[Flags]
+		public enum AppointmentsRegions:int {
+			Occident = 1 << 0, // 1
+			Central  = 1 << 1, // 2
+			Orient   = 1 << 2  // 4
+		}
+		
 		public enum AppointmentRequestModes {
 			RequestConfirmation, Context, Trigger, VerificationConfirmation
 		}

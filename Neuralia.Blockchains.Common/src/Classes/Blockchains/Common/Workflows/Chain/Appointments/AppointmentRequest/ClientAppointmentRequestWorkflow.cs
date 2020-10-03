@@ -34,16 +34,16 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 		where APPOINTMENT_REQUEST_TRIGGER : AppointmentRequestTrigger, new()
 		where SERVER_TRIGGER_REPLY : AppointmentRequestServerReply, new(){
 		
-		public readonly PeerConnection peerConnection;
-		public readonly Enums.AppointmentRequestModes mode;
-		private readonly BlockchainType chainType;
-		private readonly Guid? requesterId;
-		private readonly long? requesterIndex;
-		private readonly DateTime? appointment;
+		public readonly  PeerConnection                peerConnection;
+		public readonly  Enums.AppointmentRequestModes mode;
+		private readonly BlockchainType                chainType;
+		private readonly Guid?                         requesterId;
+		private readonly int?                          requesterIndex;
+		private readonly DateTime?                     appointment;
 		
 		public SafeArrayHandle Result { get; private set; }
 
-		public ClientAppointmentRequestWorkflow(Guid? requesterId, long? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode, BlockchainType chainType, CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator) {
+		public ClientAppointmentRequestWorkflow(Guid? requesterId, int? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode, BlockchainType chainType, CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator) {
 			this.mode = mode;
 			this.chainType = chainType;
 			this.requesterId = requesterId;

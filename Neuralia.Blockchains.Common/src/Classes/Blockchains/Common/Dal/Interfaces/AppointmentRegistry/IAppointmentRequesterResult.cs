@@ -5,7 +5,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 
 		int Id { get; set; }
 
-		long Index { get; set; }
+		int Index { get; set; }
 		DateTime Appointment { get; set; }
 		DateTime? RequestedCode { get; set; }
 		byte[] ValidatorCode { get; set; }

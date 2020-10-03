@@ -13,6 +13,7 @@ using Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical;
 using Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha;
 using Neuralia.Blockchains.Core.Cryptography.POW.V1;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -603,6 +604,87 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			using var powHash = PreparePOWHash(appointmentKey, secretCode);
 			
 			return await powEngine.Verify(powHash, nonce, solution).ConfigureAwait(false);
+		}
+		
+		public static Dictionary<int, int> RehydrateAssignedSecretCodes(SafeArrayHandle secretCodes) {
+			
+			if(secretCodes == null || secretCodes.IsZero) {
+				return new Dictionary<int, int>();
+			}
+
+			using var       rehydrator = DataSerializationFactory.CreateRehydrator(secretCodes);
+			AdaptiveLong1_9 tools      = new AdaptiveLong1_9();
+			
+			tools.Rehydrate(rehydrator);
+			int count = (int)tools.Value;
+
+			Dictionary<int, int> results = new Dictionary<int, int>();
+			for(int i = 0; i < count; i++) {
+				tools.Rehydrate(rehydrator);
+				int key = (int)tools.Value;
+				
+				tools.Rehydrate(rehydrator);
+				int value = (int)tools.Value;
+				
+				results.Add(key, value);
+			}
+			
+			return results;
+		}
+		
+		public static SafeArrayHandle DehydrateAssignedSecretCodes(Dictionary<int, int> secretCodes) {
+
+			using var       dehydrator = DataSerializationFactory.CreateDehydrator();
+			AdaptiveLong1_9 tools      = new AdaptiveLong1_9();
+
+			tools.Value = secretCodes.Count;
+			tools.Dehydrate(dehydrator);
+
+			foreach(var entry in secretCodes) {
+				tools.Value = entry.Key;
+				tools.Dehydrate(dehydrator);
+				
+				tools.Value = entry.Value;
+				tools.Dehydrate(dehydrator);
+			}
+
+			return dehydrator.ToArray();
+		}
+		
+		public static HashSet<int> RehydrateAssignedIndices(SafeArrayHandle indices) {
+			if(indices == null || indices.IsZero) {
+				return new HashSet<int>();
+			}
+			
+			using var       rehydrator = DataSerializationFactory.CreateRehydrator(indices);
+			AdaptiveLong1_9 tools      = new AdaptiveLong1_9();
+			
+			tools.Rehydrate(rehydrator);
+			int count = (int)tools.Value;
+
+			HashSet<int> results = new HashSet<int>();
+			for(int i = 0; i < count; i++) {
+				tools.Rehydrate(rehydrator);
+				results.Add((int)tools.Value);
+			}
+			
+			return results;
+		}
+		
+		public static SafeArrayHandle DehydrateAssignedIndices(List<int> indices) {
+
+			using var       dehydrator = DataSerializationFactory.CreateDehydrator();
+			AdaptiveLong1_9 tools      = new AdaptiveLong1_9();
+
+			tools.Value = indices.Count();
+			tools.Dehydrate(dehydrator);
+
+			foreach(var entry in indices) {
+				tools.Value = entry;
+				tools.Dehydrate(dehydrator);
+			}
+
+			return dehydrator.ToArray();
 		}
 	}
 }

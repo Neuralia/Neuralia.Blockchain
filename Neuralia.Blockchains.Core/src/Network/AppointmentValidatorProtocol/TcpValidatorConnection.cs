@@ -205,13 +205,12 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 			}
 		}
 
-		public void Connect(ValidatorProtocolHeader header, SafeArrayHandle operationBytes, int timeout = 5000) {
+		public void Connect(Func<SafeArrayHandle> transformBytes, int timeout = 5000) {
 			if(this.IsDisposed || this.IsDisposing) {
 				throw new SocketException((int) SocketError.Shutdown);
 			}
 
-			using SafeArrayHandle bytes = header.Dehydrate(operationBytes);
-			;
+			using SafeArrayHandle bytes = transformBytes();
 
 			if((bytes == null) || bytes.IsEmpty) {
 				throw new TcpApplicationException("Handshake bytes can not be null");

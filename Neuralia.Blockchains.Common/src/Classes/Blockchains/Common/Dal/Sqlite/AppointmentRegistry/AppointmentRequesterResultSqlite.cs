@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 	public class AppointmentRequesterResultSqlite: IIAppointmentRequesterResultSqlite {
 
 		public int Id { get; set; }
-		public long Index { get; set; }
+		public int Index { get; set; }
 		public DateTime Appointment { get; set; }
 		public DateTime? RequestedCode { get; set; }
 		public byte[] ValidatorCode { get; set; }

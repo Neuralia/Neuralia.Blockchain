@@ -8,15 +8,21 @@ using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 	public static class ValidatorProtocol1Tools {
-		public static ITcpValidatorConnection Connect(ValidatorOperation operation, ushort blockchainId, IPAddress address, int? port = null) {
+
+		public static TcpValidatorConnection BuildConnection(IPAddress address, int? port = null) {
 			int actualPort = GlobalsService.DEFAULT_VALIDATOR_PORT;
 
 			if(port.HasValue) {
 				actualPort = port.Value;
 			}
 
-			var connection = new TcpValidatorConnection(new NetworkEndPoint(address, actualPort), ex => {
+			return new TcpValidatorConnection(new NetworkEndPoint(address, actualPort), ex => {
 			});
+		}
+		
+		public static ITcpValidatorConnection Connect(ValidatorOperation operation, ushort blockchainId, IPAddress address, int? port = null) {
+
+			var connection = BuildConnection(address, port);
 
 			using SafeArrayHandle operationBytes = GetOperationBytes(operation);
 
@@ -26,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			header.ProtocolVersion = ValidatorProtocol1.PROTOCOL_VERSION;
 			header.ChainId = blockchainId;
 
-			connection.Connect(header, operationBytes);
+			connection.Connect(() => header.Dehydrate(operationBytes));
 
 			return connection;
 		}

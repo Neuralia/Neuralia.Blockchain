@@ -58,22 +58,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IChainMiningStatusProvider : IChainProvider {
 
 		// are we mining currently?  (this is not saved to chain state. we start fresh every time we load the app)
-		bool MiningEnabled { get; }
-		bool IsValidator { get; }
-		bool IsValidatorWindow { get; }
-		bool IsValidatorWindowProximity { get; }
-		AccountId MiningAccountId { get; }
-		IPMode MiningRegistrationIpMode { get; }
-		bool MiningAllowed { get; }
-		Enums.MiningTiers MiningTier { get; }
-		List<MiningHistoryEntry> GetMiningHistory(int page, int pageSize, byte maxLevel);
-		Task<MiningStatisticSet> QueryMiningStatistics(AccountId miningAccountId);
-		Task<bool> ClearCachedCredentials();
-		long QueryCurrentDifficulty();
-		void ClearElectionBlockCache();
-		Task<BlockElectionDistillate> PrepareBlockElectionContext(IBlock currentBlock, AccountId miningAccountId, LockContext lockContext);
-		void RehydrateBlockElectionContext(BlockElectionDistillate blockElectionDistillate);
-		long? AnswerQuestion(ElectionQuestionDistillate question, bool hard);
+		bool                                                                MiningEnabled              { get; }
+		bool                                                                IsValidator                { get; }
+		bool                                                                IsValidatorWindow          { get; }
+		bool                                                                IsValidatorWindowProximity { get; }
+		AccountId                                                           MiningAccountId            { get; }
+		IPMode                                                              MiningRegistrationIpMode   { get; }
+		bool                                                                MiningAllowed              { get; }
+		Enums.MiningTiers                                                   MiningTier                 { get; }
+		List<MiningHistoryEntry>                                            GetMiningHistory(int page, int pageSize, byte maxLevel);
+		Task<MiningStatisticSet>                                            QueryMiningStatistics(AccountId miningAccountId);
+		Task<bool>                                                          ClearCachedCredentials();
+		long                                                                QueryCurrentDifficulty();
+		void                                                                ClearElectionBlockCache();
+		Task<BlockElectionDistillate>                                       PrepareBlockElectionContext(IBlock currentBlock, AccountId miningAccountId, LockContext lockContext);
+		void                                                                RehydrateBlockElectionContext(BlockElectionDistillate blockElectionDistillate);
+		long?                                                               AnswerQuestion(ElectionQuestionDistillate question, bool hard);
+		Task                                                                UpdateAccountMiningCacheExpiration(LockContext lockContext);
+		(long? secondTierAnswer, long? digestAnswer, long? firstTierAnswer) AnswerQuestions(IElectionBlockQuestion secondTierQuestion, IElectionDigestQuestion digestQuestion, IElectionBlockQuestion firstTierQuestion, Enums.MiningTiers miningTier);
 	}
 
 	public interface IChainMiningProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainMiningStatusProvider
@@ -442,18 +444,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							this.registrationParameters = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RegisterMiningRegistrationParameters();
 
-							this.registrationParameters.AccountId = miningAccountId;
-							this.registrationParameters.DelegateAccountId = delegateAccountId;
-							this.registrationParameters.Password = 0;
-							this.registrationParameters.Autograph.Entry = null;
+							this.registrationParameters.AccountId                 = miningAccountId;
+							this.registrationParameters.DelegateAccountId         = delegateAccountId;
+							this.registrationParameters.Password                  = 0;
+							this.registrationParameters.Autograph.Entry           = null;
+							this.registrationParameters.ChainMiningStatusProvider = this;
 
 							// here we can reuse our existing password if its not too old
 							if(await this.ExistingMiningRegistrationValid(lockContext).ConfigureAwait(false)) {
 								
 								var miningCache = await this.WalletProvider.GetAccountMiningCache(this.MiningAccountId, lockContext).ConfigureAwait(false);
 								
-								this.registrationParameters.Password = miningCache.MiningPassword;
-								this.registrationParameters.Autograph.Entry = ByteArray.CreateClone(miningCache.MiningAutograph);
+								this.registrationParameters.Password                  = miningCache.MiningPassword;
+								this.registrationParameters.Autograph.Entry           = ByteArray.CreateClone(miningCache.MiningAutograph);
 
 								if(this.registrationParameters.Password == 0) {
 									// clear it all
@@ -864,9 +867,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4);
 			}
 
-			info.Port = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.P2pPort;
-
-			info.AccountId = this.registrationParameters.AccountId;
+			info.Port          = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.P2pPort;
+			info.ValidatorPort = GlobalSettings.ApplicationSettings.ValidatorPort;
+			
+			info.AccountId         = this.registrationParameters.AccountId;
 			info.DelegateAccountId = this.registrationParameters.DelegateAccountId;
 
 			info.ChainType = this.centralCoordinator.ChainId;
@@ -878,7 +882,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return info;
 		}
 
-		protected async Task UpdateAccountMiningCacheExpiration(LockContext lockContext) {
+		public async Task UpdateAccountMiningCacheExpiration(LockContext lockContext) {
 			WalletAccount.WalletAccountChainStateMiningCache miningCache = await this.WalletProvider.GetAccountMiningCache(this.MiningAccountId, lockContext).ConfigureAwait(false);
 
 			if(miningCache != null) {
@@ -1070,6 +1074,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					parameters.Add("password", registrationInfo.Password);
 					parameters.Add("autograph", autograph64);
 					parameters.Add("miningTier", (int) registrationInfo.MiningTier);
+
+					if(MiningTierUtils.IsFirstOrSecondTier(registrationInfo.MiningTier)) {
+						parameters.Add("port", registrationInfo.Port);
+						parameters.Add("validator-port", registrationInfo.ValidatorPort);
+					}
 
 					IRestResponse result = await restUtility.Put(url, "elections/register", parameters).ConfigureAwait(false);
 
@@ -1343,58 +1352,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				intermediateElectionContext.BlockOffset = entry.BlockOffset;
 
 				// now the questions
-
-				ElectionBlockQuestionDistillate PrepareBlockQuestionDistillate(IElectionBlockQuestion question) {
-					if(question == null) {
-						return null;
-					}
-
-					if(question is IBlockTransactionIdElectionQuestion blockTransactionIdElectionQuestion) {
-						BlockTransactionSectionQuestionDistillate distillate = new BlockTransactionSectionQuestionDistillate();
-
-						distillate.BlockId = blockTransactionIdElectionQuestion.BlockId;
-
-						distillate.TransactionIndex = (int?) blockTransactionIdElectionQuestion.TransactionIndex?.Value;
-
-						distillate.SelectedTransactionSection = (byte) blockTransactionIdElectionQuestion.SelectedTransactionSection;
-						distillate.SelectedComponent = (byte) blockTransactionIdElectionQuestion.SelectedComponent;
-
-						return distillate;
-					}
-
-					if(question is IBlockBytesetElectionQuestion bytesetElectionQuestion) {
-						BlockBytesetQuestionDistillate distillate = new BlockBytesetQuestionDistillate();
-
-						distillate.BlockId = bytesetElectionQuestion.BlockId;
-
-						distillate.Offset = (int) bytesetElectionQuestion.Offset.Value;
-						distillate.Length = bytesetElectionQuestion.Length;
-
-						return distillate;
-					}
-
-					return null;
-				}
-
-				ElectionDigestQuestionDistillate PrepareDigestQuestionDistillate(IElectionDigestQuestion question) {
-					if(question == null) {
-						return null;
-					}
-
-					if(question is IDigestBytesetElectionQuestion digestBytesetElectionQuestion) {
-						DigestBytesetQuestionDistillate distillate = new DigestBytesetQuestionDistillate();
-
-						distillate.DigestID = (int) digestBytesetElectionQuestion.DigestId;
-
-						distillate.Offset = (int) digestBytesetElectionQuestion.Offset.Value;
-						distillate.Length = digestBytesetElectionQuestion.Length;
-
-						return distillate;
-					}
-
-					return null;
-				}
-
+				
 				//TODO: this needs major cleaning
 				intermediateElectionContext.SecondTierQuestion = PrepareBlockQuestionDistillate(entry.SecondTierQuestion);
 				intermediateElectionContext.DigestQuestion = PrepareDigestQuestionDistillate(entry.DigestQuestion);
@@ -1438,6 +1396,57 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			return blockElectionDistillate;
+		}
+		
+		protected ElectionBlockQuestionDistillate PrepareBlockQuestionDistillate(IElectionBlockQuestion question) {
+			if(question == null) {
+				return null;
+			}
+
+			if(question is IBlockTransactionIdElectionQuestion blockTransactionIdElectionQuestion) {
+				BlockTransactionSectionQuestionDistillate distillate = new BlockTransactionSectionQuestionDistillate();
+
+				distillate.BlockId = blockTransactionIdElectionQuestion.BlockId;
+
+				distillate.TransactionIndex = (int?) blockTransactionIdElectionQuestion.TransactionIndex?.Value;
+
+				distillate.SelectedTransactionSection = (byte) blockTransactionIdElectionQuestion.SelectedTransactionSection;
+				distillate.SelectedComponent          = (byte) blockTransactionIdElectionQuestion.SelectedComponent;
+
+				return distillate;
+			}
+
+			if(question is IBlockBytesetElectionQuestion bytesetElectionQuestion) {
+				BlockBytesetQuestionDistillate distillate = new BlockBytesetQuestionDistillate();
+
+				distillate.BlockId = bytesetElectionQuestion.BlockId;
+
+				distillate.Offset = (int) bytesetElectionQuestion.Offset.Value;
+				distillate.Length = bytesetElectionQuestion.Length;
+
+				return distillate;
+			}
+
+			return null;
+		}
+		
+		protected ElectionDigestQuestionDistillate PrepareDigestQuestionDistillate(IElectionDigestQuestion question) {
+			if(question == null) {
+				return null;
+			}
+
+			if(question is IDigestBytesetElectionQuestion digestBytesetElectionQuestion) {
+				DigestBytesetQuestionDistillate distillate = new DigestBytesetQuestionDistillate();
+
+				distillate.DigestID = (int) digestBytesetElectionQuestion.DigestId;
+
+				distillate.Offset = (int) digestBytesetElectionQuestion.Offset.Value;
+				distillate.Length = digestBytesetElectionQuestion.Length;
+
+				return distillate;
+			}
+
+			return null;
 		}
 
 		/// <summary>
@@ -1867,14 +1876,38 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return;
 			}
 
-			if(MiningTierUtils.IsSecondTier(electionResultDistillate.MiningTier)) {
-				electionResultDistillate.secondTierAnswer = this.AnswerQuestion(intermediaryElectionResult.SecondTierQuestion, false);
-				electionResultDistillate.digestAnswer = this.AnswerQuestion(intermediaryElectionResult.DigestQuestion, false);
+			var results = this.AnswerQuestions(intermediaryElectionResult.SecondTierQuestion, intermediaryElectionResult.DigestQuestion, intermediaryElectionResult.FirstTierQuestion, electionResultDistillate.MiningTier);
+
+			electionResultDistillate.secondTierAnswer = results.secondTierAnswer;
+			electionResultDistillate.digestAnswer     = results.digestAnswer;
+			electionResultDistillate.firstTierAnswer  = results.firstTierAnswer;
+		}
+
+		public (long? secondTierAnswer, long? digestAnswer, long? firstTierAnswer) AnswerQuestions(IElectionBlockQuestion secondTierQuestion, IElectionDigestQuestion digestQuestion, IElectionBlockQuestion firstTierQuestion, Enums.MiningTiers miningTier) {
+			
+			var secondTierQuestionDistillate = PrepareBlockQuestionDistillate(secondTierQuestion);
+			var digestQuestionDistillate     = PrepareDigestQuestionDistillate(digestQuestion);
+			var firstTierQuestionDistillate  = PrepareBlockQuestionDistillate(firstTierQuestion);
+			
+			return AnswerQuestions(secondTierQuestionDistillate, digestQuestionDistillate, firstTierQuestionDistillate, miningTier);
+		}
+		
+		protected (long? secondTierAnswer, long? digestAnswer, long? firstTierAnswer) AnswerQuestions(ElectionBlockQuestionDistillate secondTierQuestion, ElectionDigestQuestionDistillate digestQuestion, ElectionBlockQuestionDistillate firstTierQuestion, Enums.MiningTiers miningTier) {
+
+			long? secondTierAnswer = null;
+			long? digestAnswer     = null;
+			long? firstTierAnswer  = null;
+			
+			if(MiningTierUtils.IsSecondTier(miningTier)) {
+				secondTierAnswer = this.AnswerQuestion(secondTierQuestion, false);
+				digestAnswer     = this.AnswerQuestion(digestQuestion, false);
 			}
 
-			if(MiningTierUtils.IsFirstTier(electionResultDistillate.MiningTier)) {
-				electionResultDistillate.firstTierAnswer = this.AnswerQuestion(intermediaryElectionResult.FirstTierQuestion, true);
+			if(MiningTierUtils.IsFirstTier(miningTier)) {
+				firstTierAnswer = this.AnswerQuestion(firstTierQuestion, true);
 			}
+			
+			return (secondTierAnswer, digestAnswer, firstTierAnswer);
 		}
 
 		public long? AnswerQuestion(ElectionQuestionDistillate question, bool hard) {

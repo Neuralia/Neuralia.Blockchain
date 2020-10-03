@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			/// <summary>
 			/// The assigned public appointment index in the session
 			/// </summary>
-			public long Index { get; set; }
+			public int Index { get; set; }
 			
 			/// <summary>
 			/// the encrypted secret appointmentId Guid
@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				
 				this.AppointmentId = (SafeArrayHandle)rehydrator.ReadArray();
 				
-				AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 				tool.Rehydrate(rehydrator);
 				this.Index = tool.Value;
 			}
@@ -55,7 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				dehydrator.Write(this.RequesterId);
 				dehydrator.Write(this.AppointmentId);
 				
-				AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 				tool.Value = this.Index;
 				tool.Dehydrate(dehydrator);
 			}
@@ -83,20 +83,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		protected override void RehydrateContents(IDataRehydrator rehydrator, IMessageRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(rehydrator, rehydrationFactory);
 
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 
 			this.AppointmentTimestamp = rehydrator.ReadDateTime();
 			
 			tool.Rehydrate(rehydrator);
-			this.Preparation = (int)tool.Value;
+			this.Preparation = tool.Value;
 			
 			tool.Rehydrate(rehydrator);
-			this.Finalization = (int)tool.Value;
+			this.Finalization = tool.Value;
 			
 			this.Requesters.Clear();
 
 			tool.Rehydrate(rehydrator);
-			int count = (int)tool.Value;
+			int count = tool.Value;
 
 			for(int i = 0; i < count; i++) {
 				var requester = this.CreateAppointmentRequester();
@@ -110,7 +110,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		protected override void DehydrateContents(IDataDehydrator dehydrator) {
 			base.DehydrateContents(dehydrator);
 			
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 
 			dehydrator.Write(this.AppointmentTimestamp);
 			

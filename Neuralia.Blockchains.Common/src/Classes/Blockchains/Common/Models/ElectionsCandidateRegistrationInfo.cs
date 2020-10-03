@@ -28,6 +28,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 		///     The IP of the miner
 		/// </summary>
 		public int Port { get; set; }
+		
+		public int ValidatorPort { get; set; }
 
 		/// <summary>
 		///     The password to be offered up to begin a confirmation exchange
@@ -53,6 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 			dehydrator.Write(this.ChainType.Value);
 			dehydrator.Write(this.Ip);
 			dehydrator.Write(this.Port);
+			dehydrator.Write(this.ValidatorPort);
 			dehydrator.Write(this.Password);
 			dehydrator.Write(this.Timestamp);
 			dehydrator.Write((byte) this.MiningTier);
@@ -66,12 +69,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models {
 			this.AccountId.Rehydrate(rehydrator);
 			this.DelegateAccountId = rehydrator.ReadRehydratable<AccountId>();
 
-			this.ChainType = rehydrator.ReadUShort();
-			this.Ip = rehydrator.ReadGuid();
-			this.Port = rehydrator.ReadInt();
-			this.Password = rehydrator.ReadLong();
-			this.Timestamp = rehydrator.ReadDateTime();
-			this.MiningTier = (Enums.MiningTiers) rehydrator.ReadByte();
+			this.ChainType     = rehydrator.ReadUShort();
+			this.Ip            = rehydrator.ReadGuid();
+			this.Port          = rehydrator.ReadInt();
+			this.ValidatorPort = rehydrator.ReadInt();
+			this.Password      = rehydrator.ReadLong();
+			this.Timestamp     = rehydrator.ReadDateTime();
+			this.MiningTier    = (Enums.MiningTiers) rehydrator.ReadByte();
 		}
 	}
 }

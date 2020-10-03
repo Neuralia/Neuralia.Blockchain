@@ -25,6 +25,11 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			ValidatorProtocol1Tools.ValidatorOperation operation = await ValidatorProtocol1Tools.ReceiveOperation<ValidatorProtocol1Tools.ValidatorOperation>(connection, ct).ConfigureAwait(false);
 
+			await HandleServerExchange(operation, connection, ct).ConfigureAwait(false);
+		}
+		
+		protected virtual async Task HandleServerExchange(ValidatorProtocol1Tools.ValidatorOperation operation, ITcpValidatorConnection connection, CancellationToken ct) {
+			
 			if(operation.OperationId == CodeTranslationRequestOperation.CODE_TRANSLATION_REQUEST_OPERATION_ID) {
 				// this is the workflow
 				await this.HandleCodeTranslationWorkflow((CodeTranslationRequestOperation) operation, connection, ct).ConfigureAwait(false);
@@ -48,7 +53,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			
 		}
 		
-		public async Task<SafeArrayHandle> RequestCodeTranslation(DateTime appointment, long index, SafeArrayHandle validatorCode, IPAddress address, int? port = null) {
+		public async Task<SafeArrayHandle> RequestCodeTranslation(DateTime appointment, int index, SafeArrayHandle validatorCode, IPAddress address, int? port = null) {
 
 			var operation = new CodeTranslationRequestOperation();
 
@@ -71,7 +76,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			throw new InvalidOperationException();
 		}
 
-		public async Task<ushort> TriggerSession(DateTime appointment, long index, int code, IPAddress address, int? port = null) {
+		public async Task<int> TriggerSession(DateTime appointment, int index, int code, IPAddress address, int? port = null) {
 
 			var operation = new TriggerSessionOperation();
 
@@ -94,7 +99,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			throw new InvalidOperationException();
 		}
 
-		public async Task<bool> CompleteSession(DateTime appointment, long index, Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> results , IPAddress address, int? port = null) {
+		public async Task<bool> CompleteSession(DateTime appointment, int index, Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> results , IPAddress address, int? port = null) {
 
 			var operation = new CompleteSessionOperation();
 
@@ -258,9 +263,9 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			public const byte CODE_TRANSLATION_REQUEST_OPERATION_ID = 1;
 
-			public DateTime Appointment { get; set; }
+			public DateTime        Appointment   { get; set; }
 			public SafeArrayHandle ValidatorCode { get; set; }
-			public long Index { get; set; }
+			public int             Index         { get; set; }
 
 			public override byte OperationId => CODE_TRANSLATION_REQUEST_OPERATION_ID;
 
@@ -272,7 +277,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 				
 				AdaptiveLong1_9 tool = new AdaptiveLong1_9();
 				tool.Rehydrate(rehydrator);
-				this.Index = tool.Value;
+				this.Index = (int)tool.Value;
 			}
 
 			public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -316,8 +321,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			public const byte TRIGGER_SESSION_OPERATION_ID = 3;
 
 			public DateTime Appointment { get; set; }
-			public int SecretCode { get; set; }
-			public long Index { get; set; }
+			public int      SecretCode  { get; set; }
+			public int      Index       { get; set; }
 			
 			public override byte OperationId => TRIGGER_SESSION_OPERATION_ID;
 
@@ -329,7 +334,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 				
 				AdaptiveLong1_9 tool = new AdaptiveLong1_9();
 				tool.Rehydrate(rehydrator);
-				this.Index = tool.Value;
+				this.Index = (int)tool.Value;
 			}
 
 			public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -348,13 +353,13 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			public const byte TRIGGER_SESSION_RESPONSE_OPERATION_ID = 4;
 
-			public ushort SecretCodeL2 { get; set; }
+			public int SecretCodeL2 { get; set; }
 			public override byte OperationId => TRIGGER_SESSION_RESPONSE_OPERATION_ID;
 
 			public override void Rehydrate(IDataRehydrator rehydrator) {
 				base.Rehydrate(rehydrator);
 
-				this.SecretCodeL2 = rehydrator.ReadUShort();
+				this.SecretCodeL2 = rehydrator.ReadInt();
 			}
 
 			public override void Dehydrate(IDataDehydrator dehydrator) {
@@ -374,9 +379,9 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			public DateTime Appointment { get; set; }
 			
-			public Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> Results { get; }= new Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle>();
-			public long Index { get; set; }
-			public override byte OperationId => COMPLETE_SESSION_OPERATION_ID;
+			public          Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> Results     { get; } = new Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle>();
+			public          int                                                        Index       { get; set; }
+			public override byte                                                       OperationId => COMPLETE_SESSION_OPERATION_ID;
 
 			public override void Rehydrate(IDataRehydrator rehydrator) {
 				base.Rehydrate(rehydrator);
@@ -398,7 +403,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 				}
 				
 				tool.Rehydrate(rehydrator);
-				this.Index = tool.Value;
+				this.Index = (int)tool.Value;
 			}
 
 			public override void Dehydrate(IDataDehydrator dehydrator) {

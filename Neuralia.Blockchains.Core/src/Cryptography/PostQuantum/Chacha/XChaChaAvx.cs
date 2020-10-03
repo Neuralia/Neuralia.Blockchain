@@ -2,6 +2,7 @@
 using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.X86;
 using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
@@ -180,7 +181,27 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha {
 		/// <param name="curBlock"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void Xor(byte* input, byte* output, int curBlock) {
-			XChaChaAvxComponents.XorBlock64(input, output, curBlock, this.state);
+			
+			if(Avx2.IsSupported) {
+				XChaChaAvxComponents.XorBlock64(input, output, curBlock, this.state);
+			} else if(Sse2.IsSupported) {
+				XChaChaAvxComponents.XorBlock32(input, output, curBlock, this.state);
+			} else {
+				
+				int blockOffset = curBlock * XChaCha.BLOCK_SIZE_IN_BYTES;
+
+				var block = (byte*) this.state;
+				for(var i = 0; i < XChaCha.BLOCK_SIZE_IN_BYTES; i += 8) {
+					output[i + 0 + blockOffset] = (byte) (input[i + 0 + blockOffset] ^ block[i + 0]);
+					output[i + 1 + blockOffset] = (byte) (input[i + 1 + blockOffset] ^ block[i + 1]);
+					output[i + 2 + blockOffset] = (byte) (input[i + 2 + blockOffset] ^ block[i + 2]);
+					output[i + 3 + blockOffset] = (byte) (input[i + 3 + blockOffset] ^ block[i + 3]);
+					output[i + 4 + blockOffset] = (byte) (input[i + 4 + blockOffset] ^ block[i + 4]);
+					output[i + 5 + blockOffset] = (byte) (input[i + 5 + blockOffset] ^ block[i + 5]);
+					output[i + 6 + blockOffset] = (byte) (input[i + 6 + blockOffset] ^ block[i + 6]);
+					output[i + 7 + blockOffset] = (byte) (input[i + 7 + blockOffset] ^ block[i + 7]);
+				}
+			}
 		}
 
 		/// <summary>

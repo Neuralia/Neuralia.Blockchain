@@ -248,6 +248,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			tcpConnection.StartWaitingForHandshake(bytes => {
 				//Invoke
 				this.InvokeNewConnection(bytes, tcpConnection);
+				
+				return Task.CompletedTask;
 			});
 
 			lock(this.locker) {

@@ -36,21 +36,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			base.RehydrateContents(rehydrator, rehydrationFactory);
 
 			this.PuzzleWindow = rehydrator.ReadShort();
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 			tool.Rehydrate(rehydrator);
-			this.ValidatorWindow     = (int)tool.Value;
-			this.PuzzleEngineVersion = rehydrator.ReadInt();
+			this.ValidatorWindow     = tool.Value;
+			
+			tool.Rehydrate(rehydrator);
+			this.PuzzleEngineVersion = tool.Value;
+			
 			this.SecretPuzzles       = (SafeArrayHandle)rehydrator.ReadNonNullableArray();
 			this.POWRuleSet.Rehydrate(rehydrator);
 			
-			int count = rehydrator.ReadInt();
+			tool.Rehydrate(rehydrator);
+			int count = tool.Value;
 
 			this.Applicants.Clear();
 			for(int i = 0; i < count; i++) {
 				this.Applicants.Add((SafeArrayHandle)rehydrator.ReadNonNullableArray());
 			}
 			
-			count = rehydrator.ReadInt();
+			tool.Rehydrate(rehydrator);
+			count = tool.Value;
 
 			this.Validators.Clear();
 			for(int i = 0; i < count; i++) {
@@ -64,21 +69,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			dehydrator.Write(this.PuzzleWindow);
 			
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 			tool.Value = this.ValidatorWindow;
 			tool.Dehydrate(dehydrator);
 			
-			dehydrator.Write(this.PuzzleEngineVersion);
+			tool.Value = this.PuzzleEngineVersion;
+			tool.Dehydrate(dehydrator);
+			
 			dehydrator.WriteNonNullable(this.SecretPuzzles);
 			this.POWRuleSet.Dehydrate(dehydrator);
 
-			dehydrator.Write(this.Applicants.Count);
+			tool.Value = this.Applicants.Count;
+			tool.Dehydrate(dehydrator);
 
 			foreach(var applicant in this.Applicants) {
 				dehydrator.WriteNonNullable(applicant);
 			}
 			
-			dehydrator.Write(this.Validators.Count);
+			tool.Value = this.Validators.Count;
+			tool.Dehydrate(dehydrator);
 			
 			foreach(var validator in this.Validators) {
 				dehydrator.Write(validator.Key);
@@ -116,12 +125,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			/// <summary>
 			/// the codes to be sent by open validators to decrypt the secret portion
 			/// </summary>
-			public readonly List<long> AssignedOpen = new List<long>();
+			public readonly List<int> AssignedOpen = new List<int>();
 			
 			/// <summary>
 			/// The secret codes sent by all to begin the process
 			/// </summary>
-			public readonly List<(int secretCode, ushort secretCodeL2)> SecretCodes = new List<(int secretCode, ushort secretCodeL2)>();
+			public readonly List<(int secretCode, int secretCodeL2)> SecretCodes = new List<(int secretCode, int secretCodeL2)>();
 
 			public void Rehydrate(SafeArrayHandle bytes) {
 				using var rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
@@ -129,28 +138,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			}
 			
 			public void Rehydrate(IDataRehydrator rehydrator) {
-				
-				AdaptiveLong1_9 tool = new AdaptiveLong1_9();
-				
-				this.AssignedOpen.Clear();
+
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 				tool.Rehydrate(rehydrator);
-				int count = (int)tool.Value;
+				int count = tool.Value;
+
+				this.AssignedOpen.Clear();
 
 				for(int j = 0; j < count; j++) {
 					
 					tool.Rehydrate(rehydrator);
-					long index = tool.Value;
+					int index = tool.Value;
 
 					this.AssignedOpen.Add(index);
 				}
 				
 				this.SecretCodes.Clear();
 				tool.Rehydrate(rehydrator);
-				count = (int)tool.Value;
+				count = tool.Value;
 
 				for(int j = 0; j < count; j++) {
-					int id = rehydrator.ReadInt();
-					ushort secret = rehydrator.ReadUShort();
+					int id     = rehydrator.ReadInt();
+					int secret = rehydrator.ReadInt();
 					
 					this.SecretCodes.Add((id, secret));
 				}
@@ -165,7 +174,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			public void Dehydrate(IDataDehydrator dehydrator) {
 				
-				AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 				
 				tool.Value = this.AssignedOpen.Count;
 				tool.Dehydrate(dehydrator);
@@ -195,7 +204,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				
 				this.PowRulesSet.Rehydrate(rehydrator);
 				
-				int count = rehydrator.ReadInt();
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+				tool.Rehydrate(rehydrator);
+				int count = tool.Value;
 
 				this.Puzzles.Clear();
 				for(int i = 0; i < count; i++) {
@@ -210,8 +221,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			public void Dehydrate(IDataDehydrator dehydrator) {
 				
 				this.PowRulesSet.Dehydrate(dehydrator);
-				dehydrator.Write(this.Puzzles.Count);
-
+				
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+				tool.Value = this.Puzzles.Count;
+				tool.Dehydrate(dehydrator);
+				
 				foreach(var puzzle in this.Puzzles) {
 					puzzle.Dehydrate(dehydrator);
 				}
@@ -228,16 +242,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			
 			public void Rehydrate(IDataRehydrator rehydrator) {
 				this.Code = rehydrator.ReadString();
-				this.EngineVersion = rehydrator.ReadInt();
 				
-				int count = rehydrator.ReadInt();
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+				tool.Rehydrate(rehydrator);
+				this.EngineVersion = tool.Value;
+				
+				tool.Rehydrate(rehydrator);
+				int count = tool.Value;
 
 				this.Libraries.Clear();
 				for(int i = 0; i < count; i++) {
 					this.Libraries.Add(rehydrator.ReadString());
 				}
 				
-				count = rehydrator.ReadInt();
+				tool.Rehydrate(rehydrator);
+				count = tool.Value;
 
 				this.Locales.Clear();
 				for(int i = 0; i < count; i++) {
@@ -246,7 +265,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 					this.Locales.Add(key, json);
 				}
 				
-				count = rehydrator.ReadInt();
+				tool.Rehydrate(rehydrator);
+				count = tool.Value;
 				
 				this.Instructions.Clear();
 				for(int i = 0; i < count; i++) {
@@ -258,22 +278,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			public void Dehydrate(IDataDehydrator dehydrator) {
 				dehydrator.Write(this.Code);
-				dehydrator.Write(this.EngineVersion);
 				
-				dehydrator.Write(this.Libraries.Count);
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+
+				tool.Value = this.EngineVersion;
+				tool.Dehydrate(dehydrator);
+
+				tool.Value = this.Libraries.Count;
+				tool.Dehydrate(dehydrator);
 
 				foreach(var library in this.Libraries) {
 					dehydrator.Write(library);
 				}
 				
-				dehydrator.Write(this.Locales.Count);
+				tool.Value = this.Locales.Count;
+				tool.Dehydrate(dehydrator);
 
 				foreach(var locale in this.Locales) {
 					dehydrator.Write(locale.Key);
 					dehydrator.Write(locale.Value);
 				}
 
-				dehydrator.Write(this.Instructions.Count);
+				tool.Value = this.Instructions.Count;
+				tool.Dehydrate(dehydrator);
 
 				foreach(var instruction in this.Instructions) {
 					dehydrator.Write(instruction.Key);
@@ -290,8 +317,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			public void Rehydrate(IDataRehydrator rehydrator) {
 				
-				int count = rehydrator.ReadInt();
-
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+				tool.Rehydrate(rehydrator);
+				int count = tool.Value;
+				
 				this.Validators.Clear();
 				for(int i = 0; i < count; i++) {
 
@@ -306,7 +335,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			public void Dehydrate(IDataDehydrator dehydrator) {
 				
-				dehydrator.Write(this.Validators.Count);
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+				
+				tool.Value = this.Validators.Count;
+				tool.Dehydrate(dehydrator);
 
 				foreach(var validator in this.Validators) {
 					validator.Dehydrate(dehydrator);
@@ -319,16 +351,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		public abstract class ValidatorEntry : IBinarySerializable{
 			
 			public Guid IP { get; set; }
-			public int? ValidationPort { get; set; }
+			public int? ValidatorPort { get; set; }
 			
 			public virtual void Rehydrate(IDataRehydrator rehydrator) {
 				this.IP = rehydrator.ReadGuid();
-				this.ValidationPort = rehydrator.ReadNullableInt();
+				this.ValidatorPort = rehydrator.ReadNullableInt();
 			}
 
 			public virtual void Dehydrate(IDataDehydrator dehydrator) {
 				dehydrator.Write(IP);
-				dehydrator.Write(ValidationPort);
+				dehydrator.Write(ValidatorPort);
 			}
 			
 		}
@@ -356,7 +388,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				
 				this.SecretCode = rehydrator.ReadInt();
 				
-				int count = rehydrator.ReadInt();
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+				tool.Rehydrate(rehydrator);
+				int count = tool.Value;
 
 				this.Validators.Clear();
 				for(int i = 0; i < count; i++) {
@@ -372,7 +406,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 				dehydrator.Write(this.SecretCode);
 				
-				dehydrator.Write(this.Validators.Count);
+				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
+				
+				tool.Value = this.Validators.Count;
+				tool.Dehydrate(dehydrator);
 
 				foreach(var validator in this.Validators) {
 					validator.Dehydrate(dehydrator);

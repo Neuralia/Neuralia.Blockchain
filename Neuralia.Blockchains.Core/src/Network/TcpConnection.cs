@@ -77,7 +77,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public delegate void ExceptionOccured(Exception exception, ITcpConnection connection);
 
-		public delegate void MessageBytesReceived(SafeArrayHandle buffer);
+		public delegate Task MessageBytesReceived(SafeArrayHandle buffer);
 
 		public delegate void MessageBytesSent(SafeArrayHandle buffer);
 
@@ -579,6 +579,8 @@ namespace Neuralia.Blockchains.Core.Network {
 				this.Latency = (DateTime.Now - startHandshake).TotalSeconds;
 				//Invoke
 				handshakeCallback(bytes);
+				
+				return Task.CompletedTask;
 			});
 		}
 
@@ -653,8 +655,10 @@ namespace Neuralia.Blockchains.Core.Network {
 						this.resetEvent.Set();
 					} else {
 						// data received
-						this.InvokeDataReceived(bytes);
+						return this.InvokeDataReceived(bytes);
 					}
+					
+					return Task.CompletedTask;
 				}, ct).ConfigureAwait(false);
 
 			} catch(InvalidPeerException ipex) {
@@ -928,7 +932,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 								//lets handle the completed message. we can launch it in its own thread since message pumping can continue meanwhile independently
 
-								await Task.Run(() => {
+								await Task.Run(async () => {
 
 									SafeArrayHandle localMainBuffer = releasedMainBuffer;
 
@@ -940,7 +944,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 											entry.SetMessageContent(bufferRehydrator);
 
-											this.protocolFactory.HandleCompetedMessage(entry, callback, this);
+											await protocolFactory.HandleCompetedMessage(entry, callback, this).ConfigureAwait(false);
 										}
 									}
 
@@ -1020,10 +1024,11 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.handshakeBytes?.Dispose();
 		}
 
-		protected void InvokeDataReceived(SafeArrayHandle bytes) {
+		protected Task InvokeDataReceived(SafeArrayHandle bytes) {
 			if(this.DataReceived != null) {
-				this.DataReceived(bytes);
+				return this.DataReceived(bytes);
 			}
+			return Task.CompletedTask;
 		}
 
 		protected void InvokeDataSent(SafeArrayHandle bytes) {

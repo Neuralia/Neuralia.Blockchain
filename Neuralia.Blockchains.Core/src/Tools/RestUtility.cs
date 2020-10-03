@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using RestSharp;
@@ -60,9 +61,14 @@ namespace Neuralia.Blockchains.Core.Tools {
 		private Task<IRestResponse> PerformCall(string url, string action, Method method, Dictionary<string, object> parameters, Dictionary<string, byte[]> files = null) {
 
 			RestClient client = new RestClient(url);
-			client.FollowRedirects = true;
-
 			RestRequest request = new RestRequest(action, method);
+			if (appSettingsBase.ProxySettings != null)
+            {
+				client.Proxy = this.GetProxy();
+				client.PreAuthenticate = true;
+				request.UseDefaultCredentials = true;
+			}
+			client.FollowRedirects = true;
 
 			request.AddHeader("Cache-control", "no-cache");
 
@@ -93,6 +99,25 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			return client.ExecuteAsync(request);
 
+		}
+
+		private IWebProxy proxy;
+		private IWebProxy GetProxy()
+		{
+
+			if (this.proxy == null)
+			{
+				this.proxy = new WebProxy
+				{
+					Address = new Uri($"{this.appSettingsBase.ProxySettings.Host}:{this.appSettingsBase.ProxySettings.Port}"),
+					BypassProxyOnLocal = true,
+					UseDefaultCredentials = false,
+
+					Credentials = new NetworkCredential(this.appSettingsBase.ProxySettings.User, this.appSettingsBase.ProxySettings.Password)
+				};
+			}
+
+			return this.proxy;
 		}
 	}
 }

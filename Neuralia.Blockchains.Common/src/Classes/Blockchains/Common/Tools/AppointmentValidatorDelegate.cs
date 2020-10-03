@@ -159,7 +159,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			int codeHash = AppointmentUtils.GenerateValidatorSecretCodeHash(operation.SecretCode, appointment, appointmentDetails.AppointmentKey.Branch(), this.GetValidatorAccountId, appointmentDetails.keyHash2, this.Stride);
 
-			ConcurrentDictionary<int, ushort> codes = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetValidatorAssignedCodes(appointment).ConfigureAwait(false);
+			ConcurrentDictionary<int, int> codes = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetValidatorAssignedCodes(appointment).ConfigureAwait(false);
 
 			if((codes == null) || !codes.ContainsKey(codeHash)) {
 				return null;

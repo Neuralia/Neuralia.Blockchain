@@ -10,8 +10,8 @@ using Neuralia.Blockchains.Core.DataAccess.Interfaces;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AppointmentRegistry {
 	public interface IAppointmentRegistryDal : IDalInterfaceBase {
 
-		Task InsertAppointmentContextGossipMessage(Guid messageUuid, DateTime appointment, long start, long end);
-		Task<IAppointmentContextGossipMessage> GetAppointmentContext(long requesterIndex, DateTime appointment);
+		Task                                   InsertAppointmentContextGossipMessage(Guid messageUuid, DateTime appointment, int start, int end);
+		Task<IAppointmentContextGossipMessage> GetAppointmentContext(int requesterIndex, DateTime appointment);
 		
 		Task InsertAppointmentTriggerGossipMessage(Guid messageUuid, DateTime appointment);
 		Task<IAppointmentTriggerGossipMessage> GetAppointmentTrigger();
@@ -33,9 +33,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		
 		Task<List<Guid>> ClearExpired();
 		
-		Task<IAppointmentRequesterResult> GetAppointmentRequesterResult(DateTime appointment, long index);
-		Task InsertAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult);
-		Task UpdateAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult);
+		Task<IAppointmentRequesterResult> GetAppointmentRequesterResult(DateTime appointment, int index);
+		Task                              InsertAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult);
+		Task                              UpdateAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult);
 		 
 		Task<List<IAppointmentRequesterResult>> GetReadyAppointmentRequesterResult();
 		Task ClearReadyAppointmentRequesterResult(List<int> ids);

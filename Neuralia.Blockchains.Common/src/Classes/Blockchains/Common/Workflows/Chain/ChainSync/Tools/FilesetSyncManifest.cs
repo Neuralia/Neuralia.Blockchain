@@ -45,6 +45,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			public bool Downloaded { get; set; }
 			public ushort sliceId { get; set; }
+
+#if DEVNET || TESTNET
+			// statistics
+			public DateTime Start { get; set; }
+			public DateTime End { get; set; }
+#endif
 		}
 	}
 

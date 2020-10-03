@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 			this.timeService = serviceSet.TimeService;
 		}
 		
-		public Task InsertAppointmentContextGossipMessage(Guid messageUuid, DateTime appointment, long start, long end) {
+		public Task InsertAppointmentContextGossipMessage(Guid messageUuid, DateTime appointment, int start, int end) {
 
 			return this.PerformOperationAsync(async db => {
 
@@ -59,7 +59,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 			});
 		}
 		
-		public async Task<IAppointmentContextGossipMessage> GetAppointmentContext(long requesterIndex, DateTime appointment) {
+		public async Task<IAppointmentContextGossipMessage> GetAppointmentContext(int requesterIndex, DateTime appointment) {
 
 			return (await this.PerformOperationAsync(db => {
 				
@@ -303,7 +303,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 			return new List<Guid>();
 		}
 
-		public async Task<IAppointmentRequesterResult> GetAppointmentRequesterResult(DateTime appointment, long index) {
+		public async Task<IAppointmentRequesterResult> GetAppointmentRequesterResult(DateTime appointment, int index) {
 			return await this.PerformOperationAsync(db => {
 				
 				return db.AppointmentRequesterResults.SingleOrDefaultAsync(a => a.Appointment == appointment && a.Index == index);

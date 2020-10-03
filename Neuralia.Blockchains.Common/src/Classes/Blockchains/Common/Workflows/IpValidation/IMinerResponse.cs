@@ -5,9 +5,13 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpValidation {
 	public interface IMinerResponse {
 
-		AccountId AccountId { get; set; }
-		ResponseType Response { get; set; }
-		void Rehydrate(IDataRehydrator rehydrator);
+		long?           SecondTierAnswer { get; set; }
+		long?    DigestTierAnswer { get; set; }
+		long?    FirstTierAnswer  { get; set; }
+		
+		AccountId       AccountId        { get; set; }
+		ResponseType    Response         { get; set; }
+		void            Rehydrate(IDataRehydrator rehydrator);
 		SafeArrayHandle Dehydrate();
 	}
 }

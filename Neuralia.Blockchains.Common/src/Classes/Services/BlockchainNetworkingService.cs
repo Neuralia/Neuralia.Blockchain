@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpValidation;
 using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core;
@@ -11,6 +13,7 @@ using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Services {
@@ -42,8 +45,9 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		///     so its all done here in top priority
 		/// </summary>
 		/// <param name="buffer"></param>
-		protected override void HandleIpValidatorRequest(SafeArrayHandle buffer, ITcpConnection connection) {
+		protected override async Task HandleIpValidatorRequest(SafeArrayHandle buffer, ITcpConnection connection) {
 
+			MiningRegistrationParameters parameters = null;
 			try {
 				(byte version, IValidatorRequest request, IMinerResponse response) messages = IpValidationFactory.RehydrateRequest(buffer);
 
@@ -54,8 +58,9 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 						//TODO: log this, if it happens to often, block the IP. the validator will never abuse this.
 					}
 
-					MiningRegistrationParameters parameters = this.chainMiningRegistrationParameters[messages.request.Chain];
+					parameters = this.chainMiningRegistrationParameters[messages.request.Chain];
 
+					
 					// validate the request
 					if(!messages.request.Password.Equals(parameters.Password)) {
 						throw new ApplicationException("We received a validation request we an invalid secret.");
@@ -63,19 +68,33 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 						//TODO: log this, if it happens to often, block the IP. the validator will never abuse this.
 					}
 
+					// ok, this is where we start the validation server so they can verify our validation port. we can star this in parallel
+					var task = Task.Run(() => EnableVerificationWindow());
+					
 					// ok, seems this is the right secret, lets confirm our miner status
 					messages.response.AccountId = parameters.AccountId;
 					messages.response.Response = ResponseType.Valid;
+
+					try {
+						var answers = parameters.ChainMiningStatusProvider.AnswerQuestions(messages.request.SecondTierQuestion, messages.request.DigestQuestion, messages.request.FirstTierQuestion, parameters.ChainMiningStatusProvider.MiningTier);
+
+						messages.response.SecondTierAnswer = answers.secondTierAnswer;
+						messages.response.DigestTierAnswer = answers.digestAnswer;
+						messages.response.FirstTierAnswer  = answers.firstTierAnswer;
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, "Failed to answer questions to validator request. this could be bad...");
+					}
 
 					if(connection.State != ConnectionState.Connected) {
 						throw new ApplicationException("Not connected to ip validator for response");
 					}
 				} catch(Exception e) {
-					// lets trye to respond at the very least
+					// lets try to respond at the very least
 					messages.response.Response = ResponseType.Invalid;
 				}
 
 				connection.SendBytes(messages.response.Dehydrate());
+				
 			} catch(Exception e) {
 				NLog.Default.Error(e, "Failed to respond to IP validation request");
 
@@ -83,6 +102,16 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 			} finally {
 				// we always finish here
 				connection.Close();
+			}
+
+			try {
+				if(parameters != null) {
+					LockContext lockContext = null;
+					await parameters.ChainMiningStatusProvider.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
+				}
+			}
+			catch(Exception e) {
+				NLog.Default.Error(e, "Failed to update account mining cache expiration. this is not very important, the response seems to have worked.");
 			}
 		}
 
@@ -94,10 +123,11 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		///     a special class to hold our published mining registration paramters so we can answer the IP Validators
 		/// </summary>
 		public class MiningRegistrationParameters {
-			public long Password { get; set; }
-			public AccountId AccountId { get; set; }
-			public AccountId DelegateAccountId { get; set; }
-			public SafeArrayHandle Autograph { get; } = new SafeArrayHandle();
+			public long                       Password                  { get; set; }
+			public AccountId                  AccountId                 { get; set; }
+			public AccountId                  DelegateAccountId         { get; set; }
+			public SafeArrayHandle            Autograph                 { get; } = new SafeArrayHandle();
+			public IChainMiningStatusProvider ChainMiningStatusProvider { get; set; }
 		}
 	}
 }

@@ -324,6 +324,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 //											NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(IpCrawler.HandleInput)}--{nBytes} bytes from node {node}");
 											this.IpCrawler.HandleInput(node, now, nBytes);
 										}));
+										
+										return Task.CompletedTask;
 									};
 
 									peer.connection.DataSent += bytes => {

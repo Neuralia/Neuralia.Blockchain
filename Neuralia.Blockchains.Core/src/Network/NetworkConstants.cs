@@ -1,7 +1,7 @@
 namespace Neuralia.Blockchains.Core.Network {
 	public static class NetworkConstants {
 		public const int MAIN_NETWORK_ID = 0x51A21052;
-		public const int TEST_NETWORK_ID = 0x10B73324;
+		public const int TEST_NETWORK_ID = 0x10B73334;
 		public const int DEV_NETWORK_ID = 0x11A61253;
 
 

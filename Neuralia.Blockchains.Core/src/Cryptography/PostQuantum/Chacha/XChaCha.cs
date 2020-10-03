@@ -5,10 +5,6 @@ using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
-#if NETCOREAPP3_1
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
-#endif
 
 namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha {
 	public unsafe class XChaCha : IXChaCha {
@@ -263,26 +259,16 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha {
 
 			var block = (byte*) this.state;
 
-#if NETCOREAPP3_1
-			if(Avx2.IsSupported) {
-				XChaChaAvxComponents.XorBlock64(input, output, curBlock, this.state);
-			} else if(Sse2.IsSupported) {
-				XChaChaAvxComponents.XorBlock32(input, output, curBlock, this.state);
-			} else {
-#endif
-				for(var i = 0; i < BLOCK_SIZE_IN_BYTES; i += 8) {
-					output[i + 0 + blockOffset] = (byte) (input[i + 0 + blockOffset] ^ block[i + 0]);
-					output[i + 1 + blockOffset] = (byte) (input[i + 1 + blockOffset] ^ block[i + 1]);
-					output[i + 2 + blockOffset] = (byte) (input[i + 2 + blockOffset] ^ block[i + 2]);
-					output[i + 3 + blockOffset] = (byte) (input[i + 3 + blockOffset] ^ block[i + 3]);
-					output[i + 4 + blockOffset] = (byte) (input[i + 4 + blockOffset] ^ block[i + 4]);
-					output[i + 5 + blockOffset] = (byte) (input[i + 5 + blockOffset] ^ block[i + 5]);
-					output[i + 6 + blockOffset] = (byte) (input[i + 6 + blockOffset] ^ block[i + 6]);
-					output[i + 7 + blockOffset] = (byte) (input[i + 7 + blockOffset] ^ block[i + 7]);
-				}
-#if NETCOREAPP3_1
+			for(var i = 0; i < BLOCK_SIZE_IN_BYTES; i += 8) {
+				output[i + 0 + blockOffset] = (byte) (input[i + 0 + blockOffset] ^ block[i + 0]);
+				output[i + 1 + blockOffset] = (byte) (input[i + 1 + blockOffset] ^ block[i + 1]);
+				output[i + 2 + blockOffset] = (byte) (input[i + 2 + blockOffset] ^ block[i + 2]);
+				output[i + 3 + blockOffset] = (byte) (input[i + 3 + blockOffset] ^ block[i + 3]);
+				output[i + 4 + blockOffset] = (byte) (input[i + 4 + blockOffset] ^ block[i + 4]);
+				output[i + 5 + blockOffset] = (byte) (input[i + 5 + blockOffset] ^ block[i + 5]);
+				output[i + 6 + blockOffset] = (byte) (input[i + 6 + blockOffset] ^ block[i + 6]);
+				output[i + 7 + blockOffset] = (byte) (input[i + 7 + blockOffset] ^ block[i + 7]);
 			}
-#endif
 		}
 
 		/// <summary>
@@ -294,10 +280,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha {
 		/// <param name="curBlock"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void Xor(byte* input, byte* output, int len, int curBlock) {
-#if NETCOREAPP3_1
 
-			XChaChaAvxComponents.XorDynamic(input, output, curBlock, len, this.state);
-#else
 			int blockOffset = curBlock * BLOCK_SIZE_IN_BYTES;
 
 			var block = (byte*) this.state;
@@ -305,7 +288,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha {
 			for(var i = 0; i < len; i++) {
 				output[i + blockOffset] = (byte) (input[i + blockOffset] ^ block[i]);
 			}
-#endif
 		}
 
 		public void Encrypt(SafeArrayHandle plaintext, SafeArrayHandle nonce, SafeArrayHandle key, SafeArrayHandle ciphertext, int? length = null) {

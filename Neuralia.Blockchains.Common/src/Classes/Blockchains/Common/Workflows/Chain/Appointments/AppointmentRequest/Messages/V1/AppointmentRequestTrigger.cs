@@ -13,11 +13,11 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest.Messages.V1
 	public class AppointmentRequestTrigger : WorkflowTriggerMessage<IBlockchainEventsRehydrationFactory>{
 
 		
-		public Guid? RequesterId { get; set; }
-		public long? RequesterIndex { get; set; }
-		public DateTime? Appointment { get; set; }
-		public Enums.AppointmentRequestModes Mode { get; set; }
-		public BlockchainType ChainType { get; set; }
+		public Guid?                         RequesterId    { get; set; }
+		public int?                          RequesterIndex { get; set; }
+		public DateTime?                     Appointment    { get; set; }
+		public Enums.AppointmentRequestModes Mode           { get; set; }
+		public BlockchainType                ChainType      { get; set; }
 
 		public override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
@@ -33,7 +33,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest.Messages.V1
 			base.Rehydrate(rehydrator, rehydrationFactory);
 
 			this.RequesterId = rehydrator.ReadNullableGuid();
-			this.RequesterIndex = rehydrator.ReadNullableLong();
+			this.RequesterIndex = rehydrator.ReadNullableInt();
 			this.Appointment = rehydrator.ReadNullableDateTime();
 			this.Mode = (Enums.AppointmentRequestModes)rehydrator.ReadByte();
 			this.ChainType = rehydrator.ReadUShort();

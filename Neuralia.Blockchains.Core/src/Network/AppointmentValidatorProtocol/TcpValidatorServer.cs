@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -45,7 +46,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		void Stop();
 
-		void RegisterBlockchainDelegate(BlockchainType blockchainType, IAppointmentValidatorDelegate appointmentValidatorDelegate);
+		void RegisterBlockchainDelegate(BlockchainType blockchainType, IAppointmentValidatorDelegate appointmentValidatorDelegate, Func<bool> isInAppointmentWindow);
 		void UnregisterBlockchainDelegate(BlockchainType blockchainType);
 		bool BlockchainDelegateEmpty { get; }
 	}
@@ -56,6 +57,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 	/// <inheritdoc />
 	public class TcpValidatorServer : ITcpValidatorServer {
 
+		public const    byte PING_BYTE = 255;
+		public const    byte PONG_BYTE = 255;
 		public delegate Task MessageBytesReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer);
 
 		private readonly Action<Exception> exceptionCallback;
@@ -65,8 +68,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 		/// </summary>
 		private Socket listener;
 
-		private readonly object locker = new object();
-
+		private readonly object          locker   = new object();
+		private readonly SafeArrayHandle pongByte = SafeArrayHandle.Wrap(new [] {PONG_BYTE });
 
 		public TcpValidatorServer(NetworkEndPoint endPoint, Action<Exception> exceptionCallback) {
 			this.exceptionCallback = exceptionCallback;
@@ -163,18 +166,27 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 			}
 		}
 
-		private readonly Dictionary<BlockchainType, IAppointmentValidatorDelegate> appointmentValidatorDelegates = new Dictionary<BlockchainType, IAppointmentValidatorDelegate>();
-		
-		public void RegisterBlockchainDelegate(BlockchainType blockchainType, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
+		private readonly ConcurrentDictionary<BlockchainType, IAppointmentValidatorDelegate> appointmentValidatorDelegates = new ConcurrentDictionary<BlockchainType, IAppointmentValidatorDelegate>();
+		private readonly ConcurrentDictionary<BlockchainType, Func<bool>>                    appointmentWindowChecks       = new ConcurrentDictionary<BlockchainType, Func<bool>>();
+
+		public void RegisterBlockchainDelegate(BlockchainType blockchainType, IAppointmentValidatorDelegate appointmentValidatorDelegate, Func<bool> isInAppointmentWindow) {
 			if(!this.appointmentValidatorDelegates.ContainsKey(blockchainType)) {
 				appointmentValidatorDelegate.Initialize();
-				this.appointmentValidatorDelegates.Add(blockchainType, appointmentValidatorDelegate);
+				this.appointmentValidatorDelegates.TryAdd(blockchainType, appointmentValidatorDelegate);
+			}
+			
+			if(!this.appointmentWindowChecks.ContainsKey(blockchainType)) {
+				this.appointmentWindowChecks.TryAdd(blockchainType, isInAppointmentWindow);
 			}
 		}
 
 		public void UnregisterBlockchainDelegate(BlockchainType blockchainType) {
 			if(this.appointmentValidatorDelegates.ContainsKey(blockchainType)) {
-				this.appointmentValidatorDelegates.Remove(blockchainType);
+				this.appointmentValidatorDelegates.Remove(blockchainType, out var _);
+			}
+			
+			if(this.appointmentWindowChecks.ContainsKey(blockchainType)) {
+				this.appointmentWindowChecks.Remove(blockchainType, out var _);
 			}
 		}
 
@@ -253,39 +265,73 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 				connection = new TcpValidatorConnection(tcpSocket, ex => {
 				}, true);
 
-				// first step, take the header
-				using ByteArray headerBytes = connection.ReadData(ValidatorProtocolHeader.HEADER_SIZE).WaitAndUnwrapException();
+				using ByteArray frontBytes = connection.ReadData(ValidatorProtocolHeader.HEAD_BYTE_SIZE).WaitAndUnwrapException();
 
-				var header = new ValidatorProtocolHeader();
-				header.Rehydrate(headerBytes);
-
-				// first thing, valida header
-				if(header.NetworkId != NetworkConstants.CURRENT_NETWORK_ID) {
-					//blacklist
+				if(frontBytes.Length == 0) {
 					var endpoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
 					IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.PermanentBan, DateTimeEx.MaxValue);
-					return;
 				}
+				
+				byte frontByte = frontBytes[0];
+				
+				if(frontByte == PING_BYTE) {
+					//TODO: ensure rate limiting here by IP.
+					// send the pong
+					connection.SendSocketBytes(this.pongByte);
+				} else if(frontByte == ValidatorProtocolHeader.HEAD_BYTE && this.IsInAppointmentWindow()) {
 
-				IValidatorProtocol protocol = ValidatorProtocolFactory.GetValidatorProtocolInstance(header.ProtocolVersion, header.ChainId, (type) => {
-					if(this.appointmentValidatorDelegates.ContainsKey(type)) {
-						return this.appointmentValidatorDelegates[type];
+					// first step, take the header
+					using ByteArray headerBytes = connection.ReadData(ValidatorProtocolHeader.MAIN_HEADER_SIZE).WaitAndUnwrapException();
+
+					var header = new ValidatorProtocolHeader();
+					header.Rehydrate(frontByte, headerBytes);
+
+					// first thing, valida header
+					if(header.NetworkId != NetworkConstants.CURRENT_NETWORK_ID) {
+						//blacklist
+						var endpoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
+						IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.PermanentBan, DateTimeEx.MaxValue);
+						return;
 					}
 
-					return null;
-				});
+					IValidatorProtocol protocol = ValidatorProtocolFactory.GetValidatorProtocolInstance(header.ProtocolVersion, header.ChainId, (type) => {
+						if(this.appointmentValidatorDelegates.ContainsKey(type)) {
+							return this.appointmentValidatorDelegates[type];
+						}
 
-				if(protocol == null) {
-					return;
+						return null;
+					});
+					
+					if(protocol == null) {
+						return;
+					}
+					using var tokenSource = new CancellationTokenSource();
+					protocol.HandleServerExchange(connection, tokenSource.Token).WaitAndUnwrapException(tokenSource.Token);
+				} else {
+					var endpoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
+					IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.PermanentBan, DateTimeEx.MaxValue);
 				}
-				using var tokenSource = new CancellationTokenSource();
-				protocol.HandleServerExchange(connection, tokenSource.Token).WaitAndUnwrapException(tokenSource.Token);
-
+				
 			} finally {
 				connection?.Dispose();
 			}
 		}
 
+		/// <summary>
+		/// check if we have any appointment window happening
+		/// </summary>
+		/// <returns></returns>
+		private bool IsInAppointmentWindow() {
+
+			foreach(var key in this.appointmentWindowChecks.Keys) {
+				if(this.appointmentWindowChecks[key]()) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+		
 		protected virtual ITcpValidatorConnection CreateTcpConnection(Socket socket, Action<Exception> exceptionCallback) {
 
 			return new TcpValidatorConnection(socket, exceptionCallback, true);

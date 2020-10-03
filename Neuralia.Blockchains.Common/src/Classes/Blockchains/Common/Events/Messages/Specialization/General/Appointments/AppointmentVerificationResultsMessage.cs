@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 		public class RequesterResultEntry : IBinarySerializable, ITreeHashable {
 
-			public long Index { get; set; }
+			public int Index { get; set; }
 			public bool ConditionVerification  { get; set; }
 			public Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> Results { get; set; }= new Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle>();
 
@@ -38,7 +38,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				AdaptiveLong1_9 tool = new AdaptiveLong1_9();
 				
 				tool.Rehydrate(rehydrator);
-				this.Index = tool.Value;
+				this.Index = (int)tool.Value;
 
 				this.ConditionVerification = rehydrator.ReadBool();
 				

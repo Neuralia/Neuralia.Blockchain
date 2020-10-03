@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 			public ValidatorSessionSlice[] Slices          { get; set; }
 
 			public class ValidatorSessionSlice {
-				public long Index { get; set; }
+				public int Index { get; set; }
 				public byte[] EncryptedSecretCodeBytes { get; set; }
 			}
 		}

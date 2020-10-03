@@ -66,9 +66,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			
 			this.Requesters.Clear();
 
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 			tool.Rehydrate(rehydrator);
-			int count = (int)tool.Value;
+			int count = tool.Value;
 
 			for(int i = 0; i < count; i++) {
 				var requester = this.CreateAppointmentRequester();
@@ -84,7 +84,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			dehydrator.Write(this.AppointmentTimestamp);
 			dehydrator.Write(this.VerificationSpan);
 			
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 			tool.Value = this.Requesters.Count;
 			tool.Dehydrate(dehydrator);
 			

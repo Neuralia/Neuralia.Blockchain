@@ -12,8 +12,9 @@ using Serilog;
 
 namespace Neuralia.Blockchains.Core.Network {
 	public interface IAppointmentsValidatorProvider : IDisposableExtended {
+		void EnableVerificationWindow();
 		void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
-		bool InAppointmentWindow { get; }
+		bool InAppointmentWindow          { get; }
 		bool InAppointmentWindowProximity { get; }
 		bool IsInAppointmentWindow(DateTime appointment);
 		void AddAppointmentWindow(DateTime appointment, TimeSpan window);
@@ -44,7 +45,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				});
 			}
 
-			this.validationServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate);
+			this.validationServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
 
 			foreach((DateTime appointment, TimeSpan window) in appointmentWindows) {
 				this.AddAppointmentWindow(appointment, window);
@@ -53,7 +54,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			if(this.pollingTimer == null) {
 				this.pollingTimer = new Timer(state => {
 
-					if(this.InAppointmentWindow) {
+					bool verificationWindowValid = (this.verificationEnd.HasValue && this.verificationEnd >= DateTimeEx.CurrentTime);
+					if(this.InAppointmentWindow || verificationWindowValid) {
 						// ok, we are inside a window, lets run the server
 						if(!this.validationServer.IsRunning) {
 							this.validationServer.Start();
@@ -62,13 +64,30 @@ namespace Neuralia.Blockchains.Core.Network {
 						// outside of windows, no server
 						this.validationServer?.Stop();
 					}
+
+					if(!verificationWindowValid) {
+						this.verificationEnd = null;
+					}
 					
 				}, this, TimeSpan.FromSeconds(3), this.ServerPollDelay);
 			}
 		}
 
-		public bool InAppointmentWindow => this.appointmentWindows.Any(a => a.start < DateTimeEx.CurrentTime && a.end >= DateTimeEx.CurrentTime);
-		public bool InAppointmentWindowProximity => this.appointmentWindows.Any(a => a.start.AddMinutes(-5) < DateTimeEx.CurrentTime && a.end.AddMinutes(5) >= DateTimeEx.CurrentTime);
+		/// <summary>
+		/// if we are opening for verification, this is the timeout
+		/// </summary>
+		private DateTime? verificationEnd = null;
+
+		public void EnableVerificationWindow() {
+			this.verificationEnd = DateTimeEx.CurrentTime.AddMinutes(3);
+			
+			if(!this.validationServer.IsRunning) {
+				this.validationServer.Start();
+			}
+		}
+		
+		public  bool InAppointmentWindow          => this.appointmentWindows.Any(a => a.start                < DateTimeEx.CurrentTime && a.end               >= DateTimeEx.CurrentTime);
+		public  bool InAppointmentWindowProximity => this.appointmentWindows.Any(a => a.start.AddMinutes(-5) < DateTimeEx.CurrentTime && a.end.AddMinutes(5) >= DateTimeEx.CurrentTime);
 
 		public bool IsInAppointmentWindow(DateTime appointment) {
 			return this.appointmentWindows.Any(a => a.start < appointment && a.end >= appointment && a.start < DateTimeEx.CurrentTime && a.end >= DateTimeEx.CurrentTime);

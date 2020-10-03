@@ -1,3 +1,4 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.Questions;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Tools.Serialization;
 
@@ -6,7 +7,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 		long Password { get; set; }
 		BlockchainType Chain { get; set; }
 
-		byte Version { get; }
-		IValidatorRequest Rehydrate(IDataRehydrator rehydrator);
+		public IElectionBlockQuestion  SecondTierQuestion { get; set; }
+		public IElectionDigestQuestion DigestQuestion     { get; set; }
+		public IElectionBlockQuestion  FirstTierQuestion  { get; set; }
+		
+		byte                           Version            { get; }
+		IValidatorRequest              Rehydrate(IDataRehydrator rehydrator);
 	}
 }

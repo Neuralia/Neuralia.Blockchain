@@ -89,6 +89,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			if(this.PresentationTransaction.AccountType == Enums.AccountTypes.User && (!envelope.ConfirmationCode.HasValue || envelope.ConfirmationCode.Value == 0)) {
 				throw new EventGenerationException("A user account presentation must have a valid confirmation code");
 			}
+			
+			var account = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
+
+			if(this.PresentationTransaction.AccountType == Enums.AccountTypes.Server && account.AccountAppointment != null && account.AccountAppointment.AppointmentStatus != Enums.AppointmentStatus.None && ( !envelope.ConfirmationCode.HasValue || envelope.ConfirmationCode.Value == 0)) {
+				throw new EventGenerationException("A Server account presentation must have a valid confirmation code if it was part of an appointment");
+			}
 		}
 		
 		protected override async Task ValidateContents(LockContext lockContext) {
@@ -184,8 +190,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			await base.WorkflowCompleted(lockContext).ConfigureAwait(false);
 			try {
 
-				
-				
 				//ok, now we mark this account as in process of being published
 		
 				// now we publish our keys

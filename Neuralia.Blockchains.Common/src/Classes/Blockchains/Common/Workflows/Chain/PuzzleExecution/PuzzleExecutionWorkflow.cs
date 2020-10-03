@@ -77,304 +77,335 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 		
 		protected override async Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
-			taskRoutingContext.SetCorrelationContext(this.correlationContext);
+			try {
+				taskRoutingContext.SetCorrelationContext(this.correlationContext);
 
-			this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzlePreparation, this.correlationContext);
+				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzlePreparation, this.correlationContext);
 
-			var appointmentsProvider = this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase;
-			var walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
+				var appointmentsProvider = this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase;
+				var walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
 
-			SafeArrayHandle key = null;
+				SafeArrayHandle key = null;
 
-			var distilledAppointmentContext = await walletProvider.GetDistilledAppointmentContextFile().ConfigureAwait(false);
+				var distilledAppointmentContext = await walletProvider.GetDistilledAppointmentContextFile().ConfigureAwait(false);
 
-			IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
-			Guid appointmentId = account.AccountAppointment.AppointmentId.Value;
-			DateTime appointmentDate = account.AccountAppointment.AppointmentTime.Value;
+				IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
+				Guid appointmentId = account.AccountAppointment.AppointmentId.Value;
+				DateTime appointmentDate = account.AccountAppointment.AppointmentTime.Value;
 
-			TimeSpan window = TimeSpan.FromSeconds(distilledAppointmentContext.Window);
-			
-			DateTime recheck = DateTimeEx.MinValue;
+				TimeSpan window = TimeSpan.FromSeconds(distilledAppointmentContext.Window);
 
-			while(true) {
+				DateTime recheck = DateTimeEx.MinValue;
 
-				this.CheckShouldCancel();
+				while(true) {
 
-				var triggerBytes = await appointmentsProvider.GetAppointmentTriggerGossipMessage(lockContext).ConfigureAwait(false);
+					this.CheckShouldCancel();
 
-				if(triggerBytes?.IsZero == false) {
+					var triggerBytes = await appointmentsProvider.GetAppointmentTriggerGossipMessage(lockContext).ConfigureAwait(false);
 
-					try {
-						// let's rebuild the message
-						var envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ISignedMessageEnvelope>(triggerBytes);
+					if(triggerBytes?.IsZero == false) {
 
-						envelope.RehydrateContents();
-						envelope.Contents.Rehydrate(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
+						try {
+							// let's rebuild the message
+							var envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ISignedMessageEnvelope>(triggerBytes);
 
-						IAppointmentTriggerMessage appointmentTriggerMessage = (IAppointmentTriggerMessage) envelope.Contents.RehydratedEvent;
+							envelope.RehydrateContents();
+							envelope.Contents.Rehydrate(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
-						key = appointmentTriggerMessage.Key;
+							IAppointmentTriggerMessage appointmentTriggerMessage = (IAppointmentTriggerMessage) envelope.Contents.RehydratedEvent;
 
-						break;
-					} catch(Exception ex) {
-						NLog.Default.Error(ex, $"Failed rehydrated trigger from gossip message. may attempt again...");
-					}
-				}
+							key = appointmentTriggerMessage.Key;
 
-				Thread.Sleep(TimeSpan.FromSeconds(5));
-
-				if(recheck < DateTimeEx.CurrentTime) {
-					// do an explicit recheck
-					try {
-						key = await appointmentsProvider.CheckAppointmentTriggerUpdate(appointmentDate, lockContext).ConfigureAwait(false);
-
-						if(key != null) {
 							break;
+						} catch(Exception ex) {
+							NLog.Default.Error(ex, $"Failed rehydrated trigger from gossip message. may attempt again...");
 						}
-					} catch(Exception ex) {
-						// do nothing here, we will try again later
-						Log.Debug(ex, "failed to get trigger.");
 					}
 
-					recheck = DateTimeEx.CurrentTime.AddSeconds(30);
+					Thread.Sleep(TimeSpan.FromSeconds(5));
+
+					if(recheck < DateTimeEx.CurrentTime) {
+						// do an explicit recheck
+						try {
+							key = await appointmentsProvider.CheckAppointmentTriggerUpdate(appointmentDate, lockContext).ConfigureAwait(false);
+
+							if(key != null) {
+								break;
+							}
+						} catch(Exception ex) {
+							// do nothing here, we will try again later
+							Log.Debug(ex, "failed to get trigger.");
+						}
+
+						if(appointmentDate.AddSeconds(-15) < DateTimeEx.CurrentTime) {
+							// ok, we are in a critical period now. let's check more often
+							recheck = DateTimeEx.CurrentTime.AddSeconds(10);
+						} else {
+							recheck = DateTimeEx.CurrentTime.AddSeconds(30);
+						}
+					}
+
+					if(appointmentDate.AddMinutes(5) < DateTimeEx.CurrentTime) {
+						// this is the end, we missed the time
+						Log.Warning("We failed to run the puzzle in time. We never acquired the appointment trigger.");
+
+						return;
+					}
 				}
 
-				if(DateTimeEx.CurrentTime > appointmentDate.AddMinutes(5)) {
-					// this is the end, we missed the time
-					Log.Warning("We failed to run the puzzle in time. We never acquired the appointment trigger.");
+				// ok, we have everything we need to start. First step, let's decrypt the puzzle
+				(SafeArrayHandle puzzlePassword, SafeArrayHandle puzzleSalt) = AppointmentUtils.RebuildPuzzlePackagePassword(key);
+				using SafeArrayHandle compressedPuzzleBytes = AppointmentUtils.Decrypt(SafeArrayHandle.Wrap(distilledAppointmentContext.PuzzleBytes), puzzlePassword, puzzleSalt);
+
+				BrotliCompression brotli = new BrotliCompression();
+				using var puzzleBytes = brotli.Decompress(compressedPuzzleBytes);
+
+				AppointmentContextMessage.PuzzleContext puzzleContext = new AppointmentContextMessage.PuzzleContext();
+				using IDataRehydrator puzzleRehydrator = DataSerializationFactory.CreateRehydrator(puzzleBytes);
+				puzzleContext.Rehydrate(puzzleRehydrator);
+
+				// ok, we have our puzzle!! now, let's decrypt our open context
+
+				int appointmentKeyHash = AppointmentUtils.GetAppointmentKeyHash(key);
+
+				(var secretPackagePassword, var secretPackageSalt) = AppointmentUtils.RebuildAppointmentApplicantPackagePassword(appointmentId, appointmentDate, appointmentKeyHash);
+				using SafeArrayHandle compressedSecretPackageBytes = AppointmentUtils.Decrypt(SafeArrayHandle.Wrap(distilledAppointmentContext.PackageBytes), secretPackagePassword, secretPackageSalt);
+				using var secretPackageBytes = brotli.Decompress(compressedSecretPackageBytes);
+
+				AppointmentContextMessage.ApplicantEntry applicantEntry = new AppointmentContextMessage.ApplicantEntry();
+				using IDataRehydrator applicantRehydrator = DataSerializationFactory.CreateRehydrator(secretPackageBytes);
+				applicantEntry.Rehydrate(applicantRehydrator);
+
+				// ok, we are this far, we have our package and our initial validators to contact. lets contact the validators to obtain our key to continue and open the rest of the package
+
+				int appointmentIndex = account.AccountAppointment.AppointmentIndex.Value;
+
+				SafeArrayHandle validatorCode = null;
+
+				bool timeRecorded = false;
+
+				foreach(var validator in applicantEntry.Validators) {
+					// this one has to remain sequential, we only need one answer.
+
+					try {
+						var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
+
+						var ipAddress = IPUtils.GuidToIP(validator.IP);
+
+						validatorCode = await Repeater.RepeatAsync(async () => {
+
+							return await validatorProtocol.RequestCodeTranslation(appointmentDate, appointmentIndex, validator.SecretCode, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
+						}, 2).ConfigureAwait(false);
+
+						timeRecorded = true;
+					} catch(Exception ex) {
+						Log.Error(ex, $"Failed to contact assigned open validator with IP {validator.IP}:{validator.ValidatorPort}");
+					}
+
+					if(validatorCode != null && !validatorCode.IsZero) {
+						break;
+					}
+				}
+
+				if(validatorCode == null || validatorCode.IsZero) {
+					// this is a serious issue, no validator responded. we are done
+					//TODO: add event
+					Log.Error($"Failed to contact open validators. Cannot continue.");
 
 					return;
 				}
-			}
 
-			// ok, we have everything we need to start. First step, let's decrypt the puzzle
-			(SafeArrayHandle puzzlePassword, SafeArrayHandle puzzleSalt) = AppointmentUtils.RebuildPuzzlePackagePassword(key);
-			using SafeArrayHandle compressedPuzzleBytes = AppointmentUtils.Decrypt(SafeArrayHandle.Wrap(distilledAppointmentContext.PuzzleBytes), puzzlePassword, puzzleSalt);
 
-			BrotliCompression brotli = new BrotliCompression();
-			using var puzzleBytes = brotli.Decompress(compressedPuzzleBytes);
-
-			AppointmentContextMessage.PuzzleContext puzzleContext = new AppointmentContextMessage.PuzzleContext();
-			using IDataRehydrator puzzleRehydrator = DataSerializationFactory.CreateRehydrator(puzzleBytes);
-			puzzleContext.Rehydrate(puzzleRehydrator);
-
-			// ok, we have our puzzle!! now, let's decrypt our open context
-
-			int appointmentKeyHash = AppointmentUtils.GetAppointmentKeyHash(key);
-
-			(var secretPackagePassword, var secretPackageSalt) = AppointmentUtils.RebuildAppointmentApplicantPackagePassword(appointmentId, appointmentDate, appointmentKeyHash);
-			using SafeArrayHandle compressedSecretPackageBytes = AppointmentUtils.Decrypt(SafeArrayHandle.Wrap(distilledAppointmentContext.PackageBytes), secretPackagePassword, secretPackageSalt);
-			using var secretPackageBytes = brotli.Decompress(compressedSecretPackageBytes);
-
-			AppointmentContextMessage.ApplicantEntry applicantEntry = new AppointmentContextMessage.ApplicantEntry();
-			using IDataRehydrator applicantRehydrator = DataSerializationFactory.CreateRehydrator(secretPackageBytes);
-			applicantEntry.Rehydrate(applicantRehydrator);
-
-			// ok, we are this far, we have our package and our initial validators to contact. lets contact the validators to obtain our key to continue and open the rest of the package
-
-			long appointmentIndex = account.AccountAppointment.AppointmentIndex.Value;
-
-			SafeArrayHandle validatorCode = null;
-
-			bool timeRecorded = false;
-			foreach(var validator in applicantEntry.Validators) {
-				// this one has to remain sequential, we only need one answer.
-
-				try {
-					var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
-
-					validatorCode = await Repeater.RepeatAsync(async () => {
-						
-						return await validatorProtocol.RequestCodeTranslation(appointmentDate, appointmentIndex, validator.SecretCode, IPUtils.GuidToIP(validator.IP), validator.ValidationPort).ConfigureAwait(false);
-					}, 2).ConfigureAwait(false);
-
-					timeRecorded = true;
-				} catch(Exception ex) {
-					Log.Error(ex, $"Failed to contact validator with IP {validator.IP}:{validator.ValidationPort}");
+				if(timeRecorded) {
+					this.UpdateAppointmentExpiration(account, window);
 				}
 
-				if(validatorCode != null && !validatorCode.IsZero) {
-					break;
-				}
-			}
+				// good, now we can open the rest of the package
 
-			if(validatorCode == null || validatorCode.IsZero) {
-				// this is a serious issue, no validator responded. we are done
-				//TODO: add event
-				Log.Error( $"Failed to contact validators. Cannot continue.");
-				return;
-			}
+				(var secretInnerPackagePassword, var secretInnerPackageSalt) = AppointmentUtils.RebuildAppointmentApplicantSecretPackagePassword(appointmentId, validatorCode);
 
-			
-			if(timeRecorded) {
-				this.UpdateAppointmentExpiration(account, window);
-			}
-			// good, now we can open the rest of the package
+				using SafeArrayHandle compressedInnerSecretPackageBytes = AppointmentUtils.Decrypt(applicantEntry.Secret, secretInnerPackagePassword, secretInnerPackageSalt);
+				using var innerSecretPackageBytes = brotli.Decompress(compressedInnerSecretPackageBytes);
 
-			(var secretInnerPackagePassword, var secretInnerPackageSalt) = AppointmentUtils.RebuildAppointmentApplicantSecretPackagePassword(appointmentId, validatorCode);
+				AppointmentContextMessage.ApplicantSecretPackage applicantSecretEntry = new AppointmentContextMessage.ApplicantSecretPackage();
+				using IDataRehydrator applicantSecretRehydrator = DataSerializationFactory.CreateRehydrator(innerSecretPackageBytes);
+				applicantSecretEntry.Rehydrate(applicantSecretRehydrator);
 
-			using SafeArrayHandle compressedInnerSecretPackageBytes = AppointmentUtils.Decrypt(applicantEntry.Secret, secretInnerPackagePassword, secretInnerPackageSalt);
-			using var innerSecretPackageBytes = brotli.Decompress(compressedInnerSecretPackageBytes);
+				// OK!!  we are now officially ready to contact validators and begin the process
+				var validators = new List<AppointmentContextMessage.ValidatorEntry>();
+				validators.AddRange(applicantEntry.Validators);
+				validators.AddRange(applicantSecretEntry.Validators);
 
-			AppointmentContextMessage.ApplicantSecretPackage applicantSecretEntry = new AppointmentContextMessage.ApplicantSecretPackage();
-			using IDataRehydrator applicantSecretRehydrator = DataSerializationFactory.CreateRehydrator(innerSecretPackageBytes);
-			applicantSecretEntry.Rehydrate(applicantSecretRehydrator);
+				SafeArrayHandle verificationResponseSeed = AppointmentUtils.BuildSecretConfirmationCorrelationCodeSeed(applicantEntry.Validators.Select(e => e.IP).ToList(), applicantSecretEntry.Validators.Select(e => e.IP).ToList(), appointmentKeyHash, applicantSecretEntry.SecretCode);
 
-			// OK!!  we are now officially ready to contact validators and begin the process
-			var validators = new List<AppointmentContextMessage.ValidatorEntry>();
-			validators.AddRange(applicantEntry.Validators);
-			validators.AddRange(applicantSecretEntry.Validators);
+				ConcurrentDictionary<Guid, int> validatorSecretCodesL2 = new ConcurrentDictionary<Guid, int>();
 
-			SafeArrayHandle verificationResponseSeed = AppointmentUtils.BuildSecretConfirmationCorrelationCodeSeed(applicantEntry.Validators.Select(e => e.IP).ToList(), applicantSecretEntry.Validators.Select(e => e.IP).ToList(), appointmentKeyHash, applicantSecretEntry.SecretCode);
+				await ParallelAsync.ForEach(validators, async item => {
+					var validator = item.entry;
 
-			ConcurrentDictionary<Guid, ushort> validatorSecretCodesL2 = new ConcurrentDictionary<Guid, ushort>();
+					try {
+						var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
 
-			await ParallelAsync.ForEach(validators, async item => {
-				var validator = item.entry;
+						var ipAddress = IPUtils.GuidToIP(validator.IP);
 
-				try {
-					var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
-					
-					await Repeater.RepeatAsync(async () => {
-						
-						ushort secretCodeL2 = await validatorProtocol.TriggerSession(appointmentDate, appointmentIndex, applicantSecretEntry.SecretCode, IPUtils.GuidToIP(validator.IP), validator.ValidationPort).ConfigureAwait(false);
+						await Repeater.RepeatAsync(async () => {
 
-						validatorSecretCodesL2.TryAdd(validator.IP, secretCodeL2);
-					}, 2).ConfigureAwait(false);
-					
-					timeRecorded = true;
-				} catch(Exception ex) {
-					Log.Error(ex, $"Failed to contact validator with IP {validator.IP}:{validator.ValidationPort}");
-				}
-			}).ConfigureAwait(false);
+							int secretCodeL2 = await validatorProtocol.TriggerSession(appointmentDate, appointmentIndex, applicantSecretEntry.SecretCode, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
 
-			if(timeRecorded) {
-				this.UpdateAppointmentExpiration(account, window);
-			}
-			
-			// ok, we received our validator L2 answers.  lets transform the secretCode
-			int finalPuzzleCode = applicantSecretEntry.SecretCode;
+							validatorSecretCodesL2.TryAdd(validator.IP, secretCodeL2);
+						}, 2).ConfigureAwait(false);
 
-			//TODO: here we should detect bad acting validators by using consensus
-			foreach(var secretCodeL2 in validatorSecretCodesL2.Values.Distinct()) {
-				finalPuzzleCode ^= secretCodeL2;
-			}
-
-			// OK, we can officially start the puzzle!
-
-			// first thing, lets begin the POW in a thread
-			var powTask = Task.Run(async () => {
-
-				CPUPOWRulesSet powRuleSet = new CPUPOWRulesSet();
-				powRuleSet.Rehydrate(SafeArrayHandle.Wrap(distilledAppointmentContext.POWRuleSet));
-
-				CPUPowEngine powEngine = new CPUPowEngine(powRuleSet, true);
-
-				using var powHash = AppointmentUtils.PreparePOWHash(key, finalPuzzleCode);
-
-				var result = await powEngine.PerformPow(powHash, (currentNonce, difficulty) => {
-					// we need this to play nice with the rest
-					Thread.Sleep(10);
-					return Task.CompletedTask;
+						timeRecorded = true;
+					} catch(Exception ex) {
+						Log.Error(ex, $"Failed to contact assigned validator with IP {validator.IP}:{validator.ValidatorPort}");
+					}
 				}).ConfigureAwait(false);
 
-				return result;
-			});
-
-			// now, lets send the Puzzle to the GUI
-
-			// prepare the puzzles
-			List<(string puzzle, string instructions)> formattedPuzzles = new List<(string puzzle, string instructions)>();
-
-			int index = 1;
-
-			foreach(var puzzle in puzzleContext.Puzzles) {
-
-				string translationTable = "";
-				string instructions = "";
-
-				var engine = AppointmentPuzzleEngineFactory.CreateEngine(puzzle.EngineVersion);
-				
-				if(puzzle.Instructions.ContainsKey(GlobalSettings.Instance.Locale)) {
-					instructions = engine.PackageInstructions(puzzle.Instructions[GlobalSettings.Instance.Locale]);
-				}
-				
-				if(puzzle.Locales.ContainsKey(GlobalSettings.Instance.Locale)) {
-					translationTable = puzzle.Locales[GlobalSettings.Instance.Locale];
+				if(timeRecorded) {
+					this.UpdateAppointmentExpiration(account, window);
 				}
 
-				if(string.IsNullOrWhiteSpace(translationTable) && puzzle.Locales.ContainsKey(GlobalsService.DEFAULT_LOCALE)) {
-					translationTable = puzzle.Locales[GlobalsService.DEFAULT_LOCALE];
+				int transformer = 0;
+
+				//TODO: here we should detect bad acting validators by using consensus
+				foreach(var secretCodeL2 in validatorSecretCodesL2.Values.Distinct()) {
+					if(transformer == 0) {
+						transformer = secretCodeL2;
+					} else {
+						transformer &= secretCodeL2;
+					}
 				}
 
-				formattedPuzzles.Add((await engine.PackagePuzzle(index, appointmentKeyHash, translationTable, puzzle.Code, puzzle.Libraries).ConfigureAwait(false), instructions));
-				index += 1;
-			}
+				// ok, we received our validator L2 answers.  lets transform the secretCode
+				int finalPuzzleCode = applicantSecretEntry.SecretCode ^ transformer;
 
-			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AppointmentPuzzleBegin(finalPuzzleCode, formattedPuzzles), this.correlationContext);
+				// OK, we can officially start the puzzle!
 
-			if(this.PuzzleBeginEvent != null) {
-				this.PuzzleBeginEvent(finalPuzzleCode, formattedPuzzles);
-			}
+				// first thing, lets begin the POW in a thread
+				var powTask = Task.Run(async () => {
 
-			this.manualResetEvent = new ManualResetEventSlim();
+					CPUPOWRulesSet powRuleSet = new CPUPOWRulesSet();
+					powRuleSet.Rehydrate(SafeArrayHandle.Wrap(distilledAppointmentContext.POWRuleSet));
 
-			// now we wait for the answer
-			var remainingTime = this.hardStop - DateTimeEx.CurrentTime + TimeSpan.FromSeconds(5);
-			if(!this.AnswersSet && !this.manualResetEvent.Wait(remainingTime)) {
-				// we got no answer in time.
-				return;
-			}
+					CPUPowEngine powEngine = new CPUPowEngine(powRuleSet, true);
 
-			if(!this.AnswersSet) {
-				// we got no answer in time.
-				return;
-			}
+					using var powHash = AppointmentUtils.PreparePOWHash(key, finalPuzzleCode);
 
-			var powResult = await powTask.ConfigureAwait(false);
+					var result = await powEngine.PerformPow(powHash, (currentNonce, difficulty) => {
+						// we need this to play nice with the rest
+						Thread.Sleep(10);
 
-			this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzleCompleted, this.correlationContext);
+						return Task.CompletedTask;
+					}).ConfigureAwait(false);
 
-			//TODO: this should be more robust
-			await ParallelAsync.ForEach(validators, async item => {
-				var validator = item.entry;
-				
-				try {
-					
-					var results = new Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle>();
-					List<int> puzzleAnswers = new List<int>();
-					puzzleAnswers.Add(finalPuzzleCode);
-					puzzleAnswers.AddRange(this.answers);
-					results.Add(Enums.AppointmentsResultTypes.Puzzle, AppointmentsResultTypeSerializer.SerializePuzzleResult(puzzleAnswers));
-					results.Add(Enums.AppointmentsResultTypes.POW, AppointmentsResultTypeSerializer.SerializePOW(powResult.nonce, powResult.solution));
-					results.Add(Enums.AppointmentsResultTypes.SecretCodeL2, AppointmentsResultTypeSerializer.SerializeSecretCodeL2(validatorSecretCodesL2[validator.IP]));
+					return result;
+				});
 
-					var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
+				// now, lets send the Puzzle to the GUI
 
-					await Repeater.RepeatAsync(async () => {
-						
-						await validatorProtocol.CompleteSession(appointmentDate, appointmentIndex, results, IPUtils.GuidToIP(validator.IP), validator.ValidationPort).ConfigureAwait(false);
-					}, 2).ConfigureAwait(false);
-				} catch(Exception ex) {
-					Log.Error(ex, $"Failed to contact validator with IP {validator.IP}:{validator.ValidationPort}");
+				// prepare the puzzles
+				List<(string puzzle, string instructions)> formattedPuzzles = new List<(string puzzle, string instructions)>();
+
+				int index = 1;
+
+				foreach(var puzzle in puzzleContext.Puzzles) {
+
+					string translationTable = "";
+					string instructions = "";
+
+					var engine = AppointmentPuzzleEngineFactory.CreateEngine(puzzle.EngineVersion);
+
+					if(puzzle.Instructions.ContainsKey(GlobalSettings.Instance.Locale)) {
+						instructions = engine.PackageInstructions(puzzle.Instructions[GlobalSettings.Instance.Locale]);
+					}
+
+					if(puzzle.Locales.ContainsKey(GlobalSettings.Instance.Locale)) {
+						translationTable = puzzle.Locales[GlobalSettings.Instance.Locale];
+					}
+
+					if(string.IsNullOrWhiteSpace(translationTable) && puzzle.Locales.ContainsKey(GlobalsService.DEFAULT_LOCALE)) {
+						translationTable = puzzle.Locales[GlobalsService.DEFAULT_LOCALE];
+					}
+
+					formattedPuzzles.Add((await engine.PackagePuzzle(index, appointmentKeyHash, translationTable, puzzle.Code, puzzle.Libraries).ConfigureAwait(false), instructions));
+					index += 1;
 				}
-			}).ConfigureAwait(false);
 
-			// we are done! :D
-			await walletProvider.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
+				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AppointmentPuzzleBegin(finalPuzzleCode, formattedPuzzles), this.correlationContext);
 
-			await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
+				if(this.PuzzleBeginEvent != null) {
+					this.PuzzleBeginEvent(finalPuzzleCode, formattedPuzzles);
+				}
 
-				account.AccountAppointment.AppointmentContextDetailsCached = false;
-				account.AccountAppointment.AppointmentStatus = Enums.AppointmentStatus.AppointmentPuzzleCompleted;
-				account.AccountAppointment.VerificationResponseSeed = verificationResponseSeed.ToExactByteArrayCopy();
+				this.manualResetEvent = new ManualResetEventSlim();
 
-				return true;
-			}, lockContext).ConfigureAwait(false);
+				// now we wait for the answer
+				var remainingTime = this.hardStop - DateTimeEx.CurrentTime + TimeSpan.FromSeconds(5);
 
-			this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentVerificationRequestCompleted, this.correlationContext);
+				if(!this.AnswersSet && !this.manualResetEvent.Wait(remainingTime)) {
+					// we got no answer in time.
+					return;
+				}
 
-			//return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(this.correlationContext, lockContext, this.passphrase);
+				if(!this.AnswersSet) {
+					// we got no answer in time.
+					return;
+				}
+
+				var powResult = await powTask.ConfigureAwait(false);
+
+				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzleCompleted, this.correlationContext);
+
+				List<int> puzzleAnswers = new List<int>();
+				puzzleAnswers.Add(finalPuzzleCode);
+				puzzleAnswers.AddRange(this.answers);
+				using var serializedResults = AppointmentsResultTypeSerializer.SerializePuzzleResult(puzzleAnswers);
+
+				using var serializedPow = AppointmentsResultTypeSerializer.SerializePOW(powResult.nonce, powResult.solution);
+
+				await ParallelAsync.ForEach(validators, async item => {
+					var validator = item.entry;
+
+					try {
+
+						var results = new Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle>();
+
+						results.Add(Enums.AppointmentsResultTypes.Puzzle, serializedResults);
+						results.Add(Enums.AppointmentsResultTypes.POW, serializedPow);
+						results.Add(Enums.AppointmentsResultTypes.SecretCodeL2, AppointmentsResultTypeSerializer.SerializeSecretCodeL2(validatorSecretCodesL2[validator.IP]));
+
+						var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
+
+						var ipAddress = IPUtils.GuidToIP(validator.IP);
+
+						await Repeater.RepeatAsync(async () => {
+
+							await validatorProtocol.CompleteSession(appointmentDate, appointmentIndex, results, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
+						}, 3).ConfigureAwait(false);
+					} catch(Exception ex) {
+						Log.Error(ex, $"Failed to contact assigned validator with IP {validator.IP}:{validator.ValidatorPort}");
+					}
+				}).ConfigureAwait(false);
+
+				// we are done! :D
+				await walletProvider.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
+
+				await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
+
+					account.AccountAppointment.AppointmentContextDetailsCached = false;
+					account.AccountAppointment.AppointmentStatus = Enums.AppointmentStatus.AppointmentPuzzleCompleted;
+					account.AccountAppointment.VerificationResponseSeed = verificationResponseSeed.ToExactByteArrayCopy();
+
+					return true;
+				}, lockContext).ConfigureAwait(false);
+
+				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentVerificationRequestCompleted, this.correlationContext);
+
+				//return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(this.correlationContext, lockContext, this.passphrase);
+			} catch(Exception ex) {
+				NLog.Default.Error(ex, "Failed to run puzzle workflow.");
+				throw;
+			}
 		}
 
 		private bool AnswersSet => this.answers != null && this.answers.Any();

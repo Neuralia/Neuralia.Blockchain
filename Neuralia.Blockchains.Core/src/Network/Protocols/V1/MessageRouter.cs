@@ -1,11 +1,12 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Network.Protocols.SplitMessages;
 using Neuralia.Blockchains.Tools.Data;
 
 namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 	public class MessageRouter : IMessageRouter {
 
-		public void HandleCompletedMessage(IMessageEntry messageEntry, ProtocolFactory.CompressedMessageBytesReceived callback, IProtocolTcpConnection connection) {
+		public async Task HandleCompletedMessage(IMessageEntry messageEntry, ProtocolFactory.CompressedMessageBytesReceived callback, IProtocolTcpConnection connection) {
 
 			if(messageEntry.Version != MessageBuilder.ProtocolVersion.Version) {
 				throw new NotSupportedException("Unsupported protocol version");
@@ -21,8 +22,7 @@ namespace Neuralia.Blockchains.Core.Network.Protocols.V1 {
 				this.HandleLargeMessageSliceResponse(responseSliceMessageEntry, callback, connection);
 			} else {
 				if(messageEntry.IsComplete) {
-					callback(messageEntry.Message.Branch());
-
+					await callback(messageEntry.Message.Branch()).ConfigureAwait(false);
 				}
 			}
 		}

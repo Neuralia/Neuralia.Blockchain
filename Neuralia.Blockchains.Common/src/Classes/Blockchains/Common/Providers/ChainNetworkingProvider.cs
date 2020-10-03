@@ -117,10 +117,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void UnregisterValidationServer();
 		void AddAppointmentWindow(DateTime appointment, TimeSpan window);
 		
-		Task<(bool success, CheckAppointmentRequestConfirmedResult result)> PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext);
+		Task<(bool success, CheckAppointmentRequestConfirmedResult result)>      PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext);
 		Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext);
-		Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, long requesterIndex, DateTime appointment, LockContext lockContext);
-		Task<(bool success, CheckAppointmentTriggerResult result)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext);
+		Task<(bool success, CheckAppointmentContextResult result)>               PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext);
+		Task<(bool success, CheckAppointmentTriggerResult result)>               PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext);
 		
 		Task<(bool success, CheckAppointmentsResult result)> QueryAvailableAppointments(LockContext lockContext);
 		Task<(bool success, QueryValidatorAppointmentSessionsResult result)> QueryValidatorAppointmentSessions(AccountId miningAccountId, List<DateTime> appointments, List<Guid> hashes, LockContext lockContext);
@@ -737,7 +737,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (sent, null);
 		}
 
-		public async Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, long requesterIndex, DateTime appointment, LockContext lockContext) {
+		public async Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext) {
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
@@ -973,7 +973,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (false, null);
 		}
 		
-		private async Task<bool> SendAppointmentRequest(Guid? requesterId, long? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode, LockContext lockContext) {
+		private async Task<bool> SendAppointmentRequest(Guid? requesterId, int? requesterIndex, DateTime? appointment, Enums.AppointmentRequestModes mode, LockContext lockContext) {
 			
 			if(this.appointmentRequestWorkflow == null) {
 				this.appointmentRequestWorkflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ClientWorkflowFactoryBase.CreateAppointmentRequestWorkflow(requesterId, requesterIndex, appointment, mode);

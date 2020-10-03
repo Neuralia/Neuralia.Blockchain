@@ -8,10 +8,10 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.Moderation.Appointments {
 	
 	public interface IAppointmentSliceMessage : IModeratorBlockchainMessage {
-		DateTime Appointment { get; set; }
-		int Range { get; set; }
-		int Slice { get; set; }
-		(long start, long end) ComputeRange();
+		DateTime             Appointment { get; set; }
+		int                  Range       { get; set; }
+		int                  Slice       { get; set; }
+		(int start, int end) ComputeRange();
 	}
 	
 	public abstract class AppointmentSliceMessage : ModeratorBlockchainMessage, IAppointmentSliceMessage{
@@ -24,19 +24,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 
 			this.Appointment = rehydrator.ReadDateTime();
 			
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 			tool.Rehydrate(rehydrator);
-			this.Range = (int)tool.Value;
+			this.Range = tool.Value;
 			
 			tool.Rehydrate(rehydrator);
-			this.Slice = (int)tool.Value;
+			this.Slice = tool.Value;
 		}
 
 		protected override void DehydrateContents(IDataDehydrator dehydrator) {
 			base.DehydrateContents(dehydrator);
 			dehydrator.Write(this.Appointment);
 			
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 			tool.Value = this.Range;
 			tool.Dehydrate(dehydrator);
 			
@@ -68,8 +68,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		/// get the effective range included in this message
 		/// </summary>
 		/// <returns></returns>
-		public (long start, long end) ComputeRange() {
-			return (((this.Slice - 1) * (long)this.Range)+1, this.Slice * (long)this.Range);
+		public (int start, int end) ComputeRange() {
+			return (((this.Slice - 1) * this.Range) +1, this.Slice * this.Range);
 		}
 
 	}

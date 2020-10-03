@@ -9,9 +9,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 
 		Guid ValidatorHash { get; set; }
 
-		string Indices { get; set; }
+		byte[] Indices { get; set; }
 		
-		string SecretCodes { get; set; }
+		byte[] SecretCodes { get; set; }
 		
 		DateTime Dispatch { get; set; }
 	}

@@ -480,7 +480,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			/// <summary>
 			/// our unique public index in the context set
 			/// </summary>
-			public long? AppointmentIndex { get; set; }  = null;
+			public int? AppointmentIndex { get; set; } = null;
 			
 			/// <summary>
 			/// the NTRUe private key we use during the appointment process

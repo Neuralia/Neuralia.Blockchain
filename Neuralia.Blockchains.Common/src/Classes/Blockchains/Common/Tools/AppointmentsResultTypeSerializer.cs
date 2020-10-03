@@ -96,18 +96,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			return (nonce, solution);
 		}
 		
-		public static SafeArrayHandle SerializeSecretCodeL2(ushort secretCodeL2) {
+		public static SafeArrayHandle SerializeSecretCodeL2(int secretCodeL2) {
 			
-			SafeArrayHandle bytes = SafeArrayHandle.Create(sizeof(ushort));
+			SafeArrayHandle bytes = SafeArrayHandle.Create(sizeof(int));
 
 			TypeSerializer.Serialize(secretCodeL2, bytes.Span);
 
 			return bytes;
 		}
 		
-		public static ushort DeserializeSecretCodeL2(SafeArrayHandle bytes) {
+		public static int DeserializeSecretCodeL2(SafeArrayHandle bytes) {
 			
-			TypeSerializer.Deserialize(bytes.Span, out ushort secretCodeL2);
+			TypeSerializer.Deserialize(bytes.Span, out int secretCodeL2);
 			
 			return secretCodeL2;
 		}

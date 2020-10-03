@@ -1658,8 +1658,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				connection.connection.DataReceived += buffer => {
 					if(this.DataReceived != null) {
-						this.DataReceived(buffer, connection, acceptedTriggerList).WaitAndUnwrapException();
+						return this.DataReceived(buffer, connection, acceptedTriggerList);
 					}
+					
+					return Task.CompletedTask;
 				};
 
 				connection.connection.Disconnected += (sender, resultArgs) => {

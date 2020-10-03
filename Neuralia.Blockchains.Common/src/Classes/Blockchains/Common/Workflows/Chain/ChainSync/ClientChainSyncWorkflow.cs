@@ -1317,7 +1317,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							slice.SliceInfo.connection = validPeers[validPeer.PeerId];
 							slice.SetCurrentPeer(validPeer);
-
+			
+#if DEVNET || TESTNET
+							slice.Start = DateTimeEx.CurrentTime;
+#endif	
 							if(!nextBlockPeerSpecs.ContainsKey(validPeer.PeerId)) {
 								// lets ask them for the next block specs
 								if(parameters.prepareFirstRunRequestMessage != null) {
@@ -1393,6 +1396,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								// make this peer available again for another slice and wrap this slice up with it's hash. it is done
 								sliceEntry.SetCompleted(HashingUtils.GenerateBlockDataSliceHash(message.Slices.SlicesInfo.Select(s => s.Value.Data).ToList()));
+#if DEVNET || TESTNET
+								sliceEntry.End = DateTimeEx.CurrentTime;
+#endif									
 							} else {
 								if(success == ResponseValidationResults.Invalid) {
 									parameters.singleEntryContext.AddFaultyPeerAttempt(connection, parameters.singleEntryContext.blockFetchAttemptCounter, retryAttempt, ConnectionSet.ConnectionStrikeset.RejectionReason.InvalidResponse);
@@ -1424,6 +1430,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				if(syncManifest.IsComplete) {
+					
+#if DEVNET || TESTNET
+					
+					// here we list the size and latency time that the various slices took
+					foreach(var slice in slicePeersContexts.Values) {
+						var span = slice.End - slice.Start;
+						string message = $"Slice {slice.SliceIndex+1} for block {slice.SliceInfo.responseMessage.Id} of size {slice.SliceInfo.responseMessage.Slices.SlicesInfo.Values.Sum(e => e.Length)} took {span}";
+						NLog.Default.Debug(message);
+					}
+
+#endif				
 					// we did it, it is complete, lets save the new generated file
 					return;
 				}
@@ -2030,6 +2047,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			public bool Completed => this.Status == SliceStatuses.Completed;
 			public bool Ready => this.Status == SliceStatuses.Ready;
 
+#if DEVNET || TESTNET
+			// statistics
+			public DateTime Start { get; set; }
+			public DateTime End { get; set; }
+#endif
+			
 			public void SetCurrentPeer(PeerSlicesContext<CHANNEL_INFO_SET_REQUEST, T_REQUEST, CHANNEL_INFO_SET_RESPONSE, T_RESPONSE, KEY, SLICE_KEY, DATA_REQUEST, DATA_RESPONSE> peerContext) {
 				if(peerContext == null) {
 					return;

@@ -8,14 +8,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 
 		public byte Version => 1;
 
-		public AdaptiveLong1_9 SecondTierAnswer { get; set; }
-		public AdaptiveLong1_9 FirstTierAnswer { get; set; }
+		public long? SecondTierAnswer { get; set; }
+		public long? DigestTierAnswer { get; set; }
+		public long? FirstTierAnswer  { get; set; }
 
 		public AccountId AccountId { get; set; } = new AccountId();
 		public ResponseType Response { get; set; }
 
 		public void Rehydrate(IDataRehydrator rehydrator) {
 
+			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
 			int version = rehydrator.ReadByte();
 			this.Response = (ResponseType) rehydrator.ReadByte();
 			this.AccountId.Rehydrate(rehydrator);
@@ -24,16 +26,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 			bool isAnswerSet = rehydrator.ReadBool();
 
 			if(isAnswerSet) {
-				this.SecondTierAnswer = new AdaptiveLong1_9();
-				this.SecondTierAnswer.Rehydrate(rehydrator);
+				tool.Rehydrate(rehydrator);
+				this.SecondTierAnswer = tool.Value;
 			}
 
+			this.DigestTierAnswer = null;
+			isAnswerSet           = rehydrator.ReadBool();
+
+			if(isAnswerSet) {
+				tool.Rehydrate(rehydrator);
+				this.DigestTierAnswer = tool.Value;
+			}
+			
 			this.FirstTierAnswer = null;
 			isAnswerSet = rehydrator.ReadBool();
 
 			if(isAnswerSet) {
-				this.FirstTierAnswer = new AdaptiveLong1_9();
-				this.FirstTierAnswer.Rehydrate(rehydrator);
+				tool.Rehydrate(rehydrator);
+				this.FirstTierAnswer = tool.Value;
 			}
 		}
 
@@ -46,16 +56,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 
 			this.AccountId.Dehydrate(dehydrator);
 
+			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			
 			dehydrator.Write(this.SecondTierAnswer != null);
 
 			if(this.SecondTierAnswer != null) {
-				this.SecondTierAnswer.Dehydrate(dehydrator);
+				tool.Value = this.SecondTierAnswer.Value;
+				tool.Dehydrate(dehydrator);
+			}
+			
+			dehydrator.Write(this.DigestTierAnswer != null);
+
+			if(this.DigestTierAnswer != null) {
+				tool.Value = this.DigestTierAnswer.Value;
+				tool.Dehydrate(dehydrator);
 			}
 
 			dehydrator.Write(this.FirstTierAnswer != null);
 
 			if(this.FirstTierAnswer != null) {
-				this.FirstTierAnswer.Dehydrate(dehydrator);
+				tool.Value = this.FirstTierAnswer.Value;
+				tool.Dehydrate(dehydrator);
 			}
 
 			return dehydrator.ToArray();
