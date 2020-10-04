@@ -270,7 +270,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		/// <summary>
-		///     validate an arbitrary message using fast keys
+		///     validate an arbitrary message using Key dictionary
 		/// </summary>
 		/// <param name="accountId"></param>
 		/// <param name="message"></param>
@@ -1156,16 +1156,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					return (null, xmssKey, usesEmbededKey);
 				}
 
-				NLog.Default.Debug("Failed to load fast keys. Keys were empty.");
+				NLog.Default.Debug("Failed to load Key dictionary. Keys were empty.");
 			} catch(Exception ex) {
-				NLog.Default.Debug(ex, "Failed to load fast keys. Keys were empty.");
+				NLog.Default.Debug(ex, "Failed to load Key dictionary. Keys were empty.");
 			}
 
 			return null;
 		}
 
 		/// <summary>
-		///     Attempt to validate an envelope using the fast keys file
+		///     Attempt to validate an envelope using the Key dictionary file
 		/// </summary>
 		/// <param name="messageEnvelope"></param>
 		/// <param name="keyOrdinal"></param>

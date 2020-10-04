@@ -469,7 +469,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			transactionInterpretationProcessor.IsAnyAccountTracked = accountIds => this.AccountSnapshotsProvider.AnyAccountTracked(accountIds);
 			transactionInterpretationProcessor.GetTrackedAccounts = accountIds => this.AccountSnapshotsProvider.AccountsTracked(accountIds);
 
-			// if we use fast keys, we track all keys. otherwise, whatever account we track
+			// if we use Key dictionary, we track all keys. otherwise, whatever account we track
 			transactionInterpretationProcessor.IsAnyAccountKeysTracked = (ids, accounts) => {
 
 				BlockChainConfigurations configuration = this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;

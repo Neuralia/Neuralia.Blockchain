@@ -433,7 +433,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		/// <summary>
-		///     This is a very simple transactional system for fast keys. It should be improved in the future to something more
+		///     This is a very simple transactional system for Key dictionary. It should be improved in the future to something more
 		///     robust
 		/// </summary>
 		protected void BeginTransaction(SerializationTransactionProcessor serializationTransactionProcessor) {

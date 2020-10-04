@@ -591,7 +591,7 @@ public string PortTestDns { get; set; } = "port-test.neuralium.com";
 		public AppSettingsBase.BlockSavingModes BlockSavingMode { get; set; } = AppSettingsBase.BlockSavingModes.BlockOnly;
 
 		/// <summary>
-		///     should we use a fast key index? takes more disk space, but makes verification much faster
+		///     should we use a Key dictionary index? takes more disk space, but makes verification much faster
 		///     by keeping fast access to the General and Message keys
 		/// </summary>
 		public bool EnableKeyDictionaryIndex { get; set; } = true;

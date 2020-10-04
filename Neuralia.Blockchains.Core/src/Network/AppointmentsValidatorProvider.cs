@@ -108,7 +108,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			DateTime start = DateTime.SpecifyKind(appointment.AddMinutes(-minutes), DateTimeKind.Utc);
 			DateTime end = DateTime.SpecifyKind((appointment + window).AddMinutes(minutes), DateTimeKind.Utc);
 
-			if(!this.appointmentWindows.Any(a => a.start == start && a.end == end)) {
+			if(end > DateTimeEx.CurrentTime && !this.appointmentWindows.Any(a => a.start == start && a.end == end)) {
 				NLog.Default.Information($"Adding validation appointment window from {start} to {end} for appointment time {appointment}.");
 				this.appointmentWindows.Add((start, end));
 			}

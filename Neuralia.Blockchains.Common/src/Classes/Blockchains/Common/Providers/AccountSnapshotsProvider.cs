@@ -20,6 +20,7 @@ using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -269,6 +270,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public void StartTrackingConfigAccounts() {
+			
 			ChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			if(chainConfiguration.AccountSnapshotTrackingMethod == AppSettingsBase.SnapshotIndexTypes.List) {
@@ -278,7 +280,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public void StartTrackingAccounts(List<AccountId> accountIds) {
-			this.TrackedAccountsDal.AddTrackedAccounts(accountIds);
+			try {
+				this.TrackedAccountsDal.AddTrackedAccounts(accountIds);
+			} 
+			catch(Exception ex) {
+				NLog.Default.Error(ex, "Failed to start tracking accounts");
+				throw;
+			}
 		}
 
 		public async Task<bool> AnyAccountTracked() {

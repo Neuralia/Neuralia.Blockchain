@@ -183,7 +183,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal {
 				this.KeyDictionaryProvider = new KeyDictionaryProvider(this.GetKeyDictionaryIndexPath(), configurations.EnabledKeyDictionaryTypes);
 			}
 
-			NLog.Default.Information($"Fast key provider is {(configurations.EnableKeyDictionaryIndex ? "enabled" : "disabled")}.");
+			NLog.Default.Information($"Key dictionary provider is {(configurations.EnableKeyDictionaryIndex ? "enabled" : "disabled")}.");
 
 			// create the digest access channels
 			this.CreateDigestChannelSet(digestFolderPath);

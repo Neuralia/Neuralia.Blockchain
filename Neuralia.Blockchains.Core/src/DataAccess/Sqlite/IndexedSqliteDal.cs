@@ -86,6 +86,10 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		protected IndexedSqliteDbContext.IndexSet GetKeyGroup(AccountId key) {
 			string type = "";
 
+			if(!key.IsValid || key.SequenceId == 0) {
+				throw new ApplicationException("Invalid account Id");
+			}
+			
 			if(key.AccountType != Enums.AccountTypes.Unknown) {
 				type = key.AccountType.ToString().ToLower();
 			}

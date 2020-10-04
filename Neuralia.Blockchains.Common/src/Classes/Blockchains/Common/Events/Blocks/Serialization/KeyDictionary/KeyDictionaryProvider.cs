@@ -15,7 +15,7 @@ using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Serialization.KeyDictionary {
 	/// <summary>
-	///     a class to handle access to the fast key index
+	///     a class to handle access to the Key dictionary index
 	/// </summary>
 	public class KeyDictionaryProvider {
 
@@ -79,12 +79,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			try {
 				using FileSystemWrapper fileSystem = FileSystemWrapper.CreatePhysical();
 				bool result = fileSystem.FileExists(path);
-				NLog.Default.Verbose($"testing for existance of fast key provider file at path {path}. File '{(result ? "" : "does not")} exist'");
+				NLog.Default.Verbose($"testing for existance of Key dictionary provider file at path {path}. File '{(result ? "" : "does not")} exist'");
 
 				return result;
 
 			} catch(Exception ex) {
-				NLog.Default.Error(ex, $"Failed to test for existance of fast key provider file at path {path}");
+				NLog.Default.Error(ex, $"Failed to test for existance of Key dictionary provider file at path {path}");
 			}
 
 			return false;
@@ -104,7 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 		}
 
 		public async Task<List<(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>> LoadKeyDictionary(List<(AccountId accountId, byte ordinal)> accountIdKeys, LockContext lockContext, FileSystemWrapper fileSystem = null) {
-			NLog.Default.Verbose($"Fast key provider: loading keys for {accountIdKeys.Count} accounts");
+			NLog.Default.Verbose($"Key dictionary provider: loading keys for {accountIdKeys.Count} accounts");
 			var result = new List<(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>();
 			
 			if(fileSystem == null) {
@@ -121,7 +121,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 				}
 			}
 
-			NLog.Default.Verbose($"Fast key provider: loaded {result.Count} keys");
+			NLog.Default.Verbose($"Key dictionary provider: loaded {result.Count} keys");
 			
 			return result;
 		}
@@ -148,7 +148,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			
 			if(!fileSystem.FileExists(fileName) || (fileSystem.GetFileLength(fileName) == 0)) {
 				
-				NLog.Default.Debug($"Fast key provider: could not load key from file {fileName}. File either does not exist, or is size 0.");
+				NLog.Default.Debug($"Key dictionary provider: could not load key from file {fileName}. File either does not exist, or is size 0.");
 				
 				return default;
 			}

@@ -97,6 +97,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 
 		public static AccountId LargestAddress => new AccountId(long.MaxValue & SEQUENCE_MASK, Enums.AccountTypes.Unknown);
 
+		public bool IsValid => this.AccountType != Enums.AccountTypes.Unknown;
 		public bool IsPresentation => IsPresentationAccountType(this.AccountType);
 		public bool IsUser => IsUserAccountType(this.AccountType);
 		public bool IsServer => IsServerAccountType(this.AccountType);
@@ -241,7 +242,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			return false;
 		}
 
-		public static bool IsValid(string value) {
+		public static bool IsValidString(string value) {
 			if (string.IsNullOrEmpty(value)) 
 				return false;
 			
@@ -275,7 +276,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 			}
 		}
 		public static AccountId FromString(string value) {
-			if(!IsValid(value)) {
+			if(!IsValidString(value)) {
 				return null;
 			}
 

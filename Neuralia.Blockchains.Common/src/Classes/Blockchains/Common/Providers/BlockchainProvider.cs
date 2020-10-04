@@ -237,7 +237,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// first and most important, add it to our archive
 				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SerializeBlock(dehydratedBlock);
 
-				// if fast keys are enabled, then we create the base directory and first file
+				// if Key dictionary are enabled, then we create the base directory and first file
 				this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.EnsureKeyDictionaryIndex();
 
 				// thats it really. now we have our block, lets update our chain stats.
