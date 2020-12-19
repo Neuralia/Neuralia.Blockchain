@@ -1,0 +1,8 @@
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Cards.Implementations;
+
+namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.AccountSnapshots.Implementations {
+
+	public class AccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT> : AccreditationCertificateSnapshot<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT>, IAccreditationCertificateSnapshotEntry<ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT>
+		where ACCREDITATION_CERTIFICATE_SNAPSHOT_ACCOUNT : AccreditationCertificateSnapshotAccountEntry {
+	}
+}
