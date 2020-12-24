@@ -139,8 +139,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			TypeSerializer.Serialize(round, paddingBuffer.Span);
 
 			paddingBuffer.CopyTo(hashBuffer, 0, root.Length, sizeof(int));
-
-			using SafeArrayHandle rootHash = this.thsHashSet.Hash(hashBuffer);
+			
+			using SafeArrayHandle rootHash = HashingUtils.HashSha3_512(hashBuffer);
 
 			return HashDifficultyUtils.GetBigInteger(rootHash);
 		}
@@ -202,7 +202,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 					totalNonce++;
 					this.ResetSets();
 
-					NLog.Default.Debug($"Performing proof of work for Nonce {nonce} and Round {round}.");
+					NLog.Default.Debug($"Performing time hard signature for Nonce {nonce} and Round {round}.");
 
 					// alert we are running an iteration
 					if(iteration != null) {
@@ -290,7 +290,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 				int currentSolution = 0;
 
-				NLog.Default.Debug($"Performing proof of work verification for Nonce {nonce} and Round {round}.");
+				NLog.Default.Debug($"Performing time hard signature verification for Nonce {nonce} and Round {round}.");
 
 				this.ResetSets();
 

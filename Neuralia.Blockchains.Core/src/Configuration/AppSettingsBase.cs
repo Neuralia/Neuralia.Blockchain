@@ -586,17 +586,17 @@ public string PortTestDns { get; set; } = "port-test.neuralium.com";
 		public bool EnableKeyGates { get; set; } = true;
 		
 		/// <summary>
-		/// do we enable the user presentation transaction proof of work?
+		/// do we enable the user presentation transaction time hard signature?
 		/// </summary>
 		public bool DisableWebRegUserPresentationTHS { get; set; } = true;
 		
 		/// <summary>
-		/// do we enable the appointment initiation request proof of work?
+		/// do we enable the appointment initiation request time hard signature?
 		/// </summary>
 		public bool DisableWebRegAppointmentInitiationTHS { get; set; } = true;
 		
 		/// <summary>
-		/// do we enable the appointment puzzle proof of work?
+		/// do we enable the appointment puzzle time hard signature?
 		/// </summary>
 		public bool DisableAppointmentPuzzleTHS { get; set; } = true;
 		

@@ -142,6 +142,25 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 			}
 
 		}
+		
+		public static string TableName<T_SOURCE>(this DbSet<T_SOURCE> dbSet, DbContext dbContext)
+			where T_SOURCE : class {
+			
+			var entityType = dbContext.Model.FindEntityType(typeof(T_SOURCE));
+			return entityType.GetTableName();
+		}
+		
+		public static Task TruncateTable<T_SOURCE>(this DbSet<T_SOURCE> dbSet, DbContext dbContext)
+			where T_SOURCE : class {
+			
+			return dbContext.Database.ExecuteSqlRawAsync($"TRUNCATE TABLE [{dbSet.TableName(dbContext)}]");
+		}
+		
+		public static Task ClearTable<T_SOURCE>(this DbSet<T_SOURCE> dbSet, DbContext dbContext)
+			where T_SOURCE : class {
+			
+			return dbContext.Database.ExecuteSqlRawAsync($"DELETE from {dbSet.TableName(dbContext)}");
+		}
 
 		public static async Task<List<T_KEY>> DeleteById<T_SOURCE, T_KEY>(this DbSet<T_SOURCE> dbSet, DbContext dbContext, Expression<Func<T_SOURCE, T_KEY>> keysSelector, Expression<Func<T_SOURCE, bool>> selector, Func<T_KEY, T_SOURCE> factory)
 			where T_SOURCE : class {

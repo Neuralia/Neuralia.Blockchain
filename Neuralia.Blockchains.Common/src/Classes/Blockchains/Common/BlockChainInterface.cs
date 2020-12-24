@@ -418,9 +418,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 					} catch(Exception ex) {
 						this.CentralCoordinator.Log.Error(ex, "Failed to check for system events");
 					}
-
-					this.pollerResetEvent.Wait(TimeSpan.FromSeconds(3));
+					
 					this.pollerResetEvent.Reset();
+					this.pollerResetEvent.Wait(TimeSpan.FromSeconds(3));
 				}
 
 				return true;

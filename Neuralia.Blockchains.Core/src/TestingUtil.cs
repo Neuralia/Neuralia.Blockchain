@@ -13,7 +13,7 @@ namespace Neuralia.Blockchains.Core {
 
 		public static void ClearContext(DbContext db) {
 			if(Testing) {
-				db.ClearLocal();
+				db.ChangeTracker.Clear();
 			}
 		}
 	}

@@ -4292,6 +4292,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			foreach(IWalletAccount account in accounts) {
 				//now we ttake care of presentation transactions
+#if MAINNET_LAUNCH_CODE
+				if(DateTimeEx.CurrentTime > GlobalsService.MainnetLauchTime.AddDays(2)) {
+					if((account.Status == Enums.PublicationStatus.Dispatched) && account.PresentationTransactionTimeout.HasValue && (account.PresentationTransactionTimeout.Value < lastBlockTimestamp)) {
+						// ok, this is a timeout, we reset it
+						account.PresentationTransactionTimeout = null;
+						account.PresentationTransactionId = null;
+						account.Status = Enums.PublicationStatus.New;
+						changed = true;
+					}
+				}
+#else
+clean above
 				if((account.Status == Enums.PublicationStatus.Dispatched) && account.PresentationTransactionTimeout.HasValue && (account.PresentationTransactionTimeout.Value < lastBlockTimestamp)) {
 					// ok, this is a timeout, we reset it
 					account.PresentationTransactionTimeout = null;
@@ -4299,6 +4311,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					account.Status = Enums.PublicationStatus.New;
 					changed = true;
 				}
+#endif
+
 			}
 
 			changed = false;

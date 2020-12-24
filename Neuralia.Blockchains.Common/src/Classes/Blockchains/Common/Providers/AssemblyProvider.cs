@@ -1006,7 +1006,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				using THSEngine thsEngine = new THSEngine(thsEnvelope.THSEnvelopeSignatureBase.RuleSet,rulesSetDescriptor, GlobalSettings.ApplicationSettings.THSMemoryType);
 				await thsEngine.Initialize().ConfigureAwait(false);
 
-				this.CentralCoordinator.Log.Information($"Beginning proof of work. HashTargetDifficulty: {rulesSetDescriptor.HashTargetDifficulty}. Expected time span: {rulesSetDescriptor.TargetTimespan}. Nonce target count: {rulesSetDescriptor.NonceTarget}");
+				this.CentralCoordinator.Log.Information($"Beginning time hard signature. HashTargetDifficulty: {rulesSetDescriptor.HashTargetDifficulty}. Expected time span: {rulesSetDescriptor.TargetTimespan}. Nonce target count: {rulesSetDescriptor.NonceTarget}");
 				
 				string key = thsEnvelope.Key;
 				
@@ -1085,7 +1085,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 			} catch(Exception ex) {
-				throw new ApplicationException("Failed to generate presentation transaction proof of work", ex);
+				throw new ApplicationException("Failed to generate presentation transaction time hard signature", ex);
 			}
 		}
 

@@ -210,24 +210,33 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			PuzzleDefaultRuleset.PageSize = THSEngine.THSMemorySizes.THS_64_MB;
 			
 			// for testing
+			
 			TestRulesetDescriptor = new THSRulesSetDescriptor();
-			TestRulesetDescriptor.TargetTimespan = TimeSpan.FromSeconds(2);
-			TestRulesetDescriptor.EstimatedIterationTime = TimeSpan.FromMilliseconds(500);
-			TestRulesetDescriptor.AverageRounds = 1;
+			TestRulesetDescriptor.TargetTimespan = TimeSpan.FromSeconds(40);
+			TestRulesetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(6);
+			TestRulesetDescriptor.AverageRounds = 3;
+			
 
 			TestRuleset = new THSRulesSet();
-
+			TestRuleset.AddHashSet(Hashes.SHA3_512);
 			TestRuleset.AddHashSet(Hashes.SHA2_512);
-			TestRuleset.AddCryptoSet(Cryptos.AES_256);
-			TestRuleset.AddPrngSet(Prngs.SPLITMIX_64);
 
-			TestRuleset.MainBufferDataSize = THSEngine.THSMemorySizes.THS_1_MB;
+			TestRuleset.AddCryptoSet(Cryptos.XCHACHA_20);
+			TestRuleset.AddCryptoSet(Cryptos.AES_256);
+			
+			TestRuleset.AddPrngSet(Prngs.SPLITMIX_64);
+			TestRuleset.AddPrngSet(Prngs.MULBERRY_32);
+			TestRuleset.AddPrngSet(Prngs.SFC_256);
+			
+			TestRuleset.MainBufferDataSize = THSEngine.THSMemorySizes.THS_512_MB;
 			TestRuleset.CryptoIterations = 1;
-			TestRuleset.CryptoSuccessRate = 2;
+			TestRuleset.CryptoSuccessRate = 13;
 
 			TestRuleset.HashIterations = 1;
-			TestRuleset.HashingSuccessRate = 2;
-			TestRuleset.PageSize = THSEngine.THSMemorySizes.THS_64_KB;
+			TestRuleset.HashingSuccessRate = 9;
+			
+			TestRuleset.Features = THSFeatures.FillFast;
+			TestRuleset.PageSize = THSEngine.THSMemorySizes.THS_64_MB;
 		}
 
 		public THSEngine.THSMemorySizes MainBufferDataSize { get; set; } = THSEngine.THSMemorySizes.THS_1_GB;
