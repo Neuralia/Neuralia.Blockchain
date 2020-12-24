@@ -28,5 +28,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected override Task SignEnvelope(IWalletProvider walletProvider, CancellationToken token, LockContext lockContext) {
 			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PerformMessageEnvelopeSignature(envelope, lockContext);
 		}
+		
+		public override string GenerationWorkflowTypeName => "GenerateNewSignedMessageWorkflow";
+
 	}
 }

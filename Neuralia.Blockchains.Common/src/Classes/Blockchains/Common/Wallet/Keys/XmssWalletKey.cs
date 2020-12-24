@@ -169,7 +169,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 				this.WarningHeight,
 				this.ChangeHeight,
 				this.MaximumHeight,
-				PublicKey = this.PublicKey.ToBase64(),
+				PublicKey = this.PublicKey.ToBase32(),
 				PrivateKey = this.ExportPrivateKey(),
 				Extras = this.ExportExtrasKey()
 			};

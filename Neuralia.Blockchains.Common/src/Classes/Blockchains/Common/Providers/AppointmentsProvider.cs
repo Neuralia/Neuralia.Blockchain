@@ -37,6 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	public interface IAppointmentsProvider : IChainProvider {
 
 		Task<bool> ClearAppointment(LockContext lockContext, string accountCode = null, bool force = false);
+		void ClearAppointmentDetails();
 		Enums.OperationStatus OperatingMode { get; set; }
 		Enums.AppointmentStatus AppointmentMode { get; }
 		bool IsValidator { get; }
@@ -46,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		void SetPuzzleAnswers(List<int> answers);
 		Task<List<(DateTime appointment, TimeSpan window)>> GetAppointmentWindows();
-		Task<ConcurrentDictionary<int, int>> GetValidatorAssignedCodes(DateTime appointment);
+		Task<ConcurrentDictionary<int, (int secretCodeL2, long index)[]>> GetValidatorAssignedCodes(DateTime appointment);
 		bool IsRequesterIndexAssigned(DateTime appointment, int index);
 		Task RecordRequestSecretCode(DateTime appointment, int index, SafeArrayHandle validatorCode);
 		Task RecordTriggerPuzzle(DateTime appointment, int index, int secretCode);
@@ -178,7 +179,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			foreach(DateTime entry in this.AppointmentDetails.Keys.Where(d => d.AddDays(1) < DateTimeEx.CurrentTime)) {
 				this.AppointmentDetails.Remove(entry, out var _);
 			}
+		}
 
+		public void ClearAppointmentDetails() {
+			this.AppointmentDetails.Clear();
 		}
 
 		public virtual async Task<bool> RecordAppointmentRequestConfirmationMessage(IAppointmentRequestConfirmationMessage appointmentRequestConfirmationMessage, IMessageEnvelope messageEnvelope, LockContext lockContext) {
@@ -284,7 +288,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return Task.FromResult(true);
 			}, lockContext).ConfigureAwait(false);
 
-			this.CentralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentRequestConfirmed, new CorrelationContext());
+			this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentRequestConfirmed, new CorrelationContext());
 		}
 
 		public async Task<SafeArrayHandle> GetAppointmentRequestConfirmationMessage(Guid requesterId, DateTime? appointment, LockContext lockContext) {
@@ -420,7 +424,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return Task.FromResult(true);
 			}, lockContext).ConfigureAwait(false);
 
-			this.CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AppointmentVerificationCompleted(verified, appointmentConfirmationCode), new CorrelationContext());
+			this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.AppointmentVerificationCompleted(verified, appointmentConfirmationCode), new CorrelationContext());
 		}
 
 		public async Task<SafeArrayHandle> GetAppointmentVerificationConfirmationMessage(Guid requesterId, DateTime appointment, LockContext lockContext) {
@@ -444,7 +448,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public async Task EnsureAppointmentDetails(DateTime appointment) {
 			using(await appointmentDetailsLocker.LockAsync().ConfigureAwait(false)) {
 
-				if(!this.AppointmentDetails.ContainsKey(appointment)) {
+				if(this.AppointmentDetails.ContainsKey(appointment)) {
 
 					await UpdateAppointmentDetails(appointment).ConfigureAwait(false);
 
@@ -462,22 +466,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return;
 			}
 
-			this.AppointmentDetails.TryAdd(appointment, new AppointmentDataDetails());
+			//TODO: this could be a performance issue. any way we can check?  testing requires we clear the codes below
+			var entry = this.AppointmentDetails.GetOrAdd(appointment, new AppointmentDataDetails());
 
-			foreach(KeyValuePair<int, int> codeEntry in this.GetValidatorAssignedCodes(session)) {
-				if(!this.AppointmentDetails[appointment].ValidatorCodes.ContainsKey(codeEntry.Key)) {
-					this.AppointmentDetails[appointment].ValidatorCodes.TryAdd(codeEntry.Key, codeEntry.Value);
+			entry.ValidatorCodes.Clear();
+			entry.assignedIndices.Clear();
+			
+			foreach(KeyValuePair<int, (int secretCodeL2, long index)[]> codeEntry in this.GetValidatorAssignedCodes(session)) {
+				if(!entry.ValidatorCodes.ContainsKey(codeEntry.Key)) {
+					entry.ValidatorCodes.TryAdd(codeEntry.Key, codeEntry.Value);
 				}
 			}
 
 			foreach(int index in this.GetValidatorAssignedIndices(session)) {
-				if(!this.AppointmentDetails[appointment].assignedIndices.ContainsKey(index)) {
-					this.AppointmentDetails[appointment].assignedIndices.TryAdd(index, 0);
+				if(!entry.assignedIndices.ContainsKey(index)) {
+					entry.assignedIndices.TryAdd(index, 0);
 				}
 			}
 		}
 
-		public async Task<ConcurrentDictionary<int, int>> GetValidatorAssignedCodes(DateTime appointment) {
+		public async Task<ConcurrentDictionary<int, (int secretCodeL2, long index)[]>> GetValidatorAssignedCodes(DateTime appointment) {
 
 			await this.EnsureAppointmentDetails(appointment).ConfigureAwait(false);
 
@@ -568,7 +576,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return false;
 		}
 
-		public Dictionary<int, int> GetValidatorAssignedCodes(IAppointmentValidatorSession appointmentValidatorSession) {
+		public Dictionary<int, (int secretCodeL2, long index)[]> GetValidatorAssignedCodes(IAppointmentValidatorSession appointmentValidatorSession) {
 
 			return AppointmentUtils.RehydrateAssignedSecretCodes(SafeArrayHandle.Wrap(appointmentValidatorSession.SecretCodes));
 		}
@@ -579,7 +587,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public class AppointmentDataDetails {
-			public ConcurrentDictionary<int, int> ValidatorCodes { get; } = new ConcurrentDictionary<int, int>();
+			public ConcurrentDictionary<int, (int secretCodeL2, long index)[]> ValidatorCodes { get; } = new ConcurrentDictionary<int, (int secretCodeL2, long index)[]>();
 			public SafeArrayHandle TriggerKey { get; set; } = SafeArrayHandle.Create();
 			public ConcurrentDictionary<int, int> assignedIndices { get; } = new ConcurrentDictionary<int, int>();
 		}
@@ -682,7 +690,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(validators.ContainsKey(entry.ValidatorHash)) {
 
 				// ok, we have some assigned requesters
-				Dictionary<int, int> assignedCodes = this.GetValidatorAssignedCodes(entry);
+				Dictionary<int, (int secretCodeL2, long index)[]> assignedCodes = this.GetValidatorAssignedCodes(entry);
 				HashSet<int> indices = this.GetValidatorAssignedIndices(entry);
 
 				SafeArrayHandle encryptedSecretCodeBytes = validators[entry.ValidatorHash];
@@ -698,13 +706,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					validatorSessionDetails.Rehydrate(decryptedBytes);
 				}
 
-				foreach((int secretCode, int secretCodeL2) secretCode in validatorSessionDetails.SecretCodes) {
-					if(!assignedCodes.ContainsKey(secretCode.secretCode)) {
-						assignedCodes.Add(secretCode.secretCode, secretCode.secretCodeL2);
+				for(int i = 0; i < validatorSessionDetails.AssignedIndices.Count; i++) {
+					var entryx = validatorSessionDetails.SecretCodes[i];
+					long index = validatorSessionDetails.AssignedIndices[i];
+					if(!assignedCodes.ContainsKey(entryx.secretCode)) {
+						(int secretCodeL2, long index)[] array = new (int secretCodeL2, long index)[] { (entryx.secretCodeL2, index)};
+						assignedCodes.Add(entryx.secretCode, array);
+					} else {
+						// this should be very rare, but still possible! it has happened!
+						var array = assignedCodes[entryx.secretCode];
+						var list = array.ToList();
+						list.Add((entryx.secretCodeL2, index));
+						assignedCodes[entryx.secretCode] = list.ToArray();
 					}
 				}
 
-				foreach(int index in validatorSessionDetails.AssignedOpen) {
+				foreach(int index in validatorSessionDetails.AssignedIndices) {
 					if(!indices.Contains(index)) {
 						indices.Add(index);
 					}
@@ -722,7 +739,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					this.AppointmentDetails.TryAdd(appointment, new AppointmentDataDetails());
 				}
 
-				foreach(KeyValuePair<int, int> codeEntry in assignedCodes) {
+				foreach(var codeEntry in assignedCodes) {
 
 					if(!this.AppointmentDetails[appointment].ValidatorCodes.ContainsKey(codeEntry.Key)) {
 						this.AppointmentDetails[appointment].ValidatorCodes.TryAdd(codeEntry.Key, codeEntry.Value);
@@ -852,7 +869,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return true;
 			}, lockContext).ConfigureAwait(false);
 
-			this.CentralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentContextCached, new CorrelationContext());
+			this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentContextCached, new CorrelationContext());
 
 			return true;
 		}
@@ -1097,7 +1114,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 									}
 								}
 
-								if(codeHash == 0 || secretCodeL2 == 0 || !codes.ContainsKey(codeHash) || (codes[codeHash] != secretCodeL2)) {
+								bool invalid = codeHash == 0 || secretCodeL2 == 0;
+
+								if(!invalid) {
+									invalid = !codes.ContainsKey(codeHash);
+									if(!invalid) {
+										invalid = !codes[codeHash].Any(e => e.index == entry.Index);
+										if(!invalid) {
+											invalid = codes[codeHash].Single(e => e.index == entry.Index).secretCodeL2 != secretCodeL2;
+										}
+									}
+								}
+								
+								if(invalid) {
 									// ok, we have a failure to offer the right code L2
 									entry.Valid = false;
 

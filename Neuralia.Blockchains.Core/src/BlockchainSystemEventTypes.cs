@@ -136,11 +136,13 @@ namespace Neuralia.Blockchains.Core {
 			
 			public readonly BlockchainSystemEventType AppointmentReset;
 			public readonly BlockchainSystemEventType AppointmentRequestSent;
+			public readonly BlockchainSystemEventType AppointmentRequestFailed;
 			public readonly BlockchainSystemEventType AppointmentRequestConfirmed;
 			public readonly BlockchainSystemEventType AppointmentContextCached;
 			public readonly BlockchainSystemEventType AppointmentPuzzlePreparation;
 			public readonly BlockchainSystemEventType AppointmentPuzzleBegin;
 			public readonly BlockchainSystemEventType AppointmentPuzzleCompleted;
+			public readonly BlockchainSystemEventType AppointmentPuzzleFailed;
 			public readonly BlockchainSystemEventType AppointmentVerificationRequestCompleted;
 			public readonly BlockchainSystemEventType AppointmentVerificationCompleted;
 			public readonly BlockchainSystemEventType InvalidPuzzleEngineVersion;
@@ -245,13 +247,14 @@ namespace Neuralia.Blockchains.Core {
 			
 			this.AppointmentReset = this.CreateBaseConstant();
 			this.AppointmentRequestSent = this.CreateBaseConstant();
+			this.AppointmentRequestFailed = this.CreateBaseConstant();
 			this.AppointmentRequestConfirmed = this.CreateBaseConstant();
 			this.AppointmentContextCached = this.CreateBaseConstant();
 			
 			this.AppointmentPuzzlePreparation = this.CreateBaseConstant();
 			this.AppointmentPuzzleBegin = this.CreateBaseConstant();
 			this.AppointmentPuzzleCompleted = this.CreateBaseConstant();
-			
+			this.AppointmentPuzzleFailed = this.CreateBaseConstant();
 			this.AppointmentVerificationRequestCompleted = this.CreateBaseConstant();
 			this.AppointmentVerificationCompleted = this.CreateBaseConstant();
 			this.InvalidPuzzleEngineVersion = this.CreateBaseConstant();

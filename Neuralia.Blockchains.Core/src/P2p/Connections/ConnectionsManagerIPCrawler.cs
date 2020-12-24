@@ -150,6 +150,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public void RequestPeerIPs(NodeAddressInfo node) {
 
+			this.CheckShouldCancel();
 			List<PeerConnection> activeConnections = this.connectionStore.AllConnectionsList;
 
 			// lets get a list of connected IPs
@@ -231,7 +232,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// its paused, we dont do anything, just return
 				return;
 			}
-
+			this.CheckShouldCancel();
 			// thats it, lets launch a connection
 
 			try {
@@ -363,7 +364,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			return new List<NodeAddressInfo>();
 		}
 
-		protected virtual async Task<List<NodeAddressInfo>> SynchProxies() {
+		protected virtual async Task<List<NodeAddressInfo>> SyncProxies() {
 			//NOP
 			return new List<NodeAddressInfo>();
 		}
@@ -385,7 +386,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				this.CheckShouldCancel();
 
 				if(this.ShouldAct(ref this.nextSyncProxiesAction)) {
-					this.Crawler.QueueDynamicBlacklist(await this.SynchProxies().ConfigureAwait(false));
+					this.Crawler.QueueDynamicBlacklist(await this.SyncProxies().ConfigureAwait(false));
 					this.nextSyncProxiesAction = DateTimeEx.CurrentTime.AddSeconds(60); //FIXME: AppSettings parameter?
 				}
 
@@ -455,6 +456,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected virtual async Task ContactHubs() {
+			this.CheckShouldCancel();
 			if(GlobalSettings.ApplicationSettings.EnableHubs && (this.nextHubContact < DateTimeEx.CurrentTime)) {
 				bool useWeb = GlobalSettings.ApplicationSettings.HubContactMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
 				bool useGossip = GlobalSettings.ApplicationSettings.HubContactMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
@@ -485,6 +487,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected Task<bool> ContactHubsWeb() {
+			this.CheckShouldCancel();
 			var restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.FormData);
 
 			return Repeater.RepeatAsync(async () => {
@@ -533,6 +536,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected async Task ContactHubsGossip() {
+			this.CheckShouldCancel();
 			try {
 				NodeAddressInfoList infoList = this.connectionStore.GetHubNodes();
 
@@ -560,7 +564,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="loopAction"></param>
 		private Task DisconnectPeers(IEnumerable<PeerConnection> removables, Action<PeerConnection> loopAction = null) {
 			foreach(PeerConnection peer in removables) {
-				this.CheckShouldCancel();
 
 				// thats it, we say bye bye to this connection
 				NLog.IPCrawler.Verbose($"Removing peer {ConnectionStore<R>.GetEndpointInfoNode(peer).ScopedAdjustedIp}.");

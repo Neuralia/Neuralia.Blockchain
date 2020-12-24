@@ -112,5 +112,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			account.AccountAppointment.AppointmentRequestTimeStamp = DateTimeEx.CurrentTime;
 		}
 
+		protected override async Task ExceptionOccured(Exception ex)
+		{
+			await base.ExceptionOccured(ex).ConfigureAwait(false);
+
+			this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentRequestFailed, this.correlationContext);
+		}
 	}
 }

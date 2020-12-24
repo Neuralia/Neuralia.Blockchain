@@ -163,7 +163,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					targetBlockHeight = highestCachedSynthesizedBlockId;
 				}
 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStarted(currentBlockHeight, targetBlockHeight));
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStarted(currentBlockHeight, targetBlockHeight)).ConfigureAwait(false);
 
 				// now lets run then sequence
 				await this.RunWalletUpdateSequence(currentBlockHeight, targetBlockHeight, taskRoutingContext, lockContext).ConfigureAwait(false);
@@ -193,7 +193,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			} finally {
 				this.IsBusy = false;
 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncEnded(currentBlockHeight, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight));
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncEnded(currentBlockHeight, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight)).ConfigureAwait(false);
 
 				this.centralCoordinator.ShutdownRequested -= this.CentralCoordinatorOnShutdownRequested;
 
@@ -261,7 +261,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						// run transaction and insert blocks
 
 						foreach((long planBlockId, BlockModes mode) in closureState.currentPlan.OrderBy(e => e.planBlockId)) {
-							(Action<BlockId, BlockId> Action, BlockId blockId, BlockId target)? syncEvent = null;
+							(Func<BlockId, BlockId, Task> Action, BlockId blockId, BlockId target)? syncEvent = null;
 							try {
 								if(mode == BlockModes.FullBlock) {
 									
@@ -275,11 +275,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					
 									syncEvent = ((b, h) => {
 											            // alert that we are syncing a block
-											            this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, closureState.syncRate));
+											            return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, closureState.syncRate));
 										            }, planBlockId, closureState.targetBlockHeight);
 								} else if(mode == BlockModes.InterpolatedMajor) {
 									syncEvent = ((b, h) => {
-											            this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, ""));
+											            return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStepEvent(b, h, ""));
 										            }, planBlockId, closureState.targetBlockHeight);
 					
 								} else if(mode == BlockModes.InterpolatedMinor) {
@@ -287,8 +287,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								}
 					
 								if(syncEvent.HasValue) {
-									(Action<BlockId, BlockId> Action, BlockId blockId, BlockId target) action = syncEvent.Value;
-									action.Action(action.blockId, action.target);
+									(Func<BlockId, BlockId, Task> Action, BlockId blockId, BlockId target) action = syncEvent.Value;
+									await action.Action(action.blockId, action.target).ConfigureAwait(false);
 								}
 					
 							} catch(Exception ex) {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
@@ -73,22 +74,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			
 			var resultOperation = new ValidatorProtocol1.CodeTranslationResponseOperation();
 
+			AppointmentDetails appointmentDetails = null;
+			LockContext lockContext = null;
 			using(await this.activeAppointmentDetailsLocker.LockAsync().ConfigureAwait(false)) {
 				if(!this.ActiveAppointmentDetails.ContainsKey(appointment)) {
-					byte ordinal = AppointmentUtils.GetKeyOrdinal(this.GetValidatorAccountId.ToLongRepresentation());
-
-					LockContext lockContext = null;
-
 					var details = new AppointmentDetails();
-					details.keyHash = this.GetValidatorKeyHash(ordinal, appointment, lockContext);
+
 					details.AppointmentKey = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetAppointmentKey(appointment).ConfigureAwait(false);
 
 					this.ActiveAppointmentDetails.TryAdd(appointment, details);
 				}
+
+				appointmentDetails = this.ActiveAppointmentDetails[appointment];
+				
+				if(appointmentDetails.keyHash == 0) {
+					byte ordinal = AppointmentUtils.GetKeyOrdinal(this.GetValidatorAccountId.ToLongRepresentation());
+					appointmentDetails.keyHash = this.GetValidatorKeyHash(ordinal, appointment, lockContext);
+				}
 			}
-
-			AppointmentDetails appointmentDetails = this.ActiveAppointmentDetails[appointment];
-
+			
 			if(appointmentDetails.RequesterStatuses.ContainsKey(operation.Index) && appointmentDetails.RequesterStatuses[operation.Index].HasFlag(AppointmentDetails.AppointmentValidationWorkflowSteps.CodeTranslation)) {
 				// this requester already did this
 				this.CentralCoordinator.Log.Verbose($"Requester already did this for index {operation.Index} in request code");
@@ -136,14 +140,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			using(await this.locker1.LockAsync().ConfigureAwait(false)) {
 				if(!this.ActiveAppointmentDetails.ContainsKey(appointment)) {
+					
+					this.ActiveAppointmentDetails.TryAdd(appointment, new AppointmentDetails());
+				}
+				
+				appointmentDetails = this.ActiveAppointmentDetails[appointment];
 
-					var details = new AppointmentDetails();
-					details.keyHash2 = this.GetValidatorKeyHash(ordinal, appointment, lockContext);
-					this.ActiveAppointmentDetails.TryAdd(appointment, details);
+				if(appointmentDetails.keyHash2 == 0) {
+					appointmentDetails.keyHash2 = this.GetValidatorKeyHash(ordinal, appointment, lockContext);
 				}
 			}
 			
-			appointmentDetails = this.ActiveAppointmentDetails[appointment];
+			
 			
 			using(await this.locker3.LockAsync().ConfigureAwait(false)) {
 
@@ -169,9 +177,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			int codeHash = AppointmentUtils.GenerateValidatorSecretCodeHash(operation.SecretCode, appointment, appointmentDetails.AppointmentKey.Branch(), this.GetValidatorAccountId, appointmentDetails.keyHash2, this.Stride);
 
-			ConcurrentDictionary<int, int> codes = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetValidatorAssignedCodes(appointment).ConfigureAwait(false);
+			var codes = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetValidatorAssignedCodes(appointment).ConfigureAwait(false);
 
-			if((codes == null) || !codes.ContainsKey(codeHash)) {
+			bool invalid = codes == null;
+
+			if(!invalid) {
+				invalid = !codes.ContainsKey(codeHash);
+				if(!invalid) {
+					invalid = !codes[codeHash].Any(e => e.index == operation.Index);
+				}
+			}
+			if(invalid) {
 				this.CentralCoordinator.Log.Verbose($"Code hash {codeHash} from secret code {operation.SecretCode} not found in codes list for index {operation.Index}");
 
 				return null;
@@ -182,7 +198,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordTriggerPuzzle(operation.Appointment, operation.Index, operation.SecretCode).ConfigureAwait(false);
 
 			//lets offer the secret level 2 code, proof that they have begun
-			resultOperation.SecretCodeL2 = codes[codeHash];
+			resultOperation.SecretCodeL2 = codes[codeHash].Single(e => e.index == operation.Index).secretCodeL2;
 
 			this.CentralCoordinator.Log.Verbose($"Received a valid puzzle trigger request from Index {operation.Index} for appointment {appointment}");
 

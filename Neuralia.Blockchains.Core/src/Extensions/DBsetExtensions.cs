@@ -9,6 +9,16 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 
 	public static class DBsetExtensions {
 
+		/// <summary>
+		/// clear the tracking. mostly used for testing
+		/// </summary>
+		/// <param name="source"></param>
+		public static void ClearLocal(this DbContext source)
+			{
+				source.ChangeTracker.Clear();
+				source.SaveChanges();
+		}
+		
 		public static bool AnyLocal<T_ENTITY>(this DbSet<T_ENTITY> source, Func<T_ENTITY, bool> predicate)
 			where T_ENTITY : class {
 			return source.Local.Any(predicate);

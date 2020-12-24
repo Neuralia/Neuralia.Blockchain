@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 	public interface IInterfaceSystemEventHandler {
 		void ReceiveChainMessageTask(SystemMessageTask task);
-		void ReceiveChainMessageTaskImmediate(SystemMessageTask task);
+		Task ReceiveChainMessageTaskImmediate(SystemMessageTask task);
 	}
 
 	public interface IBlockChainInterface : INetworkRouter, IRoutedTaskRoutingHandler, IInterfaceSystemEventHandler {
@@ -1307,11 +1307,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
-		protected void TriggerSystemEvent(CorrelationContext? correlationContext, BlockchainSystemEventType eventType, object[] parameters) {
+		protected Task TriggerSystemEvent(CorrelationContext? correlationContext, BlockchainSystemEventType eventType, object[] parameters) {
 			if(this.ChainEventRaised != null) {
-				this.ChainEventRaised(correlationContext, eventType, this.CentralCoordinator.ChainId, parameters);
+				return this.ChainEventRaised(correlationContext, eventType, this.CentralCoordinator.ChainId, parameters);
 			}
 
+			return Task.CompletedTask;
 		}
 
 		protected void TriggerImportantWalletUpdate() {
@@ -1450,18 +1451,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.pollerResetEvent?.Set();
 		}
 
-		public void ReceiveChainMessageTaskImmediate(SystemMessageTask task) {
-			var runningTask = this.HandleMessages(task);
+		public Task ReceiveChainMessageTaskImmediate(SystemMessageTask task) {
+			return this.HandleMessages(task);
 		}
 
 		// handle labeledTasks
-		protected virtual Task HandleMessages(IColoredTask task) {
+		protected virtual async Task HandleMessages(IColoredTask task) {
 			//TODO: review this list of events
 			if(task is SystemMessageTask systemTask) {
 				
 				// no matter what, lets alert of this event
 				try {
-					this.TriggerSystemEvent(systemTask.correlationContext, systemTask.message, systemTask.parameters);
+					await TriggerSystemEvent(systemTask.correlationContext, systemTask.message, systemTask.parameters).ConfigureAwait(false);
 				} catch (Exception ex){
 					this.CentralCoordinator.Log.Error(ex, $"Failed to trigger system message {systemTask.message.Value}");
 				}
@@ -1489,9 +1490,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 					this.CentralCoordinator.Log.Error(ex, $"Failed to send specialize system message {systemTask.message.Value}");
 				}
 			}
-
-			return Task.CompletedTask;
-
 		}
 
 		/// <summary>

@@ -44,17 +44,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		public async Task RemoveEntry(string key, LockContext lockContext) {
-			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				await this.RunDbOperation((dbdal, lc) => {
 					if(dbdal.CollectionExists<T>()) {
 						dbdal.Remove<T>(k => k.Key == key);
 					}
 
 					return Task.CompletedTask;
-				}, handle).ConfigureAwait(false);
+				}, lockContext).ConfigureAwait(false);
 
-				await this.Save(handle).ConfigureAwait(false);
-			}
+				await this.Save(lockContext).ConfigureAwait(false);
+			
 		}
 
 		public Task RemoveEntry<K>(K key, LockContext lockContext) {
@@ -98,20 +97,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		}
 
 		public async Task<IWalletGenerationCache> GetEntryBase(WalletGenerationCache.DispatchEventTypes type, string subtype, LockContext lockContext) {
-			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				return await this.RunQueryDbOperation((dbdal, lc) => {
+					T result = default;
 					if(dbdal.CollectionExists<T>()) {
 
-						return Task.FromResult(dbdal.GetOne<T>(k => k.EventType == type && k.EventSubType == subtype));
+						result = dbdal.GetOne<T>(k => k.EventType == type && k.EventSubType == subtype);
 					}
 
-					return Task.FromResult((T) default);
-				}, handle).ConfigureAwait(false);
-			}
+					return Task.FromResult(result);
+				}, lockContext).ConfigureAwait(false);
+			
 		}
 
 		public async Task<List<IWalletGenerationCache>> GetRetryEntriesBase(LockContext lockContext) {
-			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				return await this.RunQueryDbOperation((dbdal, lc) => {
 					if(dbdal.CollectionExists<T>()) {
 
@@ -125,8 +123,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					}
 
 					return Task.FromResult(new List<IWalletGenerationCache>());
-				}, handle).ConfigureAwait(false);
-			}
+				}, lockContext).ConfigureAwait(false);
+			
 		}
 
 		public Task<int> ClearTimedOut(LockContext lockContext) {
@@ -138,7 +136,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// </summary>
 		/// <returns></returns>
 		public async Task<int> ClearTimedOut(DateTime lastBlockTimestamp, LockContext lockContext) {
-			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				return await this.RunQueryDbOperation((dbdal, lc) => {
 					if(dbdal.CollectionExists<T>()) {
 
@@ -156,8 +153,8 @@ we have to remove this code!!
 					}
 
 					return Task.FromResult(0);
-				}, handle).ConfigureAwait(false);
-			}
+				}, lockContext).ConfigureAwait(false);
+			
 		}
 
 		/// <summary>
@@ -201,16 +198,15 @@ we have to remove this code!!
 		}
 		
 		public async Task InsertCacheEntry(T transactionCacheEntry, LockContext lockContext) {
-			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				await this.RunDbOperation((dbdal, lc) => {
 
 					dbdal.Insert(transactionCacheEntry, k => k.Key);
 
 					return Task.CompletedTask;
-				}, handle).ConfigureAwait(true);
+				}, lockContext).ConfigureAwait(true);
 
-				await this.Save(handle).ConfigureAwait(false);
-			}
+				await this.Save(lockContext).ConfigureAwait(false);
+			
 		}
 
 		public Task<bool> EntryExists(string key, LockContext lockContext) {
@@ -230,7 +226,6 @@ we have to remove this code!!
 		}
 
 		public async Task<T> GetEntry(string key, LockContext lockContext) {
-			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				return await this.RunQueryDbOperation((dbdal, lc) => {
 					if(dbdal.CollectionExists<T>()) {
 
@@ -238,8 +233,8 @@ we have to remove this code!!
 					}
 
 					return Task.FromResult((T) default);
-				}, handle).ConfigureAwait(false);
-			}
+				}, lockContext).ConfigureAwait(false);
+			
 		}
 	}
 }

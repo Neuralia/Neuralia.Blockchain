@@ -973,7 +973,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			try {
 				SystemEventGenerator.WalletCreationStepSet walletCreationStepSet = new SystemEventGenerator.WalletCreationStepSet();
 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationStartedEvent(), correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationStartedEvent(), correlationContext).ConfigureAwait(false);
 				this.CentralCoordinator.Log.Information("Creating a new wallet");
 
 				string walletPassphrase = null;
@@ -993,7 +993,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				await this.SerialisationFal.RemoveWalletCreatingTag(lockContext).ConfigureAwait(false);
 				
 				this.CentralCoordinator.Log.Information("WalletBase successfully created and loaded");
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationEndedEvent(), correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationEndedEvent(), correlationContext).ConfigureAwait(false);
 
 				await this.centralCoordinator.RequestWalletSync().ConfigureAwait(false);
 
@@ -1003,7 +1003,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return true;
 			} catch(Exception ex) {
 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationErrorEvent("Failed to generate wallet", ex.ToString()), correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationErrorEvent("Failed to generate wallet", ex.ToString()), correlationContext).ConfigureAwait(false);
 
 				try {
 					// delete the folder
@@ -1029,8 +1029,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					throw new InvalidOperationException("Key passphrase is too small");
 				}
 				SystemEventGenerator.AccountCreationStepSet accountCreationStepSet = new SystemEventGenerator.AccountCreationStepSet();
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AccountCreationStartedEvent(), correlationContext);
-				this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.AccountCreationStartedStep, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AccountCreationStartedEvent(), correlationContext).ConfigureAwait(false);
+				await this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.AccountCreationStartedStep, correlationContext).ConfigureAwait(false);
 
 				IWalletAccount account = await this.CreateNewStandardAccount(accountName, accountType, encryptKeys, encryptKeysIndividually, correlationContext, walletCreationStepSet, accountCreationStepSet, lockContext, true).ConfigureAwait(false);
 
@@ -1043,8 +1043,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// now create the keys
 				await this.CreateStandardAccountKeys(account.AccountCode, passphrases, correlationContext, walletCreationStepSet, accountCreationStepSet, lockContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.AccountCreationEndedStep, correlationContext);
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AccountCreationEndedEvent(account.AccountCode), correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.AccountCreationEndedStep, correlationContext).ConfigureAwait(false);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AccountCreationEndedEvent(account.AccountCode), correlationContext).ConfigureAwait(false);
 
 				return true;
 			} catch(Exception ex) {
@@ -1158,7 +1158,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				
 				await this.EnsureWalletPassphrase(lockContext, passphrase).ConfigureAwait(false);
 				
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingStartedEvent(), correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingStartedEvent(), correlationContext).ConfigureAwait(false);
 
 				await this.WalletFileInfo.LoadFileSecurityDetails(lockContext).ConfigureAwait(false);
 				
@@ -1202,7 +1202,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				this.CentralCoordinator.Log.Error(e, "Failed to load wallet");
 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext).ConfigureAwait(false);
 
 				throw;
 			}
@@ -1213,7 +1213,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				await this.WalletIsLoaded().ConfigureAwait(false);
 			}
 
-			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingEndedEvent(), correlationContext);
+			await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingEndedEvent(), correlationContext).ConfigureAwait(false);
 
 			await this.centralCoordinator.RequestWalletSync().ConfigureAwait(false);
 			
@@ -1367,8 +1367,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			IWalletAccount account = this.CreateNewWalletAccountEntry(lockContext);
 
-			this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.CreatingFiles, correlationContext);
-			this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingFiles, correlationContext);
+			await this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.CreatingFiles, correlationContext).ConfigureAwait(false);
+			await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingFiles, correlationContext).ConfigureAwait(false);
 
 			account.InitializeNew(name, accountType, this.centralCoordinator.BlockchainServiceSet);
 
@@ -1412,7 +1412,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			await this.PrepareAccountInfos(accountFileInfo, lockContext).ConfigureAwait(false);
 
-			this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.SavingWallet, correlationContext);
+			await this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.SavingWallet, correlationContext).ConfigureAwait(false);
 
 			return account;
 		}
@@ -1951,106 +1951,96 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// the keys are often heavy on the network, lets pause it
 				this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
 
-				this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.CreatingAccountKeys, correlationContext);
-				this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingTransactionKey, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.CreatingAccountKeys, correlationContext).ConfigureAwait(false);
+				await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingTransactionKey, correlationContext).ConfigureAwait(false);
 
 				int totalKeys = 4;
 
 				if(account.WalletAccountType == Enums.AccountTypes.Server) {
 					totalKeys = 6;
 				}
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.TRANSACTION_KEY_NAME, 1, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.TRANSACTION_KEY_NAME, 1, totalKeys}, correlationContext).ConfigureAwait(false);
 
 
 				mainKey = await this.CreateXmssKey(GlobalsService.TRANSACTION_KEY_NAME, percentage => {
-					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.TRANSACTION_KEY_NAME, percentage), correlationContext);
+					return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.TRANSACTION_KEY_NAME, percentage), correlationContext);
 					
-					return Task.CompletedTask;
-
 				}).ConfigureAwait(false);
 
 				GC.Collect();
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.TRANSACTION_KEY_NAME, 1, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.TRANSACTION_KEY_NAME, 1, totalKeys}, correlationContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.MESSAGE_KEY_NAME, 2, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.MESSAGE_KEY_NAME, 2, totalKeys}, correlationContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingMessageKey, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingMessageKey, correlationContext).ConfigureAwait(false);
 				
 				messageKey = await this.CreateXmssKey(GlobalsService.MESSAGE_KEY_NAME, percentage => {
 
-					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.MESSAGE_KEY_NAME, percentage), correlationContext);
+					return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.MESSAGE_KEY_NAME, percentage), correlationContext);
 					
-					return Task.CompletedTask;
-
 				}).ConfigureAwait(false);
 
 				GC.Collect();
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.MESSAGE_KEY_NAME, 2, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.MESSAGE_KEY_NAME, 2, totalKeys}, correlationContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.CHANGE_KEY_NAME, 3, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.CHANGE_KEY_NAME, 3, totalKeys}, correlationContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingChangeKey, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingChangeKey, correlationContext).ConfigureAwait(false);
 				
 				changeKey = await this.CreateXmssKey(GlobalsService.CHANGE_KEY_NAME, percentage => {
 
-					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.CHANGE_KEY_NAME, percentage), correlationContext);
+					return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.CHANGE_KEY_NAME, percentage), correlationContext);
 					
-					return Task.CompletedTask;
-
 				}).ConfigureAwait(false);
 
 				GC.Collect();
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.CHANGE_KEY_NAME, 3, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.CHANGE_KEY_NAME, 3, totalKeys}, correlationContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.SUPER_KEY_NAME, 4, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.SUPER_KEY_NAME, 4, totalKeys}, correlationContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingSuperKey, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingSuperKey, correlationContext).ConfigureAwait(false);
 
 				superKey = await this.CreateXmssKey(GlobalsService.SUPER_KEY_NAME, percentage => {
 
-					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.SUPER_KEY_NAME, percentage), correlationContext);
-					
-					return Task.CompletedTask;
+					return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.SUPER_KEY_NAME, percentage), correlationContext);
 
 				}).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.SUPER_KEY_NAME, 4, totalKeys}, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.SUPER_KEY_NAME, 4, totalKeys}, correlationContext).ConfigureAwait(false);
 
 				if(account.WalletAccountType == Enums.AccountTypes.Server) {
 
 					GC.Collect();
 					
-					this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.VALIDATOR_SIGNATURE_KEY_NAME, 5, totalKeys}, correlationContext);
+					await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.VALIDATOR_SIGNATURE_KEY_NAME, 5, totalKeys}, correlationContext).ConfigureAwait(false);
 
-					this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingValidatorSignatureKey, correlationContext);
+					await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingValidatorSignatureKey, correlationContext).ConfigureAwait(false);
 
 					validatorSignatureKey = await this.CreateXmssKey(GlobalsService.VALIDATOR_SIGNATURE_KEY_NAME, percentage => {
 						
-						this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.VALIDATOR_SIGNATURE_KEY_NAME, percentage), correlationContext);
-					
-						return Task.CompletedTask;
+						return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.KeyGenerationPercentageEvent(GlobalsService.VALIDATOR_SIGNATURE_KEY_NAME, percentage), correlationContext);
 
 					}).ConfigureAwait(false);
 
 					GC.Collect();
 					
-					this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.VALIDATOR_SIGNATURE_KEY_NAME, 5, totalKeys}, correlationContext);
+					await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.VALIDATOR_SIGNATURE_KEY_NAME, 5, totalKeys}, correlationContext).ConfigureAwait(false);
 
 					
-					this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.VALIDATOR_SECRET_KEY_NAME, 6, totalKeys}, correlationContext);
+					await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationStarted, new object[] {GlobalsService.VALIDATOR_SECRET_KEY_NAME, 6, totalKeys}, correlationContext).ConfigureAwait(false);
 
-					this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingValidatorSecretKey, correlationContext);
+					await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.CreatingValidatorSecretKey, correlationContext).ConfigureAwait(false);
 
 					validatorSecretKey = await this.CreateValidatorSecretKey().ConfigureAwait(false);
 
-					this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.VALIDATOR_SECRET_KEY_NAME, 6, totalKeys}, correlationContext);
+					await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.KeyGenerationEnded, new object[] {GlobalsService.VALIDATOR_SECRET_KEY_NAME, 6, totalKeys}, correlationContext).ConfigureAwait(false);
 
 				}
 
-				this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.KeysCreated, correlationContext);
-				this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.AccountKeysCreated, correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(accountCreationStepSet?.KeysCreated, correlationContext).ConfigureAwait(false);
+				await this.centralCoordinator.PostSystemEventImmediate(walletCreationStepSet?.AccountKeysCreated, correlationContext).ConfigureAwait(false);
 
 				await Repeater.RepeatAsync(() => {
 					return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(async (provider, token, lc) => {

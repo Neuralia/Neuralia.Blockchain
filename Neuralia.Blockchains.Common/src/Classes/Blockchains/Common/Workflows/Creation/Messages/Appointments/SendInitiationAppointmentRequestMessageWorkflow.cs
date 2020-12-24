@@ -17,8 +17,10 @@ using Neuralia.Blockchains.Core.Cryptography.THS.V1;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
+using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Messages.Appointments {
 
@@ -195,9 +197,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		}
 
 		private Task PerformTHSSignature(LockContext lockContext) {
-			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PerformTHSSignature(envelope, THSRulesSet.InitiationAppointmentDefaultRulesSetDescriptor, (currentNonce, currentRound) => {
+			ClosureWrapper<DateTime> lastUpdate = DateTime.Now;
+			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PerformTHSSignature(this.envelope, this.CancelToken, THSRulesSet.InitiationAppointmentDefaultRulesSetDescriptor, async (currentNonce, currentRound) => {
+
+				if(lastUpdate.Value.AddMinutes(3) < DateTime.Now) {
+					// lets update our expiration markers
+					try {
+						await centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token, lc) => {
+						
+							// lets update our expiration notice
+							return UpdateGenerationCacheTimeouts(lc);
+						}, lockContext, Timeout).ConfigureAwait(false);
+					} catch(Exception ex) {
+						this.CentralCoordinator.Log.Debug(ex, "error while perform THS");
+					}
+					lastUpdate.Value = DateTime.Now;
+				}
 				this.CheckShouldCancel();
 			});
+		}
+		
+		protected override void SetEntryCacheTimeouts(LockContext lockContext) {
+			this.WalletGenerationCache.NextRetry = DateTimeEx.CurrentTime.AddMinutes(10);
+			this.WalletGenerationCache.Expiration = DateTimeEx.CurrentTime + this.GetEnvelopeExpiration() + TimeSpan.FromHours(3);
 		}
 		
 		protected virtual void AddTaskGenerateIdentitySignatureKey() {
@@ -294,7 +316,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 				account.AccountAppointment = null;
 				this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.OperatingMode = Enums.OperationStatus.None;
-				
+				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentRequestFailed, this.correlationContext);
+
 			}, null, this.Timeout).ConfigureAwait(false);
 		}
 	}

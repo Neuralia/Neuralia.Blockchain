@@ -50,10 +50,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		void PostSystemEvent(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext correlationContext = null);
 		void PostSystemEvent(SystemEventGenerator generator, CorrelationContext correlationContext = null);
 
-		void PostSystemEventImmediate(SystemMessageTask messageTask, CorrelationContext correlationContext = null);
-		void PostSystemEventImmediate(BlockchainSystemEventType eventType, CorrelationContext correlationContext = null);
-		void PostSystemEventImmediate(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext correlationContext = null);
-		void PostSystemEventImmediate(SystemEventGenerator generator, CorrelationContext correlationContext = null);
+		Task PostSystemEventImmediate(SystemMessageTask messageTask, CorrelationContext correlationContext = null);
+		Task PostSystemEventImmediate(BlockchainSystemEventType eventType, CorrelationContext correlationContext = null);
+		Task PostSystemEventImmediate(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext correlationContext = null);
+		Task PostSystemEventImmediate(SystemEventGenerator generator, CorrelationContext correlationContext = null);
 	}
 
 	public interface ICentralCoordinator : ILoopThread, ICoordinatorTaskDispatcher {
@@ -173,12 +173,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			if(e.Exception is BlockchainException bcex && (bcex.BlockchainType == this.ChainId)) {
 				if(bcex is UnrecognizedElementException ueex) {
 					this.Log.Fatal(ueex, ueex.Message);
-					this.PostSystemEventImmediate(SystemEventGenerator.RequireNodeUpdate(ueex.BlockchainType.Value, ueex.ChainName), new CorrelationContext());
+					this.PostSystemEventImmediate(SystemEventGenerator.RequireNodeUpdate(ueex.BlockchainType.Value, ueex.ChainName), new CorrelationContext()).WaitAndUnwrapException();
 
 					//TODO: what else. should we stop the chain?
 				} else if(bcex is ReportableException rex) {
 					// this is an important message we must report to the user
-					this.PostSystemEventImmediate(SystemEventGenerator.RaiseAlert(rex), new CorrelationContext());
+					this.PostSystemEventImmediate(SystemEventGenerator.RaiseAlert(rex), new CorrelationContext()).WaitAndUnwrapException();
 				}
 			}
 		}
@@ -197,7 +197,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		
 		protected virtual void UrgentShutdown() {
 			//TODO: what else. should we stop the chain?
-			this.PostSystemEventImmediate(SystemEventGenerator.RequestShutdown());
+			this.PostSystemEventImmediate(SystemEventGenerator.RequestShutdown()).WaitAndUnwrapException();
 
 			if(this.urgentShutdownTimer == null) {
 				
@@ -789,35 +789,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			this.PostSystemEvent(systemMessage);
 		}
 
-		public void PostSystemEventImmediate(SystemMessageTask messageTask, CorrelationContext correlationContext = null) {
+		public Task PostSystemEventImmediate(SystemMessageTask messageTask, CorrelationContext correlationContext = null) {
 			// for now, only the interface is interrested in system messages
-			this.chainInterface.ReceiveChainMessageTaskImmediate(messageTask);
+			return this.chainInterface.ReceiveChainMessageTaskImmediate(messageTask);
 		}
 
 		/// <summary>
 		///     Post a system event
 		/// </summary>
 		/// <param name="eventType"></param>
-		public void PostSystemEventImmediate(BlockchainSystemEventType eventType, CorrelationContext correlationContext = null) {
-			this.PostSystemEventImmediate(eventType, null, correlationContext);
+		public Task PostSystemEventImmediate(BlockchainSystemEventType eventType, CorrelationContext correlationContext = null) {
+			return this.PostSystemEventImmediate(eventType, null, correlationContext);
 		}
 
-		public void PostSystemEventImmediate(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext correlationContext = null) {
+		public Task PostSystemEventImmediate(BlockchainSystemEventType eventType, object[] parameters, CorrelationContext correlationContext = null) {
 			//TODO refactor the post system events system
 			SystemMessageTask systemMessage = new SystemMessageTask(eventType, parameters, correlationContext);
 
-			this.PostSystemEventImmediate(systemMessage);
+			return this.PostSystemEventImmediate(systemMessage);
 		}
 
-		public void PostSystemEventImmediate(SystemEventGenerator generator, CorrelationContext correlationContext = null) {
+		public Task PostSystemEventImmediate(SystemEventGenerator generator, CorrelationContext correlationContext = null) {
 			if(generator == null) {
-				return;
+				return Task.CompletedTask;
 			}
 
 			//TODO refactor the post system events system
 			SystemMessageTask systemMessage = new SystemMessageTask(generator.EventType, generator.Parameters, correlationContext);
 
-			this.PostSystemEventImmediate(systemMessage);
+			return this.PostSystemEventImmediate(systemMessage);
 		}
 
 	#endregion

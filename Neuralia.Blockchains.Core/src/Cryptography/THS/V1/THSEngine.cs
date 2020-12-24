@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Cryptography.THS.V1.Crypto;
 using Neuralia.Blockchains.Core.Cryptography.THS.V1.Hash;
@@ -144,7 +145,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			return HashDifficultyUtils.GetBigInteger(rootHash);
 		}
 
-		public async Task<THSSolutionSet> PerformTHS(SafeArrayHandle root, Func<long, long, long, long, long, long, long, List<(int solution, long nonce)>, Task> starting = null, Func<long, int, long, List<(int solution, long nonce)>, long, long, double, Task> iteration = null, Func<int, long, long, int, Task> roundCallback = null, THSProcessState thsState = null) {
+		public async Task<THSSolutionSet> PerformTHS(SafeArrayHandle root, CancellationToken? cancellationToken, Func<long, long, long, long, long, long, long, List<(int solution, long nonce)>, Task> starting = null, Func<long, int, long, List<(int solution, long nonce)>, long, long, double, Task> iteration = null, Func<int, long, long, int, Task> roundCallback = null, THSProcessState thsState = null) {
 			
 			THSSolutionSet solutionSet = new THSSolutionSet();
 
@@ -183,6 +184,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			}
 			while(true) {
 
+				
 				long nonce = 0;
 
 				if(round == startingRound) {
@@ -195,6 +197,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 				while(true) {
 
+					cancellationToken?.ThrowIfCancellationRequested();
 					nonce++;
 					totalNonce++;
 					this.ResetSets();

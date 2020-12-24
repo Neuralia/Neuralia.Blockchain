@@ -26,5 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 			await base.PreValidateContents(lockContext).ConfigureAwait(false);
 		}
+
+		public override string GenerationWorkflowTypeName => "GenerateNewSignedTransactionWorkflow";
 	}
 }

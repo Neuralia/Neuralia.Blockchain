@@ -313,20 +313,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// ok,l first lets compare the hashes
 				IBlockchainMessage message = messageEnvelope.Contents.RehydratedEvent;
 
-				TimeSpan acceptableRange = TimeSpan.FromHours(1) + this.timeService.GetTHSExtendedExpirationSpan(messageEnvelope);
-				
+				TimeSpan acceptableRange = TimeSpan.FromHours(1);
+
 				//first check the time to ensure we are within the acceptable range
 
+				// multi sig  transactions are excluded from time limit checks
+				if(!this.timeService.WithinAcceptableRange(message.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableRange)) {
+					completedResultCallback(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE));
 
-			// multi sig  transactions are excluded from time limit checks
-			if(!this.timeService.WithinAcceptableRange(message.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableRange)) {
-				completedResultCallback(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE));
+					return this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE);
+				}
 
-				return this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE);
-			}
-
-			if(messageEnvelope is ISignedMessageEnvelope signedMessageEnvelope) {
-				using var rebuiltHash = BlockchainHashingUtils.GenerateBlockchainMessageHash(signedMessageEnvelope);
+				if(messageEnvelope is ISignedMessageEnvelope signedMessageEnvelope) {
+					using var rebuiltHash = BlockchainHashingUtils.GenerateBlockchainMessageHash(signedMessageEnvelope);
 					bool hashValid = signedMessageEnvelope.Hash.Equals(rebuiltHash);
 
 					if(hashValid != true) {
@@ -483,7 +482,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			IChainStateProvider chainStateProvider = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase;
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
-			
 
 			// lets rehydrate the first level
 			try {
@@ -504,7 +502,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return;
 			}
 
-			
 			// make sure the timestamp is not in the future
 			DateTime transactionTime = this.timeService.GetTransactionDateTime(transactionEnvelope.Contents.Uuid, chainStateProvider.ChainInception);
 
@@ -529,7 +526,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				return;
 			}
-			
+
 //#if(!COLORADO_EXCLUSION)
 			// lets make sure the expiration of the envelope is still within the timeframe
 
@@ -551,12 +548,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				return;
 			}
-			
+
 			bool isPresentationEnvelope = transactionEnvelope is IPresentationTransactionEnvelope;
 			IPresentationTransactionEnvelope presentationTransactionEnvelope = transactionEnvelope as IPresentationTransactionEnvelope;
 			bool isPresentation = transactionEnvelope.Contents.RehydratedEvent is IPresentation;
 			bool isKeyChange = transactionEnvelope.Contents.RehydratedEvent is IStandardAccountKeyChangeTransaction;
-			
+
 			if((isPresentation && !isPresentationEnvelope) || (!isPresentation && isPresentationEnvelope)) {
 				completedResultCallback?.Invoke(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_TRANSACTION_TYPE_ENVELOPE_REPRESENTATION));
 
@@ -569,6 +566,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(transactionEnvelope.Signature is IJointEnvelopeSignature || transactionEnvelope.Contents.RehydratedEvent is IJointTransaction) {
 				acceptableRange = TimeSpan.FromDays(1);
 			}
+
 			//first check the time to ensure we are within the acceptable range
 			if(!this.timeService.WithinAcceptableRange(transactionEnvelope.Contents.RehydratedEvent.TransactionId.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableRange)) {
 				completedResultCallback(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE));
@@ -659,12 +657,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 							return;
 						}
 					}
-				} else if(transactionEnvelope.Signature is IPresentationEnvelopeSignature  presentationEnvelopeSignature) {
+				} else if(transactionEnvelope.Signature is IPresentationEnvelopeSignature presentationEnvelopeSignature) {
 					// thats fine, do nothing
 					completedResultCallback(result);
-					
+
 					return;
 				}
+
 				// else if(transactionEnvelope.Signature is ISecretEnvelopeSignature secretEnvelopeSignature) {
 				// 	keyAddress = secretEnvelopeSignature.AccountSignature.KeyAddress;
 				// 	publishedAccountSignature = secretEnvelopeSignature.AccountSignature;
@@ -776,7 +775,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} else if(transactionEnvelope.Signature is IJointEnvelopeSignature jointEnvelopeSignature) {
 
 				//TODO: enable joint accounts 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.RequireNodeUpdate(this.centralCoordinator.ChainId.Value, this.centralCoordinator.ChainName), new CorrelationContext());
+				await centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.RequireNodeUpdate(centralCoordinator.ChainId.Value, centralCoordinator.ChainName), new CorrelationContext()).ConfigureAwait(false);
 
 				completedResultCallback(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID));
 
@@ -988,7 +987,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		public async Task<ValidationResult> ValidateDigest(IBlockchainDigest digest, bool verifyFiles, LockContext lockContext) {
 
 			//TODO: enable digests
-			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.RequireNodeUpdate(this.centralCoordinator.ChainId.Value, this.centralCoordinator.ChainName), new CorrelationContext());
+			await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.RequireNodeUpdate(this.centralCoordinator.ChainId.Value, this.centralCoordinator.ChainName), new CorrelationContext()).ConfigureAwait(false);
 
 			return this.CreateDigestValidationResult(ValidationResult.ValidationResults.Invalid, DigestValidationErrorCodes.Instance.INVALID);
 
@@ -1196,11 +1195,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 						if(keyOrdinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) {
 							xmssKey.NoncesExponent = WalletProvider.TRANSACTION_KEY_NONCES_EXPONENT;
-						}
-						else if(keyOrdinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
+						} else if(keyOrdinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
 							xmssKey.NoncesExponent = WalletProvider.MESSAGE_KEY_NONCES_EXPONENT;
 						}
-						
+
 						xmssKey.HashType = keyBytes.Value.hashType;
 						xmssKey.BackupHashType = keyBytes.Value.backupHashType;
 					}
@@ -1348,11 +1346,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(!this.ValidateBlockKeyTree(block.SignatureSet.ModeratorKeyOrdinal)) {
 				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.INVALID_DIGEST_KEY);
 			}
-			
+
 			// ok, check the signature
 			// first thing, get the key from our chain state
 			var entry = await this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.GetModeratorKeyAndIndex(block.SignatureSet.ModeratorKeyOrdinal).ConfigureAwait(false);
-			
+
 			var blockSignatureSignature = block.SignatureSet.BlockSignature;
 
 			// simply use it as is
@@ -1366,7 +1364,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(block.BlockId > 2 && blockSignatureSignature.KeyUseIndex < entry.keyIndex) {
 				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.INVALID_KEY_SEQUENCE);
 			}
-
 
 			// thats it :)
 			return await this.ValidateBlockSignature(hash, block, entry.key).ConfigureAwait(false);
@@ -1520,11 +1517,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <returns></returns>
 		protected virtual async Task<ValidationResult> ValidateTransactionTypes(ITransactionEnvelope transactionEnvelope, ITransaction transaction, bool gossipOrigin, LockContext lockContext) {
 			ValidationResult result = new ValidationResult(ValidationResult.ValidationResults.Valid);
-			
+
 			if(result.Valid && !transaction.TransactionId.Account.IsValid) {
 				return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ACCOUNT);
 			}
-			
+
 			if(result.Valid && transaction is IStandardPresentationTransaction presentationTransaction && transactionEnvelope is IPresentationTransactionEnvelope presentationTransactionEnvelope) {
 
 				result = await this.ValidatePresentationTransaction(presentationTransactionEnvelope, presentationTransaction, gossipOrigin, lockContext).ConfigureAwait(false);
@@ -1539,16 +1536,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// lets do a special validation first, but it will go through the usual after
 				result = this.ValidateKeyChangeTransaction(transactionEnvelope, keyChangeTransaction, lockContext);
 			}
-			
+
 			if(result.Valid && transaction is ISetAccountRecoveryTransaction accountRecoveryTransaction) {
 				// lets do a special validation first, but it will go through the usual after
 				if(accountRecoveryTransaction.Operation == SetAccountRecoveryTransaction.OperationTypes.Create && (accountRecoveryTransaction.AccountRecoveryHash == null || accountRecoveryTransaction.AccountRecoveryHash.IsZero || accountRecoveryTransaction.AccountRecoveryHash.Length > 200)) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
-				}
-				else if(accountRecoveryTransaction.Operation == SetAccountRecoveryTransaction.OperationTypes.Revoke && accountRecoveryTransaction.AccountRecoveryHash != null) {
+				} else if(accountRecoveryTransaction.Operation == SetAccountRecoveryTransaction.OperationTypes.Revoke && accountRecoveryTransaction.AccountRecoveryHash != null) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
-				}
-				else{
+				} else {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
 			}
@@ -1557,6 +1552,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				if(gatedTransaction.SenderAccountId != gatedTransaction.TransactionId.Account) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
+
 				if(gatedTransaction.CorrelationId == 0) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
@@ -1567,25 +1563,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				if(!threeWayGatedTransaction.VerifierAccountId.IsValid || threeWayGatedTransaction.VerifierAccountId == threeWayGatedTransaction.TransactionId.Account || threeWayGatedTransaction.VerifierAccountId == threeWayGatedTransaction.ReceiverAccountId) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
+
 				if(!threeWayGatedTransaction.ReceiverAccountId.IsValid || threeWayGatedTransaction.ReceiverAccountId == threeWayGatedTransaction.TransactionId.Account) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
+
 				if(threeWayGatedTransaction.Duration == 0) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
 			}
-			
+
 			if(result.Valid && transaction is IGatedJudgementTransaction gatedJudgementTransaction) {
 				// lets do a special validation first, but it will go through the usual after
 				if(!gatedJudgementTransaction.VerifierAccountId.IsValid || gatedJudgementTransaction.VerifierAccountId == gatedJudgementTransaction.SenderAccountId || gatedJudgementTransaction.VerifierAccountId == gatedJudgementTransaction.ReceiverAccountId) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
+
 				if(!gatedJudgementTransaction.SenderAccountId.IsValid || gatedJudgementTransaction.SenderAccountId == gatedJudgementTransaction.ReceiverAccountId) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
+
 				if(!gatedJudgementTransaction.ReceiverAccountId.IsValid) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
+
 				if(gatedJudgementTransaction.Judgement != GatedJudgementTransaction.GatedJudgements.Accepted && gatedJudgementTransaction.Judgement != GatedJudgementTransaction.GatedJudgements.Rejected) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 				}
@@ -1609,10 +1610,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			}
 
 			bool isServer = transaction.AccountType == Enums.AccountTypes.Server || transaction.IsServer;
-			if(isServer ||
-			   ((transaction.AccountType == Enums.AccountTypes.User && (!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.DisableWebRegUserPresentationTHS || gossipOrigin)))) {
+
+			if(isServer || ((transaction.AccountType == Enums.AccountTypes.User && (!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.DisableWebRegUserPresentationTHS || gossipOrigin)))) {
 
 				THSRulesSetDescriptor rulesSetDescriptor = null;
+
 				if(TestingUtil.Testing) {
 					if(envelope.THSEnvelopeSignature.RuleSet != THSRulesSet.TestRuleset) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_RULESET);
@@ -1625,8 +1627,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					}
 
 					rulesSetDescriptor = THSRulesSet.ServerPresentationDefaultRulesSetDescriptor;
-				}
-				else if(transaction.AccountType == Enums.AccountTypes.User) {
+				} else if(transaction.AccountType == Enums.AccountTypes.User) {
 					if(envelope.THSEnvelopeSignature.RuleSet != THSRulesSet.PresentationDefaultRulesSet) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_RULESET);
 					}
@@ -1727,29 +1728,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			Enums.KeyHashType hashType = 0;
 
 			int bits = 0;
+
 			if(key.Ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) {
 				bits = WalletProvider.TRANSACTION_KEY_HASH_BITS;
-			}
-			else if(key.Ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
+			} else if(key.Ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
 				bits = WalletProvider.MESSAGE_KEY_HASH_BITS;
-			}
-			else if(key.Ordinal == GlobalsService.CHANGE_KEY_ORDINAL_ID) {
+			} else if(key.Ordinal == GlobalsService.CHANGE_KEY_ORDINAL_ID) {
 				bits = WalletProvider.CHANGE_KEY_HASH_BITS;
-			}
-			else if(key.Ordinal == GlobalsService.SUPER_KEY_ORDINAL_ID) {
+			} else if(key.Ordinal == GlobalsService.SUPER_KEY_ORDINAL_ID) {
 				bits = WalletProvider.SUPER_KEY_HASH_BITS;
-			}
-			else if(key.Ordinal == GlobalsService.VALIDATOR_SECRET_KEY_ORDINAL_ID) {
+			} else if(key.Ordinal == GlobalsService.VALIDATOR_SECRET_KEY_ORDINAL_ID) {
 				bits = WalletProvider.VALIDATOR_SIGNATURE_KEY_HASH_BITS;
 			}
-			
+
 			bool TestHashBits(Enums.KeyHashType keyHash, int hashBits) {
 
-				var result = ((int)keyHash & Enums.HASH512) == 0;
+				var result = ((int) keyHash & Enums.HASH512) == 0;
 
 				return hashBits == 512 ? !result : result;
 			}
-			
+
 			bool TestKeyHashBits(IXmssCryptographicKey key2, int hashBits) {
 				return TestHashBits(key2.HashType, hashBits) && TestHashBits(key2.BackupHashType, hashBits);
 			}
@@ -1757,7 +1755,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(key.PublicKey == null || key.PublicKey.IsZero) {
 				return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_BYTES);
 			}
-			
+
 			if(key is IXmssmtCryptographicKey xmssmtCryptographicKey) {
 
 				//TODO: its not urgent since no transaction use this yet, but this should be added eventually
@@ -1767,15 +1765,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					if(xmssCryptographicKey.TreeHeight < WalletProvider.MINIMAL_XMSS_KEY_HEIGHT) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_MINIMUM_SIZE);
 					}
-					
+
 					if(xmssCryptographicKey.UseIndex < 0) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_ENTRY);
 					}
-					
+
 					if(!TestKeyHashBits(xmssCryptographicKey, bits)) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_BITS);
 					}
-					
+
 					if((bits == 256 && xmssCryptographicKey.PublicKey.Length != XMSSPublicKey.PUBLIC_KEY_SIZE_256) || (bits == 512 && xmssCryptographicKey.PublicKey.Length != XMSSPublicKey.PUBLIC_KEY_SIZE_512)) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_BYTE_SIZE);
 					}
@@ -1783,31 +1781,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					if(xmssCryptographicKey.NoncesExponent <= 0 || xmssCryptographicKey.NoncesExponent > xmssCryptographicKey.TreeHeight) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
 					}
-					
+
 					if(key.Ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.TRANSACTION_KEY_NONCES_EXPONENT) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
-					}
-					else if(key.Ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.MESSAGE_KEY_NONCES_EXPONENT) {
+					} else if(key.Ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.MESSAGE_KEY_NONCES_EXPONENT) {
+						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
+					} else if(key.Ordinal == GlobalsService.CHANGE_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.MESSAGE_KEY_NONCES_EXPONENT) {
+						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
+					} else if(key.Ordinal == GlobalsService.SUPER_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.SUPER_KEY_NONCES_EXPONENT) {
+						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
+					} else if(key.Ordinal == GlobalsService.VALIDATOR_SIGNATURE_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.VALIDATOR_SIGNATURE_NONCES_EXPONENT) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
 					}
-					else if(key.Ordinal == GlobalsService.CHANGE_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.MESSAGE_KEY_NONCES_EXPONENT) {
-						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
-					}
-					else if(key.Ordinal == GlobalsService.SUPER_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.SUPER_KEY_NONCES_EXPONENT) {
-						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
-					}
-					else if(key.Ordinal == GlobalsService.VALIDATOR_SIGNATURE_KEY_ORDINAL_ID && xmssCryptographicKey.NoncesExponent != WalletProvider.VALIDATOR_SIGNATURE_NONCES_EXPONENT) {
-						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_NONCES_EXPONENT);
-					} 
 				} else {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_TYPE);
 				}
 			} else if(key is INTRUPrimeCryptographicKey ntruPrimeCryptographicKey) {
-				
+
 				if(accountId.IsServer && key.Ordinal == GlobalsService.VALIDATOR_SECRET_KEY_ORDINAL_ID) {
 					if(ntruPrimeCryptographicKey.Strength != NTRUPrimeUtils.NTRUPrimeKeyStrengthTypes.SIZE_761 && ntruPrimeCryptographicKey.Strength != NTRUPrimeUtils.NTRUPrimeKeyStrengthTypes.SIZE_857) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_STRENGTH);
 					}
+
 					if(ntruPrimeCryptographicKey.PublicKey.Length != new NTRUPrimeApiParameters(ntruPrimeCryptographicKey.Strength).PublicKeyBytes) {
 						return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_KEY_BYTE_SIZE);
 					}
@@ -1834,7 +1829,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				using THSEngine thsEngine = new THSEngine(thsEnvelope.THSEnvelopeSignatureBase.RuleSet, rulesSetDescriptor, GlobalSettings.ApplicationSettings.THSMemoryType);
 				await thsEngine.Initialize().ConfigureAwait(false);
-				
+
 				return await thsEngine.Verify(hash, thsEnvelope.THSEnvelopeSignatureBase.Solution).ConfigureAwait(false) == false ? this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_SOLUTION) : this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Valid);
 			}
 		}
@@ -2024,11 +2019,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				return ((KEY_BIT_SIZE == 256 && !bit512Set) || (KEY_BIT_SIZE == 512 && bit512Set));
 			}
+
 			if(key.Ordinal == GlobalsService.TRANSACTION_KEY_ORDINAL_ID) {
 				if(key is IXmssCryptographicKey xmssCryptographicKey) {
 					Enums.KeyHashType bitSize = xmssCryptographicKey.HashType;
 
-					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.TRANSACTION_KEY_HASH_BITS)){
+					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.TRANSACTION_KEY_HASH_BITS)) {
 						return new TransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_TRANSACTION_XMSS_KEY_BIT_SIZE);
 					}
 				} else {
@@ -2037,7 +2033,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} else if(key.Ordinal == GlobalsService.MESSAGE_KEY_ORDINAL_ID) {
 				if(key is IXmssCryptographicKey xmssCryptographicKey) {
 
-					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.MESSAGE_KEY_HASH_BITS)){
+					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.MESSAGE_KEY_HASH_BITS)) {
 						return new TransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_TRANSACTION_XMSS_KEY_BIT_SIZE);
 					}
 				} else {
@@ -2046,7 +2042,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} else if(key.Ordinal == GlobalsService.CHANGE_KEY_ORDINAL_ID) {
 				if(key is IXmssCryptographicKey xmssCryptographicKey) {
 
-					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.CHANGE_KEY_HASH_BITS)){
+					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.CHANGE_KEY_HASH_BITS)) {
 						return new TransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_CHANGE_XMSS_KEY_BIT_SIZE);
 					}
 				} else {
@@ -2055,7 +2051,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} else if(key.Ordinal == GlobalsService.SUPER_KEY_ORDINAL_ID) {
 				if(key is IXmssCryptographicKey xmssCryptographicKey) {
 					// all good
-					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.SUPER_KEY_HASH_BITS)){
+					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.SUPER_KEY_HASH_BITS)) {
 						return new TransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_TRANSACTION_XMSS_KEY_BIT_SIZE);
 					}
 				} else {
@@ -2063,8 +2059,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				}
 			} else if(key.Ordinal == GlobalsService.VALIDATOR_SIGNATURE_KEY_ORDINAL_ID) {
 				if(key is IXmssCryptographicKey xmssCryptographicKey) {
-					
-					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.VALIDATOR_SIGNATURE_KEY_HASH_BITS)){
+
+					if(!CheckKeyBits(xmssCryptographicKey.HashType, WalletProvider.VALIDATOR_SIGNATURE_KEY_HASH_BITS)) {
 						return new TransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_TRANSACTION_XMSS_KEY_BIT_SIZE);
 					}
 				} else {
@@ -2234,12 +2230,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(key is IXmssmtCryptographicKey xmssmtCryptographicKey) {
 
 				return await VerifyXmssmtSignature(hash, block.SignatureSet.BlockSignature.Autograph, xmssmtCryptographicKey).ConfigureAwait(false);
-			}
-			else if(key is IXmssCryptographicKey xmssCryptographicKey) {
+			} else if(key is IXmssCryptographicKey xmssCryptographicKey) {
 
 				return await VerifyXmssSignature(hash, block.SignatureSet.BlockSignature.Autograph, xmssCryptographicKey, true).ConfigureAwait(false);
-			}
-			else if(key is ITripleXmssCryptographicKey tripleXmssCryptographicKey) {
+			} else if(key is ITripleXmssCryptographicKey tripleXmssCryptographicKey) {
 				return await VerifyTripleXmssSignature(hash, block.SignatureSet.BlockSignature.Autograph, tripleXmssCryptographicKey).ConfigureAwait(false);
 			}
 
@@ -2271,12 +2265,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			return this.CreateValidationResult(ValidationResult.ValidationResults.Valid);
 		}
-		
+
 		protected async Task<ValidationResult> VerifyXmssmtSignature(SafeArrayHandle hash, SafeArrayHandle autograph, IXmssmtCryptographicKey xmssmtCryptographicKey) {
 			using XMSSMTProvider provider = new XMSSMTProvider(xmssmtCryptographicKey.HashType, xmssmtCryptographicKey.BackupHashType, xmssmtCryptographicKey.TreeHeight, xmssmtCryptographicKey.TreeLayers, GlobalSettings.ApplicationSettings.XmssThreadMode, xmssmtCryptographicKey.NoncesExponent);
 
 			provider.Initialize();
-			
+
 			bool result = await provider.Verify(hash, autograph, xmssmtCryptographicKey.PublicKey).ConfigureAwait(false);
 
 			if(result == false) {
@@ -2285,7 +2279,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			return this.CreateValidationResult(ValidationResult.ValidationResults.Valid);
 		}
-		
+
 		protected async Task<ValidationResult> VerifyTripleXmssSignature(SafeArrayHandle hash, SafeArrayHandle autographBytes, ITripleXmssCryptographicKey tripleXmssCryptographicKey) {
 
 			var rehydrator = DataSerializationFactory.CreateRehydrator(autographBytes);
@@ -2296,21 +2290,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			if(result.Invalid) {
 				return result;
 			}
-			
+
 			result = await this.VerifyXmssmtSignature(hash, autograph.SecondAutograph, tripleXmssCryptographicKey.SecondCryptographicKey).ConfigureAwait(false);
 
 			if(result.Invalid) {
 				return result;
 			}
-			
+
 			result = await VerifyXmssmtSignature(hash, autograph.ThirdAutograph, tripleXmssCryptographicKey.ThirdCryptographicKey).ConfigureAwait(false);
 
 			if(result.Invalid) {
 				return result;
 			}
+
 			return this.CreateValidationResult(ValidationResult.ValidationResults.Valid);
 		}
-		
+
 		protected virtual async Task<ValidationResult> ValidateDigestSignature(SafeArrayHandle hash, IPublishedAccountSignature signature, IXmssmtCryptographicKey key) {
 			// ok, now lets confirm the signature. make sure the hash is authentic and not tempered with
 

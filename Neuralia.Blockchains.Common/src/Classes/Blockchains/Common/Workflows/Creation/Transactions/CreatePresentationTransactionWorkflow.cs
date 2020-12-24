@@ -16,9 +16,12 @@ using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.THS.V1;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Locking;
+using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Transactions {
 	public interface ICreatePresentationTransactionWorkflow<out CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IGenerateNewTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -39,10 +42,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		
 		protected const string PREPROCESS_WALLET_TASK_NAME = "preprocess_wallet";
 
-		
 		public CreatePresentationTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, CorrelationContext correlationContext, string accountCode) : base(centralCoordinator, expiration, null, correlationContext) {
 			this.accountPublicationStepSet = new SystemEventGenerator.AccountPublicationStepSet();
 			this.accountCode = accountCode;
+			
+			this.ExecutionMode = Workflow.ExecutingMode.Single;
 			
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 			this.dispatchUseWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
@@ -150,17 +154,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 		protected override async Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
-			this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationStarted, this.correlationContext);
+			await centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationStarted, correlationContext).ConfigureAwait(false);
 
 			try {
 				await base.PerformWork(workflow, taskRoutingContext, lockContext).ConfigureAwait(false);
 			} catch(Exception ex) {
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationError, this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationError, this.correlationContext).ConfigureAwait(false);
 
 				throw;
 			} finally {
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AccountPublicationEnded, this.correlationContext).ConfigureAwait(false);
 			}
 		}
 
@@ -181,7 +185,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			await base.ExceptionOccured(ex).ConfigureAwait(false);
 
 			if(ex is EventGenerationException evex && evex.Envelope is IPresentationTransactionEnvelope envelope) {
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.CreateErrorMessage(BlockchainSystemEventTypes.Instance.AccountPublicationError, ex.Message), this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.CreateErrorMessage(BlockchainSystemEventTypes.Instance.AccountPublicationError, ex.Message), this.correlationContext).ConfigureAwait(false);
 			}
 		}
 
@@ -238,9 +242,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			if(TestingUtil.Testing) {
 				descriptor = THSRulesSet.TestRulesetDescriptor;
 			}
-			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PerformTHSSignature(this.envelope, descriptor, (currentNonce, currentRound) => {
-				this.CheckShouldCancel();
+
+			ClosureWrapper<DateTime> lastUpdate = DateTime.Now;
+			return this.centralCoordinator.ChainComponentProvider.AssemblyProviderBase.PerformTHSSignature(this.envelope, this.CancelToken, descriptor, async (currentNonce, currentRound) => {
+				
+				if(lastUpdate.Value.AddMinutes(3) < DateTime.Now) {
+					// lets update our expiration markers
+					try {
+						await centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token, lc) => {
+
+							// lets update our expiration notice
+							return UpdateGenerationCacheTimeouts(lc);
+						}, lockContext, Timeout).ConfigureAwait(false);
+					} catch(Exception ex) {
+						this.CentralCoordinator.Log.Debug(ex, "error while perform THS");
+					}
+
+					lastUpdate.Value = DateTime.Now;
+				}
 			});
+		}
+		
+		protected override void SetEntryCacheTimeouts(LockContext lockContext) {
+			this.WalletGenerationCache.NextRetry = DateTimeEx.CurrentTime.AddMinutes(10);
+			this.WalletGenerationCache.Expiration = DateTimeEx.CurrentTime + this.GetEnvelopeExpiration() + TimeSpan.FromDays(1);
 		}
 		
 		protected override async Task Dispatch(LockContext lockContext) {

@@ -124,9 +124,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		public class ValidatorSessionDetails : IBinarySerializable {
 
 			/// <summary>
-			/// the codes to be sent by open validators to decrypt the secret portion
+			/// the indices of the requestors assigned to this validator
 			/// </summary>
-			public readonly List<int> AssignedOpen = new List<int>();
+			public readonly List<int> AssignedIndices = new List<int>();
 			
 			/// <summary>
 			/// The secret codes sent by all to begin the process
@@ -144,14 +144,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				tool.Rehydrate(rehydrator);
 				int count = tool.Value;
 
-				this.AssignedOpen.Clear();
+				this.AssignedIndices.Clear();
 
 				for(int j = 0; j < count; j++) {
 					
 					tool.Rehydrate(rehydrator);
 					int index = tool.Value;
 
-					this.AssignedOpen.Add(index);
+					this.AssignedIndices.Add(index);
 				}
 				
 				this.SecretCodes.Clear();
@@ -177,10 +177,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				
 				AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 				
-				tool.Value = this.AssignedOpen.Count;
+				tool.Value = this.AssignedIndices.Count;
 				tool.Dehydrate(dehydrator);
 				
-				foreach(var id in this.AssignedOpen) {
+				foreach(var id in this.AssignedIndices) {
 					
 					tool.Value = id;
 					tool.Dehydrate(dehydrator);

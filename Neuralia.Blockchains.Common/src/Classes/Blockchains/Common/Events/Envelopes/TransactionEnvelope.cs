@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools;
@@ -13,9 +14,9 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes {
 
 	public interface ITransactionEnvelope : ISignedEnvelope<IDehydratedTransaction, IEnvelopeSignature> {
-		byte Expiration { get; }
+		ushort Expiration { get; }
 		DateTime GetExpirationTime(ITimeService timeService, DateTime chainInception);
-		void SetExpiration(byte value, TransactionId transactionId, IBlockchainTimeService timeService, DateTime chainInception);
+		void SetExpiration(ushort value, TransactionId transactionId, IBlockchainTimeService timeService, DateTime chainInception);
 
 		HashNodeList GetTransactionHashingStructuresArray(TransactionEnvelope.TransactionHashingTypes type = TransactionEnvelope.TransactionHashingTypes.Full);
 		HashNodeList GetFixedStructuresArray();
@@ -42,34 +43,41 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public const int MINIMUM_EXPIRATION_TIME = 1;
 
 		/// <summary>
-		///     5 days in half hours
+		///     a month in half hours! should be more than plenty
 		/// </summary>
-		public const int MAXIMUM_EXPIRATION_TIME = 24 * HOURLY_ENTRIES * 5;
+		public const int MAXIMUM_EXPIRATION_TIME = 24 * HOURLY_ENTRIES * 30;
 
 		/// <summary>
-		///     3 hours
+		///     6 hours
 		/// </summary>
-		public const int DEFAULT_EXPIRATION_TIME = HOURLY_ENTRIES * 3;
+		public const int DEFAULT_EXPIRATION_TIME = HOURLY_ENTRIES * 6;
 
-		private byte expiration = DEFAULT_EXPIRATION_TIME;
+		private ushort expiration = DEFAULT_EXPIRATION_TIME;
 
 		/// <summary>
-		///     The expiration time in hours
+		///     The expiration time in half hours
 		/// </summary>
-		public byte Expiration {
+		public ushort Expiration {
 			get => this.expiration;
 			private set => this.expiration = this.ClampExpirationTime(value);
 		}
 		
-		public void SetExpiration(byte value, TransactionId transactionId, IBlockchainTimeService timeService, DateTime chainInception) {
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="value">expiration time in half hours</param>
+		/// <param name="transactionId"></param>
+		/// <param name="timeService"></param>
+		/// <param name="chainInception"></param>
+		public void SetExpiration(ushort value, TransactionId transactionId, IBlockchainTimeService timeService, DateTime chainInception) {
 
 			DateTime transactionTime = timeService.GetTransactionDateTime(transactionId, chainInception);
 
 			TimeSpan delta = DateTimeEx.CurrentTime - transactionTime;
 
-			int secondsDelta = (int) Math.Round((decimal) delta.TotalMinutes / 30, 0);
+			int halfHourDelta = (int) Math.Round((decimal) delta.TotalMinutes / SLICE_MINUTES, 0);
 
-			this.Expiration = (byte) Math.Max(Math.Min(secondsDelta + (value != 0 ? value : DEFAULT_EXPIRATION_TIME), byte.MaxValue), MINIMUM_EXPIRATION_TIME);
+			this.Expiration = (ushort) Math.Max(Math.Min(halfHourDelta + (value != 0 ? value : DEFAULT_EXPIRATION_TIME), ushort.MaxValue), MINIMUM_EXPIRATION_TIME);
 		}
 
 		public DateTime GetExpirationTime(ITimeService timeService, DateTime chainInception) {
@@ -128,30 +136,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			return hashNodeList;
 		}
 
-		public void SetExpiration(byte value) {
+		public void SetExpiration(ushort value) {
 
 			this.Expiration = value;
 		}
 
-		private byte ClampExpirationTime(byte expiration) {
+		private ushort ClampExpirationTime(ushort expiration) {
 			if(expiration == 0) {
 				expiration = DEFAULT_EXPIRATION_TIME;
 			}
 
-			return (byte) Math.Max(Math.Min((decimal) expiration, MAXIMUM_EXPIRATION_TIME), MINIMUM_EXPIRATION_TIME);
+			return (ushort) Math.Max(Math.Min((decimal) expiration, MAXIMUM_EXPIRATION_TIME), MINIMUM_EXPIRATION_TIME);
 		}
 		
 
 		protected override void Rehydrate(IDataRehydrator rehydrator) {
 			base.Rehydrate(rehydrator);
 			
-			this.Expiration = rehydrator.ReadByte();
+			SimpleOverflowShort tool = new SimpleOverflowShort();
+			tool.Rehydrate(rehydrator);
+			this.Expiration = tool.Value;
 		}
 		
 		protected override void Dehydrate(IDataDehydrator dehydrator) {
 			base.Dehydrate(dehydrator);
-			
-			dehydrator.Write(this.Expiration);
+
+			SimpleOverflowShort tool = new SimpleOverflowShort(this.Expiration);
+			tool.Dehydrate(dehydrator);
 		}
 
 		protected override IDehydratedTransaction RehydrateContents(IDataRehydrator rh) {

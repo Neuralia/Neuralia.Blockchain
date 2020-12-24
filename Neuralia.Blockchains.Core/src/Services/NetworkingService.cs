@@ -249,7 +249,7 @@ namespace Neuralia.Blockchains.Core.Services {
 			}
 		}
 
-		public async Task Stop() {
+		public Task Stop() {
 			try {
 				this.NetworkingStatus = NetworkingService.NetworkingStatuses.Stoped;
 
@@ -258,17 +258,28 @@ namespace Neuralia.Blockchains.Core.Services {
 				} catch(Exception ex) {
 
 				}
+				
+				try {
+					this.connectionListener?.Dispose();
+					
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "failed to stop connection listener");
 
-				this.connectionListener?.Dispose();
+					throw;
+				}
 
-				this.IsStarted = false;
-			} catch(Exception ex) {
-				NLog.Default.Error(ex, "failed to stop connection listener");
+				try {
+					this.StopWorkers();
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "failed to stop workers");
 
-				throw;
+					throw;
+				}
 			} finally {
-				this.StopWorkers();
+				this.IsStarted = false;
 			}
+			
+			return Task.CompletedTask;
 		}
 
 		public void Pause(bool cutConnections = false) {

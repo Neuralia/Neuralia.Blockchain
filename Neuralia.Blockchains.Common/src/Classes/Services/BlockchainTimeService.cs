@@ -12,9 +12,10 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		DateTime GetTransactionDateTime(TransactionTimestamp timestamp, DateTime chainInception);
 		TransactionTimestamp GetChainDateTimeOffsetTimestamp(DateTime chainInception);
 		TimeSpan GetTransactionTimeDifference(TransactionTimestamp timestamp, DateTime time, DateTime chainInception);
-		DateTime GetTHSExtendedExpiration(DateTime expiration, IEnvelope thsEnvelope);
+		
 		DateTime GetTransactionExpiration(ITransactionEnvelope transactionEnvelope, DateTime chainInception);
-		TimeSpan GetTHSExtendedExpirationSpan(IEnvelope envelope);
+		//DateTime GetTHSExtendedExpiration(DateTime expiration, IEnvelope thsEnvelope);
+		//TimeSpan GetTHSExtendedExpirationSpan(IEnvelope envelope);
 	}
 
 	public class BlockchainTimeService : TimeService, IBlockchainTimeService {
@@ -76,33 +77,38 @@ we have to remove this code!!
 			TimeSpan extension = TimeSpan.Zero;
 			
 			if(envelope is ITHSEnvelope thsEnvelope) {
-				TimeSpan estimatedRoundTime = TimeSpan.Zero;
+				// we dont need this anymore, expiration already has THS factored in
 
-				if(thsEnvelope is IPresentationTransactionEnvelope presentationTransactionEnvelope) {
-
-					if(presentationTransactionEnvelope.Contents.RehydratedEvent is IStandardPresentationTransaction standardPresentationTransaction) {
-						if(standardPresentationTransaction.IsServer) {
-							estimatedRoundTime = THSRulesSet.ServerPresentationDefaultRulesSetDescriptor.EstimatedHigherRoundTime;
-						} else {
-							estimatedRoundTime = THSRulesSet.PresentationDefaultRulesSetDescriptor.EstimatedHigherRoundTime;
-						}
-					}
-				} else if(thsEnvelope is IInitiationAppointmentMessageEnvelope) {
-					estimatedRoundTime = THSRulesSet.InitiationAppointmentDefaultRulesSetDescriptor.EstimatedHigherRoundTime;
-				}
-
-				// if it is a ths transaction, then we add the estimated time it took as a bonus
-				if(thsEnvelope.THSEnvelopeSignatureBase != null && thsEnvelope.THSEnvelopeSignatureBase.Solution.IsValid) {
-					var totalNonce = thsEnvelope.THSEnvelopeSignatureBase.Solution.Solutions.Sum(s => s.nonce);
-
-					// this is our best estimate to how long the THS took.
-					extension = estimatedRoundTime * totalNonce;
-				}
+				// TimeSpan estimatedRoundTime = TimeSpan.Zero;
+				//
+				// if(thsEnvelope is IPresentationTransactionEnvelope presentationTransactionEnvelope) {
+				//
+				// 	if(presentationTransactionEnvelope.Contents.RehydratedEvent is IStandardPresentationTransaction standardPresentationTransaction) {
+				// 		if(standardPresentationTransaction.IsServer) {
+				// 			estimatedRoundTime = THSRulesSet.ServerPresentationDefaultRulesSetDescriptor.EstimatedHigherRoundTime;
+				// 		} else {
+				// 			estimatedRoundTime = THSRulesSet.PresentationDefaultRulesSetDescriptor.EstimatedHigherRoundTime;
+				// 		}
+				// 	}
+				// } else if(thsEnvelope is IInitiationAppointmentMessageEnvelope) {
+				// 	estimatedRoundTime = THSRulesSet.InitiationAppointmentDefaultRulesSetDescriptor.EstimatedHigherRoundTime;
+				// }
+				//
+				// // if it is a ths transaction, then we add the estimated time it took as a bonus
+				// if(thsEnvelope.THSEnvelopeSignatureBase != null && thsEnvelope.THSEnvelopeSignatureBase.Solution.IsValid) {
+				// 	var totalNonce = thsEnvelope.THSEnvelopeSignatureBase.Solution.Solutions.Sum(s => s.nonce);
+				//
+				// 	// this is our best estimate to how long the THS took.
+				// 	extension = estimatedRoundTime * totalNonce;
+				// }
+				
+				// give a little extension
+				extension = TimeSpan.FromHours(3);
 			}
-
+		
 			return extension;
 		}
-
+		
 		public DateTime GetTHSExtendedExpiration(DateTime expiration, IEnvelope envelope) {
 			// ok, for presentations, we add the time of the THS
 			return expiration + GetTHSExtendedExpirationSpan(envelope);

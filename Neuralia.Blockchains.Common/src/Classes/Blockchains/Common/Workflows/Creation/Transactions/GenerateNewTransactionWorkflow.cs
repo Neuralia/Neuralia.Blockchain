@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected readonly byte expiration;
 
 		protected readonly string note;
-		
+		public override string GenerationWorkflowTypeName => "GenerateNewTransactionWorkflow";
 
 		public GenerateNewTransactionWorkflow(CENTRAL_COORDINATOR centralCoordinator, byte expiration, string note, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
 			this.note = note;
@@ -81,7 +81,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 				envelope = envelope3;
 			}
 
-			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.TransactionError(envelope?.Contents.Uuid, null), this.correlationContext);
+			this.centralCoordinator.PostSystemEvent(SystemEventGenerator.TransactionError(envelope?.Contents.Uuid, null), this.correlationContext);
 		}
 
 		protected override async Task PerformSanityChecks(LockContext lockContext) {

@@ -134,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys {
 				return hasher.Hash(parts);
 			});
 			
-			return $"{this.KeyExportName}:::{keyString}:::{hash.ToBase64()}";
+			return $"{this.KeyExportName}:::{keyString}:::{hash.ToBase32()}";
 		}
 
 		protected override void DisposeAll() {

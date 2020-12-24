@@ -467,12 +467,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys {
 			var key = new {
 				this.HeaderPart.Major, this.HeaderPart.Minor, this.HeaderPart.Height, this.HeaderPart.NoncesExponent, HashType = this.HeaderPart.HashType.ToString(), BackupHashType = this.HeaderPart.BackupHashType.ToString(),
 				
-				PublicSeed = this.HeaderPart.PublicSeed.ToBase64(),
+				PublicSeed = this.HeaderPart.PublicSeed.ToBase32(),
 				
-				Root = this.SecretPart.Root.ToBase64(),
-				BackupRoot = this.SecretPart.BackupRoot.ToBase64(),
-				SecretPrf = this.SecretPart.SecretPrf.ToBase64(),
-				SecretSeed = this.SecretPart.SecretSeed.ToBase64(),
+				Root = this.SecretPart.Root.ToBase32(),
+				BackupRoot = this.SecretPart.BackupRoot.ToBase32(),
+				SecretPrf = this.SecretPart.SecretPrf.ToBase32(),
+				SecretSeed = this.SecretPart.SecretSeed.ToBase32(),
 				
 				Nonces = new {
 					this.NoncePart.Nonces.Major, this.NoncePart.Nonces.Minor,
@@ -488,7 +488,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS.Keys {
 				return hasher.Hash(parts);
 			});
 			
-			return $"XMSS:::{keyString}:::{hash.ToBase64()}";
+			return $"XMSS:::{keyString}:::{hash.ToBase32()}";
 		}
 	}
 

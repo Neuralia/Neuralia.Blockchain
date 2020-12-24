@@ -70,7 +70,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<List<ISignedMessageEnvelope>> PrepareElectionMessageEnvelopes(List<IElectionCandidacyMessage> messages, LockContext lockContext);
 		Task PrepareTransactionBasics(ITransaction transaction, LockContext lockContext);
 		
-		Task PerformTHSSignature(ITHSEnvelope thsEnvelope, THSRulesSetDescriptor rulesSetDescriptor, Action<long, int> callback = null, CorrelationContext correlationContext = default);
+		Task PerformTHSSignature(ITHSEnvelope thsEnvelope, CancellationToken? cancellationToken, THSRulesSetDescriptor rulesSetDescriptor, Func<long, int, Task> callback = null, CorrelationContext correlationContext = default);
 		Task PerformEnvelopeSignature(IEnvelope envelope, LockContext lockContext, byte expiration = 0);
 		Task PerformTransactionEnvelopeSignature(ITransactionEnvelope transactionEnvelope, LockContext lockContext, byte expiration = 0);
 		Task PerformMessageEnvelopeSignature(ISignedMessageEnvelope messageEnvelope, LockContext lockContext);
@@ -992,7 +992,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 		
-		public async Task PerformTHSSignature(ITHSEnvelope thsEnvelope, THSRulesSetDescriptor rulesSetDescriptor, Action<long, int> callback = null, CorrelationContext correlationContext = default) {
+		public async Task PerformTHSSignature(ITHSEnvelope thsEnvelope, CancellationToken? cancellationToken, THSRulesSetDescriptor rulesSetDescriptor,  Func<long, int, Task> callback = null, CorrelationContext correlationContext = default) {
 
 			// this is a very special case where we hash before we create the envelope
 			try {
@@ -1000,7 +1000,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				DateTime start = DateTime.Now;
 				
 				// first thing, trigger our intent to begin a THS.
-				this.CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSTrigger(), correlationContext);
+				await CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSTrigger(), correlationContext).ConfigureAwait(false);
 				Thread.Sleep(100);
 
 				using THSEngine thsEngine = new THSEngine(thsEnvelope.THSEnvelopeSignatureBase.RuleSet,rulesSetDescriptor, GlobalSettings.ApplicationSettings.THSMemoryType);
@@ -1014,9 +1014,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
 
 					using var thsHash = BlockchainHashingUtils.GenerateTHSHash(thsEnvelope);
-					
-					THSState state = await this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadCachedTHSState(key).ConfigureAwait(false);
 
+					THSState state = null;
+					try {
+						state = await this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadCachedTHSState(key).ConfigureAwait(false);
+					} catch(Exception ex) {
+						this.CentralCoordinator.Log.Debug($"Failed to load THS cache!");
+					}
+					
 					if(state != null) {
 						if(SafeArrayHandle.Wrap(state.Hash) != thsHash) {
 							state = null;
@@ -1030,17 +1035,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					
 					ClosureWrapper<int> lastRound = new ClosureWrapper<int>(state.thsState.Round);
 
-					thsEnvelope.THSEnvelopeSignatureBase.Solution = await thsEngine.PerformTHS(thsHash, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
-						this.CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSBegin(hashTargetDifficulty, rulesSetDescriptor.NonceTarget, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions), correlationContext);
+					thsEnvelope.THSEnvelopeSignatureBase.Solution = await thsEngine.PerformTHS(thsHash, cancellationToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
+						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSBegin(hashTargetDifficulty, rulesSetDescriptor.NonceTarget, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions), correlationContext);
 
 						return Task.CompletedTask;
-					} , (currentNonce, currentRound, totalNonce, solutions, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio) => {
+					} , async (currentNonce, currentRound, totalNonce, solutions, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio) => {
 
 						if(callback != null) {
-							callback(currentNonce, currentRound);
+							await callback(currentNonce, currentRound).ConfigureAwait(false);
 						}
 						lastRound.Value = currentRound;
-						CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSIteration(currentNonce, DateTime.Now - start, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio), correlationContext);
+						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSIteration(currentNonce, DateTime.Now - start, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio), correlationContext);
 						Thread.Sleep(5);
 
 						this.CentralCoordinator.Log.Information($"THS Iteration. Current nonce: {currentNonce}.");
@@ -1055,24 +1060,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							foreach(var solution in solutions) {
 								state.thsState.Solutions.Add(new THSProcessState.SolutionEntry(solution.solution, solution.nonce));
 							}
-							return this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveCachedTHSState(state, key);
+							await CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveCachedTHSState(state, key).ConfigureAwait(false);
 						}
 						
-						return Task.CompletedTask;
 					}, (currentRound, totalNonce, lastNonce, lastSolution) => {
-						this.CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSRound(currentRound, totalNonce, lastNonce, lastSolution), correlationContext);
+						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSRound(currentRound, totalNonce, lastNonce, lastSolution), correlationContext);
 						
 						this.CentralCoordinator.Log.Information($"THS Round. Current round: {currentRound}. Total nonce: {totalNonce}. last solution nonce: {lastNonce}. Last solution: {lastSolution}");
 						
 						return Task.CompletedTask;
 					}, state.thsState).ConfigureAwait(false);
 
-					this.CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSSolution(thsEnvelope.THSEnvelopeSignatureBase.Solution, rulesSetDescriptor.HashTargetDifficulty), correlationContext);
+					await CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSSolution(thsEnvelope.THSEnvelopeSignatureBase.Solution, rulesSetDescriptor.HashTargetDifficulty), correlationContext).ConfigureAwait(false);
 					this.CentralCoordinator.Log.Information($"THS solution found!");
+
+					try {
+						this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.ClearCachedTHSState(key);
+					} catch(Exception ex) {
+						this.CentralCoordinator.Log.Debug($"Failed to clear THS cache!");
+					}
 
 				} finally {
 					this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RestoreNetwork();
-					this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.ClearCachedTHSState(key);
 				}
 
 			} catch(Exception ex) {

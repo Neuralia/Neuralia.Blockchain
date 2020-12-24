@@ -182,10 +182,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				try {
 					await this.CheckTransactionCache().ConfigureAwait(false);
-
+					
 					this.checkTransactionRetries = DateTimeEx.CurrentTime.AddMinutes(5);
 				} catch(Exception ex) {
-					this.CentralCoordinator.Log.Error(ex, "Failed to check the transaction cache. will retry");
+					this.CentralCoordinator.Log.Debug(ex, "Failed to check the transaction cache. will retry");
 					this.checkTransactionRetries = DateTimeEx.CurrentTime.AddSeconds(30);
 				}
 			}
@@ -208,7 +208,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					var retries = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetRetryEntriesBase(lockContext).ConfigureAwait(false);
 
 					foreach(var retry in retries) {
-
+						
 						IWorkflow workflow = null;
 
 						if(retry.EventType == WalletGenerationCache.DispatchEventTypes.Transaction) {

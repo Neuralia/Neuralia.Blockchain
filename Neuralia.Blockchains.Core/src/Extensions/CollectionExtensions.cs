@@ -51,6 +51,24 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 			return d;
 		}
+		
+		public static ConcurrentDictionary<KEY, ENTRY> ToConcurrentDictionary<KEY, ENTRY>(this IDictionary<KEY,ENTRY> source) {
+			if(source == null) {
+				throw new ArgumentNullException(nameof(source));
+			}
+			
+			if(source.Count == 0) {
+				return new ConcurrentDictionary<KEY, ENTRY>();
+			}
+
+			ConcurrentDictionary<KEY, ENTRY> d = new ConcurrentDictionary<KEY, ENTRY>();
+
+			foreach(var element in source) {
+				d.AddSafe(element.Key, element.Value);
+			}
+
+			return d;
+		}
 
 		/// <summary>
 		///     This method will find the consecutive elements in the array and return them in groups.

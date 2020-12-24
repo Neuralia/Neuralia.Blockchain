@@ -107,7 +107,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			
 			singleEntryContext.syncManifest = this.LoadBlockSyncManifest(singleEntryContext.details.Id);
 
-			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(1, 1, ""), this.correlationContext);
+			await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(1, 1, ""), this.correlationContext).ConfigureAwait(false);
 
 			if((singleEntryContext.syncManifest != null) && ((singleEntryContext.syncManifest.Key != 1) || (singleEntryContext.syncManifest.Attempts >= 3))) {
 				// we found one, but if we are here, it is stale so we delete it
@@ -1326,7 +1326,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			string syncRate = this.rateCalculator.CalculateSyncingRate(this.ChainStateProvider.PublicBlockHeight - this.ChainStateProvider.DownloadBlockHeight);
 
 			this.CentralCoordinator.Log.Information($"Estimated time to blockchain sync completion: {syncRate}");
-			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(singleEntryContext.details.Id, this.ChainStateProvider.PublicBlockHeight, syncRate), this.correlationContext);
+			await centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncUpdate(singleEntryContext.details.Id, ChainStateProvider.PublicBlockHeight, syncRate), correlationContext).ConfigureAwait(false);
 
 			singleEntryContext.blockFetchAttemptCounter = 1;
 			singleEntryContext.blockFetchAttempt = BlockFetchAttemptTypes.Attempt1;

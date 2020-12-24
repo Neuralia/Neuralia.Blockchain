@@ -29,8 +29,13 @@ using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation {
 
+	public interface IInternalEventGenerationWorkflowBase : IChainWorkflow {
+		string GenerationWorkflowTypeName { get; }
+	}
+	
 	public interface IEventGenerationWorkflowBase : IChainWorkflow {
 		IWalletGenerationCache WalletGenerationCache { get; set; }
+		
 	}
 
 	public interface IEventGenerationWorkflowBase<out CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IEventGenerationWorkflowBase
@@ -39,7 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 	}
 
-	public abstract class EventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ENVELOPE_TYPE, DEHYDRATED_TYPE, BLOCKCHAIN_EVENT_TYPE, VERSION_TYPE> : ChainWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IEventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public abstract class EventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ENVELOPE_TYPE, DEHYDRATED_TYPE, BLOCKCHAIN_EVENT_TYPE, VERSION_TYPE> : ChainWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IEventGenerationWorkflowBase<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IInternalEventGenerationWorkflowBase
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where ENVELOPE_TYPE : class, IEnvelope<DEHYDRATED_TYPE>
@@ -67,6 +72,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected ENVELOPE_TYPE envelope;
 		protected Exception exception = null;
 		public IWalletGenerationCache WalletGenerationCache { get; set; }
+		
+		
+		public override bool VirtualMatch(IWorkflow other) {
+
+			if(other is IInternalEventGenerationWorkflowBase eventGenerationWorkflowBase) {
+				return this.GenerationWorkflowTypeName == eventGenerationWorkflowBase.GenerationWorkflowTypeName;
+			}
+			return base.VirtualMatch(other);
+		}
+
+		public abstract string GenerationWorkflowTypeName { get; }
 
 		public EventGenerationWorkflowBase(CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext, IWalletGenerationCache WalletGenerationCache = null) : base(centralCoordinator) {
 			// we make creations sequential
@@ -377,13 +393,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 							foreach(var subTask in transactionWorkflowTask.tasks) {
 								token.ThrowIfCancellationRequested();
+								this.CancelToken.ThrowIfCancellationRequested();
 								await ExecuteTransactionStep(subTask, provider, token, transactionWorkflowTask.Name, lc).ConfigureAwait(false);
 							}
 
 							await this.UpdateGenerationCacheEntry(lc).ConfigureAwait(false);
-						}, null, this.Timeout).ConfigureAwait(false);
+						}, lockContext, this.Timeout).ConfigureAwait(false);
 
 						foreach(var func in transactionWorkflowTask.Completions) {
+							this.CheckShouldCancel();
 							await func().ConfigureAwait(false);
 						}
 					}
@@ -393,8 +411,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 				try {
 					await Repeater.RepeatAsync(async () => {
-						await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.DeleteGenerationCacheEntry(this.WalletGenerationCache.Key, lockContext).ConfigureAwait(false);
-						await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lockContext).ConfigureAwait(false);
+						
+						await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction((provider, token, lc) => {
+
+							return provider.DeleteGenerationCacheEntry(this.WalletGenerationCache.Key, lockContext);
+						}, lockContext, this.Timeout).ConfigureAwait(false);
 					}).ConfigureAwait(false);
 				} catch(Exception ex) {
 					// we can let this go, its not critical.
@@ -488,8 +509,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			// and now the latest envelope
 			this.WalletGenerationCache.Event = this.envelope.DehydrateEnvelope();
 			this.WalletGenerationCache.Version = this.BlockchainEvent.Version.ToString();
-			this.WalletGenerationCache.NextRetry = DateTimeEx.CurrentTime.AddMinutes(5);
-			this.WalletGenerationCache.Expiration = DateTimeEx.CurrentTime + this.GetEnvelopeExpiration() - TimeSpan.FromHours(2);
+
+			this.SetEntryCacheTimeouts(lockContext);
 
 			return Task.CompletedTask;
 		}
@@ -497,8 +518,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected virtual async Task UpdateGenerationCacheEntry(LockContext lockContext) {
 			await this.SetEntry(lockContext).ConfigureAwait(false);
 			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateGenerationCacheEntry(this.WalletGenerationCache, lockContext).ConfigureAwait(false);
-			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(lockContext).ConfigureAwait(false);
 		}
+
+		protected virtual void SetEntryCacheTimeouts(LockContext lockContext) {
+			this.WalletGenerationCache.NextRetry = DateTimeEx.CurrentTime.AddMinutes(5);
+			this.WalletGenerationCache.Expiration = DateTimeEx.CurrentTime + this.GetEnvelopeExpiration() - TimeSpan.FromHours(2);
+		}
+
+		protected virtual async Task UpdateGenerationCacheTimeouts(LockContext lockContext) {
+			this.SetEntryCacheTimeouts(lockContext);
+			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateGenerationCacheEntry(this.WalletGenerationCache, lockContext).ConfigureAwait(false);
+		}
+
 
 		protected virtual Task ProcessEnvelope(LockContext lockContext) {
 			return Task.CompletedTask;
@@ -592,11 +623,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		}
 
 		protected virtual Task ExceptionOccured(Exception ex) {
-			this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.Error(this.centralCoordinator.ChainId, ex.Message), this.correlationContext);
-
+			
 			this.CentralCoordinator.Log.Error(ex, "Failed to create event");
 
-			return Task.CompletedTask;
+			return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.Error(this.centralCoordinator.ChainId, ex.Message), this.correlationContext);
 		}
 
 		protected virtual async Task CheckAccountStatus(LockContext lockContext) {

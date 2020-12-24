@@ -260,7 +260,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				//TODO: should this be more granular?  perhaps it should be set at each loop...
 				this.IsBusy = true;
 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncStarted(this.ChainStateProvider.BlockHeight, this.ChainStateProvider.PublicBlockHeight), this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncStarted(this.ChainStateProvider.BlockHeight, this.ChainStateProvider.PublicBlockHeight), this.correlationContext).ConfigureAwait(false);
 
 				// this will be our parallel fetch new peers task
 
@@ -423,7 +423,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 				
 				try {
-					this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncEnded(this.ChainStateProvider.BlockHeight, this.ChainStateProvider.PublicBlockHeight), this.correlationContext);
+					await centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.BlockchainSyncEnded(ChainStateProvider.BlockHeight, ChainStateProvider.PublicBlockHeight), correlationContext).ConfigureAwait(false);
 
 				} catch(Exception ex) {
 					// do nothing, we tried but failed

@@ -32,7 +32,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where ENVELOPE_TYPE : class, IMessageEnvelope {
 		
-		
+		public override string GenerationWorkflowTypeName => "GenerateNewMessageWorkflow";
+
 		public GenerateNewMessageWorkflow(CENTRAL_COORDINATOR centralCoordinator, CorrelationContext correlationContext) : base(centralCoordinator, correlationContext) {
 
 		}

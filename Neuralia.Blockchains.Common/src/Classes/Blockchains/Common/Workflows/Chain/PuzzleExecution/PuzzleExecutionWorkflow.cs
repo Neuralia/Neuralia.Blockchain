@@ -78,7 +78,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			try {
 				taskRoutingContext.SetCorrelationContext(this.correlationContext);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzlePreparation, this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzlePreparation, this.correlationContext).ConfigureAwait(false);
 
 				var appointmentsProvider = this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase;
 				var walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
@@ -210,6 +210,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				if(validatorCode == null || validatorCode.IsZero) {
 					// this is a serious issue, no validator responded. we are done
 					//TODO: add event
+					 this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentPuzzleFailed, this.correlationContext);
+
 					Log.Error($"Failed to contact open validators. Cannot continue.");
 
 					return;
@@ -311,7 +313,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					index += 1;
 				}
 
-				this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AppointmentPuzzleBegin(finalPuzzleCode, formattedPuzzles), this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.AppointmentPuzzleBegin(finalPuzzleCode, formattedPuzzles), this.correlationContext).ConfigureAwait(false);
 
 				if(this.PuzzleBeginEvent != null) {
 					this.PuzzleBeginEvent(finalPuzzleCode, formattedPuzzles);
@@ -361,7 +363,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				}).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzleCompleted, this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzleCompleted, this.correlationContext).ConfigureAwait(false);
 
 				// now we start the THS
 
@@ -386,7 +388,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							using var thsHash = AppointmentUtils.PrepareTHSHash(key, puzzleAnswers);
 
-							thsResult = await thsEngine.PerformTHS(thsHash, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
+							thsResult = await thsEngine.PerformTHS(thsHash, this.CancelToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
 								//TODO: anything to do with these events?
 								return Task.CompletedTask;
 							}, (currentNonce, currentRound, totalNonce, solutions, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio) => {
@@ -425,7 +427,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				}).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzleCompleted, this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzleCompleted, this.correlationContext).ConfigureAwait(false);
 
 
 				// we are done! :D
@@ -440,7 +442,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					return true;
 				}, lockContext).ConfigureAwait(false);
 
-				this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentVerificationRequestCompleted, this.correlationContext);
+				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentVerificationRequestCompleted, this.correlationContext).ConfigureAwait(false);
 
 				//return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LoadWallet(this.correlationContext, lockContext, this.passphrase);
 			} catch(Exception ex) {
