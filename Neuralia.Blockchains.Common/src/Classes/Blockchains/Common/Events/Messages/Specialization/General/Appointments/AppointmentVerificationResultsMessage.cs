@@ -33,7 +33,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			public DateTime? CodeRequestTimestamp { get; set; }
 			public DateTime TriggerTimestamp { get; set; }
 			public DateTime PuzzleCompleted { get; set; }
-			public DateTime THSCompleted { get; set; }
+			public DateTime? THSCompleted { get; set; }
 			
 			public int SecretCode { get; set; }
 
@@ -48,7 +48,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 				this.CodeRequestTimestamp = rehydrator.ReadNullableDateTime();
 				this.TriggerTimestamp = rehydrator.ReadDateTime();
 				this.PuzzleCompleted = rehydrator.ReadDateTime();
-				this.THSCompleted = rehydrator.ReadDateTime();
+				this.THSCompleted = rehydrator.ReadNullableDateTime();
 				this.SecretCode = rehydrator.ReadInt();
 				
 				int count = rehydrator.ReadInt();

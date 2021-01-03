@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using Neuralia.Blockchains.Core.Cryptography.THS.V1;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
@@ -23,12 +24,16 @@ namespace Neuralia.Blockchains.Core.Services {
 		bool WithinAcceptableRange(DateTime timestamp, TimeSpan acceptableTimeRange);
 
 		bool WithinAcceptableRange(long timestamp, DateTime chainInception, TimeSpan acceptableTimeRange);
+		bool WithinThsAcceptableRange(long timestamp, DateTime chainInception, TimeSpan acceptableTimeRange, bool addExpectedTHSBuffer, THSRulesSetDescriptor rulesSetDescriptor);
+		
 
 		DateTime GetTransactionDateTime(long timestamp, DateTime chainInception);
 
 		long GetChainDateTimeOffset(DateTime chainInception);
 
 		DateTime GetTimestampDateTime(long timestamp, DateTime chainInception);
+		TimeSpan GetTimestampSpan(long timestamp, DateTime chainInception);
+		
 		
 	}
 
@@ -162,6 +167,21 @@ namespace Neuralia.Blockchains.Core.Services {
 			return this.WithinAcceptableRange(this.GetTimestampDateTime(timestamp, chainInception), acceptableTimeRange);
 		}
 
+		public bool WithinThsAcceptableRange(DateTime timestamp, TimeSpan acceptableTimeRange, bool addExpectedTHSBuffer, THSRulesSetDescriptor rulesSetDescriptor) {
+			DateTime utcTimestamp = timestamp.ToUniversalTime();
+			
+			// here we give 10x the target timespan of the THS. it should be more than enough
+			if(addExpectedTHSBuffer) {
+				utcTimestamp += (rulesSetDescriptor.TargetTimespan * 10);
+			}
+
+			return (utcTimestamp > (this.CurrentRealTime - acceptableTimeRange)) && (utcTimestamp < (this.CurrentRealTime + acceptableTimeRange));
+		}
+		
+		public bool WithinThsAcceptableRange(long timestamp, DateTime chainInception, TimeSpan acceptableTimeRange, bool addExpectedTHSBuffer, THSRulesSetDescriptor rulesSetDescriptor) {
+			return this.WithinThsAcceptableRange(this.GetTimestampDateTime(timestamp, chainInception), acceptableTimeRange, addExpectedTHSBuffer, rulesSetDescriptor);
+		}
+
 		public DateTime CurrentRealTime => DateTimeEx.CurrentTime;
 
 		public long CurrentRealTimeTicks => this.CurrentRealTime.Ticks;
@@ -206,6 +226,16 @@ namespace Neuralia.Blockchains.Core.Services {
 			}
 
 			return (chainInception + TimeSpan.FromSeconds(timestamp)).ToUniversalTime();
+		}
+
+		public TimeSpan GetTimestampSpan(long timestamp, DateTime chainInception) {
+			this.ValidateChainInception(chainInception);
+
+			if(chainInception.Kind != DateTimeKind.Utc) {
+				throw new ApplicationException("Chain inception should always be in UTC");
+			}
+
+			return TimeSpan.FromSeconds(timestamp);
 		}
 
 		public TimeSpan GetTimeDifference(long timestamp, DateTime time, DateTime chainInception) {

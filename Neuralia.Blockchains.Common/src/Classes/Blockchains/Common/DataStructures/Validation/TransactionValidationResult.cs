@@ -38,6 +38,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public readonly TransactionValidationErrorCode INVALID_JOINT_SIGNATURE_ACCOUNTs;
 		public readonly TransactionValidationErrorCode INVALID_THS_RULESET;
 		public readonly TransactionValidationErrorCode INVALID_THS_SOLUTION;
+		public readonly TransactionValidationErrorCode INVALID_THS_TOO_MANY_SOLUTIONS;
 		
 		public readonly TransactionValidationErrorCode INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION;
 		public readonly TransactionValidationErrorCode INVALID_SUPERKEY_KEY_TYPE;
@@ -74,6 +75,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 
 			this.CreateBaseConstant(ref this.INVALID_THS_RULESET, nameof(this.INVALID_THS_RULESET));
 			this.CreateBaseConstant(ref this.INVALID_THS_SOLUTION, nameof(this.INVALID_THS_SOLUTION));
+			this.CreateBaseConstant(ref this.INVALID_THS_TOO_MANY_SOLUTIONS, nameof(this.INVALID_THS_TOO_MANY_SOLUTIONS));
 			this.CreateBaseConstant(ref this.INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION, nameof(this.INVALID_SECRET_KEY_PROMISSED_HASH_VALIDATION));
 			this.CreateBaseConstant(ref this.ONLY_ONE_TRANSACTION_PER_SCOPE, nameof(this.ONLY_ONE_TRANSACTION_PER_SCOPE));
 

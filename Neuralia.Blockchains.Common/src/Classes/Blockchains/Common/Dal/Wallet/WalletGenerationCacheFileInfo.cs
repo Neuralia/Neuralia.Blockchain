@@ -143,8 +143,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 #if MAINNET_LAUNCH_CODE
 
 						// special code to accomodate mainnet launch
-						if(expirationTime.ToUniversalTime() < GlobalsService.MainnetLauchTime) {
-							expirationTime = GlobalsService.MainnetLauchTime + TimeSpan.FromDays(2);
+						if(expirationTime.ToUniversalTime() < GlobalsService.MainnetLauchTime + TimeSpan.FromDays(2)) {
+							return Task.FromResult(0);
 						}
 #else
 we have to remove this code!!
@@ -200,6 +200,16 @@ we have to remove this code!!
 		public async Task InsertCacheEntry(T transactionCacheEntry, LockContext lockContext) {
 				await this.RunDbOperation((dbdal, lc) => {
 
+#if MAINNET_LAUNCH_CODE
+
+					// special code to accomodate mainnet launch
+					if(transactionCacheEntry.Expiration.ToUniversalTime() < GlobalsService.MainnetLauchTime + TimeSpan.FromDays(2)) {
+						transactionCacheEntry.Expiration = GlobalsService.MainnetLauchTime + TimeSpan.FromDays(2);
+					}
+#else
+we have to remove this code!!
+#endif
+					
 					dbdal.Insert(transactionCacheEntry, k => k.Key);
 
 					return Task.CompletedTask;

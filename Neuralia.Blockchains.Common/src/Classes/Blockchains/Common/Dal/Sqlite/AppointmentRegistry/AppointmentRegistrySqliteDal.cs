@@ -34,10 +34,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		private readonly ITimeService timeService;
 		protected readonly ICentralCoordinator centralCoordinator;
 		protected ICentralCoordinator CentralCoordinator => this.centralCoordinator;
-		
+		private readonly bool enablePuzzleTHS;
 		private readonly AsyncLock locker = new AsyncLock();
-		public AppointmentRegistrySqliteDal(string folderPath, ICentralCoordinator centralCoordinator, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, centralCoordinator.BlockchainServiceSet, softwareVersion, chainDalCreationFactory.CreateAppointmentRegistryContext<AppointmentRegistrySqliteContext>, serializationType) {
+		public AppointmentRegistrySqliteDal(string folderPath, ICentralCoordinator centralCoordinator, bool enablePuzzleTHS, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, centralCoordinator.BlockchainServiceSet, softwareVersion, chainDalCreationFactory.CreateAppointmentRegistryContext<AppointmentRegistrySqliteContext>, serializationType) {
 
+			this.enablePuzzleTHS = enablePuzzleTHS;
 			this.centralCoordinator = centralCoordinator;
 			this.timeService = serviceSet.TimeService;
 		}
@@ -245,11 +246,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 			});
 		}
 
-		public async Task<List<(DateTime appointment, TimeSpan window)>> GetAppointments() {
+		public async Task<List<(DateTime appointment, TimeSpan window, int requesterCount)>> GetAppointments() {
 			return (await this.PerformOperationAsync(db => {
 
-				return db.AppointmentValidatorSessions.Select(e => new {e.Appointment, e.Window}).ToListAsync();
-			}).ConfigureAwait(false)).Select(e => (e.Appointment, TimeSpan.FromSeconds(e.Window))).ToList();
+				return db.AppointmentValidatorSessions.Select(e => new {e.Appointment, e.Window, e.RequesterCount}).ToListAsync();
+			}).ConfigureAwait(false)).Select(e => (e.Appointment, TimeSpan.FromSeconds(e.Window), e.RequesterCount)).ToList();
 		}
 		
 		public Task InsertAppointmentValidatorSession(IAppointmentValidatorSession appointmentValidatorSession) {
@@ -381,21 +382,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 			});
 		}
 
-		public async Task<List<IAppointmentRequesterResult>> GetReadyAppointmentRequesterResult() {
-			return (await this.PerformOperationAsync(async db => {
+		/// <summary>
+		/// get all the sessions that are ready to be processed
+		/// </summary>
+		/// <returns></returns>
+		public Task<List<DateTime>> GetReadyAppointmentSessions() {
+			DateTime time = DateTimeEx.CurrentTime;
 
-				DateTime time = DateTimeEx.CurrentTime;
-				
-				var sessions = await db.AppointmentValidatorSessions.Where(s => s.Dispatch < time).Select(e => e.Appointment).Distinct().ToListAsync().ConfigureAwait(false);
+			return this.PerformOperationAsync(db => {
+				return db.AppointmentValidatorSessions.Where(s => s.Dispatch < time).Select(e => e.Appointment).Distinct().ToListAsync();
+			});
+		}
+				        
+
+		public async Task<List<IAppointmentRequesterResult>> GetReadyAppointmentRequesterResult(DateTime appointment, int skip, int take) {
+			return (await this.PerformOperationAsync(async db => { 
+					       return await db.AppointmentRequesterResults.Where(a => a.Sent == false && a.Appointment == appointment && a.TriggerCompleted.HasValue && a.PuzzleCompleted.HasValue && (this.enablePuzzleTHS?a.THSCompleted.HasValue:true)).OrderBy(e => e.Id).Skip(skip).Take(take).ToListAsync().ConfigureAwait(false);
 					       
-				if(sessions.Any()) {
-					
-					return await db.AppointmentRequesterResults.Where(a => a.Sent == false && sessions.Contains(a.Appointment) && a.TriggerCompleted.HasValue && a.PuzzleCompleted.HasValue && a.THSCompleted.HasValue).ToListAsync().ConfigureAwait(false);
-				}
-
-				return new List<AppointmentRequesterResultSqlite>();
-
 			}).ConfigureAwait(false)).Cast<IAppointmentRequesterResult>().ToList();
+		}
+
+		public Task<int> GetReadyAppointmentRequesterResultCount(DateTime appointment) {
+			return  this.PerformOperationAsync(db => { 
+		       return db.AppointmentRequesterResults.CountAsync(a => a.Sent == false && a.Appointment == appointment && a.TriggerCompleted.HasValue && a.PuzzleCompleted.HasValue && (this.enablePuzzleTHS?a.THSCompleted.HasValue:true));
+			});
 		}
 
 		public Task ClearReadyAppointmentRequesterResult(List<int> ids) {

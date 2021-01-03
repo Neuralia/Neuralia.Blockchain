@@ -413,7 +413,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// start the validator server
 				if(MiningTierUtils.IsFirstOrSecondTier(requestedMiningTier)) {
 
-					List<(DateTime appointment, TimeSpan window)> appointmentWindows = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetAppointmentWindows().ConfigureAwait(false);
+					List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetAppointmentWindows().ConfigureAwait(false);
 
 					this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RegisterValidationServer(appointmentWindows, this.CreateAppointmentValidatorDelegate());
 				}

@@ -5,7 +5,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.IO;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Logging;
 
 namespace Neuralia.Blockchains.Core.Services {
 	public interface IAppRemote {
@@ -42,7 +44,7 @@ namespace Neuralia.Blockchains.Core.Services {
         /// <summary>
 		/// the hardcoded mainnet launch date, used for launch
 		/// </summary>
-		public static DateTime MainnetLauchTime = new DateTime(2021, 1, 3, 16, 0,0, DateTimeKind.Utc);
+		public static DateTime MainnetLauchTime = new DateTime(2021, 1, 13, 16, 0,0, DateTimeKind.Utc);
 #else
 we have to remove this code!!
 #endif
@@ -94,6 +96,7 @@ we have to remove this code!!
 	    public const int DEFAULT_RPC_PORT = 12033;
 #endif
 
+		
 		public const string COMMON_DIRECTORY_NAME = "common";
 		public const string TRANSACTION_KEY_NAME = "TransactionKey";
 		public const string MESSAGE_KEY_NAME = "MessageKey";
@@ -120,7 +123,8 @@ we have to remove this code!!
 		public const byte MODERATOR_DIGEST_BLOCKS_CHANGE_KEY_ID = 6;
 		public const byte MODERATOR_GOSSIP_KEY_ID = 7;
 		public const byte MODERATOR_BINARY_KEY_ID = 8;
-
+		public const byte MODERATOR_MESSAGE_KEY_ID = 9;
+		
 		public const byte MODERATOR_SUPER_CHANGE_KEY_ID = 13;
 		public const byte MODERATOR_PTAH_KEY_ID = 33;
 
@@ -136,6 +140,9 @@ we have to remove this code!!
 				return moderatorKeyOrdinal == MODERATOR_BLOCKS_CHANGE_KEY_ID || isSuperKey;
 			}
 			else if(activeKeyOrdinal == MODERATOR_BINARY_KEY_ID) {
+				return isBlocksKey || isSuperKey;
+			}
+			else if(activeKeyOrdinal == MODERATOR_MESSAGE_KEY_ID) {
 				return isBlocksKey || isSuperKey;
 			}
 			else if(activeKeyOrdinal == MODERATOR_GOSSIP_KEY_ID) {

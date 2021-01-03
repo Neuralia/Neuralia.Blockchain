@@ -429,11 +429,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 				return generator;
 			}
-			public static SystemEventGenerator THSIteration(long nonce, TimeSpan elapsed, long estimatedIterationTime, long estimatedRemainingTime, double benchmarkSpeedRatio) {
+			public static SystemEventGenerator THSIteration(long[] nonces, TimeSpan elapsed, long estimatedIterationTime, long estimatedRemainingTime, double benchmarkSpeedRatio) {
 				SystemEventGenerator generator = new SystemEventGenerator();
 
 				generator.EventType = BlockchainSystemEventTypes.Instance.THSIteration;
-				generator.Parameters = new object[] {nonce, (long)elapsed.TotalSeconds, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio};
+				generator.Parameters = new object[] {nonces, (long)elapsed.TotalSeconds, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio};
 
 				return generator;
 			}

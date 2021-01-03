@@ -162,27 +162,32 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				try {
 					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.RequestPeerIPs)}: attempting to query peer list from peer {peer.ScopedAdjustedIp}");
 
-					ClientPeerListRequestWorkflow<R> peerListRequest = this.clientWorkflowFactory.CreatePeerListRequest(peer);
+					IClientPeerListRequestWorkflow<R> peerListRequest = this.clientWorkflowFactory.CreatePeerListRequest(peer);
 
-					peerListRequest.Completed += (success, wf) => {
-						// run this task in the connection manager thread by sending a delegated task
+					if(peerListRequest != null) {
+						peerListRequest.Completed += (success, wf) => {
+							// run this task in the connection manager thread by sending a delegated task
 
-						ImmutableList<NodeAddressInfo> nodes = peer.PeerNodes.Nodes;
+							ImmutableList<NodeAddressInfo> nodes = peer.PeerNodes.Nodes;
 
-						this.ReceiveTask(new SimpleTask(s => {
-							NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.RequestPeerIPs)}: succes={success}, {nodes.Count} ips returned.");
+							this.ReceiveTask(new SimpleTask(s => {
+								NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.RequestPeerIPs)}: succes={success}, {nodes.Count} ips returned.");
 
-							if(success) {
-								this.Crawler.HandlePeerIPs(node, nodes.Where(n => !this.connectionStore.IsOurAddress(n)).ToList(), DateTimeEx.CurrentTime);
-							} else {
-								this.Crawler.HandleTimeout(node, DateTimeEx.CurrentTime);
-							}
-						}));
+								if(success) {
+									this.Crawler.HandlePeerIPs(node, nodes.Where(n => !this.connectionStore.IsOurAddress(n)).ToList(), DateTimeEx.CurrentTime);
+								} else {
+									this.Crawler.HandleTimeout(node, DateTimeEx.CurrentTime);
+								}
+							}));
 
-						return Task.CompletedTask;
-					};
+							return Task.CompletedTask;
+						};
 
-					this.ipCrawlerRequests.Add((nameof(this.RequestPeerIPs), this.networkingService.WorkflowCoordinator.AddWorkflow(peerListRequest)));
+						this.ipCrawlerRequests.Add(($"{nameof(this.RequestPeerIPs)}_{peer.NodeAddressInfo}", this.networkingService.WorkflowCoordinator.AddWorkflow(peerListRequest)));
+					} else {
+						List<NodeAddressInfo> nodes = new List<NodeAddressInfo>();
+						this.Crawler.HandlePeerIPs(node, nodes, DateTimeEx.CurrentTime);
+					}
 				} catch(Exception ex) {
 					NLog.IPCrawler.Error(ex, "failed to query peer list");
 				}
@@ -196,7 +201,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			ImmutableList<PeerConnection> shouldBeEmpty = this.connectionStore.AllConnectionsList.Where(peerConnection => peerConnection.NodeAddressInfo.Equals(node)).ToImmutableList();
 
 			if(shouldBeEmpty.IsEmpty) {
-				this.ipCrawlerRequests.Add((nameof(this.RequestConnect), this.CreateConnectionAttempt(node)));
+				this.ipCrawlerRequests.Add(($"{nameof(this.RequestConnect)}_{node}", this.CreateConnectionAttempt(node)));
 			} else {
 				NLog.IPCrawler.Warning($"[Crawler] {nameof(this.RequestConnect)}: {node} already connected, calling HandleLogin(), this hints at a bug.");
 				this.HandleNewConnection(shouldBeEmpty.Single());
@@ -209,7 +214,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			// lets get a list of connected IPs
 			List<PeerConnection> connectedNodes = this.connectionStore.AllConnectionsList.Where(c => c.NodeAddressInfo.Equals(node)).ToList();
 
-			this.ipCrawlerRequests.Add((nameof(this.RequestDisconnect), this.DisconnectPeers(connectedNodes)));
+			this.ipCrawlerRequests.Add(($"{nameof(this.RequestDisconnect)}_{node}", this.DisconnectPeers(connectedNodes)));
 
 		}
 
@@ -425,27 +430,50 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} pending tasks: ");
 
-				foreach((string name, Task task) in this.ipCrawlerRequests) {
-					if(task.IsCompleted) {
-						NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Task {name} Completed.");
-					}
-
-					if(task.IsFaulted) {
-						NLog.IPCrawler.Error($"{IPCrawler.TAG} Task {name} Faulted.");
+				foreach((string name, Task task) in this.ipCrawlerRequests.ToImmutableList())
+				{
+					switch (task.Status)
+					{
+						case TaskStatus.Canceled:
+							this.ipCrawlerRequests.Remove((name, task));
+							break;
+						case TaskStatus.Faulted:
+							NLog.IPCrawler.Error($"{IPCrawler.TAG} Task {name} Faulted.");
+							this.ipCrawlerRequests.Remove((name, task));
+							break;
+						case TaskStatus.RanToCompletion:
+							NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Task {name} Completed.");
+							this.ipCrawlerRequests.Remove((name, task));
+							break;
+						case TaskStatus.Created:
+							break;
+						case TaskStatus.Running:
+							break;
+						case TaskStatus.WaitingForActivation:
+							break;
+						case TaskStatus.WaitingForChildrenToComplete:
+							break;
+						case TaskStatus.WaitingToRun:
+							break;
+						default:
+							throw new ArgumentOutOfRangeException();
 					}
 				}
-
-				this.ipCrawlerRequests = this.ipCrawlerRequests.Where(el => !el.Item2.IsCompleted).ToList();
-
-				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} remaining tasks.");
-
+				
 				this.ProcessLoopActions();
-
 				//-
 				// done, lets sleep for a while
 
 				// lets act again in X seconds
 				this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
+
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} remaining tasks.");
+
+				foreach ((string name, Task task) in this.ipCrawlerRequests){
+					NLog.IPCrawler.Verbose($"Incomplete Task {name} has status {task.Status}, awaiting...");
+					await task.ConfigureAwait(false);
+					NLog.IPCrawler.Verbose($"Task {name} now has status {task.Status}.");
+				}
 
 			} catch(OperationCanceledException) {
 				throw;

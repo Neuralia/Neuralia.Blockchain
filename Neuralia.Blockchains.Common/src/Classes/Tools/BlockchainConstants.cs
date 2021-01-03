@@ -5,7 +5,7 @@ using Neuralia.Blockchains.Core.General.Versions;
 namespace Neuralium.Blockchains.Neuralium.Classes.NeuraliumChain {
 	public static class BlockchainConstants {
 		
-		public static SoftwareVersion DefaultVersion { get; } = new SoftwareVersion(1,0,0,0, "FIRST MAINNET RELEASE");
+		public static SoftwareVersion DefaultVersion { get; } = new SoftwareVersion(1,0,1,0, "SECOND MAINNET RELEASE");
 
 
 	}

@@ -175,7 +175,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			await base.Initialize(lockContext).ConfigureAwait(false);
 			
 			string path = this.GetBlocksIdFilePath();
-			FileExtensions.EnsureFileExists(path, this.centralCoordinator.FileSystem);
+
+			if(GlobalSettings.ApplicationSettings.SerializationType == AppSettingsBase.SerializationTypes.Main) {
+				FileExtensions.EnsureFileExists(path, this.centralCoordinator.FileSystem);
+			} else {
+				if(!File.Exists(path)) {
+					throw new ApplicationException($"Blocks ID file did not exist at path: {path}");
+				}
+			}
 		}
 		
 		public string GetBlocksIdFilePath() {

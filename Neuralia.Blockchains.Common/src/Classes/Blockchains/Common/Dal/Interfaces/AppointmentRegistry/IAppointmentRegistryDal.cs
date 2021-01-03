@@ -26,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 
 		Task<IAppointmentValidatorSession> GetAppointmentValidatorSession(DateTime appointment);
 		Task<DateTime?> GetInRangeAppointments();
-		Task<List<(DateTime appointment, TimeSpan window)>> GetAppointments();
+		Task<List<(DateTime appointment, TimeSpan window, int requesterCount)>> GetAppointments();
 
 		Task InsertAppointmentValidatorSession(IAppointmentValidatorSession appointmentValidatorSession);
 		Task UpdateAppointmentValidatorSession(IAppointmentValidatorSession appointmentValidatorSession);
@@ -36,8 +36,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		Task<IAppointmentRequesterResult> GetAppointmentRequesterResult(DateTime appointment, int index);
 		Task                              InsertAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult);
 		Task                              UpdateAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult);
-		 
-		Task<List<IAppointmentRequesterResult>> GetReadyAppointmentRequesterResult();
+
+		Task<List<DateTime>> GetReadyAppointmentSessions();
+		Task<List<IAppointmentRequesterResult>> GetReadyAppointmentRequesterResult(DateTime appointment, int skip, int take);
+		Task<int> GetReadyAppointmentRequesterResultCount(DateTime appointment);
 		Task ClearReadyAppointmentRequesterResult(List<int> ids);
 	}
 }

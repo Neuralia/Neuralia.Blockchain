@@ -607,7 +607,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					thsEngine = new THSEngine(THSRulesSet.PuzzleDefaultRuleset, THSRulesSet.PuzzleDefaultRulesetDescriptor, Enums.THSMemoryTypes.RAM);
 				}
 
-				await thsEngine.Initialize().ConfigureAwait(false);
+				await thsEngine.Initialize(THSEngine.THSModes.Verify).ConfigureAwait(false);
 
 				using var thsHash = PrepareTHSHash(appointmentKey, puzzleAnswers);
 

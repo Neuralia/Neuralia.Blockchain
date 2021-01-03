@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.DataAccess {
@@ -50,7 +51,14 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			using(this.locker.Lock()) {
 				try {
 					using(DBCONTEXT db = this.CreateContext()) {
-						action(db);
+						
+						if(TestingUtil.Testing) {
+							using(TestingUtil.dbLocker.Lock()) {
+								Repeater.Repeat(() => action(db));
+							}
+						} else {
+							Repeater.Repeat(() => action(db));
+						}
 					}
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "exception occured during an Entity Framework action");
@@ -65,7 +73,14 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 				using(await this.locker.LockAsync().ConfigureAwait(false)) {
 					try {
 						await using(DBCONTEXT db = this.CreateContext()) {
-							await action(db).ConfigureAwait(false);
+							
+							if(TestingUtil.Testing) {
+								using(await TestingUtil.dbLocker.LockAsync().ConfigureAwait(false)) {
+									await Repeater.RepeatAsync(() => action(db)).ConfigureAwait(false);
+								}
+							} else {
+								await Repeater.RepeatAsync(() => action(db)).ConfigureAwait(false);
+							}
 						}
 					} catch(Exception ex) {
 						NLog.Default.Error(ex, "exception occured during an Entity Framework action");
@@ -80,7 +95,14 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			using(await this.locker.LockAsync().ConfigureAwait(false)) {
 				try {
 					await using(DBCONTEXT db = this.CreateContext()) {
-						return await action(db).ConfigureAwait(false);
+						
+						if(TestingUtil.Testing) {
+							using(await TestingUtil.dbLocker.LockAsync().ConfigureAwait(false)) {
+								return await Repeater.RepeatAsync(() => action(db)).ConfigureAwait(false);
+							}
+						} else {
+							return await Repeater.RepeatAsync(() => action(db)).ConfigureAwait(false);
+						}
 					}
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "exception occured during an Entity Framework action");
@@ -134,7 +156,14 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 				db.Database.CreateExecutionStrategy().Execute(() => {
 					using(IDbContextTransaction transaction = db.Database.BeginTransaction()) {
 						try {
-							process(db);
+							if(TestingUtil.Testing) {
+								using(TestingUtil.dbLocker.Lock()) {
+									process(db);
+								}
+							} else {
+								process(db);
+							}
+							
 
 							transaction.Commit();
 						} catch(Exception e) {
@@ -152,8 +181,14 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 				return db.Database.CreateExecutionStrategy().ExecuteAsync(async () => {
 					await using(IDbContextTransaction transaction = await db.Database.BeginTransactionAsync().ConfigureAwait(false)) {
 						try {
-							await process(db).ConfigureAwait(false);
-
+							
+							if(TestingUtil.Testing) {
+								using(await TestingUtil.dbLocker.LockAsync().ConfigureAwait(false)) {
+									await process(db).ConfigureAwait(false);
+								}
+							} else {
+								await process(db).ConfigureAwait(false);
+							}
 							await transaction.CommitAsync().ConfigureAwait(false);
 						} catch(Exception e) {
 							await transaction.RollbackAsync().ConfigureAwait(false);
@@ -172,7 +207,14 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 						try {
 							var result = await process(db).ConfigureAwait(false);
 
-							await transaction.CommitAsync().ConfigureAwait(false);
+							if(TestingUtil.Testing) {
+								using(await TestingUtil.dbLocker.LockAsync().ConfigureAwait(false)) {
+									await transaction.CommitAsync().ConfigureAwait(false);
+								}
+							} else {
+								await transaction.CommitAsync().ConfigureAwait(false);
+							}
+							
 
 							return result;
 						} catch(Exception e) {

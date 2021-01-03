@@ -271,7 +271,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} 
 			else if(version.Type == BlockchainMessageTypes.Instance.APPOINTMENT_VERIFICATION_RESULTS) {
 				if(version == (1, 0)) {
-					return factory.CreateSendAppointmentVerificationResultsMessageWorkflow( new List<IAppointmentRequesterResult>(), new Dictionary<long, bool>(),new CorrelationContext());
+					return factory.CreateSendAppointmentVerificationResultsMessageWorkflow( DateTime.MinValue, new CorrelationContext());
 				}
 			} 
 			throw new NotImplementedException();

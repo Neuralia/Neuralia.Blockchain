@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1;
 
 namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {

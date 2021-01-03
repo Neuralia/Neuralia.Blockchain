@@ -9,6 +9,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exception
 		}
 
 		public ValidationResult Result { get; set; }
+
+		protected virtual string EventName => "Event";
+
+		public override string ToString() {
+			return $"{EventName} Validation errors: " + this.Result.ErrorCodesJoined;
+		}
 	}
 
 }

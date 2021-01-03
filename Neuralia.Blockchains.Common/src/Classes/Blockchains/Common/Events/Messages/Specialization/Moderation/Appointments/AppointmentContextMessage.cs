@@ -124,7 +124,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		public class ValidatorSessionDetails : IBinarySerializable {
 
 			/// <summary>
-			/// the indices of the requestors assigned to this validator
+			/// the indices of the requesters assigned to this validator
 			/// </summary>
 			public readonly List<int> AssignedIndices = new List<int>();
 			

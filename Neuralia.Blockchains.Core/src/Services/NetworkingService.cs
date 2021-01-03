@@ -95,9 +95,9 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		IConnectionsManager<R> ConnectionsManager { get; }
 
-		void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
+		void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
 		void UnregisterValidationServer(BlockchainType blockchainType);
-		void AddAppointmentWindow(DateTime appointment, TimeSpan window);
+		void AddAppointmentWindow(DateTime appointment, TimeSpan window, int requesterCount);
 		
 		void RegisterChain(BlockchainType chainType, ChainSettings chainSettings, INetworkRouter transactionchainNetworkRouting, R rehydrationFactory, IGossipMessageFactory<R> mainChainMessageFactory, Func<SoftwareVersion, bool> versionValidationCallback);
 	}
@@ -311,19 +311,19 @@ namespace Neuralia.Blockchains.Core.Services {
 				return this.appointmentsValidatorProvider.IsInAppointmentWindow(appointment);
 			}
 
-			public void AddAppointmentWindow(DateTime appointment, TimeSpan window) {
-				this.appointmentsValidatorProvider.AddAppointmentWindow(appointment, window);
+			public void AddAppointmentWindow(DateTime appointment, TimeSpan window, int requesterCount) {
+				this.appointmentsValidatorProvider.AddAppointmentWindow(appointment, window, requesterCount);
 			}
 		
 		
-			public void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
+			public void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
 				this.appointmentsValidatorProvider.RegisterValidationServer(blockchainType, appointmentWindows, appointmentValidatorDelegate);
 			}
 
 			public void UnregisterValidationServer(BlockchainType blockchainType) {
 				this.appointmentsValidatorProvider.UnregisterValidationServer(blockchainType);
 			}
-
+			
 			protected void EnableVerificationWindow() {
 				this.appointmentsValidatorProvider.EnableVerificationWindow();
 			}
@@ -443,6 +443,15 @@ namespace Neuralia.Blockchains.Core.Services {
 					// ok, this is a VERY special case. if we are contacted by an IP Validator, we must respond very quickly, and this special workflow allows us to do that
 					await HandleIpValidatorRequest(buffer, connection).ConfigureAwait(false);
 				} else {
+					NodeAddressInfo nodeSpecs = ConnectionStore<IRehydrationFactory>.GetEndpointInfoNode(new PeerConnection(connection, PeerConnection.Directions.Incoming));
+					if (!this.IPCrawler.CanAcceptNewConnection(new NodeAddressInfo(nodeSpecs.Ip, GlobalsService.DEFAULT_PORT,
+						NodeInfo.Unknown)))
+					{
+						NLog.Connections.Information($"Connection wth {nodeSpecs} refused at source: IPCrawler is saturated!");
+						connection.Close();
+						return;
+					}
+						
 					PeerConnection peerConnection = this.connectionStore.AddNewIncomingConnection(connection);
 					await this.HandleDataReceivedEvent<HandshakeTrigger<R>>(buffer, peerConnection).ConfigureAwait(false);
 				}

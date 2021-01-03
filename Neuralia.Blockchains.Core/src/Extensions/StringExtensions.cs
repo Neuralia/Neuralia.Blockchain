@@ -57,8 +57,11 @@ namespace Neuralia.Blockchains.Core.Extensions {
 					
 					// UPath and nio can not support ':', so we have to remove it
 					list.Add(':');
+					list.Add('{');
+					list.Add('}');
+					list.Add('*');
 
-					invalidChars = list.ToArray();
+					invalidChars = list.Distinct().ToArray();
 				}
 
 				return invalidChars;
@@ -67,7 +70,7 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		}
 
 		public static string CleanInvalidFileNameCharacters(this string input) {
-			return string.Join("_", input.Split(InvalidChars));
+			return string.Join("_", input.Split(InvalidChars, StringSplitOptions.RemoveEmptyEntries));
 		}
 	}
 	

@@ -63,14 +63,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<ISignedMessageEnvelope> GenerateOnChainElectionsRegistrationMessage(AccountId electedAccountId, Enums.MiningTiers miningTier, ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo, LockContext lockContext);
 		Task<IInitiationAppointmentMessageEnvelope> GenerateInitiationAppointmentRequestMessage(int preferredRegion, SafeArrayHandle publicKey, LockContext lockContext);
 		Task<ISignedMessageEnvelope> GenerateAppointmentRequestMessage(int preferredRegion, LockContext lockContext);
-		Task<ISignedMessageEnvelope> GenerateAppointmentVerificationResultsMessage(List<IAppointmentRequesterResult> entries, Dictionary<long, bool> verificationResults, LockContext lockContext);
+		Task<(ISignedMessageEnvelope envelope, List<int> processedIds)> GenerateAppointmentVerificationResultsMessage(DateTime appointment, Func<DateTime, int, int, Task<List<IAppointmentRequesterResult>>> callback, LockContext lockContext);
 
 		Task<ITransactionEnvelope> GenerateTransaction(ITransaction transaction, LockContext lockContext, Func<LockContext, Task> customProcessing = null, Func<ITransactionEnvelope, ITransaction, Task> finalizationProcessing = null);
 
 		Task<List<ISignedMessageEnvelope>> PrepareElectionMessageEnvelopes(List<IElectionCandidacyMessage> messages, LockContext lockContext);
 		Task PrepareTransactionBasics(ITransaction transaction, LockContext lockContext);
 		
-		Task PerformTHSSignature(ITHSEnvelope thsEnvelope, CancellationToken? cancellationToken, THSRulesSetDescriptor rulesSetDescriptor, Func<long, int, Task> callback = null, CorrelationContext correlationContext = default);
+		Task PerformTHSSignature(ITHSEnvelope thsEnvelope, CancellationToken? cancellationToken, THSRulesSetDescriptor rulesSetDescriptor, Func<long[], int, Task> callback = null, CorrelationContext correlationContext = default);
 		Task PerformEnvelopeSignature(IEnvelope envelope, LockContext lockContext, byte expiration = 0);
 		Task PerformTransactionEnvelopeSignature(ITransactionEnvelope transactionEnvelope, LockContext lockContext, byte expiration = 0);
 		Task PerformMessageEnvelopeSignature(ISignedMessageEnvelope messageEnvelope, LockContext lockContext);
@@ -298,48 +298,66 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public async Task<ISignedMessageEnvelope> GenerateAppointmentVerificationResultsMessage(List<IAppointmentRequesterResult> entries, Dictionary<long, bool> verificationResults, LockContext lockContext) {
+		public async Task<(ISignedMessageEnvelope envelope, List<int> processedIds)> GenerateAppointmentVerificationResultsMessage(DateTime appointment, Func<DateTime, int, int, Task<List<IAppointmentRequesterResult>>> callback, LockContext lockContext) {
+
+			List<int> processedIds = new List<int>();
 			try {
-
-				entries = entries.Where(e => e.Sent == false).ToList();
-
-				if(!entries.Any()) {
-					throw new ApplicationException("no applicants");
-				}
-
-				var appointments = entries.Select(e => e.Appointment).Distinct().ToList();
-
-				if(appointments.Count != 1) {
-					throw new ApplicationException("cannot mix appointments");
-				}
-
-				var appointment = appointments.Single();
-
+				
 				AppointmentVerificationResultsMessage appointmentVerificationResults = this.CreateNewAppointmentVerificationResultsMessage();
 
 				appointmentVerificationResults.Appointment = appointment;
 
-				foreach(var entry in entries) {
+				int index = 0;
+				int page = 50;
+				while(true) {
+					List<IAppointmentRequesterResult> entries = await callback(appointment, index*page, page).ConfigureAwait(false);
 
-					AppointmentVerificationResultsMessage.RequesterResultEntry applicant = new AppointmentVerificationResultsMessage.RequesterResultEntry();
+					if(!entries.Any()) {
+						break;
+					}
+				
+					// verify results
+					var verificationResults = await CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.PrepareAppointmentRequesterResult(appointment, entries, lockContext).ConfigureAwait(false);
+					
+					foreach(var entry in entries) {
 
-					applicant.PuzzleResults = AppointmentsResultTypeSerializer.DeserializeResultSet(SafeArrayHandle.Wrap(entry.PuzzleResults));
+						AppointmentVerificationResultsMessage.RequesterResultEntry applicant = new AppointmentVerificationResultsMessage.RequesterResultEntry();
+						
+						applicant.Index = entry.Index;
+						applicant.SecretCode = entry.SecretCode;
+						applicant.ConditionVerification = false;
+						applicant.CodeRequestTimestamp = entry.RequestedCodeCompleted;
+						applicant.THSResults.Entry = SafeArrayHandle.Wrap(entry.THSResults).Entry;
 
-					applicant.Index = entry.Index;
-					applicant.ConditionVerification = verificationResults[entry.Index];
+						bool enablePuzzleTHS = !this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.DisableAppointmentPuzzleTHS;
+						if(entry.PuzzleResults != null && entry.TriggerCompleted.HasValue && entry.PuzzleCompleted.HasValue && (enablePuzzleTHS?entry.THSCompleted.HasValue:true)) {
 
-					applicant.CodeRequestTimestamp = entry.RequestedCodeCompleted;
-					applicant.TriggerTimestamp = entry.TriggerCompleted.Value;
-					applicant.PuzzleCompleted = entry.PuzzleCompleted.Value;
-					applicant.THSCompleted = entry.THSCompleted.Value;
-					applicant.SecretCode = entry.SecretCode;
+							try {
+								applicant.PuzzleResults = AppointmentsResultTypeSerializer.DeserializeResultSet(SafeArrayHandle.Wrap(entry.PuzzleResults));
 
-					appointmentVerificationResults.Applicants.Add(applicant);
+								applicant.TriggerTimestamp = entry.TriggerCompleted.Value;
+								applicant.PuzzleCompleted = entry.PuzzleCompleted.Value;
+								applicant.THSCompleted = entry.THSCompleted;
+								
+								if(verificationResults.ContainsKey(entry.Index)) {
+									applicant.ConditionVerification = verificationResults[entry.Index];
+								}
+							} catch(Exception ex) {
+								this.CentralCoordinator.Log.Error(ex, $"failed to process applicant id {entry.Index} in {nameof(GenerateAppointmentVerificationResultsMessage)}");
+								// do nothing, refused nothing more
+							}
+						}
+
+						processedIds.Add(entry.Id);
+						appointmentVerificationResults.Applicants.Add(applicant);
+					}
+
+					index++;
 				}
 
 				ISignedMessageEnvelope envelope = await this.PrepareSignedBlockchainMessage(appointmentVerificationResults, lockContext).ConfigureAwait(false);
 
-				return envelope;
+				return (envelope, processedIds);
 
 			} catch(Exception ex) {
 				throw new ApplicationException("failed to generate appointment verification results message", ex);
@@ -992,7 +1010,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 		
-		public async Task PerformTHSSignature(ITHSEnvelope thsEnvelope, CancellationToken? cancellationToken, THSRulesSetDescriptor rulesSetDescriptor,  Func<long, int, Task> callback = null, CorrelationContext correlationContext = default) {
+		public async Task PerformTHSSignature(ITHSEnvelope thsEnvelope, CancellationToken? cancellationToken, THSRulesSetDescriptor rulesSetDescriptor,  Func<long[], int, Task> callback = null, CorrelationContext correlationContext = default) {
 
 			// this is a very special case where we hash before we create the envelope
 			try {
@@ -1002,77 +1020,84 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// first thing, trigger our intent to begin a THS.
 				await CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSTrigger(), correlationContext).ConfigureAwait(false);
 				Thread.Sleep(100);
-
-				using THSEngine thsEngine = new THSEngine(thsEnvelope.THSEnvelopeSignatureBase.RuleSet,rulesSetDescriptor, GlobalSettings.ApplicationSettings.THSMemoryType);
-				await thsEngine.Initialize().ConfigureAwait(false);
-
-				this.CentralCoordinator.Log.Information($"Beginning time hard signature. HashTargetDifficulty: {rulesSetDescriptor.HashTargetDifficulty}. Expected time span: {rulesSetDescriptor.TargetTimespan}. Nonce target count: {rulesSetDescriptor.NonceTarget}");
 				
 				string key = thsEnvelope.Key;
 				
 				try {
 					this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PauseNetwork();
-
+					
 					using var thsHash = BlockchainHashingUtils.GenerateTHSHash(thsEnvelope);
 
-					THSState state = null;
-					try {
-						state = await this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadCachedTHSState(key).ConfigureAwait(false);
-					} catch(Exception ex) {
-						this.CentralCoordinator.Log.Debug($"Failed to load THS cache!");
-					}
-					
-					if(state != null) {
-						if(SafeArrayHandle.Wrap(state.Hash) != thsHash) {
-							state = null;
+					using(THSEngine thsEngine = new THSEngine(thsEnvelope.THSEnvelopeSignatureBase.RuleSet, rulesSetDescriptor, GlobalSettings.ApplicationSettings.THSMemoryType)) {
+						await thsEngine.Initialize(THSEngine.THSModes.Generate).ConfigureAwait(false);
+
+						this.CentralCoordinator.Log.Information($"Beginning time hard signature. HashTargetDifficulty: {rulesSetDescriptor.HashTargetDifficulty}. Expected time span: {rulesSetDescriptor.TargetTimespan}. Nonce target count: {rulesSetDescriptor.NonceTarget}");
+
+						THSState state = null;
+
+						try {
+							state = await this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadCachedTHSState(key).ConfigureAwait(false);
+						} catch(Exception ex) {
+							this.CentralCoordinator.Log.Debug($"Failed to load THS cache!");
 						}
-					}
 
-					if(state == null) {
-						state = new THSState();
-						state.Hash = thsHash.ToExactByteArrayCopy();
-					}
-					
-					ClosureWrapper<int> lastRound = new ClosureWrapper<int>(state.thsState.Round);
-
-					thsEnvelope.THSEnvelopeSignatureBase.Solution = await thsEngine.PerformTHS(thsHash, cancellationToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
-						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSBegin(hashTargetDifficulty, rulesSetDescriptor.NonceTarget, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions), correlationContext);
-
-						return Task.CompletedTask;
-					} , async (currentNonce, currentRound, totalNonce, solutions, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio) => {
-
-						if(callback != null) {
-							await callback(currentNonce, currentRound).ConfigureAwait(false);
-						}
-						lastRound.Value = currentRound;
-						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSIteration(currentNonce, DateTime.Now - start, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio), correlationContext);
-						Thread.Sleep(5);
-
-						this.CentralCoordinator.Log.Information($"THS Iteration. Current nonce: {currentNonce}.");
-
-						if(totalNonce != 0 && currentNonce != 0 && totalNonce % 10 == 0) {
-							// update the state
-							state.thsState.Nonce = currentNonce;
-							state.thsState.Round = currentRound;
-							state.thsState.TotalNonce = totalNonce;
-							
-							state.thsState.Solutions.Clear();
-							foreach(var solution in solutions) {
-								state.thsState.Solutions.Add(new THSProcessState.SolutionEntry(solution.solution, solution.nonce));
+						if(state != null) {
+							if(SafeArrayHandle.Wrap(state.Hash) != thsHash) {
+								state = null;
 							}
-							await CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveCachedTHSState(state, key).ConfigureAwait(false);
 						}
-						
-					}, (currentRound, totalNonce, lastNonce, lastSolution) => {
-						this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSRound(currentRound, totalNonce, lastNonce, lastSolution), correlationContext);
-						
-						this.CentralCoordinator.Log.Information($"THS Round. Current round: {currentRound}. Total nonce: {totalNonce}. last solution nonce: {lastNonce}. Last solution: {lastSolution}");
-						
-						return Task.CompletedTask;
-					}, state.thsState).ConfigureAwait(false);
 
-					await CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSSolution(thsEnvelope.THSEnvelopeSignatureBase.Solution, rulesSetDescriptor.HashTargetDifficulty), correlationContext).ConfigureAwait(false);
-					this.CentralCoordinator.Log.Information($"THS solution found!");
+						if(state == null) {
+							state = new THSState();
+							state.Hash = thsHash.ToExactByteArrayCopy();
+						}
+
+						ClosureWrapper<int> lastRound = new ClosureWrapper<int>(state.thsState.Round);
+
+						thsEnvelope.THSEnvelopeSignatureBase.Solution = await thsEngine.PerformTHS(thsHash, cancellationToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
+							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSBegin(hashTargetDifficulty, rulesSetDescriptor.NonceTarget, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions), correlationContext);
+
+							return Task.CompletedTask;
+						}, async (currentNonces, currentRound, totalNonce, solutions, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio) => {
+
+							if(callback != null) {
+								await callback(currentNonces, currentRound).ConfigureAwait(false);
+							}
+
+							lastRound.Value = currentRound;
+							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSIteration(currentNonces, DateTime.Now - start, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio), correlationContext);
+							Thread.Sleep(5);
+
+							this.CentralCoordinator.Log.Information($"THS Iteration. Current nonces: [{string.Join(',', currentNonces)}].");
+
+							long smallestCurrentNonce = currentNonces[0];
+
+							if(totalNonce != 0 && smallestCurrentNonce != 0 && totalNonce % 10 == 0) {
+								// update the state
+								state.thsState.Nonce = smallestCurrentNonce;
+								state.thsState.Round = currentRound;
+								state.thsState.TotalNonce = totalNonce;
+
+								state.thsState.Solutions.Clear();
+
+								foreach(var solution in solutions) {
+									state.thsState.Solutions.Add(new THSProcessState.SolutionEntry(solution.solution, solution.nonce));
+								}
+
+								await CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveCachedTHSState(state, key).ConfigureAwait(false);
+							}
+
+						}, (currentRound, totalNonce, lastNonce, lastSolution) => {
+							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSRound(currentRound, totalNonce, lastNonce, lastSolution), correlationContext);
+
+							this.CentralCoordinator.Log.Information($"THS Round. Current round: {currentRound}. Total nonce: {totalNonce}. last solution nonce: {lastNonce}. Last solution: {lastSolution}");
+
+							return Task.CompletedTask;
+						}, state.thsState).ConfigureAwait(false);
+
+						await CentralCoordinator.PostSystemEventImmediate(SystemEventGenerator.THSSolution(thsEnvelope.THSEnvelopeSignatureBase.Solution, rulesSetDescriptor.HashTargetDifficulty), correlationContext).ConfigureAwait(false);
+						this.CentralCoordinator.Log.Information($"THS solution found!");
+					}
 
 					try {
 						this.CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.ClearCachedTHSState(key);

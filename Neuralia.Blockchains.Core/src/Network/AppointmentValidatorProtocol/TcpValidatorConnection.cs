@@ -101,7 +101,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 				this.socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
 			}
 
-			this.socket.InitializeSocketParameters();
+			this.socket.InitializeSocketParametersFast(TcpValidatorServer.BYTES_PER_REQUESTER);
 		}
 
 		private bool IsDisposing { get; set; }
@@ -263,7 +263,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 			while(true) {
 
-				await Task.WhenAny(asyncReadTask, Task.Delay(1000, ct)).ConfigureAwait(false);
+				await Task.WhenAny(asyncReadTask, Task.Delay(10000, ct)).ConfigureAwait(false);
 
 				if(ct.IsCancellationRequested) {
 					ct.ThrowIfCancellationRequested();

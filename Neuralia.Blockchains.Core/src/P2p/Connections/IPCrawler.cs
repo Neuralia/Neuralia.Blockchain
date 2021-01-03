@@ -149,12 +149,16 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			lock (this.countsLock)
 			{
+				bool mobileOk = this.nMobileConnected < this.maxMobilePeerCount;
+				bool fullNodesOk = this.nConnected < this.maxPeerCount;
 				if (node.PeerInfo.PeerType == Enums.PeerTypes.Mobile)
-					return this.nMobileConnected < this.maxMobilePeerCount;
-				
-				return this.nConnected < this.maxPeerCount;
+					return mobileOk;
+				if (node.PeerInfo.PeerType == Enums.PeerTypes.Unknown)
+					return mobileOk || fullNodesOk;
+				return fullNodesOk;
 			}
 		}
+		
 		public IPCrawler(int averagePeerCount, int maxPeerCount, int maxMobilePeerCount
 			, double hubIPsRequestPeriod = 1800.0, double peerIPsRequestPeriod = 600.0
 			, double peerReconnectionPeriod = 60.0, double dynamicBlacklistPeriod = 24 * 60 * 60, int maxNonConnectableNodes = -1) {

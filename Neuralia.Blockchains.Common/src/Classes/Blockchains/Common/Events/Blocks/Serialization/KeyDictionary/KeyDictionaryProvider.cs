@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
 
@@ -128,7 +129,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			
 			return result;
 		}
-		
+
+		private DateTime? lastKeyZeroMessage;
 		public async Task<(SafeArrayHandle keyBytes, byte treeHeight, byte noncesExponent, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)?> LoadKeyFileAsync(AccountId accountId, byte ordinal, FileSystemWrapper fileSystem = null) {
 
 			this.TestKeyValidity(ordinal, accountId);
@@ -147,9 +149,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 
 			string fileName = this.GetKeyFileName(page, accountId.AccountType);
 			
-			if(!fileSystem.FileExists(fileName) || (fileSystem.GetFileLength(fileName) == 0)) {
+			if((!fileSystem.FileExists(fileName) || (fileSystem.GetFileLength(fileName) == 0)) && (!lastKeyZeroMessage.HasValue || lastKeyZeroMessage.Value.AddMinutes(1) < DateTimeEx.CurrentTime)) {
 				
 				this.centralCoordinator.Log.Debug($"Key dictionary provider: could not load key from file {fileName}. File either does not exist, or is size 0.");
+
+				// make sure we dont spam this message too often
+				lastKeyZeroMessage = DateTimeEx.CurrentTime;
 				
 				return null;
 			}

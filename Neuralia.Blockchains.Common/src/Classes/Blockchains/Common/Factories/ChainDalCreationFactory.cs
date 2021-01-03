@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		APPOINTMENT_CONTEXT_CONTEXT CreateAppointmentRegistryContext<APPOINTMENT_CONTEXT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where APPOINTMENT_CONTEXT_CONTEXT : IAppointmentRegistryContext;
 		
-		APPOINTMENT_REGISTRY_DAL CreateAppointmentRegistryDal<APPOINTMENT_REGISTRY_DAL>(string folderPath, ICentralCoordinator centralCoordinator, AppSettingsBase.SerializationTypes serializationType)
+		APPOINTMENT_REGISTRY_DAL CreateAppointmentRegistryDal<APPOINTMENT_REGISTRY_DAL>(string folderPath, ICentralCoordinator centralCoordinator, bool enablePuzzleTHS, AppSettingsBase.SerializationTypes serializationType)
 			where APPOINTMENT_REGISTRY_DAL : IAppointmentRegistryDal;
 
 
@@ -137,7 +137,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		public abstract APPOINTMENT_CONTEXT_CONTEXT CreateAppointmentRegistryContext<APPOINTMENT_CONTEXT_CONTEXT>(AppSettingsBase.SerializationTypes serializationType)
 			where APPOINTMENT_CONTEXT_CONTEXT : IAppointmentRegistryContext;
 
-		public abstract APPOINTMENT_REGISTRY_DAL CreateAppointmentRegistryDal<APPOINTMENT_REGISTRY_DAL>(string folderPath, ICentralCoordinator centralCoordinator, AppSettingsBase.SerializationTypes serializationType)
+		public abstract APPOINTMENT_REGISTRY_DAL CreateAppointmentRegistryDal<APPOINTMENT_REGISTRY_DAL>(string folderPath, ICentralCoordinator centralCoordinator, bool enablePuzzleTHS, AppSettingsBase.SerializationTypes serializationType)
 			where APPOINTMENT_REGISTRY_DAL : IAppointmentRegistryDal;
 
 		public abstract STANDARD_ACCOUNT_SNAPSHOT_DAL CreateStandardAccountSnapshotDal<STANDARD_ACCOUNT_SNAPSHOT_DAL>(int groupSize, string folderPath, BlockchainServiceSet serviceSet, AppSettingsBase.SerializationTypes serializationType)

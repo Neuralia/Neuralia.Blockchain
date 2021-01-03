@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -13,43 +15,55 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 	public class ValidatorProtocol1 : IValidatorProtocol {
 		public const ushort PROTOCOL_VERSION = 1;
 
-		private readonly Func<BlockchainType, IAppointmentValidatorDelegate> getValidatorDelegate;
-		private readonly BlockchainType blockchainType;
+		private Func<BlockchainType, IAppointmentValidatorDelegate> getValidatorDelegate;
+		private BlockchainType blockchainType;
+		private int timeout;
+		
+		public ValidatorProtocol1() {
 
-		public ValidatorProtocol1(BlockchainType blockchainType, Func<BlockchainType, IAppointmentValidatorDelegate> getValidatorDelegate = null) {
+		}
+		
+		public ValidatorProtocol1(BlockchainType blockchainType, Func<BlockchainType, IAppointmentValidatorDelegate> getValidatorDelegate = null, int timeout = 10000) {
+			this.Initialize(blockchainType, getValidatorDelegate, timeout);
+		}
+
+		public void Initialize(BlockchainType blockchainType, Func<BlockchainType, IAppointmentValidatorDelegate> getValidatorDelegate = null, int timeout = 10000) {
 			this.getValidatorDelegate = getValidatorDelegate;
 			this.blockchainType = blockchainType;
+			this.timeout = timeout;
+		}
+		
+		public async Task<bool> HandleServerExchange(ValidatorConnectionSet connectionSet, ByteArray operationBytes, CancellationToken ct) {
+
+			var envelope = new ValidatorProtocol1.Protocol1Envelope();
+			envelope.Rehydrate(operationBytes, true);
+
+			var operation = envelope.operation;
+			
+			return await this.HandleServerExchange(operation, connectionSet, ct).ConfigureAwait(false);
 		}
 
-		public async Task HandleServerExchange(ITcpValidatorConnection connection, CancellationToken ct) {
-
-			ValidatorProtocol1Tools.ValidatorOperation operation = await ValidatorProtocol1Tools.ReceiveOperation<ValidatorProtocol1Tools.ValidatorOperation>(connection, ct).ConfigureAwait(false);
-
-			await this.HandleServerExchange(operation, connection, ct).ConfigureAwait(false);
-		}
-
-		protected virtual async Task HandleServerExchange(ValidatorProtocol1Tools.ValidatorOperation operation, ITcpValidatorConnection connection, CancellationToken ct) {
+		protected virtual async Task<bool> HandleServerExchange(ValidatorProtocol1Tools.ValidatorOperation operation, ValidatorConnectionSet connectionSet, CancellationToken ct) {
 
 			if(operation.OperationId == CodeTranslationRequestOperation.CODE_TRANSLATION_REQUEST_OPERATION_ID) {
 				// this is the workflow
-				await this.HandleCodeTranslationWorkflow((CodeTranslationRequestOperation) operation, connection, ct).ConfigureAwait(false);
+				return await this.HandleCodeTranslationWorkflow((CodeTranslationRequestOperation) operation, connectionSet, ct).ConfigureAwait(false);
 			} else if(operation.OperationId == TriggerSessionOperation.TRIGGER_SESSION_OPERATION_ID) {
 				// this is the workflow
-				await this.HandleTriggerSessionWorkflow((TriggerSessionOperation) operation, connection, ct).ConfigureAwait(false);
+				return await this.HandleTriggerSessionWorkflow((TriggerSessionOperation) operation, connectionSet, ct).ConfigureAwait(false);
 			} else if(operation.OperationId == PuzzleCompletedOperation.PUZZLE_COMPLETED_OPERATION_ID) {
 				// this is the workflow
-				await this.HandlePuzzleCompletedWorkflow((PuzzleCompletedOperation) operation, connection, ct).ConfigureAwait(false);
+				return await this.HandlePuzzleCompletedWorkflow((PuzzleCompletedOperation) operation, connectionSet, ct).ConfigureAwait(false);
 			} else if(operation.OperationId == THSCompletedOperation.THS_COMPLETED_OPERATION_ID) {
 				// this is the workflow
-				await this.HandleTHSCompletedWorkflow((THSCompletedOperation) operation, connection, ct).ConfigureAwait(false);
+				return await this.HandleTHSCompletedWorkflow((THSCompletedOperation) operation, connectionSet, ct).ConfigureAwait(false);
 			} else {
+				var validatorDelegate = this.getValidatorDelegate(this.blockchainType);
 				//blacklist
-				var endpoint = (IPEndPoint) connection.RemoteEndPoint;
-				IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.ValidationFailed, DateTimeEx.CurrentTime.AddDays(6));
+				BanForADay(connectionSet, "Bad handler", IPMarshall.QuarantineReason.ValidationFailed);
 
 				throw new InvalidOperationException();
 			}
-
 		}
 
 		public async Task<SafeArrayHandle> RequestCodeTranslation(DateTime appointment, int index, SafeArrayHandle validatorCode, IPAddress address, int? port = null) {
@@ -64,7 +78,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			Task<CodeTranslationResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<CodeTranslationResponseOperation>(connection, default);
 			using var tokenSource = new CancellationTokenSource();
-			await Task.WhenAny(task, Task.Delay(10000, tokenSource.Token)).ConfigureAwait(false);
+			await Task.WhenAny(task, Task.Delay(this.timeout, tokenSource.Token)).ConfigureAwait(false);
 
 			if(task.IsCompletedSuccessfully) {
 				CodeTranslationResponseOperation resultOperation = task.Result;
@@ -87,7 +101,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			Task<TriggerSessionResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<TriggerSessionResponseOperation>(connection, default);
 			using var tokenSource = new CancellationTokenSource();
-			await Task.WhenAny(task, Task.Delay(10000, tokenSource.Token)).ConfigureAwait(false);
+			await Task.WhenAny(task, Task.Delay(this.timeout, tokenSource.Token)).ConfigureAwait(false);
 
 			if(task.IsCompletedSuccessfully) {
 				TriggerSessionResponseOperation resultOperation = task.Result;
@@ -113,7 +127,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			Task<PuzzleCompletedResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<PuzzleCompletedResponseOperation>(connection, default);
 			using var tokenSource = new CancellationTokenSource();
-			await Task.WhenAny(task, Task.Delay(10000, tokenSource.Token)).ConfigureAwait(false);
+			await Task.WhenAny(task, Task.Delay(this.timeout, tokenSource.Token)).ConfigureAwait(false);
 
 			if(task.IsCompletedSuccessfully) {
 				PuzzleCompletedResponseOperation resultOperation = task.Result;
@@ -136,7 +150,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			Task<THSCompletedResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<THSCompletedResponseOperation>(connection, default);
 			using var tokenSource = new CancellationTokenSource();
-			await Task.WhenAny(task, Task.Delay(10000, tokenSource.Token)).ConfigureAwait(false);
+			await Task.WhenAny(task, Task.Delay(this.timeout, tokenSource.Token)).ConfigureAwait(false);
 
 			if(task.IsCompletedSuccessfully) {
 				THSCompletedResponseOperation resultOperation = task.Result;
@@ -146,119 +160,118 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			throw new InvalidOperationException();
 		}
-
-		private async Task HandleCodeTranslationWorkflow(CodeTranslationRequestOperation operation, ITcpValidatorConnection connection, CancellationToken ct) {
+		
+		private void BanForADay(ValidatorConnectionSet connectionSet, string details, IPMarshall.QuarantineReason reason = IPMarshall.QuarantineReason.ValidationFailed) {
+			var endpoint = (IPEndPoint)connectionSet.Socket.RemoteEndPoint;
+			IPMarshall.ValidationInstance.Quarantine(endpoint.Address, reason, DateTimeEx.CurrentTime.AddDays(1), details);
+		}
+		
+		private async Task<bool> HandleCodeTranslationWorkflow(CodeTranslationRequestOperation operation, ValidatorConnectionSet connectionSet, CancellationToken ct) {
 
 			var validatorDelegate = this.getValidatorDelegate(this.blockchainType);
 
-			if(validatorDelegate != null) {
-				CodeTranslationResponseOperation result = null;
+			try {
 
-				try {
-					result = await validatorDelegate.HandleCodeTranslationWorkflow(operation).ConfigureAwait(false);
-				} catch {
-
+				if(validatorDelegate == null) {
+					throw new ApplicationException();
 				}
+
+				var result = await validatorDelegate.HandleCodeTranslationWorkflow(operation).ConfigureAwait(false);
 
 				if(result == null) {
-					// blacklist
-					this.BanForAWeek(connection, $"failed in {nameof(this.HandleCodeTranslationWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and validator code {operation.ValidatorCode}");
-
-					return;
+					throw new ApplicationException("null result");
 				}
 
-				ValidatorProtocol1Tools.SendOperation(result, connection);
-			} else {
+				return ValidatorProtocol1Tools.SendOperation(result, connectionSet);
+
+			} catch(Exception ex) {
+				NLog.LoggingBatcher.Verbose(ex, $"failed in {nameof(this.HandleCodeTranslationWorkflow)}");
+
 				// blacklist
-				this.BanForAWeek(connection, $"failed in {nameof(this.HandleCodeTranslationWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and validator code {operation.ValidatorCode}");
+				this.BanForADay(connectionSet, $"failed in {nameof(this.HandleCodeTranslationWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and validator code {operation.ValidatorCode.ToBase32()}");
+			} finally {
 			}
+			
+			return false;
 		}
 
-		private void BanForAWeek(ITcpValidatorConnection connection, string details, IPMarshall.QuarantineReason reason = IPMarshall.QuarantineReason.ValidationFailed) {
-			var endpoint = (IPEndPoint) connection.RemoteEndPoint;
-			IPMarshall.ValidationInstance.Quarantine(endpoint.Address, reason, DateTimeEx.CurrentTime.AddDays(7).Subtract(TimeSpan.FromMinutes(5)), details);
-		}
-
-		private async Task HandleTriggerSessionWorkflow(TriggerSessionOperation operation, ITcpValidatorConnection connection, CancellationToken ct) {
+		private async Task<bool> HandleTriggerSessionWorkflow(TriggerSessionOperation operation, ValidatorConnectionSet connectionSet, CancellationToken ct) {
 
 			var validatorDelegate = this.getValidatorDelegate(this.blockchainType);
 
-			if(validatorDelegate != null) {
-
-				TriggerSessionResponseOperation result = null;
-
-				try {
-					result = await validatorDelegate.HandleTriggerSessionWorkflow(operation).ConfigureAwait(false);
-				} catch {
-
+			try {
+				
+				if(validatorDelegate == null) {
+					throw new ApplicationException();
 				}
+				var result = await validatorDelegate.HandleTriggerSessionWorkflow(operation).ConfigureAwait(false);
 
 				if(result == null) {
-					// blacklist
-					this.BanForAWeek(connection, $"failed in {nameof(this.HandleTriggerSessionWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and secret code {operation.SecretCode}");
-
-					return;
+					throw new ApplicationException();
 				}
+				
+				return ValidatorProtocol1Tools.SendOperation(result, connectionSet);
 
-				ValidatorProtocol1Tools.SendOperation(result, connection);
-			} else {
-				// blacklist
-				this.BanForAWeek(connection, $"failed in {nameof(this.HandleTriggerSessionWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and secret code {operation.SecretCode}");
+			} catch (Exception ex){
+				NLog.LoggingBatcher.Verbose(ex, $"failed in {nameof(this.HandleTriggerSessionWorkflow)}");
+				this.BanForADay(connectionSet, $"failed in {nameof(this.HandleTriggerSessionWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and secret code {operation.SecretCode}");
+			}finally {
 			}
+			
+			return false;
 		}
 
-		private async Task HandlePuzzleCompletedWorkflow(PuzzleCompletedOperation operation, ITcpValidatorConnection connection, CancellationToken ct) {
+		private async Task<bool> HandlePuzzleCompletedWorkflow(PuzzleCompletedOperation operation, ValidatorConnectionSet connectionSet, CancellationToken ct) {
 
 			var validatorDelegate = this.getValidatorDelegate(this.blockchainType);
 
-			if(validatorDelegate != null) {
-				PuzzleCompletedResponseOperation result = null;
-
-				try {
-					result = await validatorDelegate.HandlePuzzleCompletedWorkflow(operation).ConfigureAwait(false);
-				} catch {
-
+			try {
+				
+				if(validatorDelegate == null) {
+					throw new ApplicationException();
 				}
+				var result = await validatorDelegate.HandlePuzzleCompletedWorkflow(operation).ConfigureAwait(false);
 
 				if(result == null) {
-					// blacklist
-					this.BanForAWeek(connection, $"failed in {nameof(this.HandlePuzzleCompletedWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and results count {operation.Results.Count}");
-
-					return;
+					throw new ApplicationException();
 				}
+				
+				return ValidatorProtocol1Tools.SendOperation(result, connectionSet);
 
-				ValidatorProtocol1Tools.SendOperation(result, connection);
-			} else {
-				// blacklist
-				this.BanForAWeek(connection, $"failed in {nameof(this.HandlePuzzleCompletedWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and results count {operation.Results.Count}");
+			} catch (Exception ex){
+				NLog.LoggingBatcher.Verbose(ex, $"failed in {nameof(this.HandlePuzzleCompletedWorkflow)}");
+				this.BanForADay(connectionSet, $"failed in {nameof(this.HandlePuzzleCompletedWorkflow)} for appointment {operation.Appointment} and index {operation.Index} and results count {operation.Results.Count}");
+			}finally {
 			}
+			
+			return false;
 		}
 
-		private async Task HandleTHSCompletedWorkflow(THSCompletedOperation operation, ITcpValidatorConnection connection, CancellationToken ct) {
+		private async Task<bool> HandleTHSCompletedWorkflow(THSCompletedOperation operation, ValidatorConnectionSet connectionSet, CancellationToken ct) {
 
 			var validatorDelegate = this.getValidatorDelegate(this.blockchainType);
 
-			if(validatorDelegate != null) {
-				THSCompletedResponseOperation result = null;
-
-				try {
-					result = await validatorDelegate.HandleTHSCompletedWorkflow(operation).ConfigureAwait(false);
-				} catch {
-
+			try {
+				
+				if(validatorDelegate == null) {
+					throw new ApplicationException();
 				}
+				var result = await validatorDelegate.HandleTHSCompletedWorkflow(operation).ConfigureAwait(false);
 
 				if(result == null) {
-					// blacklist
-					this.BanForAWeek(connection, $"failed in {nameof(this.HandleTHSCompletedWorkflow)} for appointment {operation.Appointment} and index {operation.Index}.");
-
-					return;
+					throw new ApplicationException();
 				}
+				
+				return ValidatorProtocol1Tools.SendOperation(result, connectionSet);
 
-				ValidatorProtocol1Tools.SendOperation(result, connection);
-			} else {
-				// blacklist
-				this.BanForAWeek(connection, $"failed in {nameof(this.HandleTHSCompletedWorkflow)} for appointment {operation.Appointment} and index {operation.Index}.");
+			} catch (Exception ex){
+				NLog.LoggingBatcher.Verbose(ex, $"failed in {nameof(this.HandleTHSCompletedWorkflow)}");
+
+				this.BanForADay(connectionSet, $"failed in {nameof(this.HandleTHSCompletedWorkflow)} for appointment {operation.Appointment} and index {operation.Index}.");
+			}finally {
 			}
+
+			return false;
 		}
 
 		public class Protocol1Envelope : IBinarySerializable {
@@ -313,8 +326,14 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 				dehydrator.Write(this.operation.OperationId);
 			}
 
-			public void Rehydrate(ByteArray bytes) {
+			public void Rehydrate(ByteArray bytes, bool skipSize = false) {
 				using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
+
+				if(skipSize) {
+					// the bytes of the operation size, since we dont need them
+					rehydrator.Skip(sizeof(ushort));
+				}
+
 				this.Rehydrate(rehydrator);
 			}
 		}

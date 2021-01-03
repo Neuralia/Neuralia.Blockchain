@@ -64,9 +64,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			
 #if TESTING
 			ServerPresentationDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
-			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromMinutes(10);
+			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromHours(24);
 			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(18);
-			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 3;
+			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 9;
+			ServerPresentationDefaultRulesSetDescriptor.MaxRounds = 27;
 			
 			ServerPresentationDefaultRulesSet = new THSRulesSet();
 
@@ -99,6 +100,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromHours(24);
 			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(6);
 			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 9;
+			ServerPresentationDefaultRulesSetDescriptor.MaxRounds = 27;
 			
 			ServerPresentationDefaultRulesSet = new THSRulesSet();
 
@@ -132,6 +134,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			PresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromMinutes(3);
 			PresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromMilliseconds(250);
 			PresentationDefaultRulesSetDescriptor.AverageRounds = 3;
+			PresentationDefaultRulesSetDescriptor.MaxRounds = 13;
 
 			PresentationDefaultRulesSet = new THSRulesSet();
 			PresentationDefaultRulesSet.AddHashSet(Hashes.SHA3_512);
@@ -160,6 +163,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			InitiationAppointmentDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromMinutes(3);
 			InitiationAppointmentDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromMilliseconds(250);
 			InitiationAppointmentDefaultRulesSetDescriptor.AverageRounds = 3;
+			InitiationAppointmentDefaultRulesSetDescriptor.MaxRounds = 13;
 
 			InitiationAppointmentDefaultRulesSet = new THSRulesSet();
 			InitiationAppointmentDefaultRulesSet.AddHashSet(Hashes.SHA3_512);
@@ -187,6 +191,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			PuzzleDefaultRulesetDescriptor.TargetTimespan = TimeSpan.FromSeconds(30);
 			PuzzleDefaultRulesetDescriptor.EstimatedIterationTime = TimeSpan.FromMilliseconds(250);
 			PuzzleDefaultRulesetDescriptor.AverageRounds = 3;
+			PuzzleDefaultRulesetDescriptor.MaxRounds = 13;
 
 			PuzzleDefaultRuleset = new THSRulesSet();
 			PuzzleDefaultRuleset.AddHashSet(Hashes.SHA3_512);
@@ -215,6 +220,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			TestRulesetDescriptor.TargetTimespan = TimeSpan.FromSeconds(40);
 			TestRulesetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(6);
 			TestRulesetDescriptor.AverageRounds = 3;
+			TestRulesetDescriptor.MaxRounds = 13;
 			
 
 			TestRuleset = new THSRulesSet();
@@ -559,9 +565,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 		}
 
-		public THSRulesSetDescriptor(TimeSpan estimatedIterationTime, int averageRounds) {
+		public THSRulesSetDescriptor(TimeSpan estimatedIterationTime, int averageRounds, int maxRounds) {
 			this.EstimatedIterationTime = estimatedIterationTime;
 			this.AverageRounds = averageRounds;
+			this.MaxRounds = maxRounds;
 		}
 
 		public TimeSpan TargetTimespan { get; set; } = TimeSpan.FromSeconds(1);
@@ -576,5 +583,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 		// how many rounds do we expect in this set
 		public int AverageRounds { get; set; } = 1;
+		public int MaxRounds { get; set; } = 10;
+		
 	}
 }

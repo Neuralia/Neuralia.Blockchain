@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 
 			return connection;
 		}
-
+		
 		public static async Task<OPERATION> ReceiveOperation<OPERATION>(ITcpValidatorConnection connection, CancellationToken ct)
 			where OPERATION : ValidatorOperation {
 
@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			using ByteArray resultBytes = await connection.ReadData(size, ct).ConfigureAwait(false);
 
 			var envelope = new ValidatorProtocol1.Protocol1Envelope();
-			envelope.Rehydrate(resultBytes);
+			envelope.Rehydrate(resultBytes, false);
 
 			return (OPERATION) envelope.operation;
 		}
@@ -64,11 +64,12 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			return operationBytes;
 		}
 
-		public static void SendOperation(ValidatorOperation operation, ITcpValidatorConnection connection) {
+		public static bool SendOperation(ValidatorOperation operation, ValidatorConnectionSet connectionSet) {
 
 			using SafeArrayHandle sendBytes = GetOperationBytes(operation);
 
-			connection.SendSocketBytes(sendBytes);
+			connectionSet.SocketAsyncEventArgs.SetBuffer(sendBytes.Bytes, sendBytes.Offset, sendBytes.Length);
+			return connectionSet.Socket.SendAsync(connectionSet.SocketAsyncEventArgs);
 		}
 
 		public abstract class ValidatorOperation : IBinarySerializable {

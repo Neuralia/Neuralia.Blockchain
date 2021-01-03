@@ -22,6 +22,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		XmssCryptographicKey DigestBlocksCryptographicKey { get; }
 		TripleXmssCryptographicKey DigestBlocksChangeCryptographicKey { get; }
 		XmssCryptographicKey BinaryCryptographicKey { get; }
+		XmssCryptographicKey MessageCryptographicKey { get; }
 		XmssCryptographicKey GossipCryptographicKey { get; }
 		TripleXmssCryptographicKey SuperChangeCryptographicKey { get; }
 		TripleXmssCryptographicKey PtahCryptographicKey { get; }
@@ -32,6 +33,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		bool IsDigestBlocksKeyLoaded { get; }
 		bool IsDigestBlocksChangeKeyLoaded { get; }
 		bool IsBinaryKeyLoaded { get; }
+		bool IsMessageKeyLoaded  { get; }
 		bool IsGossipKeyLoaded { get; }
 		bool IsSuperChangeKeyLoaded { get; }
 		bool IsPtahKeyLoaded { get; }
@@ -64,6 +66,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			// binaryKey
 			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_BINARY_KEY_ID);
+			
+			// messageKey
+			this.Keyset.Add<XmssCryptographicKey>(GlobalsService.MODERATOR_MESSAGE_KEY_ID);
 
 			//  super change key
 			this.Keyset.Add<TripleXmssCryptographicKey>(GlobalsService.MODERATOR_SUPER_CHANGE_KEY_ID);
@@ -89,6 +94,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public XmssCryptographicKey GossipCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_GOSSIP_KEY_ID];
 		
 		public XmssCryptographicKey BinaryCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_BINARY_KEY_ID];
+		public XmssCryptographicKey MessageCryptographicKey => (XmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_MESSAGE_KEY_ID];
 		
 		public TripleXmssCryptographicKey SuperChangeCryptographicKey => (TripleXmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_SUPER_CHANGE_KEY_ID];
 		public TripleXmssCryptographicKey PtahCryptographicKey => (TripleXmssCryptographicKey) this.Keyset.Keys[GlobalsService.MODERATOR_PTAH_KEY_ID];
@@ -104,6 +110,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 		public bool IsGossipKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_GOSSIP_KEY_ID);
 
 		public bool IsBinaryKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_BINARY_KEY_ID);
+		public bool IsMessageKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_MESSAGE_KEY_ID);
 		
 		public bool IsSuperChangeKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_SUPER_CHANGE_KEY_ID);
 		public bool IsPtahKeyLoaded => this.Keyset.KeyLoaded(GlobalsService.MODERATOR_PTAH_KEY_ID);
@@ -138,6 +145,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transact
 
 			if(!this.IsBinaryKeyLoaded) {
 				throw new ApplicationException(string.Format(errorMessage, "Binary xmss"));
+			}
+			
+			if(!this.IsMessageKeyLoaded) {
+				throw new ApplicationException(string.Format(errorMessage, "Message xmss"));
 			}
 			
 			if(!this.IsGossipKeyLoaded) {

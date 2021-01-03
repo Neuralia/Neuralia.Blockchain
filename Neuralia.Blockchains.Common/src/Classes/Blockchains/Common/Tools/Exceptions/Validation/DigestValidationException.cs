@@ -8,5 +8,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exception
 
 		public DigestValidationException(DigestValidationResult results) : base(results) {
 		}
+		
+		protected override string EventName => "Digest";
 	}
 }

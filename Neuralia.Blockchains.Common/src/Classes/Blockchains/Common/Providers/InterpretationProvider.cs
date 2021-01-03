@@ -1716,6 +1716,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			using SafeArrayHandle binaryCryptographicKey = dehydrator.ToArray();
 
 			await chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId, cryptographicKey.Ordinal, binaryCryptographicKey).ConfigureAwait(false);
+			
+			cryptographicKey = genesisModeratorAccountPresentationTransaction.MessageCryptographicKey;
+			dehydrator?.Dispose();
+			dehydrator = DataSerializationFactory.CreateDehydrator();
+			cryptographicKey.Dehydrate(dehydrator);
+
+			using SafeArrayHandle messageCryptographicKey = dehydrator.ToArray();
+
+			await chainStateProvider.InsertModeratorKey(genesisModeratorAccountPresentationTransaction.TransactionId, cryptographicKey.Ordinal, messageCryptographicKey).ConfigureAwait(false);
 
 			cryptographicKey = genesisModeratorAccountPresentationTransaction.SuperChangeCryptographicKey;
 			dehydrator?.Dispose();

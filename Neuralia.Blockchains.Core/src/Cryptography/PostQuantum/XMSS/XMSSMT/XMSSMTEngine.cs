@@ -216,12 +216,14 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSSMT {
 				long startingTree = context.Tree;
 				
 				XMSSEngine.SaveContext saveContext = new XMSSEngine.SaveContext();
-			
-				saveContext.ContextFile = Path.Combine(this.xmssEngine.WorkingFolderPath, $"context");
-				saveContext.IncompleteNodesKeysFile = Path.Combine(this.xmssEngine.WorkingFolderPath, $"incomplete-nodes-keys");
-				saveContext.IncompleteNodesValuesFile = Path.Combine(this.xmssEngine.WorkingFolderPath, $"incomplete-nodes-values");
-				saveContext.FileSystem = fileSystem;
-				
+
+				if(this.SaveToDisk) {
+					saveContext.ContextFile = Path.Combine(this.xmssEngine.WorkingFolderPath, $"context");
+					saveContext.IncompleteNodesKeysFile = Path.Combine(this.xmssEngine.WorkingFolderPath, $"incomplete-nodes-keys");
+					saveContext.IncompleteNodesValuesFile = Path.Combine(this.xmssEngine.WorkingFolderPath, $"incomplete-nodes-values");
+					saveContext.FileSystem = fileSystem;
+				}
+
 				for(int layer = startingLayer; layer < this.layers; layer++) {
 
 					ClosureWrapper<double> layerPct = 1;

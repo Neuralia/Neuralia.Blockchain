@@ -36,16 +36,24 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 			return this.CreateTransactionId(accountSequenceId, accountType, timestamp);
 		}
-
+		
+		public TransactionId CreateTransactionId(long accountSequenceId, Enums.AccountTypes accountType, long timestamp) {
+			return CreateTransactionId(new AccountId(accountSequenceId, accountType),timestamp);
+		}
+		
 		public TransactionId CreateTransactionId(AccountId accountId, long timestamp) {
+#if MAINNET_LAUNCH_CODE
 
+			// to accomodate mobiles that are not up to date yet
+			if(timestamp < 0) {
+				timestamp = Math.Abs(timestamp);
+			}
+#else
+we have to remove this code!!
+#endif	
 			return new TransactionId(accountId, timestamp, this.GetValidScope(timestamp));
 		}
 
-		public TransactionId CreateTransactionId(long accountSequenceId, Enums.AccountTypes accountType, long timestamp) {
-
-			return new TransactionId(accountSequenceId, accountType, timestamp, this.GetValidScope(timestamp));
-		}
 
 		public AccountId CreateTemporaryAccountId() {
 			return this.CreateTemporaryAccountId(this.CreateAccountCode());

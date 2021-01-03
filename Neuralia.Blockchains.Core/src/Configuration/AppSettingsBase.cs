@@ -132,6 +132,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public Enums.THSMemoryTypes THSMemoryType { get; set; } = Enums.THSMemoryTypes.RAM;
 
 		/// <summary>
+		/// how many thraeds to use for the THS
+		/// </summary>
+		public int THSThreadCount { get; set; } = 1;
+		
+		/// <summary>
 		/// which protocol should we try to use
 		/// </summary>
 		public IPMode IPProtocol { get; set; } = IPMode.Both;
@@ -332,6 +337,11 @@ public string PortTestDns { get; set; } = "port-test.neuralium.com";
 		/// stop the app, if we reach this and limits are enabled
 		/// </summary>
 		public double MemoryLimit { get; set; } = 0.9;
+		
+		/// <summary>
+		/// How many requesters do we expect to get in any appointment validation
+		/// </summary>
+		public int TargetAppointmentRequesterCount { get; set; } = 30;
 		
 		public abstract ChainConfigurations GetChainConfiguration(BlockchainType chainType);
 

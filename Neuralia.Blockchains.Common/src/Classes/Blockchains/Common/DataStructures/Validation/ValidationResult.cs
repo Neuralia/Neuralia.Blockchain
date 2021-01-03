@@ -168,6 +168,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public readonly EventValidationErrorCode JOINT_TRANSACTION_SINGLE_SIGNATURE;
 		public readonly EventValidationErrorCode KEY_NOT_YET_SYNCED;
 		public readonly EventValidationErrorCode MISSING_REQUIRED_JOINT_ACCOUNT;
+		public readonly EventValidationErrorCode CONFIRMATION_CODE_INVALID;
 
 		public readonly EventValidationErrorCode MOBILE_CANNOT_VALIDATE;
 
@@ -218,6 +219,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 			this.CreateBaseConstant(ref this.IDENTITY_AUTOGRAPHN_NOT_SET, nameof(this.IDENTITY_AUTOGRAPHN_NOT_SET));
 			
 			this.CreateBaseConstant(ref this.MODERATION_TRANSACTION_NOT_ACCEPTED, nameof(this.MODERATION_TRANSACTION_NOT_ACCEPTED));
+			this.CreateBaseConstant(ref this.CONFIRMATION_CODE_INVALID, nameof(this.CONFIRMATION_CODE_INVALID));
+
+			
 			
 			
 		}

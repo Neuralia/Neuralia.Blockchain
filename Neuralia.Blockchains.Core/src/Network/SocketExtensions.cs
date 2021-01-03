@@ -51,32 +51,28 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static void InitializeSocketParameters(this Socket socket) {
+			
 			// Ensure a keep alive to know if connection is still active
 			socket.SetSocketKeepAliveValues(2000, 1000);
+			socket.NoDelay = false;
+			socket.LingerState = new LingerOption(true, 10);
+			socket.ExclusiveAddressUse = true;
+			socket.ReceiveBufferSize = 8192;
+			socket.ReceiveTimeout = 3000;
+			socket.SendBufferSize = 8192;
+			socket.SendTimeout = 3000;
+		}
+		// configured for very short sessions
+		public static void InitializeSocketParametersFast(this Socket socket, int buffer) {
 
 			// Disable the Nagle Algorithm for this tcp socket.
 			socket.NoDelay = true;
-
-			// The socket will linger for 3 seconds after 
-			// Socket.Close is called.
-			socket.LingerState = new LingerOption(true, 10);
-
-			// Don't allow another socket to bind to this port.
+			socket.LingerState = new LingerOption(false, 0);
 			socket.ExclusiveAddressUse = true;
-
-			// Set the receive buffer size to 8k
-			socket.ReceiveBufferSize = 8192;
-
-			// Set the timeout for synchronous receive methods to 
-			// 1 second (1000 milliseconds.)
-			socket.ReceiveTimeout = 1000;
-
-			// Set the send buffer size to 8k.
-			socket.SendBufferSize = 8192;
-
-			// Set the timeout for synchronous send methods
-			// to 1 second (1000 milliseconds.)			
-			socket.SendTimeout = 1000;
+			socket.ReceiveBufferSize = buffer;
+			socket.ReceiveTimeout = 10000;
+			socket.SendBufferSize = buffer;
+			socket.SendTimeout = 10000;
 		}
 
 		/// <summary>

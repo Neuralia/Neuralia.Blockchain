@@ -315,16 +315,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 				TimeSpan acceptableRange = TimeSpan.FromHours(1);
 
-				//first check the time to ensure we are within the acceptable range
-
-				// multi sig  transactions are excluded from time limit checks
-				if(!this.timeService.WithinAcceptableRange(message.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableRange)) {
-					completedResultCallback(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE));
-
-					return this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE);
-				}
-
 				if(messageEnvelope is ISignedMessageEnvelope signedMessageEnvelope) {
+					
+					//first check the time to ensure we are within the acceptable range
+					if(!this.timeService.WithinAcceptableRange(message.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableRange)) {
+						completedResultCallback(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE));
+
+						return this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE);
+					}
+					
 					using var rebuiltHash = BlockchainHashingUtils.GenerateBlockchainMessageHash(signedMessageEnvelope);
 					bool hashValid = signedMessageEnvelope.Hash.Equals(rebuiltHash);
 
@@ -381,7 +380,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 							rulesSetDescriptor = THSRulesSet.InitiationAppointmentDefaultRulesSetDescriptor;
 						}
 
-						return await this.ValidateProvedEnvelope(BlockchainHashingUtils.GenerateBlockchainMessageHash(initiationAppointmentMessageEnvelope), initiationAppointmentMessageEnvelope, rulesSetDescriptor, lockContext).ConfigureAwait(false);
+						return await this.ValidateProvedEnvelope(message.Timestamp, acceptableRange, true, BlockchainHashingUtils.GenerateBlockchainMessageHash(initiationAppointmentMessageEnvelope), initiationAppointmentMessageEnvelope, rulesSetDescriptor, lockContext).ConfigureAwait(false);
 					}
 				}
 
@@ -553,7 +552,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			IPresentationTransactionEnvelope presentationTransactionEnvelope = transactionEnvelope as IPresentationTransactionEnvelope;
 			bool isPresentation = transactionEnvelope.Contents.RehydratedEvent is IPresentation;
 			bool isKeyChange = transactionEnvelope.Contents.RehydratedEvent is IStandardAccountKeyChangeTransaction;
-
+			bool isThsSigned = transactionEnvelope is ITHSEnvelope;
+			
 			if((isPresentation && !isPresentationEnvelope) || (!isPresentation && isPresentationEnvelope)) {
 				completedResultCallback?.Invoke(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_TRANSACTION_TYPE_ENVELOPE_REPRESENTATION));
 
@@ -568,7 +568,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			}
 
 			//first check the time to ensure we are within the acceptable range
-			if(!this.timeService.WithinAcceptableRange(transactionEnvelope.Contents.RehydratedEvent.TransactionId.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableRange)) {
+			if(!isThsSigned && !this.timeService.WithinAcceptableRange(transactionEnvelope.Contents.RehydratedEvent.TransactionId.Timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableRange)) {
 				completedResultCallback(this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE));
 
 				return;
@@ -1597,6 +1597,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 		protected virtual async Task<ValidationResult> ValidatePresentationTransaction(IPresentationTransactionEnvelope envelope, IStandardPresentationTransaction transaction, bool gossipOrigin, LockContext lockContext) {
 
+			
 			// ok, let's check the THS
 			//TODO: this should be done asynchronously. its too time expensive. return a routed task and continue on the other side.
 			ValidationResult result = new ValidationResult(ValidationResult.ValidationResults.Valid);
@@ -1635,7 +1636,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					rulesSetDescriptor = THSRulesSet.PresentationDefaultRulesSetDescriptor;
 				}
 
-				result = await this.ValidateProvedEnvelope(BlockchainHashingUtils.GenerateTHSHash(envelope), envelope, rulesSetDescriptor, lockContext).ConfigureAwait(false);
+				TimeSpan acceptableRange = envelope.GetExpirationSpan() + TimeSpan.FromHours(1);
+				result = await this.ValidateProvedEnvelope(transaction.TransactionId.Timestamp,acceptableRange, false, BlockchainHashingUtils.GenerateTHSHash(envelope), envelope, rulesSetDescriptor, lockContext).ConfigureAwait(false);
 
 				if(result.Invalid) {
 					this.CentralCoordinator.Log.Warning("Presentation transaction failed THS verification");
@@ -1816,19 +1818,28 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Valid);
 		}
 
-		protected async Task<ValidationResult> ValidateProvedEnvelope(SafeArrayHandle hash, ITHSEnvelope thsEnvelope, THSRulesSetDescriptor rulesSetDescriptor, LockContext lockContext) {
+		protected async Task<ValidationResult> ValidateProvedEnvelope(TransactionTimestamp timestamp, TimeSpan acceptableTimeRange, bool addExpectedTHSBuffer, SafeArrayHandle hash, ITHSEnvelope thsEnvelope, THSRulesSetDescriptor rulesSetDescriptor, LockContext lockContext) {
 
+			if(!this.enableTHSVerification) {
+				return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Valid);
+			}
+			
+			if(!this.timeService.WithinThsAcceptableRange(timestamp.Value, this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception, acceptableTimeRange, addExpectedTHSBuffer, rulesSetDescriptor)) {
+				return this.CreateMessageValidationResult(ValidationResult.ValidationResults.Invalid, EventValidationErrorCodes.Instance.NOT_WITHIN_ACCEPTABLE_TIME_RANGE);
+			}
+			
 			using(var state = await this.thsLocker.LockAsync(lockContext).ConfigureAwait(false)) {
-				if(!this.enableTHSVerification) {
-					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Valid);
-				}
 
 				if(thsEnvelope.THSEnvelopeSignatureBase.Solution == null || thsEnvelope.THSEnvelopeSignatureBase.Solution.IsEmpty) {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_SOLUTION);
 				}
 
+				if(thsEnvelope.THSEnvelopeSignatureBase.Solution.Solutions.Count > rulesSetDescriptor.MaxRounds) {
+					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_TOO_MANY_SOLUTIONS);
+				}
+				
 				using THSEngine thsEngine = new THSEngine(thsEnvelope.THSEnvelopeSignatureBase.RuleSet, rulesSetDescriptor, GlobalSettings.ApplicationSettings.THSMemoryType);
-				await thsEngine.Initialize().ConfigureAwait(false);
+				await thsEngine.Initialize(THSEngine.THSModes.Verify).ConfigureAwait(false);
 
 				return await thsEngine.Verify(hash, thsEnvelope.THSEnvelopeSignatureBase.Solution).ConfigureAwait(false) == false ? this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_SOLUTION) : this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Valid);
 			}

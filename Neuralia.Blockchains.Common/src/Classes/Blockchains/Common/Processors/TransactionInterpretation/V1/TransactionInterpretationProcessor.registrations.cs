@@ -387,6 +387,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.DigestBlocksChangeCryptographicKey.Ordinal));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.GossipCryptographicKey.Ordinal));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.BinaryCryptographicKey.Ordinal));
+				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.MessageCryptographicKey.Ordinal));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.SuperChangeCryptographicKey.Ordinal));
 				affectedSnapshots.accountKeys.Add((t.ModeratorAccountId.ToLongRepresentation(), t.PtahCryptographicKey.Ordinal));
 				
@@ -408,7 +409,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					await SetAccountEntry(t.BlocksChangeCryptographicKey).ConfigureAwait(false);
 					await SetAccountEntry(t.DigestBlocksCryptographicKey).ConfigureAwait(false);
 					await SetAccountEntry(t.DigestBlocksChangeCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.GossipCryptographicKey).ConfigureAwait(false);
 					await SetAccountEntry(t.BinaryCryptographicKey).ConfigureAwait(false);
+					await SetAccountEntry(t.MessageCryptographicKey).ConfigureAwait(false);
 					await SetAccountEntry(t.SuperChangeCryptographicKey).ConfigureAwait(false);
 					await SetAccountEntry(t.PtahCryptographicKey).ConfigureAwait(false);
 				}

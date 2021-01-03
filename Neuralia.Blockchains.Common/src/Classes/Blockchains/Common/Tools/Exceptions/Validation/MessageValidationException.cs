@@ -9,5 +9,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exception
 
 		public MessageValidationException(MessageValidationResult results) : base(results) {
 		}
+
+		protected override string EventName => "Message";
 	}
 }

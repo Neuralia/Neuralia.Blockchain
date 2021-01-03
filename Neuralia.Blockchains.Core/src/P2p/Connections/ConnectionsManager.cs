@@ -161,25 +161,29 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				// ask for the peers!
 				//TODO: create workflow here
-				ClientPeerListRequestWorkflow<R> peerListRequest = null;
-
 				try {
 					NLog.Default.Verbose($"attempting to query peer list from peer {peer.PeerConnection.ScopedAdjustedIp}");
 
-					peerListRequest = this.clientWorkflowFactory.CreatePeerListRequest(peer.PeerConnection);
+					IClientPeerListRequestWorkflow<R> peerListRequest = this.clientWorkflowFactory.CreatePeerListRequest(peer.PeerConnection);
 
-					peerListRequest.Completed += async (success, wf) => {
-						// run this task in the connection manager thread by sending a delegated task
-						SimpleTask task = new SimpleTask();
+					if(peerListRequest != null) {
+						peerListRequest.Completed += (success, wf) => {
+							// run this task in the connection manager thread by sending a delegated task
+							SimpleTask task = new SimpleTask();
 
-						task.Action += sender => {
-							peer.ConnectionManagerActivityInfo.lastPeerListRequestAttempt = DateTimeEx.CurrentTime; // update it
+							task.Action += sender => {
+								peer.ConnectionManagerActivityInfo.lastPeerListRequestAttempt = DateTimeEx.CurrentTime; // update it
+							};
+
+							this.ReceiveTask(task);
+
+							return Task.CompletedTask;
 						};
 
-						this.ReceiveTask(task);
-					};
-
-					await this.networkingService.WorkflowCoordinator.AddWorkflow(peerListRequest).ConfigureAwait(false);
+						await this.networkingService.WorkflowCoordinator.AddWorkflow(peerListRequest).ConfigureAwait(false);
+					} else {
+						peer.ConnectionManagerActivityInfo.lastPeerListRequestAttempt = DateTimeEx.CurrentTime; // update it
+					}
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "failed to query peer list");
 				}

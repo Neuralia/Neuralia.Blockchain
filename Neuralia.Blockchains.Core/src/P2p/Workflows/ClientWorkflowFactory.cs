@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows {
 		where R : IRehydrationFactory {
 
 		ClientHandshakeWorkflow<R> CreateRequestHandshakeWorkflow(NetworkEndPoint endpoint);
-		ClientPeerListRequestWorkflow<R> CreatePeerListRequest(PeerConnection peerConnection);
+		IClientPeerListRequestWorkflow<R> CreatePeerListRequest(PeerConnection peerConnection);
 		ClientMessageGroupManifestWorkflow<R> CreateMessageGroupManifest();
 	}
 
@@ -25,7 +25,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows {
 			return new ClientHandshakeWorkflow<R>(endpoint, this.serviceSet);
 		}
 
-		public virtual ClientPeerListRequestWorkflow<R> CreatePeerListRequest(PeerConnection peerConnection) {
+		public virtual IClientPeerListRequestWorkflow<R> CreatePeerListRequest(PeerConnection peerConnection) {
 			return new ClientPeerListRequestWorkflow<R>(peerConnection, this.serviceSet);
 		}
 

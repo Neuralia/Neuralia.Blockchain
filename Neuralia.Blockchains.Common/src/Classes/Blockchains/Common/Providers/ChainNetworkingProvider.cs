@@ -119,9 +119,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		Task<List<WebTransactionPoolResult>> QueryWebTransactionPool(LockContext lockContext);
 
-		void RegisterValidationServer(List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
+		void RegisterValidationServer(List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
 		void UnregisterValidationServer();
-		void AddAppointmentWindow(DateTime appointment, TimeSpan window);
+		void AddAppointmentWindow(DateTime appointment, TimeSpan window, int requesterCount);
 		
 		Task<(bool success, CheckAppointmentRequestConfirmedResult result)>      PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext, bool enableBackup = true);
 		Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext, bool enableBackup = true);
@@ -485,7 +485,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return new List<WebTransactionPoolResult>();
 		}
 
-		public void RegisterValidationServer(List<(DateTime appointment, TimeSpan window)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
+		public void RegisterValidationServer(List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
 			this.networkingService.RegisterValidationServer(this.centralCoordinator.ChainId, appointmentWindows, appointmentValidatorDelegate);
 		}
 
@@ -493,8 +493,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.networkingService.UnregisterValidationServer(this.centralCoordinator.ChainId);
 		}
 
-		public void AddAppointmentWindow(DateTime appointment, TimeSpan window) {
-			this.networkingService.AddAppointmentWindow(appointment, window);
+		public void AddAppointmentWindow(DateTime appointment, TimeSpan window, int requesterCount) {
+			this.networkingService.AddAppointmentWindow(appointment, window, requesterCount);
 		}
 		
 		protected IIPCrawler IPCrawler => this.networkingService.IPCrawler;
@@ -597,7 +597,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						return true;
 					}
 
-					throw new ApplicationException("Failed to register message through web");
+					throw new ApplicationException($"Failed to register message through web. Error code: {result.StatusCode}");
 				}).ConfigureAwait(false);
 			} catch(Exception ex) {
 				this.CentralCoordinator.Log.Error(ex, "");

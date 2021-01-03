@@ -146,7 +146,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					if((appointmentDate + AppointmentsValidatorProvider.AppointmentWindowTail) < DateTimeEx.CurrentTime) {
 						// this is the end, we missed the time
 						Log.Warning("We failed to run the puzzle in time. We never acquired the appointment trigger.");
-
+						
+						this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentPuzzleFailed, this.correlationContext);
+						
 						return;
 					}
 				}
@@ -208,9 +210,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				if(validatorCode == null || validatorCode.IsZero) {
-					// this is a serious issue, no validator responded. we are done
-					//TODO: add event
-					 this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentPuzzleFailed, this.correlationContext);
 
 					Log.Error($"Failed to contact open validators. Cannot continue.");
 
@@ -253,7 +252,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							int secretCodeL2 = await validatorProtocol.TriggerSession(appointmentDate, appointmentIndex, applicantSecretEntry.SecretCode, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
 
-							validatorSecretCodesL2.TryAdd(validator.IP, secretCodeL2);
+							if(secretCodeL2 != 0) {
+								validatorSecretCodesL2.TryAdd(validator.IP, secretCodeL2);
+							}
 						}, 2).ConfigureAwait(false);
 
 						timeRecorded = true;
@@ -345,6 +346,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					try {
 
+						if(!validatorSecretCodesL2.ContainsKey(validator.IP)) {
+							this.CentralCoordinator.Log.Warning($"A validator was not found in our return list.");
+							return;
+						}
 						var results = new Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle>();
 
 						results.Add(Enums.AppointmentsResultTypes.Puzzle, serializedResults);
@@ -384,7 +389,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								thsEngine = new THSEngine(thsRuleSet, THSRulesSet.PuzzleDefaultRulesetDescriptor, Enums.THSMemoryTypes.RAM);
 							}
 
-							await thsEngine.Initialize().ConfigureAwait(false);
+							await thsEngine.Initialize(THSEngine.THSModes.Generate).ConfigureAwait(false);
 
 							using var thsHash = AppointmentUtils.PrepareTHSHash(key, puzzleAnswers);
 
@@ -408,24 +413,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				finally {
 					serializedTHS?.Dispose();
 				}
+				
+				if(!this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.DisableAppointmentPuzzleTHS) {
+					await ParallelAsync.ForEach(validators, async item => {
+						var validator = item.entry;
 
-				await ParallelAsync.ForEach(validators, async item => {
-					var validator = item.entry;
+						try {
+							var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
 
-					try {
+							var ipAddress = IPUtils.GuidToIP(validator.IP);
 
-						var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
+							await Repeater.RepeatAsync(async () => {
 
-						var ipAddress = IPUtils.GuidToIP(validator.IP);
-
-						await Repeater.RepeatAsync(async () => {
-
-							await validatorProtocol.RecordTHSCompleted(appointmentDate, appointmentIndex, serializedTHS, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
-						}, 3).ConfigureAwait(false);
-					} catch(Exception ex) {
-						Log.Error(ex, $"Failed to contact assigned validator with IP {validator.IP}:{validator.ValidatorPort}");
-					}
-				}).ConfigureAwait(false);
+								await validatorProtocol.RecordTHSCompleted(appointmentDate, appointmentIndex, serializedTHS, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
+							}, 3).ConfigureAwait(false);
+						} catch(Exception ex) {
+							Log.Error(ex, $"Failed to contact assigned validator with IP {validator.IP}:{validator.ValidatorPort}");
+						}
+					}).ConfigureAwait(false);
+				}
 
 				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzleCompleted, this.correlationContext).ConfigureAwait(false);
 
@@ -433,13 +439,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// we are done! :D
 				await walletProvider.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
 
-				await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
+				await walletProvider.ScheduleTransaction((provider, token, lc) => {
 
 					account.AccountAppointment.AppointmentContextDetailsCached = false;
 					account.AccountAppointment.AppointmentStatus = Enums.AppointmentStatus.AppointmentPuzzleCompleted;
 					account.AccountAppointment.VerificationResponseSeed = verificationResponseSeed.ToExactByteArrayCopy();
+					this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentMode = account.AccountAppointment.AppointmentStatus;
 
-					return true;
+					return Task.FromResult(true);
 				}, lockContext).ConfigureAwait(false);
 
 				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentVerificationRequestCompleted, this.correlationContext).ConfigureAwait(false);

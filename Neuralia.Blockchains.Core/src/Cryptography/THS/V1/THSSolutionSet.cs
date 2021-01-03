@@ -12,18 +12,16 @@ using Neuralia.Blockchains.Tools.Serialization;
 namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 	public class THSSolutionSet : Versionable<SimpleUShort> {
 
-		public const int MAX_SOLUTIONS = 10;
-
-		public THSSolutionSet(List<(int solution, long nonce)> solutions) {
+		public THSSolutionSet(List<(int solution, long nonce)> solutions) : this() {
 			this.Solutions.AddRange(solutions);
 		}
 
-		public THSSolutionSet(int solution, long nonce) {
+		public THSSolutionSet(int solution, long nonce) : this() {
 			this.AddSolution(solution, nonce);
 		}
 
 		public THSSolutionSet() {
-
+			
 		}
 
 		public List<(int solution, long nonce)> Solutions { get; } = new List<(int solution, long nonce)>();
@@ -33,10 +31,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 		public void AddSolution(int solution, long nonce) {
 			this.Solutions.Add((solution, nonce));
-
-			if(this.Solutions.Count > MAX_SOLUTIONS) {
-				throw new ApplicationException($"Number of solutions has passed the maximum count of {MAX_SOLUTIONS}");
-			}
 		}
 
 		protected bool Equals(THSSolutionSet other) {
@@ -110,11 +104,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 			tool.Rehydrate(rehydrator);
 			int count = tool.Value;
-
-			if(count > MAX_SOLUTIONS) {
-				throw new ApplicationException("Invalid solutions count");
-			}
-
+			
 			this.Solutions.Clear();
 
 			for(int i = 0; i < count; i++) {
@@ -130,10 +120,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 			AdaptiveLong1_9 longTool = new AdaptiveLong1_9();
-
-			if(this.Solutions.Count > MAX_SOLUTIONS) {
-				throw new ApplicationException("Invalid solutions count");
-			}
 
 			tool.Value = this.Solutions.Count;
 			tool.Dehydrate(dehydrator);

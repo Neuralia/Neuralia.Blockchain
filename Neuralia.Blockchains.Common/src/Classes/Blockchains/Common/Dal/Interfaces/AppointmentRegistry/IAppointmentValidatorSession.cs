@@ -6,6 +6,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		DateTime Appointment { get; set; }
 
 		int Window { get; set; }
+		
+		int RequesterCount  { get; set; }
 
 		Guid ValidatorHash { get; set; }
 

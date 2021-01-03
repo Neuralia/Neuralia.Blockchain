@@ -10,12 +10,14 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Serialization;
+using Org.BouncyCastle.Utilities;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes {
 
 	public interface ITransactionEnvelope : ISignedEnvelope<IDehydratedTransaction, IEnvelopeSignature> {
 		ushort Expiration { get; }
 		DateTime GetExpirationTime(ITimeService timeService, DateTime chainInception);
+		TimeSpan GetExpirationSpan();
 		void SetExpiration(ushort value, TransactionId transactionId, IBlockchainTimeService timeService, DateTime chainInception);
 
 		HashNodeList GetTransactionHashingStructuresArray(TransactionEnvelope.TransactionHashingTypes type = TransactionEnvelope.TransactionHashingTypes.Full);
@@ -43,9 +45,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		public const int MINIMUM_EXPIRATION_TIME = 1;
 
 		/// <summary>
-		///     a month in half hours! should be more than plenty
+		///     two weeks in half hours! should be more than plenty
 		/// </summary>
-		public const int MAXIMUM_EXPIRATION_TIME = 24 * HOURLY_ENTRIES * 30;
+		public const int MAXIMUM_EXPIRATION_TIME = 24 * HOURLY_ENTRIES * 15;
 
 		/// <summary>
 		///     6 hours
@@ -81,8 +83,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 		}
 
 		public DateTime GetExpirationTime(ITimeService timeService, DateTime chainInception) {
-			return timeService.GetTimestampDateTime(this.Contents.Uuid.Timestamp.Value, chainInception).AddMinutes(this.ClampExpirationTime(this.Expiration) * SLICE_MINUTES);
+			return timeService.GetTimestampDateTime(this.Contents.Uuid.Timestamp.Value, chainInception) + this.GetExpirationSpan();
 		}
+		
+		public TimeSpan GetExpirationSpan() {
+			return TimeSpan.FromMinutes(this.ClampExpirationTime(this.Expiration) * SLICE_MINUTES);
+		}
+		
 
 		public override string GetId() {
 			return this.Contents.Uuid.ToString();

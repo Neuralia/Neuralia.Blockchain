@@ -7,17 +7,23 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Data.Pools;
+using Neuralia.Blockchains.Tools.General;
 using Nito.AsyncEx.Synchronous;
 
 namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 	public interface ITcpValidatorServer {
+
+		int RequesterCount { get; }
 
 		bool IsRunning { get; }
 
@@ -32,6 +38,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 		IPMode IPMode { get; }
 
 		bool IsDisposed { get; }
+		bool BlockchainDelegateEmpty { get; }
 
 		void Close();
 
@@ -44,9 +51,10 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		void Stop();
 
+		void Initialize();
+
 		void RegisterBlockchainDelegate(BlockchainType blockchainType, IAppointmentValidatorDelegate appointmentValidatorDelegate, Func<bool> isInAppointmentWindow);
 		void UnregisterBlockchainDelegate(BlockchainType blockchainType);
-		bool BlockchainDelegateEmpty { get; }
 	}
 
 	/// <summary>
@@ -55,35 +63,47 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 	/// <inheritdoc />
 	public class TcpValidatorServer : ITcpValidatorServer {
 
-		public const    byte PING_BYTE = 255;
-		public const    byte PONG_BYTE = 255;
 		public delegate Task MessageBytesReceived(TcpServer listener, ITcpConnection connection, SafeArrayHandle buffer);
 
-		private readonly Action<Exception> exceptionCallback;
+		public const byte PING_BYTE = 255;
+		public const byte PONG_BYTE = 255;
+		public const byte BYTES_PER_REQUESTER = 100;
+
+		private readonly ConcurrentDictionary<BlockchainType, IAppointmentValidatorDelegate> appointmentValidatorDelegates = new();
+		private readonly ConcurrentDictionary<BlockchainType, Func<bool>> appointmentWindowChecks = new();
+		private readonly Semaphore maximumAcceptedRequesters;
+
+		private readonly NetworkEndPoint networkEndPoint;
+		private ObjectPool<SocketAsyncEventArgs> asyncEventArgsPool;
+		private ByteArray buffer;
+		private int connectedRequesters;
 
 		/// <summary>
 		///     The socket listening for connections.
 		/// </summary>
 		private Socket listener;
 
-		private readonly object          locker   = new object();
-		private readonly SafeArrayHandle pongByte = SafeArrayHandle.Wrap(new [] {PONG_BYTE });
-
-		public TcpValidatorServer(NetworkEndPoint endPoint, Action<Exception> exceptionCallback) {
-			this.exceptionCallback = exceptionCallback;
+		private bool enableMarshall;
+		public TcpValidatorServer(int requesterCount, NetworkEndPoint endPoint, bool enableMarshall = true) {
+			this.RequesterCount = requesterCount;
 			this.EndPoint = endPoint.EndPoint;
 			this.IPMode = endPoint.IPMode;
 			this.networkEndPoint = endPoint;
+			this.enableMarshall = enableMarshall;
+			
+			this.maximumAcceptedRequesters = new Semaphore(requesterCount, requesterCount);
+
+			ValidatorProtocolFactory.InitializeValidatorProtocolPool(requesterCount);
 		}
 
-		public bool IsRunning { get; private set; } = false;
+		public int RequesterCount { get; }
+
+		public bool IsRunning { get; private set; }
 
 		/// <summary>
 		///     The local end point the listener is listening for new clients on.
 		/// </summary>
 		public EndPoint EndPoint { get; }
-
-		private NetworkEndPoint networkEndPoint;
 
 		/// <summary>
 		///     The <see cref="IPMode">IPMode</see> the listener is listening for new clients on.
@@ -91,6 +111,30 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 		public IPMode IPMode { get; }
 
 		public bool IsDisposed { get; private set; }
+
+		public void Initialize() {
+
+			this.buffer?.Dispose();
+			this.asyncEventArgsPool?.Dispose();
+
+			this.buffer = ByteArray.Create(BYTES_PER_REQUESTER * this.RequesterCount);
+
+			ClosureWrapper<int> index = 0;
+
+			this.asyncEventArgsPool = new ObjectPool<SocketAsyncEventArgs>(() => {
+
+				SocketAsyncEventArgs entry = new();
+				entry.Completed += this.ProcessCompleted;
+				var token = new ValidatorConnectionInstance {listener = this.listener, server = this, BufferOffset = this.buffer.Offset + (BYTES_PER_REQUESTER * index.Value)};
+				entry.UserToken = token;
+
+				entry.SetBuffer(this.buffer.Bytes, token.BufferOffset, 1);
+
+				index.Value++;
+
+				return entry;
+			}, this.RequesterCount, 0);
+		}
 
 		public void Close() {
 			this.Dispose();
@@ -109,6 +153,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 			}
 
 			this.Stop();
+
 			try {
 				if(NodeAddressInfo.IsAddressIpV4(this.networkEndPoint)) {
 					this.listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -120,7 +165,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 					this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
 					this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
 				}
-				
+
 				// seems to be needed in case the listener is not completely disposed yet (on linux and MacOs)
 				//https://github.com/dotnet/corefx/issues/24562
 				//TODO: this is a bug fix, and maybe in the future we may not need the below anymore.
@@ -128,16 +173,18 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 					this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 					this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
 				}
+				this.listener.InitializeSocketParametersFast(BYTES_PER_REQUESTER);
 
-				this.listener.InitializeSocketParameters();
-				
 				this.listener.Bind(this.EndPoint);
 				this.listener.Listen((int) SocketOptionName.MaxConnections);
 
-				this.listener.BeginAccept(AcceptCallback, new ValidatorConnectionInstance {listener = this.listener, server = this});
 				this.IsRunning = true;
+				this.BeginAccepting(null);
 
-				NLog.Default.Information($"Validator TCP Server started");
+				NLog.Default.Information("Validator TCP Server started");
+
+				NLog.LoggingBatcher.Start();
+				
 			} catch(SocketException e) {
 				throw new P2pException("Could not start listening as a SocketException occured", P2pException.Direction.Receive, P2pException.Severity.Casual, e);
 			}
@@ -145,6 +192,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		public void Stop() {
 			if(this.IsRunning) {
+				this.IsRunning = false;
+
 				try {
 					try {
 						if(this.listener?.Connected ?? false) {
@@ -154,25 +203,44 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 					}
 
-					this.listener?.Dispose();
+					try {
+						this.listener?.Dispose();
+					} catch {
+
+					}
 					
-					NLog.Default.Information($"Validator TCP Server stopped");
+					try {
+						this.buffer?.Dispose();
+					} catch {
+
+					}
+					
+					this.buffer = null;
+
+					try {
+						this.asyncEventArgsPool.Dispose();
+					} catch {
+
+					}
+					
+					this.asyncEventArgsPool = null;
+
+					NLog.Default.Information("Validator TCP Server stopped");
 				} finally {
 					this.IsRunning = false;
 					this.listener = null;
+					
+					NLog.LoggingBatcher.Stop();
 				}
 			}
 		}
-
-		private readonly ConcurrentDictionary<BlockchainType, IAppointmentValidatorDelegate> appointmentValidatorDelegates = new ConcurrentDictionary<BlockchainType, IAppointmentValidatorDelegate>();
-		private readonly ConcurrentDictionary<BlockchainType, Func<bool>>                    appointmentWindowChecks       = new ConcurrentDictionary<BlockchainType, Func<bool>>();
 
 		public void RegisterBlockchainDelegate(BlockchainType blockchainType, IAppointmentValidatorDelegate appointmentValidatorDelegate, Func<bool> isInAppointmentWindow) {
 			if(!this.appointmentValidatorDelegates.ContainsKey(blockchainType)) {
 				appointmentValidatorDelegate.Initialize();
 				this.appointmentValidatorDelegates.TryAdd(blockchainType, appointmentValidatorDelegate);
 			}
-			
+
 			if(!this.appointmentWindowChecks.ContainsKey(blockchainType)) {
 				this.appointmentWindowChecks.TryAdd(blockchainType, isInAppointmentWindow);
 			}
@@ -180,148 +248,284 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		public void UnregisterBlockchainDelegate(BlockchainType blockchainType) {
 			if(this.appointmentValidatorDelegates.ContainsKey(blockchainType)) {
-				this.appointmentValidatorDelegates.Remove(blockchainType, out var _);
+				this.appointmentValidatorDelegates.Remove(blockchainType, out IAppointmentValidatorDelegate _);
 			}
-			
+
 			if(this.appointmentWindowChecks.ContainsKey(blockchainType)) {
-				this.appointmentWindowChecks.Remove(blockchainType, out var _);
+				this.appointmentWindowChecks.Remove(blockchainType, out Func<bool> _);
 			}
 		}
 
 		public bool BlockchainDelegateEmpty => !this.appointmentValidatorDelegates.Any();
 
-		private static void AcceptCallback(IAsyncResult result) {
+		public void BeginAccepting(SocketAsyncEventArgs acceptEventArg) {
 
-			try {
-				// Get the socket that handles the client request.  
-				var connectionInstance = (ValidatorConnectionInstance) result.AsyncState;
+			if(!this.IsRunning) {
+				return;
+			}
 
-				Socket tcpSocket = null;
+			// this is the one passed around as a chain
+			if(acceptEventArg == null) {
+				acceptEventArg = new SocketAsyncEventArgs();
+				acceptEventArg.Completed += this.AcceptCompleted;
+			} else {
+				acceptEventArg.AcceptSocket = null;
+			}
 
-				try {
-					if(connectionInstance.listener == null) {
-						throw new ObjectDisposedException("listener");
-					}
+			this.maximumAcceptedRequesters.WaitOne();
+			bool willRaiseEvent = this.listener.AcceptAsync(acceptEventArg);
 
-					tcpSocket = connectionInstance.listener.EndAccept(result);
-
-				} catch(ObjectDisposedException) {
-					//If the socket's been disposed then we can just end there.
-					return;
-				}
-
-				// get the next connection
-				connectionInstance.listener.BeginAccept(AcceptCallback, connectionInstance);
-
-				var endPoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
-
-				// first thing, ask IPMarshall
-				if(connectionInstance.server.CheckShouldDisconnect(endPoint)) {
-					try {
-						tcpSocket.Close();
-					} catch(ObjectDisposedException) {
-						//If the socket's been disposed then we can just end there.
-					}
-
-					return;
-				}
-
-				try {
-					connectionInstance.server.AcceptNewConnection(tcpSocket);
-				} catch(Exception ex) {
-					try {
-						tcpSocket?.Close();
-						tcpSocket?.Dispose();
-
-					} catch {
-					}
-
-					NLog.Default.Verbose("Failed to establish connection");
-				}
-			} catch(Exception ex) {
-				NLog.Default.Error(ex, "Failed to listen for connections. this is bad. trying to reestablish connection.");
-
-				try {
-					// lets try again
-					var connectionInstance = (ValidatorConnectionInstance) result.AsyncState;
-					connectionInstance.listener.BeginAccept(AcceptCallback, connectionInstance);
-				} catch {
-					NLog.Default.Fatal(ex, "Failed to listen for any connections. this is seriously critical! server is not listening anymore.");
-				}
+			if(!willRaiseEvent) {
+				this.ProcessAccept(ref acceptEventArg);
 			}
 		}
 
-		protected virtual bool CheckShouldDisconnect(IPEndPoint endPoint) {
-			return IPMarshall.ValidationInstance.RequestIncomingConnectionClearance(endPoint.Address) == false;
+		private void AcceptCompleted(object sender, SocketAsyncEventArgs e) {
+			this.ProcessAccept(ref e);
 		}
 
-		public void AcceptNewConnection(Socket tcpSocket) {
+		private void ProcessAccept(ref SocketAsyncEventArgs e) {
 
-			TcpValidatorConnection connection = null;
+			if(e.AcceptSocket != null) {
+				var acceptSocket = e.AcceptSocket;
+				var endPoint = (IPEndPoint)e.AcceptSocket.RemoteEndPoint;
+				var task = Task.Run(() => {
 
-			try {
-				connection = new TcpValidatorConnection(tcpSocket, ex => {
-				}, true);
+					SocketAsyncEventArgs readEventArgs = null;
+					NLog.LoggingBatcher.IncrementInstances();
 
-				using ByteArray frontBytes = connection.ReadData(ValidatorProtocolHeader.HEAD_BYTE_SIZE).WaitAndUnwrapException();
+					try {
+						// first thing, ask IPMarshall
+						if(this.CheckShouldDisconnect(endPoint)) {
+							try {
+								acceptSocket.Dispose();
 
-				if(frontBytes.Length == 0) {
-					var endpoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
-					IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.PermanentBan, DateTimeEx.MaxValue);
+							} catch(ObjectDisposedException) {
+								//If the socket's been disposed then we can just end there.
+							}
+							NLog.LoggingBatcher.DecrementInstances();
+
+							return;
+						}
+
+						Interlocked.Increment(ref this.connectedRequesters);
+
+						readEventArgs = this.asyncEventArgsPool.GetObject();
+
+						if(readEventArgs.UserToken is ValidatorConnectionInstance token) {
+							token.listener = acceptSocket;
+						}
+
+						if(!acceptSocket.ReceiveAsync(readEventArgs)) {
+							this.ProcessCompleted(this, ref readEventArgs);
+						}
+					} catch {
+						if(readEventArgs != null) {
+
+							ValidatorConnectionInstance token = (ValidatorConnectionInstance) readEventArgs.UserToken;
+							this.Quarantine(token);
+						}
+
+						this.DisconnectClient(ref readEventArgs);
+					}
+				});
+			}
+
+			// Accept the next connection request
+			this.BeginAccepting(e);
+		}
+
+		private void ProcessCompleted(object sender, SocketAsyncEventArgs e) {
+			ProcessCompleted(sender, ref e);
+		}
+
+		private void ProcessCompleted(object sender, ref SocketAsyncEventArgs e) {
+			ValidatorConnectionInstance token = (ValidatorConnectionInstance) e.UserToken;
+
+			if((e.LastOperation == SocketAsyncOperation.Accept) && (token != null ? token.Step != ValidatorConnectionInstance.Steps.Closing : true)) {
+				this.ProcessAccept(ref e);
+			} else if(token.Step == ValidatorConnectionInstance.Steps.ReceiveFrontByte) {
+				this.ProcessReceiveFrontByte(token, ref e);
+			} else if(token.Step == ValidatorConnectionInstance.Steps.ReceiveHeader) {
+				this.ProcessReceiveHeader(token, ref e);
+			} else if(token.Step == ValidatorConnectionInstance.Steps.ReceiveOperation) {
+				this.ProcessReceiveOperation(token, ref e);
+			} else if(token.Step == ValidatorConnectionInstance.Steps.Closing) {
+				// do nothing
+			} else {
+				this.DisconnectClient(ref e);
+			}
+		}
+
+		private void ProcessReceiveOperation(ValidatorConnectionInstance token, ref SocketAsyncEventArgs e) {
+			if((e.BytesTransferred != 0) && (e.SocketError == SocketError.Success)) {
+
+				// first step, take the header
+				using ByteArray operationBytes = ByteArray.Wrap(e.Buffer, e.Offset, e.BytesTransferred, false);
+				
+				IValidatorProtocol protocol = ValidatorProtocolFactory.GetValidatorProtocolInstance(token.Header.ProtocolVersion, token.Header.ChainId, type => {
+
+					IAppointmentValidatorDelegate validatorDelegate = null;
+					this.appointmentValidatorDelegates.TryGetValue(type, out validatorDelegate);
+					
+					return validatorDelegate;
+				});
+
+				if(protocol == null) {
+					return;
 				}
+
+				using CancellationTokenSource tokenSource = new();
+
+				if(!protocol.HandleServerExchange(new ValidatorConnectionSet {Token = token, Socket = token.listener, SocketAsyncEventArgs = e}, operationBytes, tokenSource.Token).WaitAndUnwrapException(tokenSource.Token)) {
+					this.DisconnectClient(ref e);
+				} else {
+					token.Step = ValidatorConnectionInstance.Steps.Finished;
+				}
+			} else {
+				this.DisconnectClient(ref e);
+
+				this.Quarantine(token);
+			}
+		}
+
+		private void ProcessReceiveHeader(ValidatorConnectionInstance token, ref SocketAsyncEventArgs e) {
+			if((e.BytesTransferred > 0) && (e.SocketError == SocketError.Success)) {
+
+				// first step, take the header
+				using ByteArray headerBytes = ByteArray.Wrap(e.Buffer, e.Offset, ValidatorProtocolHeader.MAIN_HEADER_SIZE, false);
+
+				ValidatorProtocolHeader header = new();
+				header.Rehydrate(ValidatorProtocolHeader.HEAD_BYTE, headerBytes);
+
+				// first thing, validate header
+				if(header.NetworkId != NetworkConstants.CURRENT_NETWORK_ID) {
+					//blacklist
+					this.Quarantine(token);
+
+					return;
+				}
+
+				e.SetBuffer(this.buffer.Bytes, token.BufferOffset, BYTES_PER_REQUESTER);
+				token.Step = ValidatorConnectionInstance.Steps.ReceiveOperation;
+				token.Header = header;
+
+				if(!token.listener.ReceiveAsync(e)) {
+					this.ProcessReceiveOperation(token, ref e);
+				}
+			} else {
+				this.DisconnectClient(ref e);
+
+				this.Quarantine(token);
+			}
+		}
+
+		private void Quarantine(ValidatorConnectionInstance token, ILoggingBatcher loggingBatcher = null) {
+			if(enableMarshall) {
+				IPEndPoint endpoint = (IPEndPoint) token.listener.RemoteEndPoint;
 				
-				byte frontByte = frontBytes[0];
-				
+				IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.PermanentBan, DateTimeEx.CurrentTime.AddDays(1));
+			}
+		}
+		
+		private void ProcessReceiveFrontByte(ValidatorConnectionInstance token, ref SocketAsyncEventArgs e) {
+
+			if((e.BytesTransferred > 0) && (e.SocketError == SocketError.Success)) {
+				//increment the count of the total bytes receive by the server
+
+				if(e.BytesTransferred != 1) {
+					this.DisconnectClient(ref e);
+
+					this.Quarantine(token);
+
+					return;
+				}
+ 
+				byte frontByte = e.Buffer[e.Offset];
+
 				if(frontByte == PING_BYTE) {
 					//TODO: ensure rate limiting here by IP.
 					// send the pong
-					connection.SendSocketBytes(this.pongByte);
-				} else if(frontByte == ValidatorProtocolHeader.HEAD_BYTE && this.IsInAppointmentWindow()) {
+					e.Buffer[e.Offset] = PONG_BYTE;
 
-					// first step, take the header
-					using ByteArray headerBytes = connection.ReadData(ValidatorProtocolHeader.MAIN_HEADER_SIZE).WaitAndUnwrapException();
+					token.Step = ValidatorConnectionInstance.Steps.SendPong;
 
-					var header = new ValidatorProtocolHeader();
-					header.Rehydrate(frontByte, headerBytes);
+					if(!token.listener.SendAsync(e)) {
+						this.DisconnectClient(ref e);
+					}
+				} else if(frontByte == ValidatorProtocolHeader.HEAD_BYTE) {
 
-					// first thing, valida header
-					if(header.NetworkId != NetworkConstants.CURRENT_NETWORK_ID) {
-						//blacklist
-						var endpoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
-						IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.PermanentBan, DateTimeEx.MaxValue);
+					if(!this.IsInAppointmentWindow()) {
+						this.DisconnectClient(ref e);
+
+						this.Quarantine(token);
+
 						return;
 					}
 
-					IValidatorProtocol protocol = ValidatorProtocolFactory.GetValidatorProtocolInstance(header.ProtocolVersion, header.ChainId, (type) => {
-						if(this.appointmentValidatorDelegates.ContainsKey(type)) {
-							return this.appointmentValidatorDelegates[type];
-						}
+					e.SetBuffer(this.buffer.Bytes, token.BufferOffset, ValidatorProtocolHeader.MAIN_HEADER_SIZE);
+					token.Step = ValidatorConnectionInstance.Steps.ReceiveHeader;
 
-						return null;
-					});
-					
-					if(protocol == null) {
-						return;
+					if(!token.listener.ReceiveAsync(e)) {
+						this.ProcessReceiveHeader(token, ref e);
 					}
-					using var tokenSource = new CancellationTokenSource();
-					protocol.HandleServerExchange(connection, tokenSource.Token).WaitAndUnwrapException(tokenSource.Token);
 				} else {
-					var endpoint = (IPEndPoint) tcpSocket.RemoteEndPoint;
-					IPMarshall.ValidationInstance.Quarantine(endpoint.Address, IPMarshall.QuarantineReason.PermanentBan, DateTimeEx.MaxValue);
+					this.Quarantine(token);
 				}
-				
-			} finally {
-				connection?.Dispose();
+			} else {
+				this.DisconnectClient(ref e);
+
+				this.Quarantine(token);
 			}
 		}
 
+		private void DisconnectClient(ref SocketAsyncEventArgs e) {
+			if(e == null) {
+				return;
+			}
+			ValidatorConnectionInstance token = e.UserToken as ValidatorConnectionInstance;
+
+			token.Step = ValidatorConnectionInstance.Steps.Closing;
+
+			try {
+				token.listener.Shutdown(SocketShutdown.Both);
+			} catch(Exception) {
+				
+			}
+			try {
+				token.listener.Dispose();
+			} catch(Exception) {
+				
+			}
+
+			token.listener = null;
+			Interlocked.Decrement(ref this.connectedRequesters);
+			
+			//restore basics
+			token.Step = ValidatorConnectionInstance.Steps.ReceiveFrontByte;
+			e.SetBuffer(this.buffer.Bytes, token.BufferOffset, 1);
+
+			this.asyncEventArgsPool.PutObject(e);
+
+			this.maximumAcceptedRequesters.Release();
+			NLog.LoggingBatcher.DecrementInstances();
+		}
+
+		protected virtual bool CheckShouldDisconnect(IPEndPoint endPoint) {
+			if(!enableMarshall) {
+				return false;
+			}
+
+			return IPMarshall.ValidationInstance.RequestIncomingConnectionClearance(endPoint.Address) == false;
+		}
+
 		/// <summary>
-		/// check if we have any appointment window happening
+		///     check if we have any appointment window happening
 		/// </summary>
 		/// <returns></returns>
 		private bool IsInAppointmentWindow() {
 
-			foreach(var key in this.appointmentWindowChecks.Keys) {
+			foreach(BlockchainType key in this.appointmentWindowChecks.Keys) {
 				if(this.appointmentWindowChecks[key]()) {
 					return true;
 				}
@@ -329,7 +533,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 			return false;
 		}
-		
+
 		protected virtual ITcpValidatorConnection CreateTcpConnection(Socket socket, Action<Exception> exceptionCallback) {
 
 			return new TcpValidatorConnection(socket, exceptionCallback, true);
@@ -351,9 +555,22 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 		}
 
 		public class ValidatorConnectionInstance {
-			public Socket listener;
 
+			public enum Steps {
+				ReceiveFrontByte,
+				ReceiveHeader,
+				ReceiveOperation,
+				SendPong,
+				Closing,
+				Finished
+			}
+
+			public ValidatorProtocolHeader Header;
+			public Socket listener;
 			public TcpValidatorServer server;
+			public int BufferOffset;
+
+			public Steps Step { get; set; } = Steps.ReceiveFrontByte;
 		}
 	}
 }

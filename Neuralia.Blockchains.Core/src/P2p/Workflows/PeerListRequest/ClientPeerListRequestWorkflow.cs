@@ -10,7 +10,13 @@ using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
-	public class ClientPeerListRequestWorkflow<R> : ClientWorkflow<PeerListRequestMessageFactory<R>, R>
+	
+	public interface IClientPeerListRequestWorkflow<R> : IClientWorkflow<NullMessageFactory<R>, R>
+		where R : IRehydrationFactory{
+
+	}
+	
+	public class ClientPeerListRequestWorkflow<R> : ClientWorkflow<PeerListRequestMessageFactory<R>, R>, IClientPeerListRequestWorkflow<R>
 		where R : IRehydrationFactory {
 		public readonly PeerConnection peerConnection;
 

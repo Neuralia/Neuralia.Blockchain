@@ -64,7 +64,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 #if MAINNET_LAUNCH_CODE
 
 			// special code to accomodate mainnet launch
-			if(expiration.ToUniversalTime() < GlobalsService.MainnetLauchTime) {
+			if(expiration.ToUniversalTime() < GlobalsService.MainnetLauchTime + TimeSpan.FromDays(2)) {
 				expiration = GlobalsService.MainnetLauchTime + TimeSpan.FromDays(2);
 			}	
 #else

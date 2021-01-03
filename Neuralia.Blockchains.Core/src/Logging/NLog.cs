@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core.Configuration;
 using Serilog;
 using Serilog.Events;
@@ -26,6 +27,8 @@ namespace Neuralia.Blockchains.Core.Logging {
 		public static IPassthroughLogger Connections => GetLogger(LoggerTypes.Connections);
 		public static IPassthroughLogger Messages => GetLogger(LoggerTypes.Messages);
 		public static IPassthroughLogger UPnP => GetLogger(LoggerTypes.UPnP);
+		
+		public static LoggingBatcher LoggingBatcher { get; } = new LoggingBatcher();
 		
 		public static void EnableLoggers(AppSettingsBase appSettings) {
 
@@ -55,7 +58,7 @@ namespace Neuralia.Blockchains.Core.Logging {
 			}
 		}
 
-		private static IPassthroughLogger GetLogger(LoggerTypes loggertype) {
+		public static IPassthroughLogger GetLogger(LoggerTypes loggertype) {
 			if(EnableAll || EnabledLoggers.Contains(loggertype)) {
 				return PassthroughLogger.Instance;
 			}
