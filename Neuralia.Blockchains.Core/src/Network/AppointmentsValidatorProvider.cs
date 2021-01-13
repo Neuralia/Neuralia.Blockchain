@@ -4,9 +4,12 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
+using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.REST;
+using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
 using Serilog;
 
@@ -23,8 +26,10 @@ namespace Neuralia.Blockchains.Core.Network {
 
 	// the validation server use to operate an appointment validator
 	public class AppointmentsValidatorProvider : IAppointmentsValidatorProvider {
+
 		protected ITcpValidatorServer validationServer = null;
-		private Timer pollingTimer;
+		protected RESTValidatorServer restValidatorServer = null;
+		private ManagedTimer pollingTimer;
 
 		public static TimeSpan AppointmentWindowHead = TimeSpan.FromMinutes(-5);
 		public static TimeSpan AppointmentWindowTail = TimeSpan.FromMinutes(10);
@@ -42,8 +47,9 @@ namespace Neuralia.Blockchains.Core.Network {
 				this.AddAppointmentWindow(appointment, window, requesterCount);
 			}
 
+#if NET5_0
 			if(this.pollingTimer == null) {
-				this.pollingTimer = new Timer(state => {
+				this.pollingTimer = new ManagedTimer(state => {
 
 					bool verificationWindowValid = (this.verificationEnd.HasValue && this.verificationEnd >= DateTimeEx.CurrentTime);
 
@@ -54,14 +60,19 @@ namespace Neuralia.Blockchains.Core.Network {
 					} else if(this.validationServer?.IsRunning ?? false) {
 						// outside of windows, no server
 						this.validationServer?.Stop();
+						this.restValidatorServer?.Stop();
 					}
 
 					if(!verificationWindowValid) {
 						this.verificationEnd = null;
 					}
+					
+					return Task.CompletedTask;
 
-				}, this, TimeSpan.FromSeconds(3), this.ServerPollDelay);
+				}, TimeSpan.FromSeconds(3), this.ServerPollDelay);
+				this.pollingTimer.Start();
 			}
+#endif
 		}
 
 		protected virtual int MinimumRequesterCount => GlobalSettings.ApplicationSettings.TargetAppointmentRequesterCount;
@@ -80,13 +91,19 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		protected void StartServer(int requesterCount) {
 
-			if(this.validationServer != null && this.validationServer.IsRunning && this.validationServer.RequesterCount < requesterCount) {
-				this.validationServer?.Stop();
-				this.validationServer = null;
-			}
 
-			if(this.validationServer == null || !this.validationServer.IsRunning) {
+			if(this.validationServer == null || !this.validationServer.IsRunning || (this.validationServer.IsRunning && this.validationServer.RequesterCount < requesterCount)) {
 
+				if(this.validationServer != null) {
+					this.validationServer?.Dispose();
+					this.validationServer = null;
+				}
+
+				if(this.restValidatorServer != null) {
+					this.restValidatorServer?.Dispose();
+					this.restValidatorServer = null;
+				}
+				
 				var ipMode = IPMode.IPv4;
 				var address = IPAddress.Any;
 
@@ -98,12 +115,24 @@ namespace Neuralia.Blockchains.Core.Network {
 					address = IPAddress.Any;
 				}
 				
+#if NET5_0
 				this.validationServer = new TcpValidatorServer(Math.Max(requesterCount, this.MinimumRequesterCount), new NetworkEndPoint(address, GlobalSettings.ApplicationSettings.ValidatorPort, ipMode));
 				this.validationServer.Initialize();
 				
 				this.validationServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
 
 				this.validationServer.Start();
+
+				if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol) {
+					this.restValidatorServer = new RESTValidatorServer(GlobalSettings.ApplicationSettings.ValidatorHttpPort);
+					
+					this.restValidatorServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
+
+					this.restValidatorServer.Start();
+				}
+#else
+				NLog.Default.Warning("Appointments validators are not possible in netstandard mode");
+#endif
 			} 
 		}
 		
@@ -161,9 +190,10 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public void UnregisterValidationServer(BlockchainType blockchainType) {
-
+#if NET5_0
 			this.validationServer?.UnregisterBlockchainDelegate(blockchainType);
-
+			this.restValidatorServer?.UnregisterBlockchainDelegate(blockchainType);
+			
 			if(this.validationServer?.BlockchainDelegateEmpty ?? false) {
 
 				this.pollingTimer?.Dispose();
@@ -172,8 +202,12 @@ namespace Neuralia.Blockchains.Core.Network {
 				this.validationServer?.Stop();
 				this.validationServer?.Dispose();
 				this.validationServer = null;
+				
+				this.restValidatorServer?.Stop();
+				this.restValidatorServer?.Dispose();
+				this.restValidatorServer = null;
 			}
-
+#endif
 			this.ClearExpiredAppointmentWindows();
 		}
 
@@ -187,6 +221,13 @@ namespace Neuralia.Blockchains.Core.Network {
 					this.validationServer = null;
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "Failed to dispose of validation server");
+				}
+				
+				try {
+					this.restValidatorServer?.Dispose();
+					this.restValidatorServer = null;
+				} catch(Exception ex) {
+					NLog.Default.Error(ex, "Failed to dispose of REST validation server");
 				}
 			}
 

@@ -5,6 +5,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account.Snapshots;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Keys;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1;
@@ -13,7 +14,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 	public interface IChainTypeCreationFactory {
 		IWalletAccount CreateNewWalletAccount();
 
-		IValidatorProtocol CreateValidatorProtocol(BlockchainType blockchainType);
+		IValidatorProtocol CreateValidatorProtocol(BlockchainType blockchainType, Enums.AppointmentValidationProtocols Protocol);
 		
 		IWalletKey CreateNewWalletKey(CryptographicKeyType keyType);
 		IXmssWalletKey CreateNewXmssWalletKey();
@@ -63,8 +64,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 
 		public CENTRAL_COORDINATOR CentralCoordinator { get; }
 
-		public IValidatorProtocol CreateValidatorProtocol(BlockchainType blockchainType) {
-			return new ValidatorProtocol1(blockchainType);
+		public IValidatorProtocol CreateValidatorProtocol(BlockchainType blockchainType, Enums.AppointmentValidationProtocols Protocol) {
+			if(Protocol == Enums.AppointmentValidationProtocols.Undefined || Protocol == Enums.AppointmentValidationProtocols.Standard) {
+				return new ValidatorProtocol1(blockchainType);
+			}
+			else if(Protocol == Enums.AppointmentValidationProtocols.Backup) {
+				return new ValidatorRESTProtocol1(blockchainType, GlobalSettings.ApplicationSettings.ValidatorHttpPort);
+			}
+
+			throw new ArgumentException();
 		}
 
 		public IWalletKey CreateNewWalletKey(CryptographicKeyType keyType) {

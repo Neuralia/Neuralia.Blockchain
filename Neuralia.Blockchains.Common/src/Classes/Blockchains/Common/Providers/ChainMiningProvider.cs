@@ -219,9 +219,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected BlockchainNetworkingService.MiningRegistrationParameters registrationParameters;
 
-		private Timer updateMiningRegistrationTimer;
+		private ManagedTimer updateMiningRegistrationTimer;
 
-		private Timer updateMiningStatusTimer;
+		private ManagedTimer updateMiningStatusTimer;
 
 		public ChainMiningProvider(CENTRAL_COORDINATOR centralCoordinator) {
 			this.centralCoordinator = centralCoordinator;
@@ -750,11 +750,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				ClosureWrapper<bool> executing = false;
 
-				this.updateMiningRegistrationTimer = new Timer(state => {
+				this.updateMiningRegistrationTimer = new ManagedTimer(state => {
 
 					if(executing == false) {
 						try {
-							this.updateMiningRegistrationTimer?.Change(TimeSpan.FromHours(100), TimeSpan.FromHours(100));
 							executing = true;
 							this.UpdateWebapiAccountRegistration(lockContext).WaitAndUnwrapException();
 
@@ -767,7 +766,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							// reset the timer
 							try {
-								this.updateMiningRegistrationTimer?.Change(waitTime, waitTime);
 							} catch(Exception ex) {
 								//TODO: do something?
 								this.CentralCoordinator.Log.Error(ex, "Timer exception");
@@ -775,7 +773,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 					}
 
-				}, this, waitTime, waitTime);
+					return Task.CompletedTask;
+				}, waitTime, waitTime);
+				
+				this.updateMiningRegistrationTimer.Start();
 			}
 		}
 
@@ -787,11 +788,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				ClosureWrapper<bool> executing = false;
 
-				this.updateMiningStatusTimer = new Timer(state => {
+				this.updateMiningStatusTimer = new ManagedTimer(state => {
 
 					if(executing == false) {
 						try {
-							this.updateMiningStatusTimer?.Change(TimeSpan.FromHours(100), TimeSpan.FromHours(100));
 							executing = true;
 							this.CheckMiningStatus(lockContext).WaitAndUnwrapException();
 						} catch(Exception ex) {
@@ -801,7 +801,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							executing = false;
 
 							try {
-								this.updateMiningStatusTimer?.Change(span, span2);
 							} catch(Exception ex) {
 								//TODO: do something?
 								this.CentralCoordinator.Log.Error(ex, "Timer set exception");
@@ -809,7 +808,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 					}
 
-				}, this, span, span2);
+					return Task.CompletedTask;
+				}, span, span2);
+				this.updateMiningStatusTimer.Start();
 			}
 
 		}

@@ -28,7 +28,7 @@ namespace Neuralia.Blockchains.Core.Services {
 	public interface INetworkingService : IDisposableExtended {
 
 		IIPCrawler IPCrawler { get; }
-		Task<bool> TestP2pPort();
+		Task<PortTester.TcpTestResult> TestP2pPort(PortTester.TcpTestPorts testPort, bool callback);
 		NetworkingService.NetworkingStatuses NetworkingStatus { get; set; }
 		bool IsStarted { get; }
 		IConnectionStore ConnectionStore { get; }
@@ -150,8 +150,19 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		public IIPCrawler IPCrawler => this.ConnectionsManagerBase.Crawler;
 
-		public Task<bool> TestP2pPort() {
-			return PortTester.TestPort();
+		public Task<PortTester.TcpTestResult> TestP2pPort(PortTester.TcpTestPorts testPort, bool callback) {
+
+			bool serverRunning = false;
+
+			if(callback) {
+				if(testPort == PortTester.TcpTestPorts.P2p) {
+					serverRunning = this.IsStarted;
+				} else if(testPort == PortTester.TcpTestPorts.Validator) {
+					serverRunning = this.appointmentsValidatorProvider.InAppointmentWindow;
+				}
+			}
+
+			return PortTester.TestPort(testPort, callback, serverRunning);
 		}
 
 		public NetworkingService.NetworkingStatuses NetworkingStatus { get; set; } = NetworkingService.NetworkingStatuses.Stoped;

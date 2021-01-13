@@ -223,7 +223,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		private bool poller_active = true;
 
 		private ManualResetEventSlim pollerResetEvent;
-		private Timer tasksPoller;
+		private ManagedTimer tasksPoller;
 
 		protected BlockChainInterface(CENTRAL_COORDINATOR centralCoordinator, TimeSpan? taskCheckSpan = null) {
 
@@ -320,7 +320,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 						try {
 							if(this.tasksPoller != null) {
-								await this.tasksPoller.DisposeAsync().ConfigureAwait(false);
+								this.tasksPoller.Dispose();
 							}
 						} catch {
 
@@ -427,15 +427,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}, TaskCreationOptions.LongRunning).Unwrap();
 
 			// perform a check for any message that has arrived and invoke the callbacks if there are any on the calling thread
-			this.tasksPoller = new Timer(state => {
-				try {
-					this.CheckTasks().WaitAndUnwrapException();
-				} catch(Exception ex) {
-					//TODO: do something?
-					this.CentralCoordinator.Log.Error(ex, "Timer exception");
-				}
-			}, this, this.taskCheckSpan, this.taskCheckSpan);
-
+			this.tasksPoller = new ManagedTimer(state => {
+	
+				return this.CheckTasks();
+			}, this.taskCheckSpan, this.taskCheckSpan);
+			this.tasksPoller.Start();
 		}
 
 		protected virtual void StartOtherChainComponents() {

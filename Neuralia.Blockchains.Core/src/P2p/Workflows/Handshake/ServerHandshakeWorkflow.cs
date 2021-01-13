@@ -289,7 +289,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			// ok, we are ready to send a positive answer
 
 			// lets tell them our own information
-			serverHandshake.Message.clientSoftwareVersion.SetVersion(GlobalSettings.SoftwareVersion);
+			serverHandshake.Message.clientSoftwareVersion.SetVersion(GlobalSettings.BlockchainCompatibilityVersion);
 			
 			// let's be nice and report it as we see it
 			serverHandshake.Message.PerceivedIP = IPUtils.IPtoGuid(this.ClientConnection.NodeAddressInfo.Ip);
@@ -375,7 +375,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 		protected virtual bool TestClientVersion(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
 
-			if(!GlobalSettings.SoftwareVersion.IsVersionAcceptable(this.triggerMessage.Message.clientSoftwareVersion)) {
+			if(!GlobalSettings.BlockchainCompatibilityVersion.IsVersionAcceptable(this.triggerMessage.Message.clientSoftwareVersion)) {
 				// we do not accept this version
 				serverHandshake.Message.Status = ServerHandshake<R>.HandshakeStatuses.ClientVersionRefused;
 

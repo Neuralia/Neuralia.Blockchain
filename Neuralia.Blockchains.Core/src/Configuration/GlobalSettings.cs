@@ -8,12 +8,14 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		private bool valueSet;
 
-		public static SoftwareVersion SoftwareVersion => Instance.CurrentSoftwareVersion;
+		public static SoftwareVersion SoftwareReleaseVersion => Instance.CurrentReleaseVersion;
+		public static SoftwareVersion BlockchainCompatibilityVersion => Instance.CurrentBlockchainVersion;
 		public static AppSettingsBase ApplicationSettings => Instance.AppSettings;
 		public static bool TestingMode { get; set; } = false;
 
 		public AppSettingsBase AppSettings { get; private set; }
-		public SoftwareVersion CurrentSoftwareVersion { get; private set; } = new SoftwareVersion();
+		public SoftwareVersion CurrentBlockchainVersion { get; private set; } = new SoftwareVersion();
+		public SoftwareVersion CurrentReleaseVersion { get; private set; } = new SoftwareVersion();
 
 		public NodeInfo NodeInfo { get; private set; }
 		public int NetworkId { get; private set; }
@@ -30,7 +32,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			// allow to set the values once. after that they become constant
 			if(!this.valueSet) {
 
-				this.CurrentSoftwareVersion = globalSettingsParameters.softwareVersion;
+				this.CurrentBlockchainVersion = globalSettingsParameters.blockchainVersion;
+				this.CurrentReleaseVersion = globalSettingsParameters.releaseVersion;
 				this.AppSettings = globalSettingsParameters.appSettings;
 				this.NodeInfo = globalSettingsParameters.nodeInfo;
 				this.NetworkId = globalSettingsParameters.networkId;
@@ -44,7 +47,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		public struct GlobalSettingsParameters {
 			public AppSettingsBase appSettings;
-			public SoftwareVersion softwareVersion;
+			public SoftwareVersion blockchainVersion;
+			public SoftwareVersion releaseVersion;
 			public ICommandLineOptions cmdOptions;
 			public NodeInfo nodeInfo;
 			public int networkId;

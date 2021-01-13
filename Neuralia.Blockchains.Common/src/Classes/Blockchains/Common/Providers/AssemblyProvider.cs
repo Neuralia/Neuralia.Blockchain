@@ -1053,7 +1053,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						ClosureWrapper<int> lastRound = new ClosureWrapper<int>(state.thsState.Round);
-
+						ClosureWrapper<DateTime> lastCheckpoint = DateTime.Now.AddMinutes(1);
+						
 						thsEnvelope.THSEnvelopeSignatureBase.Solution = await thsEngine.PerformTHS(thsHash, cancellationToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
 							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSBegin(hashTargetDifficulty, rulesSetDescriptor.NonceTarget, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions), correlationContext);
 
@@ -1072,7 +1073,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							long smallestCurrentNonce = currentNonces[0];
 
-							if(totalNonce != 0 && smallestCurrentNonce != 0 && totalNonce % 10 == 0) {
+							if(totalNonce != 0 && lastCheckpoint.Value < DateTime.Now) {
 								// update the state
 								state.thsState.Nonce = smallestCurrentNonce;
 								state.thsState.Round = currentRound;
@@ -1085,6 +1086,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 								}
 
 								await CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.SaveCachedTHSState(state, key).ConfigureAwait(false);
+
+								lastCheckpoint.Value = DateTime.Now.AddMinutes(1);
 							}
 
 						}, (currentRound, totalNonce, lastNonce, lastSolution) => {

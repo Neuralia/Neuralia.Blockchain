@@ -111,7 +111,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			NLog.Default.Verbose("Sending correlation id {0}", this.CorrelationId);
 
 			// lets inform the of our client version
-			handshakeTrigger.Message.clientSoftwareVersion.SetVersion(GlobalSettings.SoftwareVersion);
+			handshakeTrigger.Message.clientSoftwareVersion.SetVersion(GlobalSettings.BlockchainCompatibilityVersion);
 			
 			// now we inform them of our listening port, in case its non standard. 0 means disabled
 			handshakeTrigger.Message.listeningPort = this.networkingService.LocalPort;
@@ -298,7 +298,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				// now we validate our peer
 				// then we validate the client Scope, make sure its not too old
-				if(!GlobalSettings.SoftwareVersion.IsVersionAcceptable(serverHandshake.clientSoftwareVersion)) {
+				if(!GlobalSettings.BlockchainCompatibilityVersion.IsVersionAcceptable(serverHandshake.clientSoftwareVersion)) {
 					// we do not accept this version
 					clientConfirm.Message.Status = ServerHandshake<R>.HandshakeStatuses.ClientVersionRefused;
 

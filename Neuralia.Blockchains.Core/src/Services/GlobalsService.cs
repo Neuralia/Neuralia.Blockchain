@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.IO;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
 
 namespace Neuralia.Blockchains.Core.Services {
@@ -32,6 +33,8 @@ namespace Neuralia.Blockchains.Core.Services {
 		public const int MINIMUM_PUZZLE_ENGINE_VERSION = 1;
 		public const int MAXIMUM_PUZZLE_ENGINE_VERSION = 1;
 
+		public const int APPOINTMENT_STRIKE_COUNT = 200;
+
 		public const string DEFAULT_LOCALE = "en";
 
 		/// <summary>
@@ -44,7 +47,7 @@ namespace Neuralia.Blockchains.Core.Services {
         /// <summary>
 		/// the hardcoded mainnet launch date, used for launch
 		/// </summary>
-		public static DateTime MainnetLauchTime = new DateTime(2021, 1, 13, 16, 0,0, DateTimeKind.Utc);
+		public static DateTime MainnetLauchTime = new DateTime(2021, 1, 18, 16, 0,0, DateTimeKind.Utc);
 #else
 we have to remove this code!!
 #endif
@@ -79,10 +82,13 @@ we have to remove this code!!
 		/// </summary>
 #if TESTNET
 		public const int DEFAULT_VALIDATOR_PORT = 32887;
+		public const int DEFAULT_VALIDATOR_HTTP_PORT = 80;
 #elif DEVNET
 		public const int DEFAULT_VALIDATOR_PORT = 32886;
+		public const int DEFAULT_VALIDATOR_HTTP_PORT = 80;
 #else
 	    public const int DEFAULT_VALIDATOR_PORT = 32888;
+		public const int DEFAULT_VALIDATOR_HTTP_PORT = 80;
 #endif
 
 		/// <summary>

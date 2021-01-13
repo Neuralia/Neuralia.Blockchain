@@ -575,6 +575,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					while((receivedRepliesCount < peerSendCount) && (DateTimeEx.CurrentTime < absoluteTimeout)) {
 						// and now we send it to each peer, and see their response. we use our own thread autoevent to wait
 
+						this.CheckShouldStopThrow();
 						(List<(ResponseValidationResults success, SERVER_TRIGGER_REPLY message, PeerConnection connection)> messages, List<PeerConnection> finishedConnections) validReplies = default;
 
 						try {
@@ -618,7 +619,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								return ResponseValidationResults.Valid;
 							}, potentialConnections).ConfigureAwait(false);
-						} catch(Exception ex) {
+						} catch(TaskCanceledException tex) {
+							throw;
+						}
+						catch(Exception ex) {
 							// do nothing
 						}
 
@@ -1531,13 +1535,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected virtual async Task<(List<(ResponseValidationResults success, T message, PeerConnection connection)> messages, List<PeerConnection> finishedConnections)> WaitForAllPeerReplies<T>(Func<TimeSpan?, int, Task<List<ITargettedMessageSet<IBlockchainEventsRehydrationFactory>>>> waitMessagesFunc, IBlockchainTargettedMessageSet<CHAIN_SYNC_TRIGGER> trigger, int peerSendCount, Func<ITargettedMessageSet<T, IBlockchainEventsRehydrationFactory>, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>, ResponseValidationResults> replyValidFunction, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connections)
 			where T : class, INetworkMessage<IBlockchainEventsRehydrationFactory> {
 
+			this.CheckShouldStopThrow();
 			List<(ResponseValidationResults success, T reply, PeerConnection connection)> replies = new List<(ResponseValidationResults success, T reply, PeerConnection connection)>();
 			List<PeerConnection> finishedConnections = new List<PeerConnection>();
 
 			if(waitMessagesFunc == null) {
-
+				
 				waitMessagesFunc = async (timeout, peerSendCountWait) => this.WaitNetworkMessages(new[] {typeof(FINISH_SYNC), typeof(T)}, timeout, peerSendCountWait);
-
 			}
 
 			try {

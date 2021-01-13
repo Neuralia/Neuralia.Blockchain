@@ -13,7 +13,9 @@ using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Pools;
 using Neuralia.Blockchains.Tools.Locking;
@@ -25,6 +27,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
+		/// <summary>
+		/// allow only a single mistake per entry
+		/// </summary>
+		private const int INDIVIDUAL_REQUEST_STRIKE_COUNT = 2;
+		
 		private readonly CENTRAL_COORDINATOR centralCoordinator;
 		private CENTRAL_COORDINATOR CentralCoordinator => this.centralCoordinator;
 
@@ -42,6 +49,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			this.TriggerSessionResponsePool = new ObjectPool<ValidatorProtocol1.TriggerSessionResponseOperation>(() => new ValidatorProtocol1.TriggerSessionResponseOperation(), targetAppointmentRequesterCount, 100);
 			this.PuzzleCompletedResponsePool = new ObjectPool<ValidatorProtocol1.PuzzleCompletedResponseOperation>(() => new ValidatorProtocol1.PuzzleCompletedResponseOperation(), targetAppointmentRequesterCount, 100);
 			this.THSCompletedResponsePool = new ObjectPool<ValidatorProtocol1.THSCompletedResponseOperation>(() => new ValidatorProtocol1.THSCompletedResponseOperation(), targetAppointmentRequesterCount, 100);
+
+			// here we prebuild a list of decoys in case of malicious attempts
+			this.DummyValidatorCodesPool = new ObjectPool<SafeArrayHandle>(() => {
+				return AppointmentUtils.GetDummyValidatorSecretDelta();
+			}, 5, 5);
 		}
 
 		public ConcurrentDictionary<DateTime, AppointmentSurrogateDetails> ActiveAppointmentDetails { get; } = new ConcurrentDictionary<DateTime, AppointmentSurrogateDetails>();
@@ -57,6 +69,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		protected ObjectPool<ValidatorProtocol1.PuzzleCompletedResponseOperation> PuzzleCompletedResponsePool;
 		protected ObjectPool<ValidatorProtocol1.THSCompletedResponseOperation> THSCompletedResponsePool;
 
+		protected ObjectPool<SafeArrayHandle> DummyValidatorCodesPool;
+		
 		public virtual void Initialize() {
 
 			lock(this.nonceLocker) {
@@ -76,13 +90,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		private RecursiveAsyncLock codesLocker = new RecursiveAsyncLock();
 		private RecursiveAsyncLock assignedDetailsLocker = new RecursiveAsyncLock();
 
-		public virtual async Task<ValidatorProtocol1.CodeTranslationResponseOperation> HandleCodeTranslationWorkflow(ValidatorProtocol1.CodeTranslationRequestOperation operation) {
+		private (ValidatorProtocol1.CodeTranslationResponseOperation operation, bool valid) PrepareRandomCodeTranslationOperation(ValidatorProtocol1.CodeTranslationResponseOperation operation) {
+
+			operation.ValidatorCode = this.DummyValidatorCodesPool.GetObject();
+			
+			return (operation, false);
+		}
+		
+		public virtual async Task<(ValidatorProtocol1.CodeTranslationResponseOperation operation, bool valid)> HandleCodeTranslationWorkflow(ValidatorProtocol1.CodeTranslationRequestOperation operation) {
 			if(!this.IsValidator) {
 				throw new InvalidOperationException();
 			}
 
 			if(operation == null || operation.Index == 0 || operation.ValidatorCode == null || operation.ValidatorCode.IsZero || operation.Appointment == DateTime.MinValue) {
-				return null;
+				return default;
 			}
 
 			try {
@@ -93,9 +114,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					if(!await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted(appointment).ConfigureAwait(false)) {
 						NLog.LoggingBatcher.Verbose($"{nameof(this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted)} for appointment {appointment} failed in request code");
 
-						return null;
+						return default;
 					}
 				}
+
+				var resultOperation = this.CodeTranslationResponsePool.GetObject();
 
 				AppointmentSurrogateDetails appointmentDetails = this.ActiveAppointmentDetails.GetOrAdd(appointment, new AppointmentSurrogateDetails());
 
@@ -106,53 +129,68 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				if(!appointmentDetails.AssignedIndicesCache.ContainsKey(operation.Index)) {
 					NLog.LoggingBatcher.Verbose($"Requester index {operation.Index} is not assigned to validator. failed in {nameof(this.HandleCodeTranslationWorkflow)}");
 
-					return null;
+					return this.PrepareRandomCodeTranslationOperation(resultOperation);
 				}
-
-				var resultOperation = this.CodeTranslationResponsePool.GetObject();
-
+				
 				LockContext lockContext = null;
 
 				if(!appointmentDetails.AppointmentKeySet) {
 					await this.LoadTriggerKey(appointment, appointmentDetails).ConfigureAwait(false);
 				}
-
-				if(!appointmentDetails.AppointmentKeySet) {
-					await this.LoadTriggerKey(appointment, appointmentDetails).ConfigureAwait(false);
-				}
-
+				
 				if(appointmentDetails.KeyHash == 0) {
 					await this.LoadKeyHash(appointment, appointmentDetails).ConfigureAwait(false);
 				}
 
-				if(appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) && entry.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeTranslation)) {
+				if(appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) && entry.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeTranslation) && entry.strikes >= INDIVIDUAL_REQUEST_STRIKE_COUNT) {
 					// this requester already did this
 					NLog.LoggingBatcher.Verbose($"Requester already did this for index {operation.Index} in {nameof(this.HandleCodeTranslationWorkflow)}");
 
-					return null;
+					return this.PrepareRandomCodeTranslationOperation(resultOperation);
+				}
+				
+				if(appointmentDetails.ValidatorKeyCodesSet && appointmentDetails.ValidatorKeyCodes.TryGetValue(operation.Index, out var coreEntry) && coreEntry.ValidatorCode == operation.ValidatorCode) {
+					resultOperation.ValidatorCode = coreEntry.ValidatorRestoredCode;
+				}
+				else if(!appointmentDetails.ValidatorSecretCodeHashesSet) {
+					resultOperation.ValidatorCode = AppointmentUtils.ValidatorRestoreKeyCode(appointment, appointmentDetails.KeyHash, operation.ValidatorCode, this.Stride);
 				}
 
-				resultOperation.ValidatorCode = AppointmentUtils.ValidatorRestoreKeyCode(appointment, appointmentDetails.KeyHash, operation.ValidatorCode.Branch(), this.Stride);
-
 				// ok, this requester is valid
-				await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordRequestSecretCode(operation.Appointment, operation.Index, operation.ValidatorCode).ConfigureAwait(false);
-
+				var localOperation = operation;
+				await OperationBatchingProvider.OperationsBatcher.AddOperationAsync(this.GetActionAsync(timestamp => {
+					return this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordRequestSecretCode(localOperation.Appointment, localOperation.Index, localOperation.ValidatorCode, timestamp);
+				})).ConfigureAwait(false);
+				
 				NLog.LoggingBatcher.Verbose($"Received a valid puzzle Code Translation request from Index {operation.Index} for appointment {appointment}");
 
-				appointmentDetails.RequesterStatuses.TryAdd(operation.Index, AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeTranslation);
+				appointmentDetails.RequesterStatuses.AddOrUpdate(operation.Index, key => (AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeTranslation, 1), (key, value) => {
 
-				return resultOperation;
+					if(value.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeTranslation)) {
+						return (value.status, value.strikes+1);
+					}
+					return (AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeTranslation, value.strikes);
+				});
+				
+				return (resultOperation, true);
 			} finally {
 			}
 		}
 
-		public virtual async Task<ValidatorProtocol1.TriggerSessionResponseOperation> HandleTriggerSessionWorkflow(ValidatorProtocol1.TriggerSessionOperation operation) {
+		private (ValidatorProtocol1.TriggerSessionResponseOperation operation, bool valid) PrepareRandomTriggerSessionOperation(ValidatorProtocol1.TriggerSessionResponseOperation operation) {
+
+			operation.SecretCodeL2 = GlobalRandom.GetNext();
+			
+			return (operation, false);
+		}
+		
+		public virtual async Task<(ValidatorProtocol1.TriggerSessionResponseOperation operation, bool valid)> HandleTriggerSessionWorkflow(ValidatorProtocol1.TriggerSessionOperation operation) {
 			if(!this.IsValidator) {
 				throw new InvalidOperationException();
 			}
 
 			if(operation == null || operation.Index == 0 || operation.SecretCode == 0 || operation.Appointment == DateTime.MinValue) {
-				return null;
+				return default;
 			}
 
 			try {
@@ -163,11 +201,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					if(!await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted(appointment).ConfigureAwait(false)) {
 						NLog.LoggingBatcher.Verbose($"{nameof(this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted)} for appointment {appointment} failed in trigger");
 
-						return null;
+						return default;
 					}
 				}
 
 				LockContext lockContext = null;
+				var resultOperation = this.TriggerSessionResponsePool.GetObject();
 
 				AppointmentSurrogateDetails appointmentDetails = this.ActiveAppointmentDetails.GetOrAdd(appointment, new AppointmentSurrogateDetails());
 
@@ -178,7 +217,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				if(!appointmentDetails.AssignedIndicesCache.ContainsKey(operation.Index)) {
 					NLog.LoggingBatcher.Verbose($"Requester index {operation.Index} is not assigned to validator. failed in {nameof(this.HandleTriggerSessionWorkflow)}");
 
-					return null;
+					return this.PrepareRandomTriggerSessionOperation(resultOperation);
 				}
 
 				if(!appointmentDetails.AppointmentKeySet) {
@@ -189,15 +228,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					await this.LoadKeyHash2(appointment, appointmentDetails).ConfigureAwait(false);
 				}
 
-				if(appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) && entry.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.TriggerSession)) {
+				if(appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) && entry.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.TriggerSession) && entry.strikes >= INDIVIDUAL_REQUEST_STRIKE_COUNT) {
 					// this requester already did this
 					NLog.LoggingBatcher.Verbose($"Requester already did this for index {operation.Index} in {nameof(this.HandlePuzzleCompletedWorkflow)}");
 
-					return null;
+					return this.PrepareRandomTriggerSessionOperation(resultOperation);
 				}
 
-				int codeHash = AppointmentUtils.GenerateValidatorSecretCodeHash(operation.SecretCode, appointment, appointmentDetails.AppointmentKey, this.GetValidatorAccountId, appointmentDetails.KeyHash2, this.Stride);
+				int codeHash = 0;
+				if(appointmentDetails.ValidatorSecretCodeHashesSet && appointmentDetails.ValidatorSecretCodeHashes.TryGetValue(operation.Index, out var coreEntry) && coreEntry.SecretCode == operation.SecretCode) {
+					codeHash = coreEntry.SecretCodeHash;
+				}
+				else if(!appointmentDetails.ValidatorSecretCodeHashesSet) {
+					codeHash = AppointmentUtils.GenerateValidatorSecretCodeHash(operation.SecretCode, appointment, appointmentDetails.AppointmentKey, this.GetValidatorAccountId, appointmentDetails.KeyHash2, this.Stride);
+				}
+				if(codeHash == 0) {
+					// this requester already did this
+					NLog.LoggingBatcher.Verbose($"Requester index {operation.Index} had an invalid {nameof(coreEntry.SecretCode)} in {nameof(this.HandlePuzzleCompletedWorkflow)}");
 
+					return this.PrepareRandomTriggerSessionOperation(resultOperation);
+				}
 				if(!appointmentDetails.CodeCacheSet) {
 					await this.LoadAssignedCodesCache(appointment, appointmentDetails).ConfigureAwait(false);
 				}
@@ -216,33 +266,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				if(!valid) {
 					NLog.LoggingBatcher.Verbose($"Code hash {codeHash} from secret code {operation.SecretCode} not found in codes list for index {operation.Index}");
 
-					return null;
+					return this.PrepareRandomTriggerSessionOperation(resultOperation);
 				}
-
-				var resultOperation = this.TriggerSessionResponsePool.GetObject();
-
-				await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordTriggerPuzzle(operation.Appointment, operation.Index, operation.SecretCode).ConfigureAwait(false);
+				
+				var localOperation = operation;
+				await OperationBatchingProvider.OperationsBatcher.AddOperationAsync(this.GetActionAsync(timestamp => {
+					return this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordTriggerPuzzle(localOperation.Appointment, localOperation.Index, localOperation.SecretCode, timestamp);
+				})).ConfigureAwait(false);
 
 				//lets offer the secret level 2 code, proof that they have begun
 				resultOperation.SecretCodeL2 = secretCodeL2;
 
 				NLog.LoggingBatcher.Verbose($"Received a valid puzzle trigger request from Index {operation.Index} for appointment {appointment}");
 
-				appointmentDetails.RequesterStatuses.AddOrUpdate(operation.Index, key => AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.TriggerSession, (key, value) => value | AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.TriggerSession);
+				appointmentDetails.RequesterStatuses.AddOrUpdate(operation.Index, key => (AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeAndTrigger, 1), (key, value) => {
 
-				return resultOperation;
+					if(value.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.TriggerSession)) {
+						return (value.status | AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeAndTrigger, value.strikes+1);
+					}
+					return (value.status | AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeAndTrigger, value.strikes);
+				});
+
+				return (resultOperation, true);
 			} finally {
 				
 			}
 		}
 
-		public virtual async Task<ValidatorProtocol1.PuzzleCompletedResponseOperation> HandlePuzzleCompletedWorkflow(ValidatorProtocol1.PuzzleCompletedOperation operation) {
+		public virtual async Task<(ValidatorProtocol1.PuzzleCompletedResponseOperation operation, bool valid)> HandlePuzzleCompletedWorkflow(ValidatorProtocol1.PuzzleCompletedOperation operation) {
 			if(!this.IsValidator) {
 				throw new InvalidOperationException();
 			}
 
 			if(operation == null || operation.Index == 0 || !operation.Results.Any() || operation.Results.Any(e => e.Value == null || e.Value.IsZero) || operation.Appointment == DateTime.MinValue) {
-				return null;
+				return default;
 			}
 
 			try {
@@ -253,12 +310,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					if(!await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted(appointment).ConfigureAwait(false)) {
 						NLog.LoggingBatcher.Verbose($"{nameof(this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted)} for appointment {appointment} failed in complete session");
 
-						return null;
+						return default;
 					}
 				}
 
-				AppointmentSurrogateDetails appointmentDetails = this.ActiveAppointmentDetails.GetOrAdd(appointment, new AppointmentSurrogateDetails());
+				if(!this.ActiveAppointmentDetails.TryGetValue(appointment, out AppointmentSurrogateDetails appointmentDetails)) {
+					NLog.LoggingBatcher.Verbose($"Appointment {appointment} not found in complete session");
 
+					return default;
+				}
+				
+				var resultOperation = this.PuzzleCompletedResponsePool.GetObject();
+				resultOperation.Result = true;
+				
 				if(!appointmentDetails.AssignedIndicesCacheSet) {
 					await this.LoadAssignedIndicesCache(appointment, appointmentDetails).ConfigureAwait(false);
 				}
@@ -266,39 +330,45 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				if(!appointmentDetails.AssignedIndicesCache.ContainsKey(operation.Index)) {
 					NLog.LoggingBatcher.Verbose($"Requester index {operation.Index} is not assigned to validator. failed in {nameof(this.HandlePuzzleCompletedWorkflow)}");
 
-					return null;
+					return (resultOperation, false);
 				}
 
-				if(!appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) || entry.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.PuzzleCompleted)) {
+				if(!appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) || entry.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.PuzzleCompleted) && entry.strikes >= INDIVIDUAL_REQUEST_STRIKE_COUNT) {
 					// this requester already did this
 					NLog.LoggingBatcher.Verbose($"Requester already did this for index {operation.Index} in {nameof(this.HandlePuzzleCompletedWorkflow)}");
 
-					return null;
+					return (resultOperation, false);
 				}
+				
+				var localOperation = operation;
+				await OperationBatchingProvider.OperationsBatcher.AddOperationAsync(this.GetActionAsync(async timestamp => {
+					bool result = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordCompletePuzzle(localOperation.Appointment, localOperation.Index, localOperation.Results, timestamp).ConfigureAwait(false);
+					
+					if(!result) {
+						NLog.LoggingBatcher.Verbose($"Failed to record completed puzzle in complete session for index {operation.Index}");
+					}
+				})).ConfigureAwait(false);
 
-				var resultOperation = this.PuzzleCompletedResponsePool.GetObject();
-
-				bool recorded = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordCompletePuzzle(operation.Appointment, operation.Index, operation.Results).ConfigureAwait(false);
-
-				if(!recorded) {
-					NLog.LoggingBatcher.Verbose($"Failed to record completed puzzle in complete session for index {operation.Index}");
-
-					return null;
-				}
-
+				// no choice, we do our best and hope it will be processed. 
 				resultOperation.Result = true;
 
 				NLog.LoggingBatcher.Verbose($"Received a valid puzzle completed request from Index {operation.Index} for appointment {appointment}");
 
-				appointmentDetails.RequesterStatuses[operation.Index] |= AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.PuzzleCompleted;
+				var statusEntry = appointmentDetails.RequesterStatuses[operation.Index];
+				if(statusEntry.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.PuzzleCompleted)) {
+					statusEntry = (statusEntry.status | AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeAndTrigger, statusEntry.strikes+1);
+				} else {
+					statusEntry = (statusEntry.status | AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.CodeAndTrigger, statusEntry.strikes);
+				}
+				appointmentDetails.RequesterStatuses[operation.Index] = statusEntry;
 
-				return resultOperation;
+				return (resultOperation, true);
 			} finally {
 				
 			}
 		}
 
-		public virtual async Task<ValidatorProtocol1.THSCompletedResponseOperation> HandleTHSCompletedWorkflow(ValidatorProtocol1.THSCompletedOperation operation) {
+		public virtual async Task<(ValidatorProtocol1.THSCompletedResponseOperation operation, bool valid)> HandleTHSCompletedWorkflow(ValidatorProtocol1.THSCompletedOperation operation) {
 			if(!this.IsValidator) {
 				throw new InvalidOperationException();
 			}
@@ -311,34 +381,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				if(operation.THSResults == null) {
 					var resultOperation2 = this.THSCompletedResponsePool.GetObject();
 					resultOperation2.Result = true;
-					return resultOperation2;
+					return (new ValidatorProtocol1.THSCompletedResponseOperation(){Result = true}, true);
 				}
 #else
 we have to remove this code!!
 #endif
-				return null;
+				return default;
 			}
 
 			try {
 				
 				DateTime appointment = DateTime.SpecifyKind(operation.Appointment, DateTimeKind.Utc);
-
-				if(!this.ActiveAppointmentDetails.ContainsKey(appointment)) {
-					NLog.LoggingBatcher.Verbose($"Appointment {appointment} not found in complete session");
-
-					return null;
-				}
-
+				
 				if(!this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.CheckAppointmentExistsAndStarted(appointment)) {
 					if(!await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted(appointment).ConfigureAwait(false)) {
 						NLog.LoggingBatcher.Verbose($"{nameof(this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentExistsAndStarted)} for appointment {appointment} failed in complete session");
 
-						return null;
+						return default;
 					}
 				}
+				
+				if(!this.ActiveAppointmentDetails.TryGetValue(appointment, out AppointmentSurrogateDetails appointmentDetails)) {
+					NLog.LoggingBatcher.Verbose($"Appointment {appointment} not found in complete session");
 
-				AppointmentSurrogateDetails appointmentDetails = this.ActiveAppointmentDetails.GetOrAdd(appointment, new AppointmentSurrogateDetails());
-
+					return default;
+				}
+				
+				var resultOperation = this.THSCompletedResponsePool.GetObject();
+				resultOperation.Result = true;
+				
 				if(!appointmentDetails.AssignedIndicesCacheSet) {
 					await this.LoadAssignedIndicesCache(appointment, appointmentDetails).ConfigureAwait(false);
 				}
@@ -346,32 +417,40 @@ we have to remove this code!!
 				if(!appointmentDetails.AssignedIndicesCache.ContainsKey(operation.Index)) {
 					NLog.LoggingBatcher.Verbose($"Requester index {operation.Index} is not assigned to validator. failed in {nameof(this.HandleTHSCompletedWorkflow)}");
 
-					return null;
+					return (resultOperation, false);
 				}
 
-				if(!appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) || entry.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.THSCompleted)) {
+				if(!appointmentDetails.RequesterStatuses.TryGetValue(operation.Index, out var entry) || entry.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.THSCompleted) && entry.strikes >= INDIVIDUAL_REQUEST_STRIKE_COUNT) {
 					// this requester already did this
 					NLog.LoggingBatcher.Verbose($"Requester already did this for index {operation.Index} in {nameof(this.HandleTHSCompletedWorkflow)}");
 
-					return null;
+					return (resultOperation, false);
 				}
 
-				var resultOperation = this.THSCompletedResponsePool.GetObject();
 
-				bool recorded = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordCompleteTHS(operation.Appointment, operation.Index, operation.THSResults).ConfigureAwait(false);
+				var localOperation = operation;
+				await OperationBatchingProvider.OperationsBatcher.AddOperationAsync(this.GetActionAsync(async timestamp => {
+					bool result = await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.RecordCompleteTHS(localOperation.Appointment, localOperation.Index, localOperation.THSResults, timestamp).ConfigureAwait(false);
+					
+					if(!result) {
+						NLog.LoggingBatcher.Verbose($"Failed to record completed THS in complete session for index {operation.Index}");
+					}
+				})).ConfigureAwait(false);
 
-				if(!recorded) {
-					NLog.LoggingBatcher.Verbose($"Failed to record completed puzzle in complete session for index {operation.Index}");
-
-					return null;
-				}
-
+				// no choice, we do our best and hope it will be processed. 
 				resultOperation.Result = true;
+				
 				NLog.LoggingBatcher.Verbose($"Received a valid puzzle completed request from Index {operation.Index} for appointment {appointment}");
 
-				appointmentDetails.RequesterStatuses[operation.Index] |= AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.THSCompleted;
+				var statusEntry = appointmentDetails.RequesterStatuses[operation.Index];
+				if(statusEntry.status.HasFlag(AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.THSCompleted)) {
+					statusEntry = (statusEntry.status | AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.THSCompleted, statusEntry.strikes+1);
+				} else {
+					statusEntry = (statusEntry.status | AppointmentSurrogateDetails.AppointmentValidationWorkflowSteps.THSCompleted, statusEntry.strikes);
+				}
+				appointmentDetails.RequesterStatuses[operation.Index] = statusEntry;
 
-				return resultOperation;
+				return (resultOperation, true);
 			} finally {
 				
 			}
@@ -462,6 +541,10 @@ we have to remove this code!!
 				}
 			}
 		}
+		
+		protected virtual Func<DateTime, Task> GetActionAsync(Func<DateTime, Task> actionAsync) {
+			return actionAsync;
+		}
 
 		protected virtual SafeArrayHandle GetPublicKey(byte ordinal, LockContext lockContext) {
 			lock(this.publicKeyLocker) {
@@ -491,7 +574,9 @@ we have to remove this code!!
 			CodeTranslation = 1 << 0,
 			TriggerSession = 1 << 1,
 			PuzzleCompleted = 1 << 2,
-			THSCompleted = 1 << 3
+			THSCompleted = 1 << 3,
+			
+			CodeAndTrigger = CodeTranslation | TriggerSession
 		}
 
 		private SafeArrayHandle appointmentKey;
@@ -525,7 +610,12 @@ we have to remove this code!!
 			set => Interlocked.Exchange(ref this.keyHash2, value);
 		}
 
-		public ConcurrentDictionary<long, AppointmentValidationWorkflowSteps> RequesterStatuses { get; } = new ConcurrentDictionary<long, AppointmentValidationWorkflowSteps>();
+		public ConcurrentDictionary<long, (AppointmentValidationWorkflowSteps status, int strikes)> RequesterStatuses { get; } = new ConcurrentDictionary<long, (AppointmentValidationWorkflowSteps status, int strikes)>();
+		public ConcurrentDictionary<int, (int SecretCode, int SecretCodeHash)> ValidatorSecretCodeHashes { get; } = new ConcurrentDictionary<int, (int SecretCode, int SecretCodeHash)>();
+		public ConcurrentDictionary<long, (SafeArrayHandle ValidatorCode, SafeArrayHandle ValidatorRestoredCode)> ValidatorKeyCodes { get; } = new ConcurrentDictionary<long, (SafeArrayHandle ValidatorCode, SafeArrayHandle ValidatorRestoredCode)>();
+		public bool ValidatorSecretCodeHashesSet { get; set; }
+		public bool ValidatorKeyCodesSet { get; set; }
+
 
 		private ConcurrentDictionary<int, (int secretCodeL2, long index)[]> codesCache;
 

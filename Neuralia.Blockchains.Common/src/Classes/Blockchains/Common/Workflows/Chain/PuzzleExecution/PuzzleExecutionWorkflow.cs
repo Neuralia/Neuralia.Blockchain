@@ -18,6 +18,7 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.THS.V1;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
+using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
@@ -77,7 +78,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected override async Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 			try {
 				taskRoutingContext.SetCorrelationContext(this.correlationContext);
-
+				
 				await this.centralCoordinator.PostSystemEventImmediate(BlockchainSystemEventTypes.Instance.AppointmentPuzzlePreparation, this.correlationContext).ConfigureAwait(false);
 
 				var appointmentsProvider = this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase;
@@ -94,52 +95,64 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				TimeSpan window = TimeSpan.FromSeconds(distilledAppointmentContext.Window);
 
 				DateTime recheck = DateTimeEx.MinValue;
+				
+				var appointmentValidatorStrikes = this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentPuzzleStrikes.GetOrAdd(appointmentDate, new AppointmentsProvider.AppointmentPuzzleStrikesSet());
+
+				bool canContinue = true;
+				if(appointmentValidatorStrikes.Validators.Any() && appointmentValidatorStrikes.Validators.All(v => v.Value.StrikesInvalid) && appointmentValidatorStrikes.Validators.Any(v => !v.Value.PuzzleCompleted)) {
+					
+					// this is bad, we can not go any further
+					canContinue = false;
+				}
+				bool timeRecorded = appointmentValidatorStrikes.Validators.Any(v => v.Value.Contacted);
 
 				while(true) {
 
 					this.CheckShouldCancel();
 
-					var triggerBytes = await appointmentsProvider.GetAppointmentTriggerGossipMessage(appointmentDate, lockContext).ConfigureAwait(false);
+					if(canContinue) {
+						var triggerBytes = await appointmentsProvider.GetAppointmentTriggerGossipMessage(appointmentDate, lockContext).ConfigureAwait(false);
 
-					if(triggerBytes?.IsZero == false) {
+						if(triggerBytes?.IsZero == false) {
 
-						try {
-							// let's rebuild the message
-							var envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ISignedMessageEnvelope>(triggerBytes);
+							try {
+								// let's rebuild the message
+								var envelope = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase.RehydrateEnvelope<ISignedMessageEnvelope>(triggerBytes);
 
-							envelope.RehydrateContents();
-							envelope.Contents.Rehydrate(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
+								envelope.RehydrateContents();
+								envelope.Contents.Rehydrate(this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.BlockchainEventsRehydrationFactoryBase);
 
-							IAppointmentTriggerMessage appointmentTriggerMessage = (IAppointmentTriggerMessage) envelope.Contents.RehydratedEvent;
+								IAppointmentTriggerMessage appointmentTriggerMessage = (IAppointmentTriggerMessage) envelope.Contents.RehydratedEvent;
 
-							key = appointmentTriggerMessage.Key;
+								key = appointmentTriggerMessage.Key;
 
-							break;
-						} catch(Exception ex) {
-							this.CentralCoordinator.Log.Error(ex, $"Failed rehydrated trigger from gossip message. may attempt again...");
-						}
-					}
-
-					Thread.Sleep(TimeSpan.FromSeconds(5));
-
-					if(recheck < DateTimeEx.CurrentTime) {
-						// do an explicit recheck
-						try {
-							key = await appointmentsProvider.CheckAppointmentTriggerUpdate(appointmentDate, lockContext).ConfigureAwait(false);
-
-							if(key != null) {
 								break;
+							} catch(Exception ex) {
+								this.CentralCoordinator.Log.Error(ex, $"Failed rehydrated trigger from gossip message. may attempt again...");
 							}
-						} catch(Exception ex) {
-							// do nothing here, we will try again later
-							Log.Debug(ex, "failed to get trigger.");
 						}
 
-						if(appointmentDate.AddSeconds(-15) < DateTimeEx.CurrentTime) {
-							// ok, we are in a critical period now. let's check more often
-							recheck = DateTimeEx.CurrentTime.AddSeconds(10);
-						} else {
-							recheck = DateTimeEx.CurrentTime.AddSeconds(30);
+						Thread.Sleep(TimeSpan.FromSeconds(5));
+
+						if(recheck < DateTimeEx.CurrentTime) {
+							// do an explicit recheck
+							try {
+								key = await appointmentsProvider.CheckAppointmentTriggerUpdate(appointmentDate, lockContext).ConfigureAwait(false);
+
+								if(key != null) {
+									break;
+								}
+							} catch(Exception ex) {
+								// do nothing here, we will try again later
+								Log.Debug(ex, "failed to get trigger.");
+							}
+
+							if(appointmentDate.AddSeconds(-15) < DateTimeEx.CurrentTime) {
+								// ok, we are in a critical period now. let's check more often
+								recheck = DateTimeEx.CurrentTime.AddSeconds(10);
+							} else {
+								recheck = DateTimeEx.CurrentTime.AddSeconds(30);
+							}
 						}
 					}
 
@@ -149,6 +162,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						
 						this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentPuzzleFailed, this.correlationContext);
 						
+						return;
+					}
+
+					if(!canContinue) {
+						
+						// nothing we can do now
 						return;
 					}
 				}
@@ -182,30 +201,64 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				int appointmentIndex = account.AccountAppointment.AppointmentIndex.Value;
 
-				SafeArrayHandle validatorCode = null;
+				SafeArrayHandle validatorCode = appointmentValidatorStrikes.Validators.Where(v => v.Value.CodeTranslationCompleted && v.Value.ValidatorCode != null && !v.Value.ValidatorCode.IsZero).Select(e => e.Value.ValidatorCode).SingleOrDefault();
+	
+				if(validatorCode == null) {
+					foreach(var validator in applicantEntry.PublicValidators) {
+						// this one has to remain sequential, we only need one answer.
 
-				bool timeRecorded = false;
+						var validatorState = appointmentValidatorStrikes.Validators.GetOrAdd(validator.IP, new AppointmentsProvider.ValidatorState());
 
-				foreach(var validator in applicantEntry.PublicValidators) {
-					// this one has to remain sequential, we only need one answer.
+						try {
+							if(validatorState.NoMoreTries) {
+								// can't use this validator anymore.
+								continue;
+							}
 
-					try {
-						var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
+							if(validatorState.CodeTranslationCompleted) {
+								validatorCode = validatorState.ValidatorCode.Clone();
+							}
 
-						var ipAddress = IPUtils.GuidToIP(validator.IP);
+							if(validatorCode == null) {
+								
+								var ipAddress = IPUtils.GuidToIP(validator.IP);
 
-						validatorCode = await Repeater.RepeatAsync(async () => {
+								await Repeater.RepeatAsync2(async count => {
+							
+									var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId, validatorState.Protocol);
 
-							return await validatorProtocol.RequestCodeTranslation(appointmentDate, appointmentIndex, validator.SecretCode, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
-						}, 2).ConfigureAwait(false);
+									bool hasConnected = false;
+									(validatorCode, hasConnected) = await validatorProtocol.RequestCodeTranslation(appointmentDate, appointmentIndex, validator.SecretCode, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
 
-						timeRecorded = true;
-					} catch(Exception ex) {
-						Log.Error(ex, $"Failed to contact assigned open validator with IP {validator.IP}:{validator.ValidatorPort}");
-					}
+									ProcessValidatorResponse(hasConnected, hasConnected && validatorCode != null && !validatorCode.IsZero, validatorState, vs => {
+										vs.ValidatorCode = validatorCode?.Clone();
+										vs.Status |= AppointmentsProvider.ValidatorState.AppointmentValidationWorkflowSteps.CodeTranslation;
+									});
 
-					if(validatorCode != null && !validatorCode.IsZero) {
-						break;
+									if(!hasConnected && validatorState.NoMoreTries) {
+										// we give up, stop here
+										return (1, true);
+									}
+									return (1, hasConnected);
+							
+								}, AppointmentsProvider.ValidatorState.STRIKE_COUNT).ConfigureAwait(false);
+
+								if(validatorState.CodeTranslationCompleted) {
+									timeRecorded = true;
+								}
+							}
+						} catch(InvalidValidatorConnectionException iex) {
+
+							ProcessValidatorException(iex.HasConnected, validatorState);
+							Log.Error(iex, $"Failed to contact assigned open validator with IP {validator.IP}:{validator.ValidatorPort}");
+						}
+						catch(Exception ex) {
+							Log.Error(ex, $"Failed to contact assigned open validator with IP {validator.IP}:{validator.ValidatorPort}");
+						}
+
+						if(validatorCode != null && !validatorCode.IsZero) {
+							break;
+						}
 					}
 				}
 
@@ -237,28 +290,47 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				validators.AddRange(applicantSecretEntry.SecretValidators);
 				
 				SafeArrayHandle verificationResponseSeed = AppointmentUtils.BuildSecretConfirmationCorrelationCodeSeed(applicantEntry.PublicValidators.Select(e => e.IP).ToList(), applicantSecretEntry.SecretValidators.Select(e => e.IP).ToList(), appointmentKeyHash, applicantSecretEntry.SecretCode);
-
-				ConcurrentDictionary<Guid, int> validatorSecretCodesL2 = new ConcurrentDictionary<Guid, int>();
-
+				
 				await ParallelAsync.ForEach(validators, async item => {
 					var validator = item.entry;
 
-					try {
-						var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
+					var validatorState = appointmentValidatorStrikes.Validators.GetOrAdd(validator.IP, new AppointmentsProvider.ValidatorState());
 
+					try {
+						if(validatorState.TriggerSessionCompleted || validatorState.NoMoreTries) {
+							// can't use this validator anymore.
+							return;
+						}
+						
 						var ipAddress = IPUtils.GuidToIP(validator.IP);
 
-						await Repeater.RepeatAsync(async () => {
+						await Repeater.RepeatAsync2(async count => {
+							
+							var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId, validatorState.Protocol);
 
-							int secretCodeL2 = await validatorProtocol.TriggerSession(appointmentDate, appointmentIndex, applicantSecretEntry.SecretCode, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
+							(int secretCodeL2, bool hasConnected) = await validatorProtocol.TriggerSession(appointmentDate, appointmentIndex, applicantSecretEntry.SecretCode, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
 
-							if(secretCodeL2 != 0) {
-								validatorSecretCodesL2.TryAdd(validator.IP, secretCodeL2);
+							ProcessValidatorResponse(hasConnected, secretCodeL2 != 0, validatorState, vs => {
+								vs.SecretCodeL2 = secretCodeL2;
+								vs.Status |= AppointmentsProvider.ValidatorState.AppointmentValidationWorkflowSteps.TriggerSession;
+							});
+
+							if(!hasConnected && validatorState.NoMoreTries) {
+								// we give up, stop here
+								return (1, true);
 							}
-						}, 2).ConfigureAwait(false);
+							return (1, hasConnected);
+							
+						}, AppointmentsProvider.ValidatorState.STRIKE_COUNT).ConfigureAwait(false);
 
-						timeRecorded = true;
-					} catch(Exception ex) {
+						if(validatorState.TriggerSessionCompleted) {
+							timeRecorded = true;
+						}
+					} catch(InvalidValidatorConnectionException iex) {
+						ProcessValidatorException(iex.HasConnected, validatorState);
+						Log.Error(iex, $"Failed to contact assigned open validator with IP {validator.IP}:{validator.ValidatorPort}");
+					}
+					catch(Exception ex) {
 						Log.Error(ex, $"Failed to contact assigned validator with IP {validator.IP}:{validator.ValidatorPort}");
 					}
 				}).ConfigureAwait(false);
@@ -270,7 +342,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				int transformer = 0;
 
 				//TODO: here we should detect bad acting validators by using consensus
-				foreach(var secretCodeL2 in validatorSecretCodesL2.Values.Distinct()) {
+				foreach(var secretCodeL2 in appointmentValidatorStrikes.Validators.Values.Where(v => v.TriggerSessionCompleted).Select(v => v.SecretCodeL2).Distinct()) {
 					if(transformer == 0) {
 						transformer = secretCodeL2;
 					} else {
@@ -344,26 +416,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				await ParallelAsync.ForEach(validators, async item => {
 					var validator = item.entry;
 
+					if(!appointmentValidatorStrikes.Validators.TryGetValue(validator.IP, out var validatorState) || validatorState.StrikesInvalid || validatorState.PuzzleCompleted) {
+						return;
+					}
 					try {
-
-						if(!validatorSecretCodesL2.ContainsKey(validator.IP)) {
-							this.CentralCoordinator.Log.Warning($"A validator was not found in our return list.");
+						
+						if(validatorState.PuzzleCompleted) {
+							this.CentralCoordinator.Log.Warning($"Puzzle results already sent to this validator.");
+							return;
+						}
+						if(validatorState.NoMoreTries) {
+							this.CentralCoordinator.Log.Warning($"We cant contact this validator anymore.");
 							return;
 						}
 						var results = new Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle>();
 
 						results.Add(Enums.AppointmentsResultTypes.Puzzle, serializedResults);
-						results.Add(Enums.AppointmentsResultTypes.SecretCodeL2, AppointmentsResultTypeSerializer.SerializeSecretCodeL2(validatorSecretCodesL2[validator.IP]));
-
-						var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
-
+						results.Add(Enums.AppointmentsResultTypes.SecretCodeL2, AppointmentsResultTypeSerializer.SerializeSecretCodeL2(validatorState.SecretCodeL2));
+						
 						var ipAddress = IPUtils.GuidToIP(validator.IP);
+						
+						await Repeater.RepeatAsync2(async count => {
+							
+							var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId, validatorState.Protocol);
 
-						await Repeater.RepeatAsync(async () => {
+							(bool completed, bool hasConnected) = await validatorProtocol.RecordPuzzleCompleted(appointmentDate, appointmentIndex, results, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
 
-							await validatorProtocol.RecordPuzzleCompleted(appointmentDate, appointmentIndex, results, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
-						}, 3).ConfigureAwait(false);
-					} catch(Exception ex) {
+							ProcessValidatorResponse(hasConnected, completed, validatorState, vs => {
+								vs.Status |= AppointmentsProvider.ValidatorState.AppointmentValidationWorkflowSteps.PuzzleCompleted;
+							});
+
+							if(!hasConnected && validatorState.NoMoreTries) {
+								// we give up, stop here
+								return (1, true);
+							}
+							return (1, hasConnected);
+							
+						}, AppointmentsProvider.ValidatorState.STRIKE_COUNT).ConfigureAwait(false);
+						
+					} catch(InvalidValidatorConnectionException iex) {
+						ProcessValidatorException(iex.HasConnected, validatorState);
+						Log.Error(iex, $"Failed to contact assigned open validator with IP {validator.IP}:{validator.ValidatorPort}");
+					}
+					catch(Exception ex) {
 						Log.Error(ex, $"Failed to contact assigned validator with IP {validator.IP}:{validator.ValidatorPort}");
 					}
 				}).ConfigureAwait(false);
@@ -418,16 +513,37 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					await ParallelAsync.ForEach(validators, async item => {
 						var validator = item.entry;
 
+						if(!appointmentValidatorStrikes.Validators.TryGetValue(validator.IP, out var validatorState) || validatorState.NoMoreTries || validatorState.THSCompleted) {
+							return;
+						}
+
 						try {
-							var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId);
 
 							var ipAddress = IPUtils.GuidToIP(validator.IP);
+							
+							await Repeater.RepeatAsync2(async count => {
+							
+								var validatorProtocol = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainTypeCreationFactoryBase.CreateValidatorProtocol(this.centralCoordinator.ChainId, validatorState.Protocol);
 
-							await Repeater.RepeatAsync(async () => {
+								(bool completed, bool hasConnected) = await validatorProtocol.RecordTHSCompleted(appointmentDate, appointmentIndex, serializedTHS, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
 
-								await validatorProtocol.RecordTHSCompleted(appointmentDate, appointmentIndex, serializedTHS, ipAddress, validator.ValidatorPort).ConfigureAwait(false);
-							}, 3).ConfigureAwait(false);
-						} catch(Exception ex) {
+								ProcessValidatorResponse(hasConnected, completed, validatorState, vs => {
+									vs.Status |= AppointmentsProvider.ValidatorState.AppointmentValidationWorkflowSteps.THSCompleted;
+								});
+
+								if(!hasConnected && validatorState.NoMoreTries) {
+									// we give up, stop here
+									return (1, true);
+								}
+								return (1, hasConnected);
+							
+							}, AppointmentsProvider.ValidatorState.STRIKE_COUNT).ConfigureAwait(false);
+
+						} catch(InvalidValidatorConnectionException iex) {
+							ProcessValidatorException(iex.HasConnected, validatorState);
+							Log.Error(iex, $"Failed to contact assigned open validator with IP {validator.IP}:{validator.ValidatorPort}");
+						}
+						catch(Exception ex) {
 							Log.Error(ex, $"Failed to contact assigned validator with IP {validator.IP}:{validator.ValidatorPort}");
 						}
 					}).ConfigureAwait(false);
@@ -459,6 +575,49 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			} 
 		}
 
+		/// <summary>
+		/// handle the logics about care handling our validators
+		/// </summary>
+		/// <param name="hasConnected"></param>
+		/// <param name="resultValid"></param>
+		/// <param name="validatorState"></param>
+		/// <param name="action"></param>
+		private static void ProcessValidatorResponse(bool hasConnected, bool resultValid, AppointmentsProvider.ValidatorState validatorState, Action<AppointmentsProvider.ValidatorState> action) {
+			if(hasConnected) {
+				
+				if(!validatorState.Connected) {
+					validatorState.Connected = true;
+
+					if(validatorState.Protocol == Enums.AppointmentValidationProtocols.Undefined) {
+						// lets confirm the protocol
+						validatorState.Protocol = Enums.AppointmentValidationProtocols.Standard;
+					}
+				}
+				
+				if(resultValid) {
+					action(validatorState);
+				}
+				else{
+					validatorState.Strikes++;
+				}
+			} 
+			else{
+				validatorState.FailedConnectionAttempts++;
+
+				if(!validatorState.ProtocolValid && validatorState.Protocol != Enums.AppointmentValidationProtocols.Backup) {
+					// time to switch to the backup protocol
+					validatorState.Protocol = Enums.AppointmentValidationProtocols.Backup;
+					validatorState.FailedConnectionAttempts = 0;
+				}
+			}
+		}
+
+
+		private static void ProcessValidatorException(bool hasConnected, AppointmentsProvider.ValidatorState validatorState) {
+
+			ProcessValidatorResponse(hasConnected, false,validatorState, vs =>{
+			});
+		}
 		private bool AnswersSet => this.answers != null && this.answers.Any();
 
 		public void ProvidePuzzleAnswers(List<int> answers) {

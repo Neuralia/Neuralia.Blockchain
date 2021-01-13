@@ -64,8 +64,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			
 #if TESTING
 			ServerPresentationDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
-			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromHours(24);
-			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(18);
+			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromSeconds(30);
+			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(1);
 			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 9;
 			ServerPresentationDefaultRulesSetDescriptor.MaxRounds = 27;
 			

@@ -341,8 +341,9 @@ namespace Neuralia.Blockchains.Core.Network {
 						eventsCopy = this.events.ToImmutableArray();
 					}
 
+					var referenceTicks = referenceTime.Ticks - observationPeriod.Ticks;
 					foreach(DateTime timestamp in eventsCopy) {
-						if(timestamp < referenceTime.Subtract(observationPeriod)) {
+						if(timestamp.Ticks < referenceTicks) {
 							value += 1;
 						} else //out of observation period
 						{

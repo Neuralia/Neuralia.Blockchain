@@ -35,7 +35,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		protected ChannelBandSqliteProviderDal<CARD_TYPE, KEY> ChannelBandSqliteProviderDal {
 			get {
 				if(this.channelBandSqliteProviderDal == null) {
-					this.channelBandSqliteProviderDal = new ChannelBandSqliteProviderDal<CARD_TYPE, KEY>(this.ActiveFilename, this.ActiveFolder, GlobalSettings.SoftwareVersion, this.keyDeclaration);
+					this.channelBandSqliteProviderDal = new ChannelBandSqliteProviderDal<CARD_TYPE, KEY>(this.ActiveFilename, this.ActiveFolder, GlobalSettings.BlockchainCompatibilityVersion, this.keyDeclaration);
 				}
 
 				return this.channelBandSqliteProviderDal;

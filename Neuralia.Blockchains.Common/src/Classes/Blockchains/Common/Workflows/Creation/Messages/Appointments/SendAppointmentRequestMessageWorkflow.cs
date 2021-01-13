@@ -6,6 +6,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages.Specialization.General.Appointments;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Models;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Configuration;
@@ -76,8 +77,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			}
 			
 			if(this.PreDispatch == false && account.AccountAppointment != null) {
-				if((account.AccountAppointment.AppointmentConfirmationCodeExpiration.HasValue && account.AccountAppointment.AppointmentConfirmationCodeExpiration.Value < DateTimeEx.CurrentTime) ||
-				   (account.AccountAppointment.AppointmentVerificationTime.HasValue && account.AccountAppointment.AppointmentVerificationTime.Value < DateTimeEx.CurrentTime && !account.AccountAppointment.AppointmentConfirmationCode.HasValue)) {
+				if(AppointmentUtils.AppointmentVerificationExpired(account.AccountAppointment)) {
 					
 					// in these cases, we allow a reset.
 					account.AccountAppointment = null;

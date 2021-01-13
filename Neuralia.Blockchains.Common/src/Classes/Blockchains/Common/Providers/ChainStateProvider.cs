@@ -887,9 +887,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateEntry.LastDigestTimestamp = DateTimeEx.MinValue;
 			chainStateEntry.MaxBlockInterval = 0;
 
-			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(BlockchainConstants.DefaultVersion).ToString();
-			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(BlockchainConstants.DefaultVersion).ToString();
-			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(BlockchainConstants.DefaultVersion).ToString();
+			chainStateEntry.MaximumVersionAllowed = new SoftwareVersion(BlockchainConstants.BlockchainCompatibilityVersion).ToString();
+			chainStateEntry.MinimumWarningVersionAllowed = new SoftwareVersion(BlockchainConstants.BlockchainCompatibilityVersion).ToString();
+			chainStateEntry.MinimumVersionAllowed = new SoftwareVersion(BlockchainConstants.BlockchainCompatibilityVersion).ToString();
 
 			return chainStateEntry;
 		}
@@ -914,6 +914,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					});
 				}).ConfigureAwait(false);
 
+				if(this.chainStateEntry.HasValue && new SoftwareVersion(this.chainStateEntry.Value.entry.MinimumVersionAllowed) > new SoftwareVersion(BlockchainConstants.BlockchainCompatibilityVersion)) {
+					NLog.Default.Warning($"The {nameof(MinimumVersionAllowed)} from the chain state is {this.chainStateEntry.Value.entry.MinimumVersionAllowed}, but our software version is {BlockchainConstants.BlockchainCompatibilityVersion}. Possible incompatibilities!");
+				}
 				return function(this.chainStateEntry?.entry);
 			}
 		}

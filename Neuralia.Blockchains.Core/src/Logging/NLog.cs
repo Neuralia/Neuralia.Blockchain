@@ -27,8 +27,8 @@ namespace Neuralia.Blockchains.Core.Logging {
 		public static IPassthroughLogger Connections => GetLogger(LoggerTypes.Connections);
 		public static IPassthroughLogger Messages => GetLogger(LoggerTypes.Messages);
 		public static IPassthroughLogger UPnP => GetLogger(LoggerTypes.UPnP);
-		
-		public static LoggingBatcher LoggingBatcher { get; } = new LoggingBatcher();
+
+		public static ILoggingBatcher LoggingBatcher => LoggingBatcherProvider.LoggingBatcher;
 		
 		public static void EnableLoggers(AppSettingsBase appSettings) {
 

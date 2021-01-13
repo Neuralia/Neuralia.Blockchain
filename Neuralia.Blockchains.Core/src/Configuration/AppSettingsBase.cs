@@ -173,8 +173,19 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
 		public int ValidatorPort { get; set; } = GlobalsService.DEFAULT_VALIDATOR_PORT;
+		public int ValidatorHttpPort { get; set; } = GlobalsService.DEFAULT_VALIDATOR_HTTP_PORT;
 		public int RpcPort { get; set; } = GlobalsService.DEFAULT_RPC_PORT;
-		
+
+		/// <summary>
+		/// if true, the port 80 HTTP backup protocol will be started and used
+		/// </summary>
+		public bool EnableAppointmentValidatorBackupProtocol { get; set; } = true;
+
+		/// <summary>
+		/// should the IPMarshall be enabled during appointments. some may wish to disable it due to proxies 
+		/// </summary>
+		public bool EnableAppointmentValidatorIPMarshall { get; set; } = true;
+
 		public bool UseUPnP { get; set; } = true;
 		public bool UsePmP { get; set; } = false;
 
@@ -216,9 +227,14 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public string HubsWebAddress { get; set; } = "http://dev-web-hubs.neuralium.com";
 #else
 	    public string HubsGossipDNS { get; set; } = "hubs.neuralium.com";
-public string PortTestDns { get; set; } = "port-test.neuralium.com";
+		public string PortTestDns { get; set; } = "port-test.neuralium.com";
 		public string HubsWebAddress { get; set; } = "https://web-hubs.neuralium.com";
 #endif
+		
+		/// <summary>
+		/// if set, it will override the DNS check
+		/// </summary>
+		public string PortTestIpOverride { get; set; }
 
 		/// <summary>
 		///     the maximum amount of IPs to keep in our cache

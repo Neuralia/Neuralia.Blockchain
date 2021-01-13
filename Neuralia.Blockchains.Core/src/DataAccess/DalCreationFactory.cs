@@ -20,9 +20,9 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 	///     a non chain version of the Dal creation factory
 	/// </summary>
 	public class DalCreationFactory : IDalCreationFactory {
-		public virtual Func<string, ServiceSet, IMessageRegistryDal> CreateMessageRegistryDAL => (folderPath, serviceSet) => new MessageRegistrySqliteDal(folderPath, serviceSet, GlobalSettings.SoftwareVersion, this, GlobalSettings.ApplicationSettings.SerializationType);
+		public virtual Func<string, ServiceSet, IMessageRegistryDal> CreateMessageRegistryDAL => (folderPath, serviceSet) => new MessageRegistrySqliteDal(folderPath, serviceSet, GlobalSettings.BlockchainCompatibilityVersion, this, GlobalSettings.ApplicationSettings.SerializationType);
 		public virtual Func<AppSettingsBase.SerializationTypes, IMessageRegistryContext> CreateMessageRegistryContext => EntityFrameworkContext.CreateContext<MessageRegistrySqliteContext>;
-		public virtual Func<string, ServiceSet, IPeerRegistryDal> CreatePeerRegistryDAL => (folderPath, serviceSet) => new PeerRegistrySqliteDal(folderPath, serviceSet, GlobalSettings.SoftwareVersion, this, GlobalSettings.ApplicationSettings.SerializationType);
+		public virtual Func<string, ServiceSet, IPeerRegistryDal> CreatePeerRegistryDAL => (folderPath, serviceSet) => new PeerRegistrySqliteDal(folderPath, serviceSet, GlobalSettings.BlockchainCompatibilityVersion, this, GlobalSettings.ApplicationSettings.SerializationType);
 		public virtual Func<AppSettingsBase.SerializationTypes, IPeerRegistryContext> CreatePeerRegistryContext => EntityFrameworkContext.CreateContext<PeerRegistrySqliteContext>;
 	}
 }

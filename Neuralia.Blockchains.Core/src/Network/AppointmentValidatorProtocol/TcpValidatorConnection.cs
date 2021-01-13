@@ -18,6 +18,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 		IPMode IPMode { get; }
 		NetworkEndPoint EndPoint { get; }
 		ConnectionState State { get; }
+		bool HasConnected { get; }
 
 		Task<ByteArray> ReadData(int size, CancellationToken cancellationNeuralium = default);
 		void SendSocketBytes(in Span<byte> bytes);
@@ -34,6 +35,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 		protected readonly AsyncLock sendBytesLocker = new AsyncLock();
+
+		public bool HasConnected { get; private set; }
 
 		/// <summary>
 		///     The socket we're managing.
@@ -202,6 +205,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 				this.networkStream.WriteTimeout = 10000;
 				this.networkStream.ReadTimeout = 10000;
 			}
+
+			this.HasConnected = true;
 		}
 
 		public void Connect(Func<SafeArrayHandle> transformBytes, int timeout = 5000) {

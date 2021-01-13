@@ -1788,7 +1788,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainStateProvider.MaxBlockInterval = chainOperatingRulesTransaction.MaxBlockInterval;
 			chainStateProvider.AllowGossipPresentations = chainOperatingRulesTransaction.AllowGossipPresentations;
 
-			if(new SoftwareVersion(chainStateProvider.MinimumVersionAllowed) > GlobalSettings.SoftwareVersion) {
+			if(new SoftwareVersion(chainStateProvider.MinimumVersionAllowed) > GlobalSettings.BlockchainCompatibilityVersion) {
 				throw new UnrecognizedElementException(this.CentralCoordinator.ChainId, this.CentralCoordinator.ChainName);
 			}
 		}

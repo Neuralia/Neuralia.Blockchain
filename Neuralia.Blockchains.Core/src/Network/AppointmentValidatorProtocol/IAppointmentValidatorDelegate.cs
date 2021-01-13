@@ -7,12 +7,12 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		void Initialize();
 		
-		Task<ValidatorProtocol1.CodeTranslationResponseOperation> HandleCodeTranslationWorkflow(ValidatorProtocol1.CodeTranslationRequestOperation operation);
+		Task<(ValidatorProtocol1.CodeTranslationResponseOperation operation, bool valid)> HandleCodeTranslationWorkflow(ValidatorProtocol1.CodeTranslationRequestOperation operation);
 
-		Task<ValidatorProtocol1.TriggerSessionResponseOperation> HandleTriggerSessionWorkflow(ValidatorProtocol1.TriggerSessionOperation operation);
+		Task<(ValidatorProtocol1.TriggerSessionResponseOperation operation, bool valid)> HandleTriggerSessionWorkflow(ValidatorProtocol1.TriggerSessionOperation operation);
 
-		Task<ValidatorProtocol1.PuzzleCompletedResponseOperation> HandlePuzzleCompletedWorkflow(ValidatorProtocol1.PuzzleCompletedOperation operation);
+		Task<(ValidatorProtocol1.PuzzleCompletedResponseOperation operation, bool valid)> HandlePuzzleCompletedWorkflow(ValidatorProtocol1.PuzzleCompletedOperation operation);
 		
-		Task<ValidatorProtocol1.THSCompletedResponseOperation> HandleTHSCompletedWorkflow(ValidatorProtocol1.THSCompletedOperation operation);
+		Task<(ValidatorProtocol1.THSCompletedResponseOperation operation, bool valid)> HandleTHSCompletedWorkflow(ValidatorProtocol1.THSCompletedOperation operation);
 	}
 }

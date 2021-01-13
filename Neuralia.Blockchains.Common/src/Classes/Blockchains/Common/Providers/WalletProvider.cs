@@ -1005,6 +1005,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletCreationErrorEvent("Failed to generate wallet", ex.ToString()), correlationContext).ConfigureAwait(false);
 
+#if TESTNET
 				try {
 					// delete the folder
 					if(Directory.Exists(this.WalletFileInfo.WalletPath)) {
@@ -1014,11 +1015,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				} catch(Exception ex2) {
 					this.CentralCoordinator.Log.Error(ex2, "Failed to delete faulty wallet files.");
 				}
-
+#endif
 				//Reset the WalletFileInfo
 				await WalletFileInfo.Reset(lockContext).ConfigureAwait(false);
 
-				throw new ApplicationException("Failed to create wallet", ex);
+				throw new ApplicationException($"Failed to create wallet: {ex.Message}", ex);
 			}
 		}
 
@@ -1082,7 +1083,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(encryptWallet) {
 				if(string.IsNullOrWhiteSpace(passphrase) || passphrase.Length < MINIMUM_KEY_PASSPHRASE_LENGTH) {
-					throw new InvalidOperationException();
+					throw new InvalidOperationException($"Passphrase must be {MINIMUM_KEY_PASSPHRASE_LENGTH} characters long");
 				}
 
 				this.SetWalletPassphrase(passphrase, lockContext);
@@ -1092,9 +1093,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			// set the wallet version
 
-			wallet.Major = GlobalSettings.SoftwareVersion.Major;
-			wallet.Minor = GlobalSettings.SoftwareVersion.Minor;
-			wallet.Revision = GlobalSettings.SoftwareVersion.Revision;
+			wallet.Major = GlobalSettings.BlockchainCompatibilityVersion.Major;
+			wallet.Minor = GlobalSettings.BlockchainCompatibilityVersion.Minor;
+			wallet.Revision = GlobalSettings.BlockchainCompatibilityVersion.Revision;
 
 			wallet.NetworkId = GlobalSettings.Instance.NetworkId;
 			wallet.ChainId = this.centralCoordinator.ChainId.Value;
@@ -4291,7 +4292,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			bool changed = false;
 
 			foreach(IWalletAccount account in accounts) {
-				//now we ttake care of presentation transactions
+				//now we take care of presentation transactions
 #if MAINNET_LAUNCH_CODE
 				if(DateTimeEx.CurrentTime > GlobalsService.MainnetLauchTime.AddDays(2)) {
 					if((account.Status == Enums.PublicationStatus.Dispatched) && account.PresentationTransactionTimeout.HasValue && (account.PresentationTransactionTimeout.Value < lastBlockTimestamp)) {

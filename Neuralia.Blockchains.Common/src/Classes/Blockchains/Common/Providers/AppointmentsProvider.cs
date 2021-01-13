@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	public interface IAppointmentsProvider : IChainProvider {
 		Enums.OperationStatus OperatingMode { get; set; }
-		Enums.AppointmentStatus AppointmentMode { get; set;}
+		Enums.AppointmentStatus AppointmentMode { get; set; }
 		bool IsValidator { get; }
 		bool IsValidatorWindow { get; }
 		bool IsValidatorWindowProximity { get; }
@@ -50,10 +50,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<ConcurrentDictionary<int, (int secretCodeL2, long index)[]>> GetValidatorAssignedCodes(DateTime appointment);
 		Task<ConcurrentDictionary<int, int>> GetValidatorAssignedIndices(DateTime appointment);
 		Task<bool> IsRequesterIndexAssigned(DateTime appointment, int index);
-		Task RecordRequestSecretCode(DateTime appointment, int index, SafeArrayHandle validatorCode);
-		Task RecordTriggerPuzzle(DateTime appointment, int index, int secretCode);
-		Task<bool> RecordCompletePuzzle(DateTime appointment, int index, Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> results);
-		Task<bool> RecordCompleteTHS(DateTime appointment, int index, SafeArrayHandle thsResults);
+		Task RecordRequestSecretCode(DateTime appointment, int index, SafeArrayHandle validatorCode, DateTime? timestamp = null);
+		Task RecordTriggerPuzzle(DateTime appointment, int index, int secretCode, DateTime? timestamp = null);
+		Task<bool> RecordCompletePuzzle(DateTime appointment, int index, Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> results, DateTime? timestamp = null);
+		Task<bool> RecordCompleteTHS(DateTime appointment, int index, SafeArrayHandle thsResults, DateTime? timestamp = null);
 
 		Task EnsureAppointmentDetails(DateTime appointment);
 		Task<bool> AppointmentExistsAndStarted(DateTime appointment);
@@ -74,6 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		event Action AppointmentPuzzleCompletedEvent;
 		event Action<int, List<(string puzzle, string instructions)>> PuzzleBeginEvent;
 		Task<Dictionary<int, bool>> PrepareAppointmentRequesterResult(DateTime appointmentTime, List<IAppointmentRequesterResult> entries, LockContext lockContext);
+		ConcurrentDictionary<DateTime, AppointmentsProvider.AppointmentPuzzleStrikesSet> AppointmentPuzzleStrikes { get; }
 	}
 
 	public interface IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IAppointmentsProvider
@@ -82,6 +83,61 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	}
 
 	public static class AppointmentsProvider {
+		public class ValidatorState {
+
+			public const int STRIKE_COUNT = 3;
+			[Flags]
+			public enum AppointmentValidationWorkflowSteps : byte {
+				None = 0,
+				CodeTranslation = 1 << 0,
+				TriggerSession = 1 << 1,
+				PuzzleCompleted = 1 << 2,
+				THSCompleted = 1 << 3,
+			
+				CodeAndTrigger = CodeTranslation | TriggerSession
+			}
+
+			public AppointmentValidationWorkflowSteps Status { get; set; }
+			public int Strikes { get; set; }
+			public SafeArrayHandle ValidatorCode { get; set; }
+			public int SecretCodeL2 { get; set; }
+
+			public Enums.AppointmentValidationProtocols Protocol { get; set; } = Enums.AppointmentValidationProtocols.Undefined;
+		
+			/// <summary>
+			/// have we connected at least once on this protocol
+			/// </summary>
+			public bool Connected { get; set; }
+			
+			/// <summary>
+			/// number of failed attempts to connect on this protocol
+			/// </summary>
+			public int FailedConnectionAttempts { get; set; }
+			/// <summary>
+			/// can we still try on this protocol
+			/// </summary>
+			public bool ProtocolValid => this.FailedConnectionAttempts < STRIKE_COUNT;
+			
+			/// <summary>
+			/// if true, we are done with this validator, nothing left to do, it is exhaused
+			/// </summary>
+			public bool NoMoreTries => !this.ProtocolValid && this.Protocol == Enums.AppointmentValidationProtocols.Backup;
+			
+			public bool Contacted => this.Connected || this.Strikes != 0;
+			public bool StrikesValid => this.Strikes < STRIKE_COUNT;
+			public bool StrikesInvalid => !this.StrikesValid;
+			
+			public bool CodeTranslationCompleted => this.Status.HasFlag(AppointmentValidationWorkflowSteps.CodeTranslation);
+			public bool TriggerSessionCompleted => this.Status.HasFlag(AppointmentValidationWorkflowSteps.TriggerSession);
+			public bool PuzzleCompleted => this.Status.HasFlag(AppointmentValidationWorkflowSteps.PuzzleCompleted);
+			public bool THSCompleted => this.Status.HasFlag(AppointmentValidationWorkflowSteps.THSCompleted);
+		}
+		
+		
+		public class AppointmentPuzzleStrikesSet {
+			public ConcurrentDictionary<Guid, AppointmentsProvider.ValidatorState> Validators { get; } = new ConcurrentDictionary<Guid, AppointmentsProvider.ValidatorState>();
+		}
+
 	}
 
 	public abstract class AppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainProvider, IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
@@ -91,7 +147,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		private readonly object appointmentWorkflowLocker = new();
 		private readonly object sendVerificationResultsWorkflowLocker = new();
 
-		
 		private readonly object locker = new();
 
 		private IAppointmentRegistryDal appointmentRegistryDal;
@@ -99,7 +154,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected DateTime? checkAppointmentsContexts;
 		protected DateTime? checkAppointmentsDispatches;
-		private ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> sendVerificationResultsWorkflow;
+		private ConcurrentDictionary<DateTime, ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>> sendVerificationResultsWorkflows = new ConcurrentDictionary<DateTime, ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>>();
+		public ConcurrentDictionary<DateTime, AppointmentsProvider.AppointmentPuzzleStrikesSet> AppointmentPuzzleStrikes { get; } = new ConcurrentDictionary<DateTime, AppointmentsProvider.AppointmentPuzzleStrikesSet>();
 		private static TimeSpan LastAppointmentOperationTimeoutSpan = TimeSpan.FromMinutes(30);
 
 		public AppointmentsProvider(CENTRAL_COORDINATOR centralCoordinator) {
@@ -188,11 +244,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			foreach(DateTime entry in this.AppointmentDetails.Keys.Where(d => d.AddDays(1) < DateTimeEx.CurrentTime)) {
 				this.AppointmentDetails.Remove(entry, out AppointmentDataDetails _);
+				this.AppointmentPuzzleStrikes.TryRemove(entry, out var _);
 			}
 		}
 
 		public void ClearAppointmentDetails() {
 			this.AppointmentDetails.Clear();
+			this.AppointmentPuzzleStrikes.Clear();
 		}
 
 		public virtual async Task<bool> RecordAppointmentRequestConfirmationMessage(IAppointmentRequestConfirmationMessage appointmentRequestConfirmationMessage, IMessageEnvelope messageEnvelope, LockContext lockContext) {
@@ -234,23 +292,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
 
 			if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentRequested) {
-				if(!account.AccountAppointment.LastAppointmentOperationTimeout.HasValue || (account.AccountAppointment.LastAppointmentOperationTimeout.Value < DateTimeEx.CurrentTime)) {
+				if(!account.AccountAppointment.LastAppointmentOperationTimeout.HasValue || account.AccountAppointment.LastAppointmentOperationTimeout.Value < DateTimeEx.CurrentTime) {
 					(bool success, CheckAppointmentRequestConfirmedResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentRequestUpdateCheck(account.AccountAppointment.RequesterId.Value, lockContext).ConfigureAwait(false);
 
 					bool retry = true;
 
-					if(success) {
+					if(success && result != null && result.Index != 0) {
+						retry = false;
 
-						if((result != null) && (result.Index != 0)) {
-							retry = false;
+						await this.ProcessAppointmentRequest(result.Appointment, result.Index, result.Preparation, result.Finalization, SafeArrayHandle.Wrap(result.SecretAppointmentId), lockContext, a => {
 
-							await this.ProcessAppointmentRequest(result.Appointment, result.Index, result.Preparation, result.Finalization, SafeArrayHandle.Wrap(result.SecretAppointmentId), lockContext, a => {
-
-								a.AccountAppointment.LastAppointmentOperationTimeout = null;
-							}).ConfigureAwait(false);
-						}
+							a.AccountAppointment.LastAppointmentOperationTimeout = null;
+						}).ConfigureAwait(false);
 					}
-
+					
 					if(retry) {
 						await walletProvider.ScheduleTransaction((provider, token, lc) => {
 #if TESTING
@@ -333,7 +388,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
 
-					if(appointmentTime.HasValue && (appointmentVerificationConfirmationMessage.AppointmentTimestamp == appointmentTime.Value)) {
+					if(appointmentTime.HasValue && appointmentVerificationConfirmationMessage.AppointmentTimestamp == appointmentTime.Value) {
 						AppointmentVerificationConfirmationMessage.AppointmentRequester resultEntry = appointmentVerificationConfirmationMessage.Requesters.SingleOrDefault(e => e.RequesterId == account.AccountAppointment.RequesterId.Value);
 
 						if(resultEntry != null) {
@@ -352,16 +407,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IWalletProviderProxy walletProvider = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase;
 			IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
 
-			if(!account.AccountAppointment.LastAppointmentOperationTimeout.HasValue || (account.AccountAppointment.LastAppointmentOperationTimeout.Value < DateTimeEx.CurrentTime)) {
+			if(!account.AccountAppointment.LastAppointmentOperationTimeout.HasValue || account.AccountAppointment.LastAppointmentOperationTimeout.Value < DateTimeEx.CurrentTime) {
 				(bool success, CheckAppointmentVerificationConfirmedResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentCompletedUpdateCheck(account.AccountAppointment.RequesterId.Value, account.AccountAppointment.AppointmentId.Value, lockContext).ConfigureAwait(false);
 
 				bool retry = true;
 
-				if(success && (result != null)) {
+				if(success && result != null) {
 
 					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
 
-					if(appointmentTime.HasValue && (result.Appointment == appointmentTime.Value)) {
+					if(appointmentTime.HasValue && result.Appointment == appointmentTime.Value) {
 						retry = false;
 
 						await this.ProcessAppointmentVerificationConfirmation(SafeArrayHandle.Wrap(result.ConfirmationCorrelationCode), TimeSpan.FromDays(result.VerificationSpan), lockContext, a => {
@@ -385,7 +440,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		private async Task ProcessAppointmentVerificationConfirmation(SafeArrayHandle appointmentConfirmationCodeBytes, TimeSpan verificationSpan, LockContext lockContext, Action<IWalletAccount> transactionExtra = null) {
 
-			if((appointmentConfirmationCodeBytes == null) || appointmentConfirmationCodeBytes.IsZero) {
+			if(appointmentConfirmationCodeBytes == null || appointmentConfirmationCodeBytes.IsZero) {
 				return;
 			}
 
@@ -408,7 +463,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				account.AccountAppointment.AppointmentVerified = verified;
 				account.AccountAppointment.AppointmentStatus = Enums.AppointmentStatus.AppointmentCompleted;
-				
+
 				if(verified) {
 					if(account.AccountAppointment != null) {
 						account.VerificationLevel = Enums.AccountVerificationTypes.Appointment;
@@ -457,7 +512,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="appointment"></param>
 		/// <returns></returns>
 		public async Task EnsureAppointmentDetails(DateTime appointment) {
-			
+
 			if(!this.AppointmentDetails.TryGetValue(appointment, out var details) || details.IsLoaded || TestingUtil.Testing) {
 				using(await this.appointmentDetailsLocker.LockAsync().ConfigureAwait(false)) {
 					await this.UpdateAppointmentDetails(appointment).ConfigureAwait(false);
@@ -467,7 +522,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 				}
 			}
-			
+
 		}
 
 		public async Task UpdateAppointmentDetails(DateTime appointment) {
@@ -492,28 +547,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public async Task<ConcurrentDictionary<int, (int secretCodeL2, long index)[]>> GetValidatorAssignedCodes(DateTime appointment) {
-			
+
 			await this.EnsureAppointmentDetails(appointment).ConfigureAwait(false);
-			
+
 			if(this.AppointmentDetails.TryGetValue(appointment, out var details)) {
 				return details.ValidatorCodes;
 			}
+
 			return null;
 		}
-		
+
 		public async Task<ConcurrentDictionary<int, int>> GetValidatorAssignedIndices(DateTime appointment) {
 			await this.EnsureAppointmentDetails(appointment).ConfigureAwait(false);
-			
+
 			if(this.AppointmentDetails.TryGetValue(appointment, out var details)) {
 				return details.AssignedIndices;
 			}
+
 			return null;
 		}
 
 		public async Task<bool> IsRequesterIndexAssigned(DateTime appointment, int index) {
 
 			await this.EnsureAppointmentDetails(appointment).ConfigureAwait(false);
-			
+
 			if(this.AppointmentDetails.TryGetValue(appointment, out var details)) {
 				return details.AssignedIndices.ContainsKey(index);
 			}
@@ -523,7 +580,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#region appointment validator
 
-		public async Task RecordRequestSecretCode(DateTime appointment, int index, SafeArrayHandle validatorCode) {
+		public async Task RecordRequestSecretCode(DateTime appointment, int index, SafeArrayHandle validatorCode, DateTime? timestamp = null) {
 
 			IAppointmentRequesterResult entry = await this.AppointmentRegistryDal.GetAppointmentRequesterResult(appointment, index).ConfigureAwait(false);
 
@@ -532,13 +589,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				entry.Appointment = appointment;
 				entry.Index = index;
 				entry.ValidatorCode = validatorCode.ToExactByteArrayCopy();
-				entry.RequestedCodeCompleted = DateTimeEx.CurrentTime;
+				entry.RequestedCodeCompleted = timestamp.HasValue?timestamp.Value:DateTimeEx.CurrentTime;
 
 				await this.AppointmentRegistryDal.InsertAppointmentRequesterResult(entry).ConfigureAwait(false);
 			}
 		}
 
-		public async Task RecordTriggerPuzzle(DateTime appointment, int index, int secretCode) {
+		public async Task RecordTriggerPuzzle(DateTime appointment, int index, int secretCode, DateTime? timestamp = null) {
 
 			IAppointmentRequesterResult entry = await this.AppointmentRegistryDal.GetAppointmentRequesterResult(appointment, index).ConfigureAwait(false);
 
@@ -547,24 +604,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				entry.Appointment = appointment;
 				entry.Index = index;
 				entry.SecretCode = secretCode;
-				entry.TriggerCompleted = DateTimeEx.CurrentTime;
+				entry.TriggerCompleted = timestamp.HasValue?timestamp.Value:DateTimeEx.CurrentTime;
 
 				await this.AppointmentRegistryDal.InsertAppointmentRequesterResult(entry).ConfigureAwait(false);
 			} else {
 				entry.SecretCode = secretCode;
-				entry.TriggerCompleted = DateTimeEx.CurrentTime;
+				entry.TriggerCompleted = timestamp.HasValue?timestamp.Value:DateTimeEx.CurrentTime;
 				await this.AppointmentRegistryDal.UpdateAppointmentRequesterResult(entry).ConfigureAwait(false);
 			}
 		}
 
-		public async Task<bool> RecordCompletePuzzle(DateTime appointment, int index, Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> results) {
+		public async Task<bool> RecordCompletePuzzle(DateTime appointment, int index, Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> results, DateTime? timestamp = null) {
 			IAppointmentRequesterResult entry = await this.AppointmentRegistryDal.GetAppointmentRequesterResult(appointment, index).ConfigureAwait(false);
 
 			if(entry != null) {
 
 				using SafeArrayHandle bytes = AppointmentsResultTypeSerializer.SerializeResultSet(results);
 				entry.PuzzleResults = bytes.ToExactByteArrayCopy();
-				entry.PuzzleCompleted = DateTimeEx.CurrentTime;
+				entry.PuzzleCompleted = timestamp.HasValue?timestamp.Value:DateTimeEx.CurrentTime;
 
 				await this.AppointmentRegistryDal.UpdateAppointmentRequesterResult(entry).ConfigureAwait(false);
 
@@ -574,13 +631,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return false;
 		}
 
-		public async Task<bool> RecordCompleteTHS(DateTime appointment, int index, SafeArrayHandle thsResults) {
+		public async Task<bool> RecordCompleteTHS(DateTime appointment, int index, SafeArrayHandle thsResults, DateTime? timestamp = null) {
 			IAppointmentRequesterResult entry = await this.AppointmentRegistryDal.GetAppointmentRequesterResult(appointment, index).ConfigureAwait(false);
 
 			if(entry != null) {
 
 				entry.THSResults = thsResults.ToExactByteArrayCopy();
-				entry.THSCompleted = DateTimeEx.CurrentTime;
+				entry.THSCompleted = timestamp.HasValue?timestamp.Value:DateTimeEx.CurrentTime;
 
 				await this.AppointmentRegistryDal.UpdateAppointmentRequesterResult(entry).ConfigureAwait(false);
 
@@ -595,7 +652,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return AppointmentUtils.RehydrateAssignedSecretCodes(SafeArrayHandle.Wrap(appointmentValidatorSession.SecretCodes));
 		}
 
-
 		public HashSet<int> GetValidatorAssignedIndicesSet(IAppointmentValidatorSession appointmentValidatorSession) {
 
 			return AppointmentUtils.RehydrateAssignedIndices(SafeArrayHandle.Wrap(appointmentValidatorSession.Indices));
@@ -608,10 +664,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			public ConcurrentDictionary<int, (int secretCodeL2, long index)[]> ValidatorCodes = new ConcurrentDictionary<int, (int secretCodeL2, long index)[]>();
 			public ConcurrentDictionary<int, int> AssignedIndices = new ConcurrentDictionary<int, int>();
 
+			
 			public void SetIsLoaded() {
 				this.IsLoaded = this.AssignedIndices.Any() && ValidatorCodes.Any();
 			}
-			public bool IsLoaded { get; set; }
+
+			public bool IsLoaded { get; private set; }
 		}
 
 		public ConcurrentDictionary<DateTime, AppointmentDataDetails> AppointmentDetails { get; } = new();
@@ -622,7 +680,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.AppointmentDetails.ContainsKey(appointment);
 		}
 
-		public async Task<bool> AppointmentExistsAndStarted(DateTime appointment) {
+		public virtual async Task<bool> AppointmentExistsAndStarted(DateTime appointment) {
 			using(await this.appointmentExistsAndStartedLocker.LockAsync().ConfigureAwait(false)) {
 
 				if(this.AppointmentDetails.ContainsKey(appointment)) {
@@ -646,11 +704,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			SafeArrayHandle key = null;
 
 			using(await this.appointmentKeyLocker.LockAsync().ConfigureAwait(false)) {
-				
+
 				if(this.AppointmentDetails.TryGetValue(appointment, out var details)) {
 					key = details.TriggerKey;
 
-					if((key != null) && !key.IsZero) {
+					if(key != null && !key.IsZero) {
 						return key.Clone();
 					}
 				}
@@ -677,14 +735,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 								await this.CheckAppointmentContextUpdate(appointment, lockContext).ConfigureAwait(false);
 							}
 
-							if((appointmentTriggerMessage.Key != null) && !appointmentTriggerMessage.Key.IsZero) {
+							if(appointmentTriggerMessage.Key != null && !appointmentTriggerMessage.Key.IsZero) {
 								this.AppointmentDetails[appointment].TriggerKey = appointmentTriggerMessage.Key.Clone();
 
 								return appointmentTriggerMessage.Key.Clone();
 							}
 						}
 					}
-				} catch(Exception ex){
+				} catch(Exception ex) {
 					NLog.Default.Error(ex, "Failed to load trigger from gossip message");
 				}
 
@@ -709,12 +767,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				entry.Appointment = appointment;
 				entry.Window = appointmentWindow;
 				entry.RequesterCount = 0;
-				
+
 				// establish a random dispatch time within the window in hours. we will wait a minimum of 20 minutes
+				entry.Appointment.AddMinutes(GlobalRandom.GetNext(10, Math.Max(validatorWindow - 30, 30)));
+
 #if TESTING
 				entry.Dispatch = entry.Appointment;
 #else
-				entry.Dispatch = entry.Appointment.AddMinutes(GlobalRandom.GetNext(10, Math.Max(validatorWindow - 30, 30)));
+				entry.Dispatch = AppointmentUtils.ComputeDispatchDelay(appointment, validatorWindow);
 #endif
 
 				IWalletAccount account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
@@ -742,6 +802,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					using SafeArrayHandle decryptedBytes = AppointmentUtils.DecryptValidatorMessage(appointment, encryptedSecretCodeBytes, account.Stride, key.PublicKey);
 					validatorSessionDetails.Rehydrate(decryptedBytes);
 				}
+
 				entry.RequesterCount = validatorSessionDetails.AssignedIndices.Count;
 				await this.AppointmentRegistryDal.UpdateAppointmentValidatorSession(entry).ConfigureAwait(false);
 
@@ -778,14 +839,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				var details = this.AppointmentDetails.GetOrAdd(appointment, new AppointmentDataDetails());
 
 				foreach(KeyValuePair<int, (int secretCodeL2, long index)[]> codeEntry in assignedCodes) {
-					
+
 					details.ValidatorCodes.TryAdd(codeEntry.Key, codeEntry.Value);
 				}
 
 				foreach(int index in indices) {
-					
+
 					details.AssignedIndices.TryAdd(index, 0);
 				}
+
 				details.SetIsLoaded();
 			}
 		}
@@ -820,14 +882,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					int adjustedIndex = account.AccountAppointment.AppointmentIndex.Value - range.start;
 
 					SafeArrayHandle secretPuzzleBytes = null;
+
 					if(appointmentContextMessage.Applicants.Count > adjustedIndex) {
 						secretPuzzleBytes = appointmentContextMessage.Applicants[adjustedIndex];
 					}
-					
-					if(appointmentTime.HasValue && (appointmentTime.Value == appointmentContextMessage.Appointment) && !appointmentContextMessage.SecretPuzzles.IsZero && secretPuzzleBytes != null && !secretPuzzleBytes.IsZero && !account.AccountAppointment.AppointmentContextDetailsCached) {
+
+					if(appointmentTime.HasValue && appointmentTime.Value == appointmentContextMessage.Appointment && !appointmentContextMessage.SecretPuzzles.IsZero && secretPuzzleBytes != null && !secretPuzzleBytes.IsZero && !account.AccountAppointment.AppointmentContextDetailsCached) {
 						// ok, this is ours. lets see if we are in the right index
-						if((account.AccountAppointment.AppointmentIndex.Value >= range.start) && (account.AccountAppointment.AppointmentIndex.Value <= range.end)) {
-							
+						if(account.AccountAppointment.AppointmentIndex.Value >= range.start && account.AccountAppointment.AppointmentIndex.Value <= range.end) {
+
 							using SafeArrayHandle thsRuleSetBytes = appointmentContextMessage.THSRuleSet.Dehydrate();
 							await this.ProcessAppointmentContext(appointmentContextMessage.PuzzleWindow, appointmentContextMessage.PuzzleEngineVersion, thsRuleSetBytes.ToExactByteArrayCopy(), appointmentContextMessage.SecretPuzzles.ToExactByteArrayCopy(), secretPuzzleBytes.ToExactByteArrayCopy(), lockContext).ConfigureAwait(false);
 						}
@@ -849,7 +912,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			bool retry = true;
 
 			if(success) {
-				
+
 				DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
 
 				if(result != null && result.PuzzleBytes != null && result.PuzzleBytes.Length > 0 && result.SecretPackageBytes != null && result.SecretPackageBytes.Length > 0 && appointmentTime.HasValue && result.Appointment == appointmentTime.Value) {
@@ -883,7 +946,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			distilledAppointmentContext.EngineVersion = engineVersion;
 			distilledAppointmentContext.THSRuleSet = thsRuleSet;
 
-			if((distilledAppointmentContext.EngineVersion > GlobalsService.MAXIMUM_PUZZLE_ENGINE_VERSION) || (distilledAppointmentContext.EngineVersion < GlobalsService.MINIMUM_PUZZLE_ENGINE_VERSION)) {
+			if(distilledAppointmentContext.EngineVersion > GlobalsService.MAXIMUM_PUZZLE_ENGINE_VERSION || distilledAppointmentContext.EngineVersion < GlobalsService.MINIMUM_PUZZLE_ENGINE_VERSION) {
 
 				this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.InvalidPuzzleEngineVersion(distilledAppointmentContext.EngineVersion, GlobalsService.MINIMUM_PUZZLE_ENGINE_VERSION, GlobalsService.MAXIMUM_PUZZLE_ENGINE_VERSION), new CorrelationContext());
 
@@ -908,7 +971,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				return true;
 			}, lockContext).ConfigureAwait(false);
-			
+
 			this.CentralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentContextCached, new CorrelationContext());
 
 			return true;
@@ -926,8 +989,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public void SetPuzzleAnswers(List<int> answers) {
-			if(this.IsInAppointmentOperation && (this.AppointmentMode == Enums.AppointmentStatus.AppointmentContextCached)) {
-				if((this.appointmentWorkflow != null) && !this.appointmentWorkflow.IsCompleted) {
+			if(this.IsInAppointmentOperation && this.AppointmentMode == Enums.AppointmentStatus.AppointmentContextCached) {
+				if(this.appointmentWorkflow != null && !this.appointmentWorkflow.IsCompleted) {
 					this.appointmentWorkflow.ProvidePuzzleAnswers(answers);
 				}
 			}
@@ -941,7 +1004,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(!this.AppointmentDetails.ContainsKey(appointmentTriggerMessage.Appointment)) {
 				this.AppointmentDetails.TryAdd(appointmentTriggerMessage.Appointment, new AppointmentDataDetails());
-				
+
 				// gotta try to load the context
 				await this.CheckAppointmentContextUpdate(appointmentTriggerMessage.Appointment, lockContext).ConfigureAwait(false);
 			}
@@ -956,18 +1019,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(this.AppointmentDetails.ContainsKey(appointment)) {
 				SafeArrayHandle key = this.AppointmentDetails[appointment].TriggerKey;
 
-				if((key != null) && !key.IsZero) {
+				if(key != null && !key.IsZero) {
 					return key.Clone();
 				}
 			}
 
 			(bool success, CheckAppointmentTriggerResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentTriggerUpdateCheck(appointment, lockContext).ConfigureAwait(false);
 
-			if(success && (result != null)) {
+			if(success && result != null) {
 
 				if(!this.AppointmentDetails.ContainsKey(result.Appointment)) {
 					this.AppointmentDetails.TryAdd(result.Appointment, new AppointmentDataDetails());
-					
+
 					// gotta try to load the context
 					await this.CheckAppointmentContextUpdate(result.Appointment, lockContext).ConfigureAwait(false);
 				}
@@ -1033,7 +1096,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				account = await walletProvider.GetWalletAccount(accountCode, lockContext).ConfigureAwait(false);
 			}
 
-			if((account == null) || (account.AccountAppointment == null)) {
+			if(account == null || account.AccountAppointment == null) {
 				return false;
 			}
 
@@ -1092,47 +1155,55 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(this.appointmentDispatches.Values.Any(a => a < DateTimeEx.CurrentTime)) {
 #endif
 
-					bool ready = false;
+					List<DateTime> sessions = await this.appointmentRegistryDal.GetReadyAppointmentSessions().ConfigureAwait(false);
 
-					lock(this.sendVerificationResultsWorkflowLocker) {
-						ready = (this.sendVerificationResultsWorkflow == null) || this.sendVerificationResultsWorkflow.IsCompleted;
+					if(!sessions.Any()) {
+						return;
 					}
 
-					if(ready) {
+					foreach(var sessionAppointment in sessions) {
 
-						List<DateTime> sessions = await this.appointmentRegistryDal.GetReadyAppointmentSessions().ConfigureAwait(false);
-
-						if(!sessions.Any()) {
-							return;
+						if(DateTimeEx.CurrentTime >= sessionAppointment-AppointmentsValidatorProvider.AppointmentWindowHead && DateTimeEx.CurrentTime <= sessionAppointment-AppointmentsValidatorProvider.AppointmentWindowTail) {
+							// we are IN the appointment, dont do anything
+							continue;
 						}
-
-						DateTime sessionAppointment = sessions.First();
-
-						int total = await appointmentRegistryDal.GetReadyAppointmentRequesterResultCount(sessionAppointment).ConfigureAwait(false);
-
-						if(total == 0) {
-							return;
-						}
+						bool ready = false;
 
 						lock(this.sendVerificationResultsWorkflowLocker) {
-							this.sendVerificationResultsWorkflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateSendAppointmentVerificationResultsMessageWorkflow(sessionAppointment, new CorrelationContext());
+							ready = !this.sendVerificationResultsWorkflows.ContainsKey(sessionAppointment) || this.sendVerificationResultsWorkflows[sessionAppointment].IsCompleted;
 						}
 
-						this.sendVerificationResultsWorkflow.Completed2 += (b, workflow) => {
+						if(ready) {
 
-							try {
+							int total = await appointmentRegistryDal.GetReadyAppointmentRequesterResultCount(sessionAppointment).ConfigureAwait(false);
 
-							} finally {
-
-								lock(this.sendVerificationResultsWorkflowLocker) {
-									this.sendVerificationResultsWorkflow = null;
-								}
+							if(total == 0) {
+								continue;
 							}
 
-							return Task.CompletedTask;
-						};
+							ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> sendVerificationResultsWorkflow = null;
 
-						this.CentralCoordinator.PostWorkflow(this.sendVerificationResultsWorkflow);
+							lock(this.sendVerificationResultsWorkflowLocker) {
+								sendVerificationResultsWorkflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateSendAppointmentVerificationResultsMessageWorkflow(sessionAppointment, new CorrelationContext());
+								this.sendVerificationResultsWorkflows.TryAdd(sessionAppointment, sendVerificationResultsWorkflow);
+							}
+
+							sendVerificationResultsWorkflow.Completed2 += (b, workflow) => {
+
+								try {
+
+								} finally {
+
+									lock(this.sendVerificationResultsWorkflowLocker) {
+										this.sendVerificationResultsWorkflows.TryRemove(sessionAppointment, out var _);
+									}
+								}
+
+								return Task.CompletedTask;
+							};
+
+							this.CentralCoordinator.PostWorkflow(sendVerificationResultsWorkflow);
+						}
 
 						try {
 							await this.CleanAppointmentsRegistry().ConfigureAwait(false);
@@ -1140,12 +1211,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						} catch(Exception ex) {
 							this.CentralCoordinator.Log.Error("Failed to clear obsolete appointments.");
 						}
+
 						// clear obsoletes
 						foreach(KeyValuePair<DateTime, DateTime> entry in this.appointmentDispatches.Where(k => k.Key.AddMinutes(5) < DateTimeEx.CurrentTime)) {
 							this.appointmentDispatches.Remove(entry.Key, out var _);
 						}
 					}
 				}
+
 			}
 
 			if(this.IsInAppointmentOperation) {
@@ -1162,21 +1235,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// first, check if an appointment has expired under various scenarios
 
 				// context received but puzzle never completed in time.
-				bool appointmentExpired = (account.AccountAppointment.AppointmentStatus <= Enums.AppointmentStatus.AppointmentContextCached) && account.AccountAppointment.AppointmentTime.HasValue && (account.AccountAppointment.AppointmentTime.Value.AddHours(1) < DateTimeEx.CurrentTime);
+				bool appointmentExpired = account.AccountAppointment.AppointmentStatus <= Enums.AppointmentStatus.AppointmentContextCached && account.AccountAppointment.AppointmentTime.HasValue && account.AccountAppointment.AppointmentTime.Value.AddHours(1) < DateTimeEx.CurrentTime;
 
 				// absolute appointment time long passed X days
-				bool appointmentExpired2 = appointmentExpired || (account.AccountAppointment.AppointmentTime.HasValue && (account.AccountAppointment.AppointmentTime.Value.AddDays(3) < DateTimeEx.CurrentTime));
+				bool appointmentExpired2 = appointmentExpired || account.AccountAppointment.AppointmentTime.HasValue && account.AccountAppointment.AppointmentTime.Value.AddDays(3) < DateTimeEx.CurrentTime;
 
 				// we sent a request, and never received a response
-				bool appointmentExpired3 = appointmentExpired2 || (!account.AccountAppointment.AppointmentTime.HasValue && (account.AccountAppointment.AppointmentStatus <= Enums.AppointmentStatus.AppointmentRequested) && account.AccountAppointment.AppointmentRequestTimeStamp.HasValue && (account.AccountAppointment.AppointmentRequestTimeStamp.Value.AddDays(1) < DateTimeEx.CurrentTime));
+				bool appointmentExpired3 = appointmentExpired2 || !account.AccountAppointment.AppointmentTime.HasValue && account.AccountAppointment.AppointmentStatus <= Enums.AppointmentStatus.AppointmentRequested && account.AccountAppointment.AppointmentRequestTimeStamp.HasValue && account.AccountAppointment.AppointmentRequestTimeStamp.Value.AddDays(1) < DateTimeEx.CurrentTime;
 
 				// puzzle completed, but we never received any verification results
-				bool appointmentExpired4 = appointmentExpired3 || ((account.AccountAppointment.AppointmentStatus >= Enums.AppointmentStatus.AppointmentPuzzleCompleted) && account.AccountAppointment.AppointmentVerificationTime.HasValue && (account.AccountAppointment.AppointmentVerificationTime.Value < DateTimeEx.CurrentTime) && !account.AccountAppointment.AppointmentConfirmationCodeExpiration.HasValue);
+				bool appointmentExpired4 = appointmentExpired3 || account.AccountAppointment.AppointmentStatus >= Enums.AppointmentStatus.AppointmentPuzzleCompleted && AppointmentUtils.AppointmentVerificationExpired(account.AccountAppointment.AppointmentVerificationTime);
 
-				// we completed everything, but our puzzle verification is now expired.
-				bool codeExpired = appointmentExpired4 || (account.AccountAppointment.AppointmentConfirmationCodeExpiration.HasValue && (account.AccountAppointment.AppointmentConfirmationCodeExpiration.Value.AddHours(3) < DateTimeEx.CurrentTime));
-
-				if(codeExpired || appointmentExpired || appointmentExpired2 || appointmentExpired3 || appointmentExpired4) {
+				if(appointmentExpired || appointmentExpired2 || appointmentExpired3 || appointmentExpired4) {
 					// ok, we are way behind. we need to get our confirmation
 
 					await this.ClearAppointment(lockContext).ConfigureAwait(false);
@@ -1198,7 +1268,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
 					DateTime? appointmentContextTime = account.AccountAppointment.AppointmentContextTime;
 
-					if(appointmentTime.HasValue && appointmentContextTime.HasValue && (appointmentContextTime.Value < DateTimeEx.CurrentTime)) {
+					if(appointmentTime.HasValue && appointmentContextTime.HasValue && appointmentContextTime.Value < DateTimeEx.CurrentTime) {
 						// ok, we can try to get the contexts info we need
 						await this.CheckAppointmentContextUpdate(appointmentTime.Value, lockContext).ConfigureAwait(false);
 					}
@@ -1210,13 +1280,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
 					DateTime? appointmentExpirationTime = account.AccountAppointment.AppointmentExpirationTime;
 
-					if(appointmentTime.HasValue && ((appointmentTime.Value + AppointmentsValidatorProvider.AppointmentWindowHead) < DateTimeEx.CurrentTime) && (appointmentTime.Value.AddMinutes(30) > DateTimeEx.CurrentTime) && (!appointmentExpirationTime.HasValue || (appointmentExpirationTime.Value >= DateTimeEx.CurrentTime))) {
+					if(appointmentTime.HasValue && appointmentTime.Value + AppointmentsValidatorProvider.AppointmentWindowHead < DateTimeEx.CurrentTime && appointmentTime.Value.AddMinutes(30) > DateTimeEx.CurrentTime && (!appointmentExpirationTime.HasValue || appointmentExpirationTime.Value >= DateTimeEx.CurrentTime)) {
 						// this is our appointment!!  it begins! lets begin the workflow
 
 						bool ready = false;
 
 						lock(this.appointmentWorkflowLocker) {
-							ready = (this.appointmentWorkflow == null) || this.appointmentWorkflow.IsCompleted;
+							ready = this.appointmentWorkflow == null || this.appointmentWorkflow.IsCompleted;
 						}
 
 						if(ready) {
@@ -1281,7 +1351,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IWalletAccount account = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(lockContext).ConfigureAwait(false);
 
 			// we only send them when we can
-			if(!this.appointmentDispatches.ContainsKey(appointmentTime) || (this.appointmentDispatches[appointmentTime] > DateTimeEx.CurrentTime)) {
+			if(!this.appointmentDispatches.ContainsKey(appointmentTime) || this.appointmentDispatches[appointmentTime] > DateTimeEx.CurrentTime) {
 				return new Dictionary<int, bool>();
 			}
 
@@ -1289,13 +1359,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			SafeArrayHandle appointmentKey = this.AppointmentDetails[appointmentTime].TriggerKey;
 
-			if((appointmentKey == null) || appointmentKey.IsZero) {
+			if(appointmentKey == null || appointmentKey.IsZero) {
 
 				await this.CheckAppointmentTriggerUpdate(appointmentTime, lockContext).ConfigureAwait(false);
 
 				appointmentKey = this.AppointmentDetails[appointmentTime].TriggerKey;
 
-				if((appointmentKey == null) || appointmentKey.IsZero) {
+				if(appointmentKey == null || appointmentKey.IsZero) {
 
 					return new Dictionary<int, bool>();
 				}
@@ -1319,7 +1389,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				using SafeArrayHandle results = SafeArrayHandle.Wrap(entry.PuzzleResults);
 				Dictionary<Enums.AppointmentsResultTypes, SafeArrayHandle> resultSet = null;
 
-				if((results != null) && !results.IsZero) {
+				if(results != null && !results.IsZero) {
 					try {
 						resultSet = AppointmentsResultTypeSerializer.DeserializeResultSet(results);
 
@@ -1332,7 +1402,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 				}
 
-				bool invalid = (codeHash == 0) || (secretCodeL2 == 0);
+				bool invalid = codeHash == 0 || secretCodeL2 == 0;
 
 				if(!invalid) {
 					invalid = !codes.ContainsKey(codeHash);
@@ -1421,7 +1491,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			(bool success, CheckAppointmentsResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.QueryAvailableAppointments(lockContext).ConfigureAwait(false);
 
-			if(success && (result != null)) {
+			if(success && result != null) {
 
 				List<DateTime> registryAppointments = (await this.AppointmentRegistryDal.GetAppointments().ConfigureAwait(false)).Select(a => a.appointment.ToUniversalTime()).ToList();
 
@@ -1456,7 +1526,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				(bool success2, QueryValidatorAppointmentSessionsResult result2) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.QueryValidatorAppointmentSessions(miningAccountId, missingContextsAppointments, hashesList, lockContext).ConfigureAwait(false);
 
-				if(success2 && (result2 != null)) {
+				if(success2 && result2 != null) {
 					foreach(QueryValidatorAppointmentSessionsResult.ValidatorAppointmentSession session in result2.Sessions) {
 
 						foreach(QueryValidatorAppointmentSessionsResult.ValidatorAppointmentSession.ValidatorSessionSlice slice in session.Slices) {

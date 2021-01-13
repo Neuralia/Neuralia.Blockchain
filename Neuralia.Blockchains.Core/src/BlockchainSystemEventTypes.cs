@@ -1,4 +1,7 @@
 
+using System;
+using System.Linq;
+using System.Reflection;
 using Neuralia.Blockchains.Core.General.Types.Constants;
 using Neuralia.Blockchains.Core.General.Types.Simple;
 
@@ -26,6 +29,14 @@ namespace Neuralia.Blockchains.Core {
 
 		public static bool operator !=(BlockchainSystemEventType a, BlockchainSystemEventType b) {
 			return !(a == b);
+		}
+		
+		public static bool operator !=(BlockchainSystemEventType a, ushort b) {
+			return !(a.Value == b);
+		}
+		
+		public static bool operator ==(BlockchainSystemEventType a, ushort b) {
+			return a.Value == b;
 		}
 	}
 
@@ -261,5 +272,25 @@ namespace Neuralia.Blockchains.Core {
 		}
 
 		public static BlockchainSystemEventTypes Instance { get; } = new BlockchainSystemEventTypes();
+
+		public string GetNameFromUShort(ushort eventId)
+		{
+			try
+			{
+				var member = this.GetType().GetFields().Where(imember =>
+				{
+					if(this.GetType().GetField(imember.Name).GetValue(this) is BlockchainSystemEventType value)
+						return value.Value == eventId;
+					return false;
+				}).First();
+
+				return member.Name;
+			}
+			catch (Exception e)
+			{
+				throw new ApplicationException(
+					$"Could not find a type with id {eventId} among {nameof(BlockchainTypes)}'s members.", e);
+			}
+		}
 	}
 }

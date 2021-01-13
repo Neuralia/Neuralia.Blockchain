@@ -203,6 +203,11 @@ namespace Neuralia.Blockchains.Core {
 			Test = 0x80000 // 524288
 		}
 		
+		public enum AppointmentValidationProtocols:byte {
+			Undefined=0,
+			Standard=1,
+			Backup=2,
+		}
 
 		public enum AppointmentRequestModes:byte {
 			Unknown = 0, RequestConfirmation= 1, Context = 2, Trigger = 3, VerificationConfirmation = 4

@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Core {
 				return false;
 			}
 
-			return base.Equals(other);
+			return this.Value == other.Value;
 		}
 
 		public override bool Equals(object obj) {

@@ -16,6 +16,8 @@ using Neuralia.Blockchains.Core.Cryptography.THS.V1;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -126,6 +128,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			TypeSerializer.Serialize(code, resultingCode.Span.Slice(16, 16));
 			
 			return resultingCode;
+		}
+		
+		/// <summary>
+		/// builds a random but valid entry for decoy purposes
+		/// </summary>
+		/// <returns></returns>
+		public static SafeArrayHandle GetDummyValidatorSecretDelta() {
+			
+			using var validatorCodeMap1 = GuidDelta.CreateMap(Guid.NewGuid(), Guid.NewGuid());
+			using var validatorCodeMap2 = GuidDelta.CreateMap(Guid.NewGuid(), Guid.NewGuid());
+
+			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
+
+			dehydrator.WriteNonNullable(validatorCodeMap1);
+			dehydrator.WriteNonNullable(validatorCodeMap2);
+
+			return dehydrator.ToArray();
 		}
 
 		private static long Roll(long value, long iterations) {
@@ -750,5 +769,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			return dehydrator.ToArray();
 		}
+
+		public static DateTime ComputeDispatchDelay(DateTime appointment, int validatorWindow) {
+			return appointment.AddMinutes(GlobalRandom.GetNext(10, Math.Max(validatorWindow - 30, 30)));
+		}
+
+		public static bool AppointmentVerificationExpired(DateTime? appointmentVerificationTime) {
+			return appointmentVerificationTime.HasValue && appointmentVerificationTime.Value.AddDays(2) < DateTimeEx.CurrentTime;
+		}
+		
+		public static bool AppointmentVerificationExpired(WalletAccount.AccountAppointmentDetails accountAppointment) {
+			return AppointmentVerificationExpired(accountAppointment.AppointmentVerificationTime) && (!accountAppointment.AppointmentConfirmationCode.HasValue || !accountAppointment.AppointmentConfirmationCodeExpiration.HasValue || accountAppointment.AppointmentConfirmationCodeExpiration.Value < DateTimeEx.CurrentTime);
+		}
+		
 	}
 }

@@ -10,19 +10,12 @@
         <AssemblyName>Neuralia.Blockchains.Components</AssemblyName>
         <TargetFrameworks>netstandard2.1;net5.0</TargetFrameworks>
         <PackageId>Neuralia.Blockchains.Components</PackageId>
-        <VersionPrefix>1.0.0</VersionPrefix>
+        <VersionPrefix>1.0.1.2</VersionPrefix>
 
-    </PropertyGroup>
-    <PropertyGroup>
-        <ServerGarbageCollection>true</ServerGarbageCollection>
-        <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
-        <RetainVMGarbageCollection>true</RetainVMGarbageCollection>
-        <ThreadPoolMinThreads>4</ThreadPoolMinThreads>
-        <ThreadPoolMaxThreads>25</ThreadPoolMaxThreads>
     </PropertyGroup>
  <ItemGroup>
 
-    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.0" />
+    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.1.2" />
 
   </ItemGroup> 
     <ItemGroup>

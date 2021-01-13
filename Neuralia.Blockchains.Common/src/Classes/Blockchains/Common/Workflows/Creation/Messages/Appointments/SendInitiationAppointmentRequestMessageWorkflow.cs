@@ -116,8 +116,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			}
 			
 			if(this.PreDispatch == false && account.AccountAppointment != null) {
-				if((account.AccountAppointment.AppointmentConfirmationCodeExpiration.HasValue && account.AccountAppointment.AppointmentConfirmationCodeExpiration.Value < DateTimeEx.CurrentTime) ||
-				   (account.AccountAppointment.AppointmentVerificationTime.HasValue && account.AccountAppointment.AppointmentVerificationTime.Value < DateTimeEx.CurrentTime && !account.AccountAppointment.AppointmentConfirmationCode.HasValue)) {
+				if(AppointmentUtils.AppointmentVerificationExpired(account.AccountAppointment.AppointmentVerificationTime)) {
 					
 					// in these cases, we allow a reset.
 					account.AccountAppointment = null;

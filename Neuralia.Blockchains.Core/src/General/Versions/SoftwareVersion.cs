@@ -135,7 +135,7 @@ namespace Neuralia.Blockchains.Core.General.Versions {
 
 			return left.Equals(right);
 		}
-
+		
 		public static bool operator !=(SoftwareVersion left, SoftwareVersion right) {
 			return !(left == right);
 		}
