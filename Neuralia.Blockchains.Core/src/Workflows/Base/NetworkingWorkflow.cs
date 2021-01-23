@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Cryptography.Trees;
@@ -309,7 +310,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		protected override void LogWorkflowException(Exception ex) {
 
 			// dont show send message exceptions
-			if(ex is AggregateException aex && (aex.InnerExceptions.Count == 1) && (aex.InnerException is SendMessageException sendEx || aex.InnerException is WorkflowNetworkException wnex)) {
+			if(ex is AggregateException aex && (aex.InnerExceptions.Count == 1) && (aex.InnerException is SendMessageException sendEx || aex.InnerException is WorkflowNetworkException wnex || aex.InnerException is ObjectDisposedException oex)) {
 				// make this exception less intense. we dont need to log it. it will be logged in the connection manager
 
 			} else {

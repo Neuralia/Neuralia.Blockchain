@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Core.Services {
         /// <summary>
 		/// the hardcoded mainnet launch date, used for launch
 		/// </summary>
-		public static DateTime MainnetLauchTime = new DateTime(2021, 1, 18, 16, 0,0, DateTimeKind.Utc);
+		public static DateTime MainnetLauchTime = new DateTime(2021, 1, 22, 16, 0,0, DateTimeKind.Utc);
 #else
 we have to remove this code!!
 #endif

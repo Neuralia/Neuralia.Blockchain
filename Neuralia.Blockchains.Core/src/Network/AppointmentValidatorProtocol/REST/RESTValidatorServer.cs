@@ -15,6 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
 
@@ -44,6 +45,12 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.REST {
 	        if(this.hostTask != null && !this.hostTask.IsCompleted) {
 		        return;
 	        }
+
+	        var tempPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+
+	        if(!Directory.Exists(tempPath)) {
+		        Directory.CreateDirectory(tempPath);
+	        }
 	        IHostBuilder builder = Host.CreateDefaultBuilder(Array.Empty<string>()).ConfigureHostConfiguration(config => {
 		        config.AddEnvironmentVariables();
 	        }).ConfigureWebHostDefaults(webBuilder => {
@@ -59,13 +66,17 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.REST {
 			        options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(10);
 			        options.Listen(IPAddress.Any, this.port, listenOptions => {
 			        });
-		        }).UseContentRoot(Directory.GetCurrentDirectory()).UseStartup<Startup>(factory => {
+		        }).ConfigureLogging(loggingBuilder => 
+			        loggingBuilder.AddFilter<ConsoleLoggerProvider>(level => level == LogLevel.None)).UseContentRoot(tempPath).UseStartup<Startup>(factory => {
 			        return new Startup(this.appointmentValidatorDelegates, this.mode);
 		        });
 	        });
 
+	        
 	        this.host = builder.Build();
 	        this.hostTask = this.host.RunAsync();
+	        
+	        NLog.Default.Information("Validator HTTP REST backup Server started");
         }
 
         public async Task Stop() {
@@ -89,6 +100,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.REST {
 	        
 	        this.host = null;
 	        this.hostTask = null;
+	        
+	        NLog.Default.Information("Validator HTTP REST backup Server stopped");
         }
        
         public void RegisterBlockchainDelegate(BlockchainType blockchainType, IAppointmentValidatorDelegate appointmentValidatorDelegate, Func<bool> isInAppointmentWindow) {

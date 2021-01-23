@@ -15,6 +15,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Locking;
 
@@ -233,11 +234,17 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					// it is a confirmed connection, we are now friends
 					
 					NLog.Default.Verbose($"Handshake confirmed, adding connection  {this.serverConnection.ScopedAdjustedIp} to connection store (async).");
-					
-					await this.AddValidConnection(serverResponse.Message, this.serverConnection).ConfigureAwait(false);
+					try
+					{
+						await this.AddValidConnection(serverResponse.Message, this.serverConnection).ConfigureAwait(false);
+					}
+					catch (Exception e)
+					{
+						NLog.Connections.Warning(e,$"[ClientHandshakeWorkflow] Failed to add connection with {this.serverConnection.NodeAddressInfo}");
+						throw;
+					}
 
-					this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
-					return true;
+					return this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
 				}
 			} finally {
 				if(ClientHandshakeWorkflow.ConnectingNonces.ContainsKey(handshakeTrigger.Message.nonce)) {
@@ -248,14 +255,17 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return false;
 		}
 
-		protected virtual void SendClientReadyReply(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, PeerConnection serverConnection) {
+		protected virtual bool SendClientReadyReply(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, PeerConnection serverConnection) {
 			// lets inform the server that we are ready to go forward
 			TargettedMessageSet<ClientReady<R>, R> clientReady = this.MessageFactory.CreateClientReadySet(handshakeTrigger.Header);
 
 			if(!this.SendMessage(serverConnection, clientReady)) {
 				NLog.Default.Verbose($"Connection with peer  {serverConnection.ScopedAdjustedIp} was terminated");
 
+				return false;
 			}
+
+			return true;
 		}
 
 		protected virtual long GenerateRandomHandshakeNonce() {
@@ -266,17 +276,16 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return GlobalRandom.GetNextUInt();
 		}
 
-		protected virtual Task AddValidConnection(ServerHandshakeConfirm<R> serverHandshakeConfirm, PeerConnection peerConnectionn) {
+		protected virtual async Task AddValidConnection(ServerHandshakeConfirm<R> serverHandshakeConfirm, PeerConnection peerConnectionn) {
 			// take the peer nodes
 			peerConnectionn.SetPeerNodes(serverHandshakeConfirm.nodes);
 
 			// handshake confirmed
-			this.networkingService.ConnectionStore.ConfirmConnection(peerConnectionn);
-			this.networkingService.ConnectionStore.FullyConfirmConnection(peerConnectionn);
+			await this.networkingService.ConnectionStore.ConfirmConnection(peerConnectionn).ConfigureAwait(false);
+			await this.networkingService.ConnectionStore.FullyConfirmConnection(peerConnectionn).ConfigureAwait(false);
 
 			NLog.Default.Verbose($"handshake with {peerConnectionn.ScopedAdjustedIp} is now confirmed");
-
-			return Task.CompletedTask;
+			
 		}
 
 		protected virtual TargettedMessageSet<ClientHandshakeConfirm<R>, R> ProcessServerHandshake(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, ServerHandshake<R> serverHandshake, PeerConnection peerConnectionn) {
@@ -290,7 +299,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				if(!this.timeService.WithinAcceptableRange(serverHandshake.localTime, TimeSpan.FromSeconds(9))) {
 					clientConfirm.Message.Status = ServerHandshake<R>.HandshakeStatuses.TimeOutOfSync;
 
-					NLog.Default.Verbose("Sending handshake negative response");
+					NLog.Default.Verbose($"Sending handshake negative response, server time is out of sync with a delta of {DateTimeEx.CurrentTime - serverHandshake.localTime.ToUniversalTime()}.");
 					this.SendFinalMessage(peerConnectionn, clientConfirm);
 					
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.TimeOutOfSync);

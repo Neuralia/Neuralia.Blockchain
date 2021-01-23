@@ -39,6 +39,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		public const string LOGGING_BATCHER_KEY = "Logging";
 		
 		public void Error(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
+			if(string.IsNullOrWhiteSpace(message)) {
+				return;
+			}
 			if(!this.IsRunning) {
 				NLog.GetLogger(loggertype).Error(message);
 
@@ -51,6 +54,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		}
 
 		public void Error(Exception ex, string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
+			if(string.IsNullOrWhiteSpace(message) && ex == null) {
+				return;
+			}
 			if(!this.IsRunning) {
 				NLog.GetLogger(loggertype).Error(ex, message);
 
@@ -60,11 +66,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			entry.LogEntryType = LogEntry.LogTypes.Error;
 			entry.Message = message;
 			entry.Exception = ex;
-			entry.Loggertype = loggertype;
+			entry.LoggerType = loggertype;
 			this.Entries.Add(entry);
 		}
 		
 		public void Information(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
+			if(string.IsNullOrWhiteSpace(message)) {
+				return;
+			}
 			if(!this.IsRunning) {
 				NLog.GetLogger(loggertype).Information(message);
 
@@ -74,11 +83,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			var entry = this.GetEntry();
 			entry.LogEntryType = LogEntry.LogTypes.Information;
 			entry.Message = message;
-			entry.Loggertype = loggertype;
+			entry.LoggerType = loggertype;
 			this.Entries.Add(entry);
 		}
 		
 		public void Warning(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
+			if(string.IsNullOrWhiteSpace(message)) {
+				return;
+			}
 			if(!this.IsRunning) {
 				NLog.GetLogger(loggertype).Warning(message);
 
@@ -87,11 +99,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			var entry = this.GetEntry();
 			entry.LogEntryType = LogEntry.LogTypes.Warning;
 			entry.Message = message;
-			entry.Loggertype = loggertype;
+			entry.LoggerType = loggertype;
 			this.Entries.Add(entry);
 		}
 		
 		public void Verbose(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
+			if(string.IsNullOrWhiteSpace(message)) {
+				return;
+			}
 			if(!this.IsRunning) {
 				NLog.GetLogger(loggertype).Verbose(message);
 
@@ -100,11 +115,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			var entry = this.GetEntry();
 			entry.LogEntryType = LogEntry.LogTypes.Verbose;
 			entry.Message = message;
-			entry.Loggertype = loggertype;
+			entry.LoggerType = loggertype;
 			this.Entries.Add(entry);
 		}
 		
 		public void Verbose(Exception ex, string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
+			if(string.IsNullOrWhiteSpace(message) && ex == null) {
+				return;
+			}
 			if(!this.IsRunning) {
 				NLog.GetLogger(loggertype).Verbose(message);
 
@@ -113,7 +131,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			var entry = this.GetEntry();
 			entry.LogEntryType = LogEntry.LogTypes.Verbose;
 			entry.Message = message;
-			entry.Loggertype = loggertype;
+			entry.LoggerType = loggertype;
 			entry.Exception = ex;
 			this.Entries.Add(entry);
 		}
@@ -127,7 +145,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			public LogTypes LogEntryType { get; set; }
 			public string Message { get; set; }
 			public Exception Exception { get; set; }
-			public NLog.LoggerTypes Loggertype { get; set; }
+			public NLog.LoggerTypes LoggerType { get; set; }
+			public override bool IsValid => !string.IsNullOrWhiteSpace(this.Message);
 		}
 
 		public override string Key => LOGGING_BATCHER_KEY;
@@ -141,7 +160,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			
 			string message = $"[Async: {entry.Timestamp}] - {entry.Message}";
 
-			var logger = NLog.GetLogger(entry.Loggertype);
+			var logger = NLog.GetLogger(entry.LoggerType);
 			if(entry.LogEntryType == LogEntry.LogTypes.Error) {
 				if(entry.Exception == null) {
 					logger.Error(message);

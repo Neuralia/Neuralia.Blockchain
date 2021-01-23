@@ -61,9 +61,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public const string TAG = "[" + nameof(IPCrawler) + "]";
 		private readonly int averagePeerCount;
-		private readonly int maxPeerCount;
-		private readonly int maxMobilePeerCount;
-		private readonly int maxNonConnectableNodes;
+
 		private readonly double hubIPsRequestPeriod;
 		private readonly double peerIPsRequestPeriod;
 		private readonly double peerReconnectionPeriod;
@@ -71,24 +69,89 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		
 		private DateTime lastHubIpsRequested;
 		private DateTime lastHubIpsReceived;
-		private readonly ConcurrentDictionary<NodeAddressInfo, ConnectionMetrics> connections = new ConcurrentDictionary<NodeAddressInfo, ConnectionMetrics>();
-		private readonly ConcurrentDictionary<NodeAddressInfo, ConnectionMetrics> mobileConnections = new ConcurrentDictionary<NodeAddressInfo, ConnectionMetrics>();
-		private readonly FixedQueue<int> peerCounts = new FixedQueue<int>(10);
+		private readonly ConnectionsDict connections = new();
+		private readonly ConnectionsDict nonConnectableConnections = new();
+		private readonly ConnectionsDict mobileConnections = new ();
+		private readonly ConnectionsDict localConnections = new ();
+
+		
 		
 		private readonly object countsLock = new object();
-		private int nConnected = 0;
-		private int nNonConnectable = 0;
-		private int nMobileConnected = 0;
 		
-		private readonly List<NodeAddressInfo> dynamicBlacklist = new List<NodeAddressInfo>();
-		private readonly List<NodeAddressInfo> filteredNodes = new List<NodeAddressInfo>();
+		private readonly List<NodeAddressInfo> dynamicBlacklist = new ();
+		private readonly List<NodeAddressInfo> filteredNodes = new ();
+
+
+		
+		public IPCrawler(int averagePeerCount, int maxPeerCount, int maxMobilePeerCount, int maxNonConnectablePeerCount = -1, List<NodeAddressInfo> localNodes = null
+			, double hubIPsRequestPeriod = 1800.0, double peerIPsRequestPeriod = 600.0
+			, double peerReconnectionPeriod = 60.0, double dynamicBlacklistPeriod = 24 * 60 * 60) {
+			
+			this.connections.maxConnected = maxPeerCount;
+			this.averagePeerCount = averagePeerCount;
+			this.mobileConnections.maxConnected = maxMobilePeerCount;
+			this.nonConnectableConnections.maxConnected = maxNonConnectablePeerCount < 0 ? maxPeerCount : maxNonConnectablePeerCount;
+
+			if (localNodes != null)
+				foreach (var node in localNodes)
+				{
+					if (!this.localConnections.store.TryAdd(node, new ConnectionMetrics()))
+						throw new ApplicationException($"Fatal: could not add {node} to local connections");
+				}
+			this.lastHubIpsReceived = this.lastHubIpsRequested = DateTimeEx.MinValue;
+			this.peerIPsRequestPeriod = peerIPsRequestPeriod;
+			this.hubIPsRequestPeriod = hubIPsRequestPeriod;
+			this.peerReconnectionPeriod = peerReconnectionPeriod;
+			this.dynamicBlacklistPeriod = dynamicBlacklistPeriod;
+		}
+
+		private class ConnectionsDict
+		{
+			public readonly ConcurrentDictionary<NodeAddressInfo, ConnectionMetrics> store = new ();
+
+			public int nConnected = 0;
+			public int maxConnected = 0;
+			public readonly FixedQueue<int> peerCounts = new(10);
+			public bool IsSaturated => nConnected >= maxConnected;
+
+			public void UpdateMetrics(IConnectionsProvider provider)
+			{
+				foreach (var connection in this.store)
+				lock (connection.Value)
+				{
+					connection.Value.UpdateMetric(provider, connection.Key);
+				}
+			}
+
+			public List<KeyValuePair<NodeAddressInfo, ConnectionMetrics>> ConnectedNodes(bool sortByMetric = false)
+			{
+				var nodes = store.Where(pair =>
+				{
+					lock (pair.Value)
+					{
+						return pair.Value.Status == ConnectionMetrics.ConnectionStatus.Connected;
+					}
+				});
+				if (sortByMetric)
+					return nodes.OrderBy(pair =>
+					{
+						lock (pair.Value)
+						{
+							return pair.Value.LastMetric;
+						}
+					}).ToList();
+				
+				return nodes.ToList();
+			}
+
+		}
 
 		public IIPCrawler.PeerStatistics QueryStats(NodeAddressInfo nai, bool onlyConnected = true)
 		{
-			bool TryGetStats(ConcurrentDictionary<NodeAddressInfo, ConnectionMetrics> collection,
+			bool TryGetStats(ConnectionsDict connections,
 				NodeAddressInfo nai2, out IIPCrawler.PeerStatistics stats2)
 			{
-				if (collection.TryGetValue(nai2, out var metric))
+				if (connections.store.TryGetValue(nai2, out var metric))
 				{
 					lock (metric)
 					{
@@ -137,49 +200,71 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				switch (acceptanceType)
 				{
 					case AppSettingsBase.WhitelistedNode.AcceptanceTypes.Always:
+						NLog.IPCrawler.Verbose($"CanAcceptNewConnection() asked for a whitelisted node ({node}), accepting...");
 						return true;
 					case AppSettingsBase.WhitelistedNode.AcceptanceTypes.WithRemainingSlots:
-						NLog.IPCrawler.Information($"{TAG} whitelisted node's acceptanceType is '{AppSettingsBase.WhitelistedNode.AcceptanceTypes.WithRemainingSlots}' so we accept it only if a slot remains.");
+						NLog.IPCrawler.Information($"{TAG} whitelisted node's acceptanceType is '{AppSettingsBase.WhitelistedNode.AcceptanceTypes.WithRemainingSlots}', no special treatment.");
 						break;
 					default:
-						NLog.IPCrawler.Error($"{TAG} Undefined whitelisted node's acceptanceType: '{acceptanceType}', refusing.");
+						NLog.IPCrawler.Error($"{TAG} Undefined whitelisted node's acceptanceType: '{acceptanceType}', no special treatment.");
 						break;
 				}
 			}
 
+			if (this.localConnections.store.TryGetValue(node, out var metrics))
+			{
+				if(metrics.Status == ConnectionMetrics.ConnectionStatus.Connected
+					|| metrics.Status == ConnectionMetrics.ConnectionStatus.Pending)
+					NLog.IPCrawler.Warning($"CanAcceptNewConnection() asked for a local node ({node}) with status {metrics.Status}, accepting anyway");
+				
+				NLog.IPCrawler.Verbose($"CanAcceptNewConnection() asked for a local node ({node}) with status {metrics.Status}, accepting...");
+				
+				return true;
+			}
+
 			lock (this.countsLock)
 			{
-				bool mobileOk = this.nMobileConnected < this.maxMobilePeerCount;
-				bool fullNodesOk = this.nConnected < this.maxPeerCount;
+				bool mobileOk = !this.mobileConnections.IsSaturated;
+				bool fullNodesOk = !this.connections.IsSaturated;
+				bool nonConnectableOk = !this.nonConnectableConnections.IsSaturated;
+				
+
 				if (node.PeerInfo.PeerType == Enums.PeerTypes.Mobile)
+				{
+					if(!mobileOk)
+						NLog.IPCrawler.Verbose($"CanAcceptNewConnection: mobile connections saturated ({this.mobileConnections.maxConnected}), refusing {node}.");
 					return mobileOk;
+				}
+
+				if (node.PeerInfo.PeerType == Enums.PeerTypes.FullNode && !node.IsConnectable)
+				{
+					if(!nonConnectableOk)
+						NLog.IPCrawler.Verbose($"CanAcceptNewConnection: non-connectable connections saturated ({this.nonConnectableConnections.maxConnected}), refusing {node}.");
+					return nonConnectableOk;
+				}
+
 				if (node.PeerInfo.PeerType == Enums.PeerTypes.Unknown)
-					return mobileOk || fullNodesOk;
+				{
+					if(!(mobileOk || fullNodesOk || nonConnectableOk))
+						NLog.IPCrawler.Verbose($"CanAcceptNewConnection: all connection types saturated (c:{this.connections.maxConnected}, n-c: {this.nonConnectableConnections.maxConnected}, m: {this.mobileConnections.maxConnected}), refusing {node}.");
+					
+					return mobileOk || fullNodesOk || nonConnectableOk;
+				}
+				
+				if(!fullNodesOk)
+					NLog.IPCrawler.Verbose($"CanAcceptNewConnection: connectable connections saturated ({this.connections.maxConnected}), refusing {node}.");
+				
 				return fullNodesOk;
 			}
 		}
-		
-		public IPCrawler(int averagePeerCount, int maxPeerCount, int maxMobilePeerCount
-			, double hubIPsRequestPeriod = 1800.0, double peerIPsRequestPeriod = 600.0
-			, double peerReconnectionPeriod = 60.0, double dynamicBlacklistPeriod = 24 * 60 * 60, int maxNonConnectableNodes = -1) {
-			
-			this.maxPeerCount = maxPeerCount;
-			this.averagePeerCount = averagePeerCount;
-			this.maxMobilePeerCount = maxMobilePeerCount;
-
-			this.lastHubIpsReceived = this.lastHubIpsRequested = DateTimeEx.MinValue;
-			this.peerIPsRequestPeriod = peerIPsRequestPeriod;
-			this.hubIPsRequestPeriod = hubIPsRequestPeriod;
-			this.peerReconnectionPeriod = peerReconnectionPeriod;
-			this.dynamicBlacklistPeriod = dynamicBlacklistPeriod;
-			this.maxNonConnectableNodes = maxNonConnectableNodes < 0 ? maxPeerCount : maxNonConnectableNodes;
-		}
-
-		public List<NodeAddressInfo> AllNodesList => this.connections.Keys.ToList();
+		public List<NodeAddressInfo> AllNodesList => this.connections.store.Keys.ToList();
 		
 		private ConnectionMetrics GocConnectionMetrics(NodeAddressInfo node)
 		{
-			var store = node.PeerInfo.PeerType == Enums.PeerTypes.Mobile ? this.mobileConnections : this.connections;
+			if (this.localConnections.store.TryGetValue(node, out var connectionMetric))
+				return connectionMetric;
+			
+			var store = node.PeerInfo.PeerType == Enums.PeerTypes.Mobile ? this.mobileConnections.store : (node.IsConnectable ? this.connections.store : this.nonConnectableConnections.store);
 
 			if(!store.TryGetValue(node, out var connectionMetrics)) {
 				connectionMetrics = store[node] = new ConnectionMetrics();
@@ -213,21 +298,27 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			// to make certain we are always notified of new connections/disconnections
 			// Please note that this is the only method that uses PeerConnection type, and this method should be removed
 
+			List<PeerConnection> connectedLocal =
+				connected.Where(c => this.localConnections.store.ContainsKey(c.NodeAddressInfo)).ToList();
+			
 			List<PeerConnection> connectedMobile =
-				connected.Where(c => c.NodeAddressInfo.PeerInfo.PeerType == Enums.PeerTypes.Mobile).ToList();
+				connected.Where(c => !this.localConnections.store.ContainsKey(c.NodeAddressInfo) && c.NodeAddressInfo.PeerInfo.PeerType == Enums.PeerTypes.Mobile).ToList();
 			
 			List<PeerConnection> connectedOther =
-				connected.Where(c => c.NodeAddressInfo.PeerInfo.PeerType != Enums.PeerTypes.Mobile).ToList();	
+				connected.Where(c => !this.localConnections.store.ContainsKey(c.NodeAddressInfo) && c.NodeAddressInfo.PeerInfo.PeerType != Enums.PeerTypes.Mobile && c.NodeAddressInfo.IsConnectable).ToList();	
+			
+			List<PeerConnection> connectedNonConnectable =
+				connected.Where(c => !this.localConnections.store.ContainsKey(c.NodeAddressInfo) && c.NodeAddressInfo.PeerInfo.PeerType != Enums.PeerTypes.Mobile && !c.NodeAddressInfo.IsConnectable).ToList();
 				
 			int correctionsMade = 0;
 
-			void MissingLogins(IReadOnlyDictionary<NodeAddressInfo, ConnectionMetrics> store, IEnumerable<PeerConnection> connections)
+			void MissingLogins(ConnectionsDict dict, IEnumerable<PeerConnection> connections)
 			{
 				foreach (var node in connections)
 				{
 					bool missing = false;
 
-					if (store.TryGetValue(node.NodeAddressInfo, out var metrics))
+					if (dict.store.TryGetValue(node.NodeAddressInfo, out var metrics))
 					{
 						lock (metrics)
 						{
@@ -261,15 +352,17 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 			}
 
+			MissingLogins(this.localConnections, connectedLocal);
 			MissingLogins(this.connections, connectedOther);
 			MissingLogins(this.mobileConnections, connectedMobile);
+			MissingLogins(this.nonConnectableConnections, connectedNonConnectable);
 			
 
 
-			void MissingLogouts(IReadOnlyDictionary<NodeAddressInfo, ConnectionMetrics> store, IEnumerable<PeerConnection> connections)
+			void MissingLogouts(ConnectionsDict store, IEnumerable<PeerConnection> connections)
 			{
 				
-				var toDisconnect = store.Where(pair =>
+				var toDisconnect = store.store.Where(pair =>
 				{
 					lock (pair.Value)
 					{
@@ -289,21 +382,37 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 			}
 			
+			MissingLogouts(this.localConnections, connectedLocal);
 			MissingLogouts(this.connections, connectedOther);
 			MissingLogouts(this.mobileConnections, connectedMobile);
+			MissingLogouts(this.nonConnectableConnections, connectedNonConnectable);
 
 			return correctionsMade;
 
 		}
 		public void CombineIPs(List<NodeAddressInfo> nodes)
 		{
-			List<NodeAddressInfo> newIPs = nodes.Where(node => !this.connections.ContainsKey(node)).ToList();
+			
+			List<NodeAddressInfo> newIPs = nodes.Where(node =>
+			{
+				if (this.localConnections.store.ContainsKey(node))
+				{
+					// One might think that we (or some other peer) probably sent it in a PeerList request, but in fact,
+					// every ClientHandshakeWorkflow ends by calling AddValidConnection(node), which, in turn, will call
+					// AddAvailablePeerNode(node) which will end up calling CombineIPs 
+					return false;
+				}
+
+				return node.PeerInfo.PeerType != Enums.PeerTypes.Mobile
+				       && node.IsConnectable
+				       && !this.connections.store.ContainsKey(node);
+			}).ToList();
 			
 			foreach (NodeAddressInfo newIP in newIPs)
 			{
 				NLog.IPCrawler.Verbose($"{TAG} new node detected: {newIP}, registering...");
 				ConnectionMetrics metric = new ConnectionMetrics();
-				if(!this.connections.TryAdd(newIP, metric))
+				if(!this.connections.store.TryAdd(newIP, metric))
 					throw new ApplicationException($"{TAG} could not add metric for node {newIP}, this is fatal");
 			}
 		}
@@ -313,7 +422,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			List<NodeAddressInfo> unfilter = this.filteredNodes.Where(node => !nodes.Contains(node)).ToList();
 			
 			foreach(NodeAddressInfo node in unfilter) {
-				if (this.connections.TryGetValue(node, out var connectionMetrics))
+				if (this.connections.store.TryGetValue(node, out var connectionMetrics))
 				{
 					if (connectionMetrics.Status == ConnectionMetrics.ConnectionStatus.Filtered)
 					{
@@ -326,7 +435,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			foreach (var node in nodes)
 			{
-				if (this.connections.TryGetValue(node, out var metric))
+				if (this.connections.store.TryGetValue(node, out var metric))
 				{
 					switch (metric.Status)
 					{
@@ -338,7 +447,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							metric.FilterOnNextEvent = true;
 							break;
 						case ConnectionMetrics.ConnectionStatus.DynamicBlacklist:
-							NLog.IPCrawler.Error($"{TAG} Filtering requested on a dynamic blacklist ndoe, this is illegal, updating status to Filtered.");
+							NLog.IPCrawler.Error($"{TAG} Filtering requested on a dynamic blacklist node, this is illegal, updating status to Filtered.");
 							metric.Status = ConnectionMetrics.ConnectionStatus.Filtered;
 							break;
 						case ConnectionMetrics.ConnectionStatus.NotConnected:
@@ -357,7 +466,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						Status = ConnectionMetrics.ConnectionStatus.Filtered,
 					};
 
-					if(!this.connections.TryAdd(node, metric))
+					if(!this.connections.store.TryAdd(node, metric))
 						throw new ApplicationException($"{TAG} could not add metric for node {node}, this is fatal");
 				}
 				
@@ -372,7 +481,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		
 		public void DisconnectAndBlacklist(NodeAddressInfo node, IConnectionsProvider provider, DateTime expiry)
 		{
-			if (this.connections.TryGetValue(node, out var metric))
+			if (this.connections.store.TryGetValue(node, out var metric))
 			{
 				lock (metric)
 				{
@@ -406,21 +515,21 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				void UpdateCounter(int delta)
 				{
-					if (node.PeerInfo.PeerType == Enums.PeerTypes.Mobile)
-						this.nMobileConnected += delta;
+					if (this.localConnections.store.ContainsKey(node))
+						this.localConnections.nConnected += delta;
+					else if (node.PeerInfo.PeerType == Enums.PeerTypes.Mobile)
+						this.mobileConnections.nConnected += delta;
+					else if(node.IsConnectable)
+						this.connections.nConnected += delta;
 					else
-					{
-						this.nConnected += delta;
-						if (!node.IsConnectable) this.nNonConnectable += delta;
-					}
-
-
+						this.nonConnectableConnections.nConnected += delta;
 				}
 
 				if (metric.Status != ConnectionMetrics.ConnectionStatus.Connected &&
 				    newStatus == ConnectionMetrics.ConnectionStatus.Connected)
 					UpdateCounter(+1); // Any -> Connected
-				else if (metric.Status == ConnectionMetrics.ConnectionStatus.Connected)
+				else if (metric.Status == ConnectionMetrics.ConnectionStatus.Connected &&
+				         newStatus != ConnectionMetrics.ConnectionStatus.Connected)
 					UpdateCounter(-1); // Connected -> Any
 			}
 
@@ -441,7 +550,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public void HandleLogin(NodeAddressInfo node, DateTime timestamp, double latency)
 		{
 			ConnectionMetrics metric = this.GocConnectionMetrics(node);
-
+			NLog.IPCrawler.Verbose($"{nameof(HandleLogin)}  with {node}, status was {metric.Status}.");
 			lock (metric)
 			{
 				if (metric.Status == ConnectionMetrics.ConnectionStatus.Filtered)
@@ -461,6 +570,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public void HandleLogout(NodeAddressInfo node, DateTime timestamp) {
 			ConnectionMetrics metric = this.GocConnectionMetrics(node);
+			NLog.IPCrawler.Verbose($"{nameof(HandleLogout)}  with {node}, status was {metric.Status}.");
 			lock (metric)
 			{
 				metric.AddEvent(new ConnectionEvent(ConnectionEvent.Type.Logout, timestamp, 0));
@@ -471,7 +581,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public void HandleTimeout(NodeAddressInfo node, DateTime timestamp) {
 			ConnectionMetrics metric = this.GocConnectionMetrics(node);
-
+			NLog.IPCrawler.Verbose($"{nameof(HandleTimeout)} with {node}, status was {metric.Status}");
 			lock (metric)
 			{
 				metric.AddEvent(new ConnectionEvent(ConnectionEvent.Type.Timeout, timestamp, 0));
@@ -525,7 +635,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public double SumOfConnectedPeerMetrics(IConnectionsProvider provider)
 		{
-			var connectedNodes = ConnectedNodes(this.connections).Where(pair => pair.Key.IsConnectable);
+			var connectedNodes = this.connections.ConnectedNodes();
 
 			double sum = 0.0;
 
@@ -541,7 +651,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 		public double SumOfConnectedPeerLatencies()
 		{
-			var connectedNodes = ConnectedNodes(this.connections).Where(pair => pair.Key.IsConnectable);
+			var connectedNodes = this.connections.ConnectedNodes();
 
 			double sum = 0.0;
 
@@ -555,16 +665,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			return sum;
 		}
-		private static List<KeyValuePair<NodeAddressInfo, ConnectionMetrics>> ConnectedNodes(ConcurrentDictionary<NodeAddressInfo, ConnectionMetrics> store)
-		{
-			return store.Where(pair =>
-			{
-				lock (pair.Value)
-				{
-					return pair.Value.Status == ConnectionMetrics.ConnectionStatus.Connected;
-				}
-			}).ToList();
-		}
+
 		
 		public void Crawl(IConnectionsProvider provider, DateTime now) {
 
@@ -580,37 +681,53 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				lastHubIpsRequested = now;
 			}
 
-			foreach (var connection in this.connections)
+			foreach (var (node, metric) in localConnections.store.Where(n => 
+				n.Value.Status != ConnectionMetrics.ConnectionStatus.Connected 
+			    && n.Value.Status != ConnectionMetrics.ConnectionStatus.Pending ))
 			{
-				lock (connection.Value)
-				{
-					connection.Value.UpdateMetric(provider, connection.Key);
-				}
+				NLog.IPCrawler.Information($"[LocalNodes] request connection to {node}, current status is {metric.Status}.");
+				// actively try connecting local nodes
+				provider.RequestConnect(node);
 			}
 			
-			var connectedNodes = ConnectedNodes(connections);
-			var connectedConnectableNodes = connectedNodes.Where(pair => pair.Key.IsConnectable).ToList();
-			var connectedNonConnectableNodes = connectedNodes.Where(pair => !pair.Key.IsConnectable).ToList();
-			var connectedMobileNodes = ConnectedNodes(mobileConnections);
+			connections.UpdateMetrics(provider);
+			mobileConnections.UpdateMetrics(provider);
+			nonConnectableConnections.UpdateMetrics(provider);
 			
+
+			var connectedConnectableNodes = connections.ConnectedNodes(true);
+			var connectedNonConnectableNodes = nonConnectableConnections.ConnectedNodes(true);
+			var connectedMobileNodes = mobileConnections.ConnectedNodes(true);
+
+
+			var connectedNodes = connectedConnectableNodes.Concat(connectedNonConnectableNodes);
 			
 			
 			int nConnectable = connectedConnectableNodes.Count;
 			int nNonConnectable = connectedNonConnectableNodes.Count;
 			
 			//remove extra connections
-			
+
+			void RemoveIfNotWhitelisted(NodeAddressInfo node)
+			{
+				if (!IPMarshall.Instance.IsWhiteList(node.Address, out var acceptanceType)
+				    || acceptanceType == AppSettingsBase.WhitelistedNode.AcceptanceTypes.Always)
+				{
+					provider.RequestDisconnect(node);
+				}
+				
+			}
 			//connectable
-			for(int i = 0; i < Math.Min(nConnectable - maxPeerCount, nConnectable); i++)
-				provider.RequestDisconnect(connectedConnectableNodes[i].Key);
+			for (int i = 0; i < Math.Min(nConnectable - this.connections.maxConnected, nConnectable); i++)
+				RemoveIfNotWhitelisted(connectedConnectableNodes[i].Key);
 			
 			//non-connectable
-			for(int i = 0; i < Math.Min(nNonConnectable - maxNonConnectableNodes, nNonConnectable); i++)
-				provider.RequestDisconnect(connectedNonConnectableNodes[i].Key);
+			for(int i = 0; i < Math.Min(nNonConnectable - this.nonConnectableConnections.nConnected, nNonConnectable); i++)
+				RemoveIfNotWhitelisted(connectedNonConnectableNodes[i].Key);
 			
 			//mobile
-			for(int i = 0; i < Math.Min(connectedMobileNodes.Count - maxMobilePeerCount, connectedMobileNodes.Count); i++)
-				provider.RequestDisconnect(connectedMobileNodes[i].Key);
+			for(int i = 0; i < Math.Min(connectedMobileNodes.Count - this.mobileConnections.nConnected, connectedMobileNodes.Count); i++)
+				RemoveIfNotWhitelisted(connectedMobileNodes[i].Key);
 			
 			// request peers, print stats
 			foreach((NodeAddressInfo node, ConnectionMetrics connectionMetric) in connectedNodes) {
@@ -632,13 +749,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 
-			List<KeyValuePair<NodeAddressInfo, ConnectionMetrics>> connectionCandidates = connections.Where(pair =>
+			List<KeyValuePair<NodeAddressInfo, ConnectionMetrics>> connectionCandidates = connections.store.Where(pair =>
 			{
 				lock (pair.Value)
 				{
 					return (pair.Value.Status != ConnectionMetrics.ConnectionStatus.Connected) &&
 					       (pair.Value.Status != ConnectionMetrics.ConnectionStatus.Pending) &&
-					       pair.Key.IsConnectable &&
 					       (pair.Value.NextConnectionAttempt < now) &&
 					       !IPMarshall.Instance.IsQuarantined(pair.Key.Address);
 				}
@@ -646,7 +762,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			{
 				lock (pair.Value)
 				{
-					return pair.Value.Metric(provider, pair.Key);
+					return pair.Value.LastMetric; //we just updated all metrics a few lines above
 				}
 			}).ToList();
 
@@ -654,9 +770,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			double avg = 0;
 			lock (this.countsLock)
 			{
-				peerCounts.Enqueue(nConnectable);
-				avg = Convert.ToDouble(peerCounts.Sum(x => x)) /
-				             peerCounts.Count; // average last n nConnected counts
+				connections.peerCounts.Enqueue(nConnectable);
+				avg = Convert.ToDouble(connections.peerCounts.Sum(x => x)) /
+				      connections.peerCounts.Count; // average last n connections.nConnected counts
+				
+				nonConnectableConnections.peerCounts.Enqueue(nNonConnectable);
+				mobileConnections.peerCounts.Enqueue(connectedMobileNodes.Count);
 			}
 
 			for (int i = 0; i < Math.Min(averagePeerCount - Convert.ToInt32(avg), connectionCandidates.Count); i++)
@@ -677,7 +796,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				NLog.IPCrawler.Information($"{TAG} {nConnectable} connectable peer(s) ({avg:0.00} in avg)" 
 				+ $" with average latency {SumOfConnectedPeerLatencies()/nConnectable:0.000} s,"
 				+ $" we have {connectionCandidates.Count} potential other connectable peers ready"
-				+ $" to connect to and {connections.Count - nConnected - connectionCandidates.Count} peers in timeout.");
+				+ $" to connect to and {connections.store.Count - connections.nConnected - connectionCandidates.Count} peers in timeout.");
 			}
 			
 			NLog.IPCrawler.Information($"{TAG} we have {connectedMobileNodes.Count} mobile and {nNonConnectable} non-connectable peers connected");
@@ -945,7 +1064,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.UpdateMetric(provider, key);
 			return this.metric;
 		}
-		
 		private double StatsMetric() {
 			return (  (1e-3  * this.stats[BYTES_OUT]) 
 			        + (1e-3  * this.stats[BYTES_IN]) 

@@ -153,14 +153,19 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <param name="limit">the max amount of peers to return, in case we have too much</param>
 		/// <returns></returns>
-		NodeAddressInfoList GetPeerNodeList(NodeInfo nodeInfo, List<BlockchainType> blockchainTypes, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic, List<NodeAddressInfo> excludeAddresses, bool onlyConnectable = false, int? limit = null);
+		NodeAddressInfoList GetPeerNodeList(NodeInfo nodeInfo
+			, List<BlockchainType> blockchainTypes
+			, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic
+			, List<NodeAddressInfo> excludeAddresses
+			, bool onlyConnectable = false
+			, int? limit = null);
 
 		List<NodeAddressInfo> GetAvailablePeerNodes(List<NodeAddressInfo> excludeAddresses, bool onlyShareable, bool excludeConnected, bool onlyConnectable, int? limit = null);
 
 		PeerConnection AddNewIncomingConnection(ITcpConnection tcpConnection);
 		PeerConnection AddNewOutgoingConnection(ITcpConnection tcpConnection);
 		void RemoveConnection(PeerConnection connection);
-		void ConfirmConnection(PeerConnection connection);
+		Task ConfirmConnection(PeerConnection connection);
 
 		void AddChainSettings(NodeAddressInfo nodeAddressInfo, Dictionary<BlockchainType, ChainSettings> chainSettings);
 
@@ -172,7 +177,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		bool IsNeuraliumHub(PeerConnection peerConnection);
 		bool IsNeuraliumHub(NodeAddressInfo nodes);
-		void FullyConfirmConnection(PeerConnection connection);
+		Task FullyConfirmConnection(PeerConnection connection);
 		void LoadStaticStartNodes();
 
 		void SetConnectionUuidExistsCheck(ITcpConnection tcpConnection, NodeAddressInfo nodeAddressInfo);
@@ -796,12 +801,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		/// <param name="limit">the max amount of peers to return, in case we have too much</param>
 		/// <returns></returns>
-		public NodeAddressInfoList GetPeerNodeList(NodeInfo nodeInfo, List<BlockchainType> blockchainTypes, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic, List<NodeAddressInfo> excludeAddresses, bool onlyConnectable = false, int? limit = null) {
+		public NodeAddressInfoList GetPeerNodeList(NodeInfo nodeInfo
+			, List<BlockchainType> blockchainTypes
+			, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic
+			, List<NodeAddressInfo> excludeAddresses
+			, bool onlyConnectable = false
+			, int? limit = null) {
 
 			List<NodeAddressInfo> nodes = null;
 
 			lock(this.locker) {
-				nodes = this.GetAvailablePeerNodes(excludeAddresses, true, false, onlyConnectable);
+				nodes = this.GetAvailablePeerNodes(excludeAddresses, true, false, onlyConnectable)
+					.Where(n => GlobalSettings.ApplicationSettings.LocalNodes.All(ln => ln.Ip != n.Ip)).ToList();
 			}
 
 			return NodeSelectionHeuristicTools.SelectNodes(nodeInfo, nodes, blockchainTypes, heuristic, excludeAddresses, limit);
@@ -832,7 +843,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				if(connection.ClientUuid == Guid.Empty) {
 					NLog.Connections.Verbose("Removing connection for as of yet unidentified client");
 				} else {
-					NLog.Connections.Verbose($"Removing connection for client {connection.ClientUuid}");
+					NLog.Connections.Verbose($"Closing connection for client {connection.ClientUuid}");
 				}
 
 				try {
@@ -884,7 +895,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			return null;
 		}
 
-		public void ConfirmConnection(PeerConnection connection) {
+		public Task ConfirmConnection(PeerConnection connection) {
 			lock(this.locker) {
 				if(connection.ClientUuid == Guid.Empty) {
 					throw new ApplicationException("Peer uuid cannot be empty");
@@ -902,6 +913,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				if(this.AllConnections.ContainsKey(connection.ClientUuid)) {
 					// clear the old connection
+					NLog.Connections.Verbose($"ConfirmConnection {connection.ClientUuid} already in AllConnections, removing....");
 					this.RemoveConnection(this.AllConnections[connection.ClientUuid]);
 				}
 
@@ -921,7 +933,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						throw new ApplicationException("We cannot connect to ourselves. connection refused.");
 					}
 				}
-
+				if(this.Connections.ContainsKey(connection.ClientUuid))
+					NLog.Connections.Verbose($"ConfirmConnection {connection.ClientUuid} already in Connections, calling AddSafe anyway....");
+				
 				this.Connections.AddSafe(connection.ClientUuid, connection);
 
 				connection.ConnectionState = PeerConnection.ConnectionStates.DeferredConfirmed;
@@ -942,16 +956,25 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				//we got new peer nodes. lets do something with his/her peers. we collect them
 				this.NewPeersReceived(connection);
 			}
+			
+			return Task.CompletedTask;
 		}
 
-		public void FullyConfirmConnection(PeerConnection connection) {
+		public Task FullyConfirmConnection(PeerConnection connection) {
+			
+			if(connection.direction == PeerConnection.Directions.Outgoing) {
+				// out going, we give a little bit of time for the other side to confirm the connection
+				Thread.Sleep(1000);
+			}
+			
 			connection.ConnectionState = PeerConnection.ConnectionStates.FullyConfirmed;
 
 			// alert the world we have a new peer!
 			this.TriggerPeerConnectionsCountUpdated().WaitAndUnwrapException();
 			if(connection.direction == PeerConnection.Directions.Incoming)
 				this.TriggerIncomingPeerConnectionConfirmed(connection).WaitAndUnwrapException();
-
+			
+			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -1425,6 +1448,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// <param name="nodeAddressInfo"></param>
 		public void PromoteIgnoredPeerNode(NodeAddressInfo nodeAddressInfo) {
 			if(this.ignorePeerNodes.ContainsKey(nodeAddressInfo.ScopedIp)) {
+				NLog.Connections.Verbose($"PromoteIgnoredPeerNode: {nodeAddressInfo} was ignored, promoting...");
 				IgnoreNodeActivityInfo inai = this.ignorePeerNodes.RemoveSafe(nodeAddressInfo.ScopedIp);
 				this.AddAvailablePeerNode(new NodeActivityInfo(inai), false);
 				this.promotedIgnoredNodes.Add(nodeAddressInfo.ScopedIp);
@@ -1434,6 +1458,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public void RemoveConnectingConnection(ITcpConnection tcpConnection) {
 			lock(this.locker) {
 				if(this.ConnectingConnections.ContainsKey(tcpConnection.InternalUuid)) {
+					NLog.Connections.Verbose($"ConfirmConnection {tcpConnection.InternalUuid} already in ConnectingConnections, removing....");
 					this.ConnectingConnections.RemoveSafe(tcpConnection.InternalUuid);
 				}
 			}

@@ -132,8 +132,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			long startBlockHeight = lowestAccountBlockSyncHeight.Value;
 
 			long currentBlockHeight = startBlockHeight;
+			
+			long? previousSyncedBlockHeightEntry = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountPreviousBlockSyncHeight(lockContext).ConfigureAwait(false);
 
-			List<IWalletAccount> syncableAccounts = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(currentBlockHeight, currentBlockHeight, lockContext).ConfigureAwait(false);
+			long previousSyncedBlockHeight = 0;
+			if(!previousSyncedBlockHeightEntry.HasValue || previousSyncedBlockHeightEntry.Value == 0) {
+				previousSyncedBlockHeight = currentBlockHeight - 1;
+
+				if(previousSyncedBlockHeight == -1) {
+					// genesis will be at 0
+					previousSyncedBlockHeight = 0;
+				}
+			} else {
+				previousSyncedBlockHeight = previousSyncedBlockHeightEntry.Value;
+			}
+			List<IWalletAccount> syncableAccounts = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(null, currentBlockHeight, lockContext).ConfigureAwait(false);
 
 			if(!syncableAccounts.Any()) {
 				// no syncing possible
@@ -222,10 +235,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			// ensure that captured closures dont lock variables
 			ClosureState closureState = new ClosureState();
-			
+
+			// lets make sure that the currentBlockHeight was fully inserted otherwise we have to retry it to complete the workflow
+			// The latestSyncedBlockId is the same as the currentBlockHeight, so the same value is used for both parameters.
+			if(!await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.AllAccountsHaveSyncStatus(currentBlockHeight, currentBlockHeight, WalletAccountChainState.BlockSyncStatuses.FullySynced, lockContext).ConfigureAwait(false)) {
+				// let's run a resync of the latest just in case
+				currentBlockHeight -= 1;
+			}
+
 			// Get initialized outside the loop once and must stay outside because the sync is different for mobile. It gets updated at every full block sync (which is not every block for mobile, but it is for desktop).
 			closureState.lastFullBlockSynced = currentBlockHeight;
-			
+
 			while (currentBlockHeight < targetBlockHeight) {
 
 				closureState.nextPlanBlockHeight = currentBlockHeight + totalIncrement;

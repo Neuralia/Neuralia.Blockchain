@@ -658,8 +658,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return synthesizedElectionResult;
 		}
 
-		protected Task<List<IWalletAccount>> GetIncompleteAccountList(IWalletProvider walletProvider, long blockSyncHeight, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
-			return walletProvider.GetWalletSyncableAccounts(blockSyncHeight, previousSyncedBlockId, lockContext);
+		protected Task<List<IWalletAccount>> GetIncompleteAccountList(IWalletProvider walletProvider, long blockSyncHeight, long latestSyncedBlockId, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
+			return walletProvider.GetWalletSyncableAccounts(blockSyncHeight, latestSyncedBlockId, lockContext);
 		}
 
 		/// <summary>
@@ -726,12 +726,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     this method will return our local accounts in different forms and combinations
 		/// </summary>
 		/// <returns></returns>
-		protected async Task<AccountCache> GetAccountCache(LockContext lockContext, long? blockSyncHeight = null, long? previousSyncedBlockId = null) {
-			if ((blockSyncHeight.HasValue && !previousSyncedBlockId.HasValue)
-				|| (!blockSyncHeight.HasValue && previousSyncedBlockId.HasValue))
-				throw new ArgumentException($"Both optional parameters ({nameof(blockSyncHeight)} and {nameof(previousSyncedBlockId)}) must have a value if they are used. One cannot be null if the other is not.");
+		protected async Task<AccountCache> GetAccountCache(LockContext lockContext, long? blockSyncHeight = null, long? latestSyncedBlockId = null) {
+			if ((blockSyncHeight.HasValue && !latestSyncedBlockId.HasValue)
+				|| (!blockSyncHeight.HasValue && latestSyncedBlockId.HasValue))
+				throw new ArgumentException($"Both optional parameters ({nameof(blockSyncHeight)} and {nameof(latestSyncedBlockId)}) must have a value if they are used. One cannot be null if the other is not.");
 
-			List<IWalletAccount> accountsList = blockSyncHeight.HasValue && previousSyncedBlockId.HasValue ? await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(blockSyncHeight.Value, previousSyncedBlockId.Value, lockContext).ConfigureAwait(false) : await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccounts(lockContext).ConfigureAwait(false);
+			List<IWalletAccount> accountsList = blockSyncHeight.HasValue && latestSyncedBlockId.HasValue ? await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(blockSyncHeight.Value, latestSyncedBlockId.Value, lockContext).ConfigureAwait(false) : await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetAccounts(lockContext).ConfigureAwait(false);
 
 			return this.PrepareAccountCache(accountsList, lockContext);
 		}
@@ -740,12 +740,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     Set a status flag to all New accounts
 		/// </summary>
 		/// <param name="blockId"></param>
-		/// <param name="previousSyncedBlockId"></param>
+		/// <param name="latestSyncedBlockId"></param>
 		/// <param name="statusFlag"></param>
-		protected async Task<bool> SetNewAccountsFlag(IWalletProvider provider, long blockId, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses statusFlag, LockContext lockContext) {
+		protected async Task<bool> SetNewAccountsFlag(IWalletProvider provider, long blockId, long latestSyncedBlockId, WalletAccountChainState.BlockSyncStatuses statusFlag, LockContext lockContext) {
 			bool changed = false;
 
-			List<IWalletAccount> syncableAccounts = await provider.GetWalletSyncableAccounts(blockId, previousSyncedBlockId, lockContext).ConfigureAwait(false);
+			List<IWalletAccount> syncableAccounts = await provider.GetWalletSyncableAccounts(blockId, latestSyncedBlockId, lockContext).ConfigureAwait(false);
 
 			foreach(IWalletAccount account in syncableAccounts.Where(a => a.Status == Enums.PublicationStatus.New || a.ConfirmationBlockId == 0)) {
 

@@ -21,6 +21,8 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		private Process myProcess;
 
+		public event Action<long> MemoryCheckEvent;
+		
 		/// <summary>
 		/// Ability to override the mechanism by which we check for memory
 		/// </summary>
@@ -135,6 +137,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 				double percent = Math.Round((double) currentMemory / virtualMemory, 6);
 				double percentAdjusted = Math.Round(percent * 100, 4);
 
+				if(this.MemoryCheckEvent != null) {
+					this.MemoryCheckEvent(currentMemory);
+				}
 				NLog.Default.Verbose($"Verifying memory. Current memory used: {FormatBytes(currentMemory)}. Total available memory: {FormatBytes(virtualMemory)}. Using {percentAdjusted}% of the available memory. Circuit breaker will trigger at {appSettingsBase.MemoryLimit*100}% or {FormatBytes((long)(virtualMemory*appSettingsBase.MemoryLimit))}.");
 
 				if(percent > appSettingsBase.MemoryLimit) {

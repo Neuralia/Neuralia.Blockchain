@@ -122,11 +122,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void RegisterValidationServer(List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
 		void UnregisterValidationServer();
 		void AddAppointmentWindow(DateTime appointment, TimeSpan window, int requesterCount);
-		
-		Task<(bool success, CheckAppointmentRequestConfirmedResult result)>      PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext, bool enableBackup = true);
+
+		Task<(bool success, CheckAppointmentRequestConfirmedResult result)> PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext, bool enableBackup = true);
 		Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext, bool enableBackup = true);
-		Task<(bool success, CheckAppointmentContextResult result)>               PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true);
-		Task<(bool success, CheckAppointmentTriggerResult result)>               PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext, bool enableBackup = true);
+		Task<(bool success, CheckAppointmentContextResult2 result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true);
+		Task<(bool success, string triggerKey)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext, bool enableBackup = true);
 		
 		Task<(bool success, CheckAppointmentsResult result)> QueryAvailableAppointments(LockContext lockContext);
 		Task<(bool success, QueryValidatorAppointmentSessionsResult result)> QueryValidatorAppointmentSessions(AccountId miningAccountId, List<DateTime> appointments, List<Guid> hashes, LockContext lockContext);
@@ -787,13 +787,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (sent, null);
 		}
 
-		public async Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true) {
+		public async Task<(bool success, CheckAppointmentContextResult2 result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true) {
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
 			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
 			bool sent = false;
-			CheckAppointmentContextResult result = null;
+			CheckAppointmentContextResult2 result = null;
 			
 			if(useWeb) {
 				try {
@@ -808,7 +808,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						parameters.Add("appointment", appointment.Ticks);
 						
 						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
-						string action = "appointments/check-appointment-context";
+						string action = "appointments/check-appointment-context2";
 
 						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
 
@@ -825,7 +825,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							if(string.IsNullOrWhiteSpace(webResult.Content)) {
 								return (true, null);
 							}
-							return (true, JsonSerializer.Deserialize<CheckAppointmentContextResult>(webResult.Content, serializerSettings));
+							return (true, JsonSerializer.Deserialize<CheckAppointmentContextResult2>(webResult.Content, serializerSettings));
 						}
 
 						throw new ApplicationException("Failed to register message through web");
@@ -854,27 +854,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (sent, null);
 		}
 
-		public async Task<(bool success, CheckAppointmentTriggerResult result)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext, bool enableBackup = true) {
+		public async Task<(bool success, string triggerKey)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext, bool enableBackup = true) {
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
 			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
 			bool sent = false;
-			CheckAppointmentTriggerResult result = null;
+			string triggerKey = null;
 			
 			if(useWeb) {
 				try {
 
 					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
-					(sent, result) = await Repeater.RepeatAsync(async () => {
+					(sent, triggerKey) = await Repeater.RepeatAsync(async () => {
 
 						Dictionary<string, object> parameters = new Dictionary<string, object>();
 
 						parameters.Add("appointment", appointment.Ticks);
 						
 						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
-						string action = "appointments/check-appointment-trigger";
+						string action = "appointments/check-appointment-trigger2";
 
 						IRestResponse webResult = await restUtility.Post(url, action, parameters).ConfigureAwait(false);
 
@@ -885,17 +885,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 								return (true, null);
 							}
 							// ok, all good
-							var serializerSettings = new JsonSerializerOptions();
-							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-							
-							return (true, JsonSerializer.Deserialize<CheckAppointmentTriggerResult>(webResult.Content, serializerSettings));
+							return (true, webResult.Content);
+						}
+						else if(webResult.StatusCode == HttpStatusCode.NoContent) {
+							return (true, null);
 						}
 
 						throw new ApplicationException("Failed to register message through web");
 					}).ConfigureAwait(false);
 
-					if(sent && result != null) {
-						return (sent, result);
+					if(sent && !string.IsNullOrWhiteSpace(triggerKey)) {
+						return (sent, triggerKey);
 					}
 				} catch(Exception ex) {
 					this.CentralCoordinator.Log.Error(ex, "Failed to register message through web");
@@ -950,6 +950,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							var serializerSettings = new JsonSerializerOptions();
 
 							return (true, JsonSerializer.Deserialize<CheckAppointmentsResult>(webResult.Content, serializerSettings));
+						}
+						else if(webResult.StatusCode == HttpStatusCode.NoContent) {
+							return (true, null);
 						}
 
 						throw new ApplicationException("Failed to register message through web");

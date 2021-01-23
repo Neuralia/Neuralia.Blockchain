@@ -109,6 +109,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			
 			account.AccountAppointment.RequesterId = appointmentRequestMessage.RequesterId;
 			account.AccountAppointment.AppointmentStatus = Enums.AppointmentStatus.AppointmentRequested;
+			account.AccountAppointment.Region = this.preferredRegion;
 			account.AccountAppointment.AppointmentRequestTimeStamp = DateTimeEx.CurrentTime;
 			this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.AppointmentMode = account.AccountAppointment.AppointmentStatus;
 		}

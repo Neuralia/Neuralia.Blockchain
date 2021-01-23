@@ -529,6 +529,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			}
 
 			/// <summary>
+			/// in which region did we request the appointment
+			/// </summary>
+			public int Region  { get; set; }
+			
+			/// <summary>
 			///     has this account been published and confirmed? if no, we can not use it yet, the network will reject it as unknown
 			/// </summary>
 			/// <returns></returns>

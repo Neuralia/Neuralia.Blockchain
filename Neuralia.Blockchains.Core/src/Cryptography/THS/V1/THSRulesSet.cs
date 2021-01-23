@@ -64,9 +64,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			
 #if TESTING
 			ServerPresentationDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
-			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromSeconds(30);
+			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromSeconds(5);
 			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(1);
-			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 9;
+			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 3;
 			ServerPresentationDefaultRulesSetDescriptor.MaxRounds = 27;
 			
 			ServerPresentationDefaultRulesSet = new THSRulesSet();
@@ -84,7 +84,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			ServerPresentationDefaultRulesSet.AddPrngSet(Prngs.JSF_256);
 			ServerPresentationDefaultRulesSet.AddPrngSet(Prngs.XOSHIRO_256_SS);
 
-			ServerPresentationDefaultRulesSet.MainBufferDataSize = THSEngine.THSMemorySizes.THS_2_GB;
+			ServerPresentationDefaultRulesSet.MainBufferDataSize = THSEngine.THSMemorySizes.THS_256_MB;
 			ServerPresentationDefaultRulesSet.CryptoIterations = 1;
 			ServerPresentationDefaultRulesSet.CryptoSuccessRate = 3;
 

@@ -86,6 +86,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public class ValidatorState {
 
 			public const int STRIKE_COUNT = 3;
+			public const int FULL_ROUND_STRIKE_COUNT = STRIKE_COUNT*2;
 			[Flags]
 			public enum AppointmentValidationWorkflowSteps : byte {
 				None = 0,
@@ -907,7 +908,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
 
-			(bool success, CheckAppointmentContextResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentContextUpdateCheck(account.AccountAppointment.RequesterId.Value, account.AccountAppointment.AppointmentIndex.Value, appointment, lockContext).ConfigureAwait(false);
+			(bool success, CheckAppointmentContextResult2 result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentContextUpdateCheck(account.AccountAppointment.RequesterId.Value, account.AccountAppointment.AppointmentIndex.Value, appointment, lockContext).ConfigureAwait(false);
 
 			bool retry = true;
 
@@ -918,7 +919,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				if(result != null && result.PuzzleBytes != null && result.PuzzleBytes.Length > 0 && result.SecretPackageBytes != null && result.SecretPackageBytes.Length > 0 && appointmentTime.HasValue && result.Appointment == appointmentTime.Value) {
 					retry = false;
 
-					await this.ProcessAppointmentContext(result.Window, result.EngineVersion, result.POwRuleSet, result.PuzzleBytes, result.SecretPackageBytes, lockContext, a => {
+					await this.ProcessAppointmentContext(result.Window, result.EngineVersion, Convert.FromBase64String(result.POwRuleSet), Convert.FromBase64String(result.PuzzleBytes), Convert.FromBase64String(result.SecretPackageBytes), lockContext, a => {
 
 						a.AccountAppointment.LastAppointmentOperationTimeout = null;
 					}).ConfigureAwait(false);
@@ -1024,20 +1025,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 			}
 
-			(bool success, CheckAppointmentTriggerResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentTriggerUpdateCheck(appointment, lockContext).ConfigureAwait(false);
+			(bool success, string triggerKey) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentTriggerUpdateCheck(appointment, lockContext).ConfigureAwait(false);
 
-			if(success && result != null) {
+			if(success && !string.IsNullOrWhiteSpace(triggerKey)) {
 
-				if(!this.AppointmentDetails.ContainsKey(result.Appointment)) {
-					this.AppointmentDetails.TryAdd(result.Appointment, new AppointmentDataDetails());
+				if(!this.AppointmentDetails.ContainsKey(appointment)) {
+					this.AppointmentDetails.TryAdd(appointment, new AppointmentDataDetails());
 
 					// gotta try to load the context
-					await this.CheckAppointmentContextUpdate(result.Appointment, lockContext).ConfigureAwait(false);
+					await this.CheckAppointmentContextUpdate(appointment, lockContext).ConfigureAwait(false);
 				}
 
-				this.AppointmentDetails[result.Appointment].TriggerKey = SafeArrayHandle.Wrap(result.Key);
+				this.AppointmentDetails[appointment].TriggerKey = SafeArrayHandle.FromBase64(triggerKey);
 
-				return SafeArrayHandle.WrapAndOwn(result.Key);
+				return this.AppointmentDetails[appointment].TriggerKey.Clone();
 			}
 
 			return null;

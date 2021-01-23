@@ -130,7 +130,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public static bool IsReallyConnected(this Socket socket, out TimeSpan latency) {
-			latency = TimeSpan.MaxValue;
+			latency = TimeSpan.Zero;
 			
 			if(!socket.Connected) {
 				return false;

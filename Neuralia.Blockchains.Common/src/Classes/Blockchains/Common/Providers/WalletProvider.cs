@@ -173,9 +173,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<bool> WalletFileExists(LockContext lockContext);
 		Task<bool> WalletFullyCreated(LockContext lockContext);
 		Task<long?> LowestAccountBlockSyncHeight(LockContext lockContext);
+		Task<long?> LowestAccountPreviousBlockSyncHeight(LockContext lockContext);
+		
 		Task<bool?> Synced(LockContext lockContext);
 		Task<bool> WalletContainsAccount(string accountCode, LockContext lockContext);
-		Task<List<IWalletAccount>> GetWalletSyncableAccounts(long blockId, long previousSyncedBlockId, LockContext lockContext);
+		Task<List<IWalletAccount>> GetWalletSyncableAccounts(long? newBlockId, long lastSyncedBlockId, LockContext lockContext);
 		Task<IAccountFileInfo> GetAccountFileInfo(string accountCode, LockContext lockContext);
 		Task<List<IWalletAccount>> GetAccounts(LockContext lockContext);
 		Task<List<IWalletAccount>> GetAllAccounts(LockContext lockContext);
@@ -245,10 +247,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		event Delegates.RequestKeyPassphraseDelegate WalletKeyPassphraseRequest;
 		event Delegates.RequestCopyKeyFileDelegate WalletCopyKeyFileRequest;
 		Task CreateNewEmptyWallet(CorrelationContext correlationContext, bool encryptWallet, string passphrase, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, LockContext lockContext);
-		Task<bool> AllAccountsHaveSyncStatus(SynthesizedBlock block, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext);
-		Task<bool> AllAccountsUpdatedWalletBlock(SynthesizedBlock block, long previousSyncedBlockId, LockContext lockContext);
-		Task UpdateWalletBlock(SynthesizedBlock synthesizedBlock, long previousSyncedBlockId, Func<SynthesizedBlock, LockContext, Task> callback, LockContext lockContext);
-		Task<bool> AllAccountsWalletKeyLogSet(SynthesizedBlock block, long previousSyncedBlockId, LockContext lockContext);
+		Task<bool> AllAccountsHaveSyncStatus(SynthesizedBlock block, long latestSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext);
+		Task<bool> AllAccountsHaveSyncStatus(BlockId blockId, long latestSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext);
+		Task<bool> AllAccountsUpdatedWalletBlock(SynthesizedBlock block, long latestSyncedBlockId, LockContext lockContext);
+		Task UpdateWalletBlock(SynthesizedBlock synthesizedBlock, long latestSyncedBlockId, Func<SynthesizedBlock, LockContext, Task> callback, LockContext lockContext);
+		Task<bool> AllAccountsWalletKeyLogSet(SynthesizedBlock block, long latestSyncedBlockId, LockContext lockContext);
 		Task<bool> SetActiveAccount(string accountCode, LockContext lockContext);
 		Task<bool> CreateNewCompleteWallet(CorrelationContext correlationContext, string accountName, Enums.AccountTypes accountType, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, LockContext lockContext, Action<IWalletAccount> accountCreatedCallback = null);
 		Task<bool> CreateNewCompleteWallet(CorrelationContext correlationContext, Enums.AccountTypes accountType, bool encryptWallet, bool encryptKey, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, LockContext lockContext, Action<IWalletAccount> accountCreatedCallback = null);
@@ -654,6 +657,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			return 0;
 		}
+		
+		public async Task<long?> LowestAccountPreviousBlockSyncHeight(LockContext lockContext) {
+
+			if(!this.WalletFileInfo.IsLoaded) {
+				return null;
+			}
+
+			if(this.WalletFileInfo.Accounts.Any()) {
+				return (await this.WalletFileInfo.Accounts.Values.SelectAsync(async a => (await a.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false)).PreviousBlockSynced).ConfigureAwait(false)).Min();
+			}
+
+			return 0;
+		}
 
 		public async Task<bool?> Synced(LockContext lockContext) {
 
@@ -719,19 +735,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		/// <summary>
-		///     gets the list of accounts that can be synced since they match the provided block id
+		///     Gets the list of accounts that can be synced since they match the provided last synced block id or new block id.
+		///     - If the account LastBlockSynced match the lastSyncedBlockId: the account is fully synced and ready to sync a new block.
+		///     - If the account LastBlockSynced match the newBlockId: 2 cases:
+		///			- The account has already fully synced the newBlockId ==> no need to sync again.
+		///			- The account has not fully synced the newBlockId ==> An error occured at the previous sync, better to sync again.
 		/// </summary>
-		/// <param name="blockId"></param>
+		/// <param name="newBlockId">The blockId currently to be synced, if any.</param>
+		/// <param name="lastSyncedBlockId">The last known blockId that is synced.</param>
 		/// <returns></returns>
-		public async Task<List<IWalletAccount>> GetWalletSyncableAccounts(long blockId, long previousSyncedBlockId, LockContext lockContext) {
+		public async Task<List<IWalletAccount>> GetWalletSyncableAccounts(long? newBlockId, long lastSyncedBlockId, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			List<string> keys = (await this.WalletFileInfo.Accounts.WhereAsync(async a => {
-
-					                  WalletAccountChainState chainState = await a.Value.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
-
-					                  return chainState;
-				                  }, e => (e.LastBlockSynced == previousSyncedBlockId) || (e.LastBlockSynced == blockId && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced)).ConfigureAwait(false)).Select(a => a.Key).ToList();
+			List<string> keys = (await this.WalletFileInfo.Accounts.WhereAsync(a => a.Value.WalletChainStatesInfo.ChainState(lockContext),
+				e => (e.LastBlockSynced == lastSyncedBlockId)
+				|| (newBlockId.HasValue && (e.LastBlockSynced == newBlockId.Value && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced))
+				).ConfigureAwait(false)).Select(a => a.Key).ToList();
 
 			return (await this.GetAccounts(lockContext).ConfigureAwait(false)).Where(a => keys.Contains(a.AccountCode)).ToList();
 
@@ -964,6 +983,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.EnsureWalletIsLoaded();
 
 			WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[accountCode].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+			chainState.PreviousBlockSynced = chainState.LastBlockSynced;
 			chainState.LastBlockSynced = BlockId;
 			chainState.BlockSyncStatus = (int) blockSyncStatus;
 		}
@@ -1035,7 +1055,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				IWalletAccount account = await this.CreateNewStandardAccount(accountName, accountType, encryptKeys, encryptKeysIndividually, correlationContext, walletCreationStepSet, accountCreationStepSet, lockContext, true).ConfigureAwait(false);
 
-				this.CentralCoordinator.Log.Information($"Your new default account Uuid is '{account.AccountCode}'");
+				this.CentralCoordinator.Log.Information($"Your new default account code is '{account.AccountCode}'");
 
 				if(accountCreatedCallback != null) {
 					accountCreatedCallback(account);
@@ -1187,7 +1207,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					this.WalletFileInfo.Accounts.Add(account.AccountCode, await CreateNewAccountFileInfo(account, lockContext).ConfigureAwait(false));
 				}
 
+				this.CentralCoordinator.Log.Warning("Wallet successfully loaded");
+
+				//TODO: oit is unclear if this event should happen before, or after WalletIsLoaded event. to check
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingEndedEvent(), correlationContext).ConfigureAwait(false);
+
+				if(this.WalletIsLoaded != null) {
+					await this.WalletIsLoaded().ConfigureAwait(false);
+				}
+				
 			} catch(FileNotFoundException e) {
+
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext).ConfigureAwait(false);
 
 				await this.WalletFileInfo.Reset(lockContext).ConfigureAwait(false);
 				this.WalletFileInfo = this.SerialisationFal.CreateWalletFileInfo();
@@ -1198,23 +1229,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return false;
 			} catch(Exception e) {
 
+				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext).ConfigureAwait(false);
+
 				await this.WalletFileInfo.Reset(lockContext).ConfigureAwait(false);
 				this.WalletFileInfo = this.SerialisationFal.CreateWalletFileInfo();
 
 				this.CentralCoordinator.Log.Error(e, "Failed to load wallet");
 
-				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext).ConfigureAwait(false);
-
 				throw;
 			}
-
-			this.CentralCoordinator.Log.Warning("Wallet successfully loaded");
-
-			if(this.WalletIsLoaded != null) {
-				await this.WalletIsLoaded().ConfigureAwait(false);
-			}
-
-			await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingEndedEvent(), correlationContext).ConfigureAwait(false);
 
 			await this.centralCoordinator.RequestWalletSync().ConfigureAwait(false);
 			
@@ -1225,7 +1248,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			await this.UpdateAppointmentOperatingMode(lockContext).ConfigureAwait(false);
 			
 			return true;
-
 		}
 
 		private Task UpdateAppointmentOperatingMode(LockContext lockContext){
@@ -1407,6 +1429,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			chainState.AccountCode = account.AccountCode;
 
 			// its a brand new account, there is nothing to sync until right now.
+			chainState.PreviousBlockSynced = chainState.LastBlockSynced;
 			chainState.LastBlockSynced = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
 
 			await accountFileInfo.WalletChainStatesInfo.CreateEmptyFile(chainState, lockContext).ConfigureAwait(false);
@@ -1623,10 +1646,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		}
 
-		public async Task<bool> AllAccountsHaveSyncStatus(SynthesizedBlock block, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext) {
+		public Task<bool> AllAccountsHaveSyncStatus(SynthesizedBlock block, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext) {
+			return AllAccountsHaveSyncStatus(block.BlockId, previousSyncedBlockId, status, lockContext);
+		}
+
+		public async Task<bool> AllAccountsHaveSyncStatus(BlockId blockId, long latestSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
-			List<IWalletAccount> syncableAccounts = await this.GetWalletSyncableAccounts(block.BlockId, previousSyncedBlockId, lockContext).ConfigureAwait(false);
+			List<IWalletAccount> syncableAccounts = await this.GetWalletSyncableAccounts(blockId, latestSyncedBlockId, lockContext).ConfigureAwait(false);
 
 			if(!syncableAccounts.Any()) {
 				return false;
@@ -1647,27 +1674,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     now we have a block we must interpret and update our wallet
 		/// </summary>
 		/// <param name="block"></param>
-		public virtual async Task UpdateWalletBlock(SynthesizedBlock synthesizedBlock, long previousSyncedBlockId, Func<SynthesizedBlock, LockContext, Task> callback, LockContext lockContext) {
+		public virtual async Task UpdateWalletBlock(SynthesizedBlock synthesizedBlock, long latestSyncedBlockId, Func<SynthesizedBlock, LockContext, Task> callback, LockContext lockContext) {
 			this.EnsureWalletIsLoaded();
 
 			this.CentralCoordinator.Log.Verbose($"updating wallet blocks for block {synthesizedBlock.BlockId}...");
 
 			// this is where the wallet update happens...  any previous account that is fully synced can be upgraded to.
-			List <IWalletAccount> availableAccounts = (await (await this.GetWalletSyncableAccounts(synthesizedBlock.BlockId, previousSyncedBlockId, lockContext).ConfigureAwait(false)).WhereAsync(async a => {
+			var eligibleAccounts = (await this.GetWalletSyncableAccounts(synthesizedBlock.BlockId, latestSyncedBlockId, lockContext).ConfigureAwait(false));
+			List <IWalletAccount> availableAccounts = (await eligibleAccounts.WhereAsync(async a => {
 
-					                                         WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[a.AccountCode].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
+					                                          WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[a.AccountCode].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
-					                                         return new {chainState.BlockSyncStatus, chainState.LastBlockSynced};
-				                                         }, e => (e.BlockSyncStatus == (int) WalletAccountChainState.BlockSyncStatuses.FullySynced) || (e.LastBlockSynced == 0)).ConfigureAwait(false)).ToList();
+					                                          return new {chainState.BlockSyncStatus, chainState.LastBlockSynced};
+				                                          }, e => (e.BlockSyncStatus == (int) WalletAccountChainState.BlockSyncStatuses.FullySynced && e.LastBlockSynced == latestSyncedBlockId) || (e.BlockSyncStatus != (int) WalletAccountChainState.BlockSyncStatuses.FullySynced && e.LastBlockSynced == synthesizedBlock.BlockId) || (e.LastBlockSynced == 0)).ConfigureAwait(false)).ToList();
 
 			if (!availableAccounts.Any())
 			{
 				long? lowestAccountBlockSyncHeight = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
-				if (lowestAccountBlockSyncHeight.HasValue && lowestAccountBlockSyncHeight.Value != previousSyncedBlockId)
+				if (lowestAccountBlockSyncHeight.HasValue && lowestAccountBlockSyncHeight.Value < latestSyncedBlockId)
 					throw new WalletSyncException(synthesizedBlock.BlockId, "We have no syncable account and are trying to sync a block that would skip important block(s), this should not happen.");
 			}
 			
-
 			Dictionary<string, WalletAccountChainState> chainStates = new Dictionary<string, WalletAccountChainState>();
 
 			foreach(IWalletAccount account in availableAccounts) {
@@ -1676,9 +1703,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				IAccountFileInfo accountFileInfo = this.WalletFileInfo.Accounts[account.AccountCode];
 				WalletAccountChainState chainState = await accountFileInfo.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
-				// we start the new workflow
-				chainState.LastBlockSynced = synthesizedBlock.BlockId;
-				chainState.BlockSyncStatus = (int) WalletAccountChainState.BlockSyncStatuses.Blank;
+				// we start the new workflow. if we were already at this block, we dont change the status to reapply only the delta
+				if(chainState.LastBlockSynced != synthesizedBlock.BlockId) {
+					chainState.PreviousBlockSynced = chainState.LastBlockSynced;
+					chainState.LastBlockSynced = synthesizedBlock.BlockId;
+					chainState.BlockSyncStatus = (int) WalletAccountChainState.BlockSyncStatuses.Blank;
+				}
 
 				chainStates.Add(account.AccountCode, chainState);
 
@@ -1717,7 +1747,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// has been fully synced
 				if(chainState.BlockSyncStatus != (int) WalletAccountChainState.BlockSyncStatuses.FullySynced) {
-					throw new ApplicationException($"Wallet sync was incomplete for block id {synthesizedBlock.BlockId} and accountId {account.AccountCode}");
+					throw new ApplicationException($"Wallet sync was incomplete for block id {synthesizedBlock.BlockId} and account code {account.AccountCode}");
 				}
 			}
 		}
@@ -2225,7 +2255,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected virtual async Task<bool> UpdateWalletKeyLog(IAccountFileInfo accountFile, IWalletAccount account, SynthesizedBlock synthesizedBlock, LockContext lockContext) {
 			bool changed = false;
 
-			this.CentralCoordinator.Log.Verbose($"Update Wallet Key Logs for block {synthesizedBlock.BlockId} and accountId {account.AccountCode}...");
+			this.CentralCoordinator.Log.Verbose($"Update Wallet Key Logs for block {synthesizedBlock.BlockId} and account code {account.AccountCode}...");
 
 			WalletAccountChainState chainState = await accountFile.WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 			bool keyLogSynced = ((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.KeyLogSynced);
@@ -2658,6 +2688,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.CentralCoordinator.Log.Warning($"The new chain state height ({blockId}) is higher than the next block id for current chain state height ({chainState.LastBlockSynced}).");
 			}
 
+			chainState.PreviousBlockSynced = chainState.LastBlockSynced;
 			chainState.LastBlockSynced = blockId;
 			chainState.BlockSyncStatus |= (int) WalletAccountChainState.BlockSyncStatuses.BlockHeightUpdated;
 		}
@@ -3557,7 +3588,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task RequestKeysCopyFileByConsole(string accountCode, string keyName, LockContext lockContext, int maxTryCount = 10) {
-			this.CentralCoordinator.Log.Warning($"Wallet key file (account: {accountCode}, key name: {keyName}) is not present. Please copy it.", maxTryCount);
+			this.CentralCoordinator.Log.Warning($"Wallet key file (account code: {accountCode}, key name: {keyName}) is not present. Please copy it.", maxTryCount);
 
 			Console.ReadKey();
 
@@ -4684,7 +4715,8 @@ clean above
 				Status = (int) account.AccountAppointment.AppointmentStatus, AppointmentRequestTimeStamp = account.AccountAppointment.AppointmentRequestTimeStamp, AppointmentConfirmationId = account.AccountAppointment.AppointmentConfirmationCode
 				, AppointmentTime = account.AccountAppointment.AppointmentTime, AppointmentContextTime = account.AccountAppointment.AppointmentContextTime, 
 				AppointmentVerificationTime = account.AccountAppointment.AppointmentVerificationTime, 
-				AppointmentWindow = account.AccountAppointment.AppointmentWindow, AppointmentConfirmationIdExpiration = account.AccountAppointment.AppointmentConfirmationCodeExpiration
+				AppointmentWindow = account.AccountAppointment.AppointmentWindow, AppointmentConfirmationIdExpiration = account.AccountAppointment.AppointmentConfirmationCodeExpiration,
+				Region = account.AccountAppointment.Region
 			};
 		}
 
@@ -4694,7 +4726,7 @@ clean above
 			IWalletAccount account = await this.GetWalletAccount(accountCode, lockContext).ConfigureAwait(false);
 
 			if(account == null) {
-				throw new ApplicationException($"Failed to load account with Uuid {accountCode}");
+				throw new ApplicationException($"Failed to load account with code {accountCode}");
 			}
 
 			return account.PresentationTransactionId.Clone;
@@ -4705,7 +4737,7 @@ clean above
 			IWalletAccount account = await this.GetWalletAccount(accountCode, lockContext).ConfigureAwait(false);
 
 			if(account == null) {
-				throw new ApplicationException($"Failed to load account with Uuid {accountCode}");
+				throw new ApplicationException($"Failed to load account with code {accountCode}");
 			}
 			
 			AccountAppointmentConfirmationResultAPI result = new AccountAppointmentConfirmationResultAPI();
@@ -4724,7 +4756,7 @@ clean above
 			IWalletAccount account = await this.GetWalletAccount(accountCode, lockContext).ConfigureAwait(false);
 
 			if(account == null) {
-				throw new ApplicationException($"Failed to load account with Uuid {accountCode}");
+				throw new ApplicationException($"Failed to load account with code {accountCode}");
 			}
 
 			if(account.AccountAppointment != null) {
@@ -4744,7 +4776,7 @@ clean above
 			IWalletAccount account = await this.GetWalletAccount(accountCode, lockContext).ConfigureAwait(false);
 
 			if(account == null) {
-				throw new ApplicationException($"Failed to load account with Uuid {accountCode}");
+				throw new ApplicationException($"Failed to load account with code {accountCode}");
 			}
 			
 			AccountCanPublishAPI result = new AccountCanPublishAPI();

@@ -15,6 +15,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.Handshake.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography;
 using Neuralia.Blockchains.Tools.Locking;
 
@@ -115,7 +116,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				await this.AddValidConnection().ConfigureAwait(false);
 
 				// now we wait for the final confirmation
-				this.WaitFinalClientReady();
+				await WaitFinalClientReady().ConfigureAwait(false);
 
 				return true;
 
@@ -132,10 +133,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			// nothing to do
 		}
 
-		protected virtual void WaitFinalClientReady() {
+		protected virtual async Task WaitFinalClientReady() {
 			TargettedMessageSet<ClientReady<R>, R> finalNetworkMessageSet = this.WaitSingleNetworkMessage<ClientReady<R>, TargettedMessageSet<ClientReady<R>, R>, R>();
 
-			this.networkingService.ConnectionStore.FullyConfirmConnection(this.ClientConnection);
+			await this.networkingService.ConnectionStore.FullyConfirmConnection(this.ClientConnection).ConfigureAwait(false);
 		}
 
 		protected virtual void SetReceivedPeerNodes(ClientHandshakeConfirm<R> message) {
@@ -217,10 +218,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 					return null;
 				}
-
 			}
-
-
 
 			// ok, we just received a trigger, lets examine it
 			NLog.Default.Verbose($"Received correlation id {this.CorrelationId}");
@@ -229,7 +227,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			if(!this.timeService.WithinAcceptableRange(this.triggerMessage.Message.localTime, TimeSpan.FromSeconds(9))) {
 				serverHandshake.Message.Status = ServerHandshake<R>.HandshakeStatuses.TimeOutOfSync;
 
-				NLog.Default.Verbose("Sending handshake negative response");
+				NLog.Default.Verbose($"Sending handshake negative response, server time is out of sync with a delta of {DateTimeEx.CurrentTime - this.triggerMessage.Message.localTime.ToUniversalTime()}.");
 				this.SendFinal(serverHandshake);
 
 				return null;
@@ -282,6 +280,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			// and check if their connection port is true and available
 			serverHandshake.Message.Connectable = await this.PerformCounterConnection().ConfigureAwait(false);
 
+			NLog.Default.Verbose($"The client {this.ClientConnection.NodeAddressInfo.AdjustedAddress} is connectable: {serverHandshake.Message.Connectable}");
+			
 			this.networkingService.ConnectionStore.AddPeerReportedPublicIp(this.triggerMessage.Message.PerceivedIP, ConnectionStore.PublicIpSource.Peer);
 
 			this.networkingService.ConnectionStore.AddChainSettings(this.ClientConnection.NodeAddressInfo, this.triggerMessage.Message.nodeInfo.GetChainSettings());
@@ -309,8 +309,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 		protected virtual async Task<bool?> PerformCounterConnection() {
 			// now we counterconnect to determine if they are truly listening on their port
 			try {
-				return await this.ClientConnection.connection.PerformCounterConnection(this.ClientConnection.NodeAddressInfo.RealPort).ConfigureAwait(false);
+				this.ClientConnection.NodeAddressInfo.IsConnectable = await this.ClientConnection.connection.PerformCounterConnection(this.ClientConnection.NodeAddressInfo.RealPort).ConfigureAwait(false);
 
+				return this.ClientConnection.NodeAddressInfo.IsConnectable;
 			} catch {
 				// nothing to do here, its just a fail and thus unconnectable
 			}
@@ -414,12 +415,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return this.networkingService.ConnectionStore.GetPeerNodeList(otherPeer, otherPeer.GetSupportedBlockchains(), heuristic, new[] {this.ClientConnection.NodeAddressInfo}.ToList(), false, 20);
 		}
 
-		protected virtual Task AddValidConnection() {
-			this.networkingService.ConnectionStore.ConfirmConnection(this.ClientConnection);
+		protected virtual async Task AddValidConnection() {
+			await networkingService.ConnectionStore.ConfirmConnection(ClientConnection).ConfigureAwait(false);
 			NLog.Default.Verbose($"handshake with {this.ClientConnection.ScopedAdjustedIp} is now confirmed");
-
-			return Task.CompletedTask;
-
 		}
 
 		protected virtual long GenerateRandomHandshakeNonce() {

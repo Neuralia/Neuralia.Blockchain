@@ -39,7 +39,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelope
 			
 			nodeList.Add(this.AccreditationCertificates.Count);
 
-			foreach(int entry in this.AccreditationCertificates) {
+			foreach(int entry in this.AccreditationCertificates.OrderBy(c => c)) {
 
 				nodeList.Add(entry);
 			}

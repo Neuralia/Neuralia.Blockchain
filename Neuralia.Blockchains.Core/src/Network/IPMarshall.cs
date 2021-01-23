@@ -13,12 +13,15 @@ using Neuralia.Blockchains.Tools;
 
 namespace Neuralia.Blockchains.Core.Network {
 
+
 	/// <summary>
 	///     a very simple and light weight but effective rate limiting controller
 	/// </summary>
-	public sealed class IPMarshall {
+	public sealed class IPMarshall
+	{
 
-		public enum QuarantineReason {
+		public enum QuarantineReason
+		{
 			Cleared,
 			RateLimited,
 			ConnectionBroken,
@@ -34,9 +37,14 @@ namespace Neuralia.Blockchains.Core.Network {
 		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> blacklist = new();
 		private readonly int blacklistStrikes = 5;
 		private readonly TimeSpan cleanupPeriod = TimeSpan.FromSeconds(20);
+		private readonly TimeSpan mutexTimeout = TimeSpan.FromSeconds(30);
 		private readonly int connectionRefusalStrikes = 100;
 		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> greylist = new();
-		private readonly ConcurrentDictionary<IPAddress, (bool whitelisted, AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType)> isWhiteList = new();
+
+		private readonly
+			ConcurrentDictionary<IPAddress, (bool whitelisted, AppSettingsBase.WhitelistedNode.AcceptanceTypes
+				acceptanceType)> isWhiteList = new();
+
 		private readonly TimeSpan minPeriodBetweenConnections = TimeSpan.FromSeconds(10);
 		private readonly object NextClearanceCheckMutex = new();
 		private readonly int rateLimitGraceStrikes;
@@ -46,15 +54,88 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private DateTime NextCleanCheck = DateTimeEx.CurrentTime;
 
+		private static readonly ConcurrentDictionary<object, ReaderWriterLock> mutexes =
+			new ConcurrentDictionary<object, ReaderWriterLock>();
+
+		public static ReaderWriterLock GocMutex(object obj)
+		{
+			if (mutexes.TryGetValue(obj, out var mutex))
+			{
+				return mutex;
+			}
+
+			return mutexes[obj] = new ReaderWriterLock();
+		}
+
+		public T LockRead<T>(object lockObject, Func<ReaderWriterLock, T> f)
+		{
+			return LockRead(lockObject, f, this.mutexTimeout);
+		}
+
+		public static T LockRead<T>(object lockObject, Func<ReaderWriterLock, T> f, TimeSpan timeout)
+		{
+			var mutex = GocMutex(lockObject);
+			try
+			{
+				mutex.AcquireReaderLock(timeout);
+				return f(mutex);
+			}
+			catch (ApplicationException e)
+			{
+				NLog.LoggingBatcher.Error(e, "Failed acquiring mutex lock (read/wrte)");
+				throw;
+			}
+			catch (Exception e)
+			{
+				NLog.LoggingBatcher.Error(e, "Failed during function execution");
+				throw;
+			}
+			finally
+			{
+				mutex.ReleaseLock();
+			}
+		}
+
+		public T LockWrite<T>(object lockObject, Func<ReaderWriterLock, T> f)
+		{
+			return LockWrite(lockObject, f, this.mutexTimeout);
+		}
+
+		public static T LockWrite<T>(object lockObject, Func<ReaderWriterLock, T> f, TimeSpan timeout)
+		{
+			var mutex = GocMutex(lockObject);
+			try
+			{
+				mutex.AcquireWriterLock(timeout);
+				return f(mutex);
+			}
+			catch (ApplicationException e)
+			{
+				NLog.LoggingBatcher.Error(e, "Failed acquiring mutex lock (read)");
+				throw;
+			}
+			catch (Exception e)
+			{
+				NLog.LoggingBatcher.Error(e, "Failed during function execution");
+				throw;
+			}
+			finally
+			{
+				mutex.ReleaseLock();
+			}
+		}
+
 		/// <summary>
 		///     Check an entry and ensure that it is within the rate limiting limit. return true if it can connect, otherwise false
 		///     to reject the connection
 		/// </summary>
 		/// <param name="address"></param>
 		/// <returns></returns>
-		public bool RequestIncomingConnectionClearance(IPAddress ip) {
+		public bool RequestIncomingConnectionClearance(IPAddress ip)
+		{
 
-			if(this.IsWhiteList(ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType)) {
+			if (this.IsWhiteList(ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType))
+			{
 				NLog.LoggingBatcher.Information($"{TAG} ignoring acceptanceType", NLog.LoggerTypes.Connections);
 
 				return true;
@@ -70,57 +151,81 @@ namespace Neuralia.Blockchains.Core.Network {
 			// return early if blacklisted
 			QuarantinedInfo info = null;
 
-			if(this.blacklist.TryGetValue(ip, out info)) {
+			if (this.blacklist.TryGetValue(ip, out info))
+			{
 				Interlocked.Increment(ref info.refusalCount);
 
 				return false;
 			}
 
 			//rate limiter logic
-			if(this.watchlist.TryGetValue(ip, out info)) {
-				lock(info) {
+			if (this.watchlist.TryGetValue(ip, out info))
+			{
+				LockWrite(info, mutex =>
+				{
 					accepted = info.Expiry < now;
 
-					if(accepted) {
+					if (accepted)
+					{
 
 						info.Expiry = now + this.minPeriodBetweenConnections;
 						info.rateLimitStrikes = 0;
 						info.rateLimitGraceStrikes = 0;
 
-					} else if(info.rateLimitGraceStrikes < this.rateLimitGraceStrikes) {
+					}
+					else if (info.rateLimitGraceStrikes < this.rateLimitGraceStrikes)
+					{
 						info.rateLimitGraceStrikes++;
 						accepted = true;
-					} else {
+					}
+					else
+					{
 						info.rateLimitStrikes++;
 
-						if(info.rateLimitStrikes >= this.rateLimitStrikes) {
+						if (info.rateLimitStrikes >= this.rateLimitStrikes)
+						{
 
 							this.watchlist.TryRemove(ip, out _);
 
 							// that's it, this peer is blacklist
-							if(!this.blacklist.TryAdd(ip, info)) {
-								NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in blacklist", NLog.LoggerTypes.Connections);
+							if (!this.blacklist.TryAdd(ip, info))
+							{
+								NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in blacklist",
+									NLog.LoggerTypes.Connections);
 							}
 
 							info.blacklistStrikes++;
 
-							if(info.blacklistStrikes >= this.blacklistStrikes) {
-								NLog.LoggingBatcher.Warning($"{TAG} Permanently banning {ip}: {info.blacklistStrikes} blacklist strikes" + ", consider adding this ip to your firewall.", NLog.LoggerTypes.Connections);
+							if (info.blacklistStrikes >= this.blacklistStrikes)
+							{
+								NLog.LoggingBatcher.Warning(
+									$"{TAG} Permanently banning {ip}: {info.blacklistStrikes} blacklist strikes" +
+									", consider adding this ip to your firewall.", NLog.LoggerTypes.Connections);
 								info.Reason = QuarantineReason.PermanentBan;
 								info.Expiry = DateTimeEx.MaxValue;
-							} else {
+							}
+							else
+							{
 								info.Reason = QuarantineReason.RateLimited;
 								info.Expiry = DateTimeEx.CurrentTime.Add(this.ratLimitTimePenalty);
 							}
 						}
 					}
-				}
-			} else {
+
+					return true;
+				});
+
+			}
+			else
+			{
 				//new ip, add it to watchlist
 				info = new QuarantinedInfo {Expiry = DateTimeEx.CurrentTime.Add(this.minPeriodBetweenConnections)};
 
-				if(!this.watchlist.TryAdd(ip, info)) {
-					NLog.LoggingBatcher.Warning($"{TAG} Node {ip} is already in watchlist ({info.Reason}, expiry {info.Expiry}), this is an unexpected race condition, not very worrying..", NLog.LoggerTypes.Connections);
+				if (!this.watchlist.TryAdd(ip, info))
+				{
+					NLog.LoggingBatcher.Warning(
+						$"{TAG} Node {ip} is already in watchlist ({info.Reason}, expiry {info.Expiry}), this is an unexpected race condition, not very worrying..",
+						NLog.LoggerTypes.Connections);
 				}
 
 				accepted = true;
@@ -129,89 +234,105 @@ namespace Neuralia.Blockchains.Core.Network {
 			return accepted;
 		}
 
-		public bool IsWhiteList(IPAddress ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType) {
-			acceptanceType = default;
+		public bool IsWhiteList(IPAddress ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType)
+		{
 
-			if(!this.isWhiteList.TryGetValue(ip, out var pair)) {
-				if((GlobalSettings.ApplicationSettings != null) && (GlobalSettings.ApplicationSettings.Whitelist != null)) {
-					lock(GlobalSettings.ApplicationSettings.Whitelist) {
-						foreach(AppSettingsBase.WhitelistedNode node in GlobalSettings.ApplicationSettings.Whitelist) {
-							acceptanceType = node.AcceptanceType;
+			if (this.isWhiteList.TryGetValue(ip, out var pair))
+			{
+				acceptanceType = pair.Item2;
+				return pair.Item1;
+			}
 
-							if(node.CIDR) {
-								if(IPUtils.IsIPV4InCIDRRange(ip, node.Ip)) {
-									NLog.LoggingBatcher.Information($"{TAG} {ip} matches whitelisted CIDR IP range '{node.Ip}', AcceptanceType: '{node.AcceptanceType}'.");
-									this.isWhiteList.TryAdd(ip, (true, acceptanceType));
+			AppSettingsBase.WhitelistedNode.AcceptanceTypes
+				localAcceptanceType = default; //cannot capture 'out' variables
+			bool result = false;
 
-									return true;
-								}
-							} else if(IPAddress.TryParse(node.Ip, out IPAddress? ipAddress)) {
-								if(ipAddress.MapToIPv6().Equals(ip.MapToIPv6())) {
-									NLog.LoggingBatcher.Information($"{TAG} {ip} has a match in the whitelist, AcceptanceType: '{node.AcceptanceType}'");
-									this.isWhiteList.TryAdd(ip, (true, acceptanceType));
+			if ((GlobalSettings.ApplicationSettings != null) && (GlobalSettings.ApplicationSettings.Whitelist != null))
+			{
+				result = LockRead(GlobalSettings.ApplicationSettings.Whitelist, mutex =>
+				{
+					foreach (AppSettingsBase.WhitelistedNode node in GlobalSettings.ApplicationSettings.Whitelist)
+					{
+						localAcceptanceType = node.AcceptanceType;
 
-									return true;
-								}
+						if (node.CIDR)
+						{
+							if (IPUtils.IsIPV4InCIDRRange(ip, node.Ip))
+							{
+								NLog.LoggingBatcher.Information(
+									$"{TAG} {ip} matches whitelisted CIDR IP range '{node.Ip}', AcceptanceType: '{node.AcceptanceType}'.");
+
+								return true;
+							}
+						}
+						else if (IPAddress.TryParse(node.Ip, out IPAddress? ipAddress))
+						{
+							if (ipAddress.MapToIPv6().Equals(ip.MapToIPv6()))
+							{
+								NLog.LoggingBatcher.Information(
+									$"{TAG} {ip} has a match in the whitelist, AcceptanceType: '{node.AcceptanceType}'");
+
+								return true;
 							}
 						}
 					}
-				}
 
-				this.isWhiteList.TryAdd(ip, (false, acceptanceType));
-
-				return false;
+					return false;
+				});
 			}
 
-			acceptanceType = pair.Item2;
+			this.isWhiteList.TryAdd(ip, (result, localAcceptanceType));
 
-			return pair.Item1;
+			acceptanceType = localAcceptanceType;
+			return result;
+
+
 		}
 
-		private void PeriodicWatchListsUpdate(DateTime now, bool force = false) {
-			bool shouldUpdate = force;
-
-			if(!shouldUpdate) {
-				lock(this.NextClearanceCheckMutex) {
-					shouldUpdate = this.NextCleanCheck < now;
-				}
-			}
-
-			if(shouldUpdate) {
-				foreach(KeyValuePair<IPAddress, QuarantinedInfo> expired in this.blacklist.Where(e => e.Value.Expiry < now).ToArray()) {
-					lock(expired.Value) {
-						if(expired.Value.refusalCount >= this.connectionRefusalStrikes) {
-							NLog.LoggingBatcher.Warning($"{TAG} Permanently banning {expired.Key}: {expired.Value.refusalCount} refused connection attempts" + ", consider adding this ip to your firewall.");
+		private void PeriodicWatchListsUpdate(DateTime now, bool force = false)
+		{
+			if (force || LockRead(this.NextClearanceCheckMutex, _ => this.NextCleanCheck < now)) {
+				foreach(KeyValuePair<IPAddress, QuarantinedInfo> expired in this.blacklist.Where(e => e.Value.Expiry < now))
+				{
+					LockRead(expired.Value, mutex =>
+					{
+						if (expired.Value.refusalCount >= this.connectionRefusalStrikes)
+						{
+							NLog.LoggingBatcher.Warning(
+								$"{TAG} Permanently banning {expired.Key}: {expired.Value.refusalCount} refused connection attempts" +
+								", consider adding this ip to your firewall.");
+							mutex.UpgradeToWriterLock(mutexTimeout);
 							expired.Value.Reason = QuarantineReason.PermanentBan;
 							expired.Value.Expiry = DateTimeEx.MaxValue; //won't enter in this scope anymore
 
-							continue;
+							return true;
 						}
 
 						this.blacklist.TryRemove(expired.Key, out QuarantinedInfo removed);
+						
+						mutex.UpgradeToWriterLock(mutexTimeout);
 						removed.Reason = QuarantineReason.Cleared;
 						removed.Expiry = now.Add(this.minPeriodBetweenConnections);
 
-						if(!this.watchlist.TryAdd(expired.Key, removed)) {
+						if (!this.watchlist.TryAdd(expired.Key, removed))
+						{
 							NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in watchlist");
 						}
-					}
+
+						return false;
+					});
 				}
 
-				lock(this.NextClearanceCheckMutex) {
-					this.NextCleanCheck = DateTimeEx.CurrentTime.Add(this.cleanupPeriod);
-				}
+				LockWrite(this.NextClearanceCheckMutex, _ => this.NextCleanCheck = DateTimeEx.CurrentTime.Add(this.cleanupPeriod));
 			}
 		}
 
 		public bool IsQuarantined(IPAddress ip, out DateTime expiry, out QuarantineReason reason) {
 			this.PeriodicWatchListsUpdate(DateTimeEx.CurrentTime, true); //we need up to date results
 
-			if(this.blacklist.TryGetValue(ip, out QuarantinedInfo info)) {
-				lock(info) {
-					expiry = info.Expiry;
-					reason = info.Reason;
-				}
-
+			if(this.blacklist.TryGetValue(ip, out QuarantinedInfo info))
+			{
+				(expiry, reason) = LockRead(info, _ => (info.Expiry, info.Reason));
 				return true;
 			}
 
@@ -322,36 +443,39 @@ namespace Neuralia.Blockchains.Core.Network {
 			public QuarantineReason Reason = QuarantineReason.Cleared;
 			public int refusalCount;
 
-			public class Events {
-				private readonly object eventsMutex = new();
+			public class Events
+			{
+				private readonly ReaderWriterLock mutex = new ReaderWriterLock();
 				private FixedQueue<DateTime> events { get; } = new(100);
 
-				public void AddEvent(DateTime time) {
-					lock(this.eventsMutex) {
-						this.events.Enqueue(time);
-					}
+				public void AddEvent(DateTime time)
+				{
+					LockWrite(this.events, _ => this.events.Enqueue(time, out var overflow), TimeSpan.FromSeconds(30));
 				}
 
-				public double CountEventsWithinObservationPeriod(DateTime referenceTime, TimeSpan observationPeriod, double outOfTimeSpanBase = 0.95) {
-					double value = 0.0;
+				public double CountEventsWithinObservationPeriod(DateTime referenceTime, TimeSpan observationPeriod,
+					double outOfTimeSpanBase = 0.95)
+				{
 
-					IEnumerable<DateTime> eventsCopy;
-
-					lock(this.eventsMutex) {
-						eventsCopy = this.events.ToImmutableArray();
-					}
-
-					var referenceTicks = referenceTime.Ticks - observationPeriod.Ticks;
-					foreach(DateTime timestamp in eventsCopy) {
-						if(timestamp.Ticks < referenceTicks) {
-							value += 1;
-						} else //out of observation period
+					return LockRead(this.events, mutex =>
+					{
+						double value = 0.0;
+						var referenceTicks = referenceTime.Ticks - observationPeriod.Ticks;
+						foreach (DateTime timestamp in this.events)
 						{
-							value += Math.Pow(outOfTimeSpanBase, Math.Max(1.0, (referenceTime - timestamp).TotalSeconds));
+							if (timestamp.Ticks < referenceTicks)
+							{
+								value += 1;
+							}
+							else //out of observation period
+							{
+								value += Math.Pow(outOfTimeSpanBase,
+									Math.Max(1.0, (referenceTime - timestamp).TotalSeconds));
+							}
 						}
-					}
 
-					return value;
+						return value;
+					}, TimeSpan.FromSeconds(30));
 				}
 			}
 		}

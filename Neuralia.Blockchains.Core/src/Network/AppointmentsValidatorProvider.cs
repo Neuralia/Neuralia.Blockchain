@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		protected virtual TimeSpan ServerPollDelay => TimeSpan.FromMinutes(1);
 
-		private IAppointmentValidatorDelegate appointmentValidatorDelegate;
+		protected IAppointmentValidatorDelegate appointmentValidatorDelegate;
 		private BlockchainType blockchainType;
 		public virtual void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate) {
 
@@ -89,7 +89,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 		}
 
-		protected void StartServer(int requesterCount) {
+		protected virtual void StartServer(int requesterCount) {
 
 
 			if(this.validationServer == null || !this.validationServer.IsRunning || (this.validationServer.IsRunning && this.validationServer.RequesterCount < requesterCount)) {
@@ -130,10 +130,16 @@ namespace Neuralia.Blockchains.Core.Network {
 
 					this.restValidatorServer.Start();
 				}
+
+				this.ValidatorServersStarted();
 #else
 				NLog.Default.Warning("Appointments validators are not possible in netstandard mode");
 #endif
 			} 
+		}
+		
+		protected virtual void ValidatorServersStarted() {
+			
 		}
 		
 		public int InAppointmentWindowRequesterCount {
@@ -155,7 +161,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			return this.appointmentWindows.Any(a => a.start < appointment && a.end >= appointment && a.start < DateTimeEx.CurrentTime && a.end >= DateTimeEx.CurrentTime);
 		}
 
-		private readonly List<(DateTime start, DateTime end, int requesterCount)> appointmentWindows = new List<(DateTime start, DateTime end, int requesterCount)>();
+		protected readonly List<(DateTime start, DateTime end, int requesterCount)> appointmentWindows = new List<(DateTime start, DateTime end, int requesterCount)>();
 
 		private void ClearExpiredAppointmentWindows() {
 			foreach(var entry in this.appointmentWindows.Where(a => a.end < DateTimeEx.CurrentTime).ToArray()) {

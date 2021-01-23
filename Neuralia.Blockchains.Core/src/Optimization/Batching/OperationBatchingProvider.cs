@@ -63,10 +63,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			public Func<DateTime, Task> ActionAsync { get; set; }
 			public Action<DateTime> Action { get; set; }
+			public override bool IsValid => this.Action != null || this.ActionAsync != null;
 		}
 
 		public void AddOperation(Action<DateTime> action) {
 
+			if(action == null) {
+				return;
+			}
 			if(!this.IsRunning) {
 				action(DateTimeEx.CurrentTime);
 
@@ -79,6 +83,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		}
 
 		public Task AddOperationAsync(Func<DateTime, Task> actionAsync) {
+			if(actionAsync == null) {
+				return Task.CompletedTask;
+			}
 			if(!this.IsRunning) {
 				return actionAsync(DateTimeEx.CurrentTime);
 			}

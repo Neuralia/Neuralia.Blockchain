@@ -15,6 +15,7 @@ using Neuralia.Blockchains.Core.P2p.Workflows.Handshake;
 using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Tools;
@@ -106,7 +107,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected virtual IPCrawler CreateIPCrawler() {
-			return new IPCrawler(GlobalSettings.ApplicationSettings.AveragePeerCount, GlobalSettings.ApplicationSettings.MaxPeerCount, GlobalSettings.ApplicationSettings.MaxMobilePeerCount, 1800.0, 600.0, 60.0, 24 * 60 * 60, GlobalSettings.ApplicationSettings.MaxNonConnectablePeerCount);
+			return new IPCrawler(GlobalSettings.ApplicationSettings.AveragePeerCount
+				, GlobalSettings.ApplicationSettings.MaxPeerCount
+				, GlobalSettings.ApplicationSettings.MaxMobilePeerCount
+				, GlobalSettings.ApplicationSettings.MaxNonConnectablePeerCount
+				, GlobalSettings.ApplicationSettings.LocalNodes.Select(n => new NodeAddressInfo(n.Ip, n.Port, NodeInfo.Full)).ToList()
+				, 1800.0, 600.0, 60.0, 24 * 60 * 60);
 		}
 
 		private void HandleNewConnection(PeerConnection connection) {
@@ -122,8 +128,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}));
 			};
 
-			if(!this.Crawler.CanAcceptNewConnection(connection.NodeAddressInfo)) // have we reached max peer count?
+			if (!this.Crawler.CanAcceptNewConnection(connection.NodeAddressInfo)) // have we reached max peer count?
+			{
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} CanAcceptNewConnection returned false for {connection.NodeAddressInfo}");
+				
 				this.RequestDisconnect(connection.NodeAddressInfo); // disconnect already!
+			}
 		}
 
 		/// <summary>
@@ -381,7 +391,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected override async Task ProcessLoop(LockContext lockContext) {
 			try {
 
-				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ProcessLoop)}.");
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ProcessLoop)}, acting next at {this.nextAction}.");
 
 				this.CheckShouldCancel();
 
@@ -402,6 +412,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				var secondsToWait = 3; // default next action time in seconds. we can play on this
 
 				if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
+					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} networking status is paused.");
 					// its paused, we dont do anything, just return
 					this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
 

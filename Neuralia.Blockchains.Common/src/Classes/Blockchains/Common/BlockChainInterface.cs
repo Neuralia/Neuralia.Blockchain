@@ -1304,8 +1304,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		}
 
 		protected Task TriggerSystemEvent(CorrelationContext? correlationContext, BlockchainSystemEventType eventType, object[] parameters) {
-			if(this.ChainEventRaised != null) {
-				return this.ChainEventRaised(correlationContext, eventType, this.CentralCoordinator.ChainId, parameters);
+			//TODO: race condition, sometimes null when events arrive.
+
+			try {
+				if(this.ChainEventRaised != null) {
+					return this.ChainEventRaised(correlationContext, eventType, this.CentralCoordinator.ChainId, parameters);
+				}
+			} catch {
+				
 			}
 
 			return Task.CompletedTask;

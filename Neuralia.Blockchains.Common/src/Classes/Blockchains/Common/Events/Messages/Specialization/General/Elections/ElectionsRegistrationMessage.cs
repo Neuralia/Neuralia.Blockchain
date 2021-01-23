@@ -120,7 +120,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 			
 			nodesList.Add(this.Certificates.Count);
 
-			foreach(AccreditationCertificateMetadata entry in this.Certificates) {
+			foreach(AccreditationCertificateMetadata entry in this.Certificates.OrderBy(c => c.CertificateId)) {
 				nodesList.Add(entry);
 			}
 

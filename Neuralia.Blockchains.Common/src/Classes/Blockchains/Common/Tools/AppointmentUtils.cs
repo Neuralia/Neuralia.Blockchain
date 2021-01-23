@@ -42,7 +42,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		public const int CODE_SALT_LENGTH = 100;
 
 		public static SafeArrayHandle BuildSecretConfirmationCorrelationCodeSeed(List<Guid> publicValidators, List<Guid> secretValidators, int appointmentKeyHash, int secretCode) {
-
+			
+			publicValidators = publicValidators.OrderBy(v => v).ToList();
+			secretValidators = secretValidators.OrderBy(v => v).ToList();
+			
 			var adjustedPublicValidators = publicValidators.Skip(1).ToList();
 			adjustedPublicValidators.AddRange(secretValidators);
 			var first = publicValidators.First();

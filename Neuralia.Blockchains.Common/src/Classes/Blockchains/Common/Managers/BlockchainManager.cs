@@ -138,6 +138,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			var checkOperatingModeTime = this.checkOperatingMode.Value;
 			if(this.ShouldAct(ref checkOperatingModeTime) && (this.checkOperatingModeTask.Value == null || this.checkOperatingModeTask.Value.IsCompleted)) {
 
+				this.checkOperatingMode.Value = DateTimeEx.MaxValue;
+				
 				this.checkOperatingModeTask.Value = Task.Run(async () => {
 					
 					await appointmentProvider.CheckOperatingMode(lockContext).ConfigureAwait(false);

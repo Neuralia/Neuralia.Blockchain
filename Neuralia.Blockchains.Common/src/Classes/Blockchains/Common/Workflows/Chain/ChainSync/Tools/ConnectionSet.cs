@@ -388,7 +388,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public void AddConnectionStrike(Guid clientUuid, ConnectionSet.ConnectionStrikeset.RejectionReason rejectionReason) {
 			lock(this.locker) {
-				this.AddConnectionStrike(this.connections.Keys.Single(c => c.PeerConnection.ClientUuid == clientUuid).PeerConnection, rejectionReason);
+				try {
+					var entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == clientUuid);
+					
+					if(entry != null) {
+						this.AddConnectionStrike(entry.PeerConnection, rejectionReason);
+					}
+					
+				} catch {
+					// nothing to do really
+				}
 			}
 		}
 
@@ -402,7 +411,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public void AddBannedConnection(Guid clientUuid, ConnectionSet.BlockedConnection.BanReason reason) {
 			lock(this.locker) {
-				this.AddBannedConnection(this.connections.Keys.Single(c => c.PeerConnection.ClientUuid == clientUuid).PeerConnection, reason);
+				try {
+					var entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == clientUuid);
+					
+					if(entry != null) {
+						this.AddBannedConnection(entry.PeerConnection, reason);
+					}
+					
+				} catch {
+					// nothing to do really
+				}
 			}
 		}
 
@@ -419,13 +437,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				if(!this.banned.ContainsKey(peerConnectionn.ClientUuid)) {
-					entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
+					try {
+						entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
 
-					if(entry != null) {
-						entry.Syncing = false;
+						if(entry != null) {
+							entry.Syncing = false;
+						}
+
+						this.banned.Add(peerConnectionn.ClientUuid, new ConnectionSet.BlockedConnection(peerConnectionn, reason));
+					} catch {
+						// nothing to do really
 					}
-
-					this.banned.Add(peerConnectionn.ClientUuid, new ConnectionSet.BlockedConnection(peerConnectionn, reason));
 				}
 			}
 		}

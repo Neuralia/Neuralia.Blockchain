@@ -139,6 +139,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public Task<long?> LowestAccountBlockSyncHeight(LockContext lockContext) {
 			return this.ScheduleRead((p, lc) => p.LowestAccountBlockSyncHeight(lc), lockContext);
 		}
+		
+		public Task<long?> LowestAccountPreviousBlockSyncHeight(LockContext lockContext) {
+			return this.ScheduleRead((p, lc) => p.LowestAccountPreviousBlockSyncHeight(lc), lockContext);
+		}
 
 		public Task<bool?> Synced(LockContext lockContext) {
 			return this.ScheduleRead((p, lc) => p.Synced(lc), lockContext);
@@ -156,8 +160,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleKeyedRead((p, lc) => p.WalletContainsAccount(accountCode, lc), lockContext);
 		}
 
-		public Task<List<IWalletAccount>> GetWalletSyncableAccounts(long blockId, long previousSyncedBlockId, LockContext lockContext) {
-			return this.ScheduleKeyedRead((p, lc) => p.GetWalletSyncableAccounts(blockId, previousSyncedBlockId, lc), lockContext);
+		public Task<List<IWalletAccount>> GetWalletSyncableAccounts(long? newBlockId, long latestSyncedBlockId, LockContext lockContext) {
+			return this.ScheduleKeyedRead((p, lc) => p.GetWalletSyncableAccounts(newBlockId, latestSyncedBlockId, lc), lockContext);
 		}
 
 		public Task<IAccountFileInfo> GetAccountFileInfo(string accountCode, LockContext lockContext) {
@@ -426,6 +430,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public Task<bool> AllAccountsHaveSyncStatus(SynthesizedBlock block, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext) {
 			return this.ScheduleKeyedRead((prov, lc) => {
 				return this.walletProvider.AllAccountsHaveSyncStatus(block, previousSyncedBlockId, status, lc);
+			}, lockContext);
+		}
+		
+		public Task<bool> AllAccountsHaveSyncStatus(BlockId blockId, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses status, LockContext lockContext) {
+			return this.ScheduleKeyedRead((prov, lc) => {
+				return this.walletProvider.AllAccountsHaveSyncStatus(blockId, previousSyncedBlockId, status, lc);
 			}, lockContext);
 		}
 

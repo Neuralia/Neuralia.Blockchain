@@ -11,7 +11,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		string AccountCode { get; set; }
 
 		long LastBlockSynced { get; set; }
-
+		long PreviousBlockSynced { get; set; }
+		
 		int BlockSyncStatus { get; set; }
 
 		Dictionary<byte, IWalletAccountChainStateKey> Keys { get; set; }
@@ -29,7 +30,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			WalletImmediateImpactPerformed = 1 << 2,
 			SnapshotInterpretationDone = 1 << 3,
 			InterpretationCompleted = SnapshotInterpretationDone,
-			FullySynced = BlockHeightUpdated | KeyLogSynced | WalletImmediateImpactPerformed | InterpretationCompleted
+			FullySyncedBlockHeightNotUpdated = KeyLogSynced | WalletImmediateImpactPerformed | InterpretationCompleted,
+			FullySynced = BlockHeightUpdated | FullySyncedBlockHeightNotUpdated
 		}
 
 		static WalletAccountChainState() {
@@ -39,8 +41,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		[BsonId]
 		public string AccountCode { get; set; }
 
+		/// <summary>
+		/// the last actual block that we synced
+		/// </summary>
 		public long LastBlockSynced { get; set; } = 0;
-
+		
+		/// <summary>
+		/// the block that we had synced before that
+		/// </summary>
+		public long PreviousBlockSynced { get; set; } = 0;
+		
 		/// <summary>
 		///     The status of the last block insertion
 		/// </summary>

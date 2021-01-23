@@ -31,7 +31,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			NLog.Default.Verbose($"Received peer list request from peer {this.ClientConnection.ScopedAdjustedIp}");
 
 			// lets send the server our list of nodeAddressInfo IPs
-			serverPeerListReply.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(this.triggerMessage.Message.NodeInfo, this.triggerMessage.Message.NodeInfo.GetSupportedBlockchains(), NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {this.ClientConnection.NodeAddressInfo}.ToList(), true, 20));
+			serverPeerListReply.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(this.triggerMessage.Message.NodeInfo
+				, this.triggerMessage.Message.NodeInfo.GetSupportedBlockchains()
+				, NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {this.ClientConnection.NodeAddressInfo}.ToList()
+				, true, 20));
 
 			if(!this.Send(serverPeerListReply)) {
 				NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");

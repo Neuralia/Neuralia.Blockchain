@@ -12,6 +12,9 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 	public abstract class AppSettingsBase : IAppSettingsBase {
 
+		public AppSettingsBase() {
+			
+		}
 		public enum ChainScopedLoggingTypes {
 			Never,
 			WhenMany,
@@ -189,10 +192,15 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public bool UseUPnP { get; set; } = true;
 		public bool UsePmP { get; set; } = false;
 
-		public List<FullNode> Nodes { get; set; } = new List<FullNode>();
+		public List<FullNode> Nodes { get; set; } = new ();
+		
+		/// <summary>
+		/// Connections to local nodes will be maintained aggressively, and won't count in totals, meant to be used with each-others under a LAN
+		/// </summary>
+		public List<FullNode> LocalNodes { get; set; } = new ();
 
-		public List<WhitelistedNode> Whitelist { get; set; } = new List<WhitelistedNode>();
-		public List<Node> Blacklist { get; set; } = new List<Node>();
+		public List<WhitelistedNode> Whitelist { get; set; } = new ();
+		public List<Node> Blacklist { get; set; } = new ();
 
 		/// <summary>
 		/// the loggers we wish to enable. empty means all.

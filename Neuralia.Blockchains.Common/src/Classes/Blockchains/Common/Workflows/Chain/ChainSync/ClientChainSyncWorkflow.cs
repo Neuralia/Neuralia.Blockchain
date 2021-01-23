@@ -619,7 +619,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								return ResponseValidationResults.Valid;
 							}, potentialConnections).ConfigureAwait(false);
-						} catch(TaskCanceledException tex) {
+						} 
+						catch(ObjectDisposedException oex) {
+							throw;
+						}
+						catch(TaskCanceledException tex) {
 							throw;
 						}
 						catch(Exception ex) {
@@ -684,7 +688,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				this.CentralCoordinator.Log.Information($"{TAG} Workflow to check for new Synchronization peers is completed. Added {validRepliesCount} new peers.");
-			} catch(Exception e) {
+			} catch(ObjectDisposedException oex) {
+
+				throw;
+			} 
+			catch(TaskCanceledException tcex) {
+
+				throw;
+			} 
+			catch(Exception e) {
 				this.CentralCoordinator.Log.Error(e, $"{TAG} Exception occured");
 
 				throw;
@@ -1610,11 +1622,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						}
 					}
 
-				} catch(Exception ex) {
+				} catch(ObjectDisposedException ex) {
+					// do nothing
+				}
+				catch(Exception ex) {
 					this.CentralCoordinator.Log.Verbose(ex, $"{TAG} Error occured while waiting for messages (A)");
 					// what to do here?
 				}
-			} catch(Exception e) {
+			} catch(ObjectDisposedException ex) {
+				// do nothing
+				throw;
+			}
+			catch(Exception e) {
 				this.CentralCoordinator.Log.Error(e, $"{TAG} Error occured while waiting for messages (B)");
 
 				throw;

@@ -159,9 +159,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					this.StopTimer();
 					
 					foreach(var entry in this.providers) {
-						if(!entry.Value.HasEntries) {
-							NLog.Default.Information($"Batching Provider {entry.Key} has no entries");
-						} else {
+						if(entry.Value.HasEntries) {
+		
 							NLog.Default.Information($"Flushing load batching Provider {entry.Key}");
 
 							try {

@@ -82,7 +82,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 					this.timer.Change(Timeout.Infinite, Timeout.Infinite);
 
 					if(this.TimerEvent != null) {
-						await this.TimerEvent((T)state).ConfigureAwait(false);
+						await this.TimerEvent(state!=default?(T)state:default).ConfigureAwait(false);
 					}
 				} catch(Exception ex) {
 					NLog.Default.Error(ex, "Timer exception");
@@ -95,7 +95,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 						Interlocked.Exchange(ref this.sessionId, 0);
 					}
 					
-					this.timer.Change(this.period, this.period);
+					this.timer?.Change(this.period, this.period);
 				}
 			}
 		}

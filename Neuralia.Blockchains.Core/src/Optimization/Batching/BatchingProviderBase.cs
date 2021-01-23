@@ -45,6 +45,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		
 		public abstract class BatchingEntry {
 			public DateTime Timestamp { get; protected internal set; }
+			public abstract bool IsValid { get; }
 
 		}
 
@@ -53,7 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			var entriesGroup = this.Entries;
 			this.Entries = new ConcurrentBag<T>();
 
-			foreach(var entry in entriesGroup.OrderBy(e => e.Timestamp)) {
+			foreach(var entry in entriesGroup.Where(e => e.IsValid).OrderBy(e => e.Timestamp)) {
 
 				var syncType = this.SyncType;
 

@@ -595,7 +595,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								ResultsState state = ResultsState.None;
 								(nextBlockSpecs, state) = await this.PrepareNextBlockDownload(connections, nextBlockSpecs, lc).ConfigureAwait(false);
 
-								if(state != ResultsState.OK) {
+								if(state != ResultsState.OK || nextBlockSpecs == null)  {
 									sleepTime = 2000;
 								} else {
 									this.UpdateSignificantActionTimestamp();
@@ -698,7 +698,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						running.running = false;
 
-						void Wait(int time) {
+						void WaitComplete(int time) {
 							try {
 								Task[] continueTasks = tasksSet.Where(t => !t.IsCompleted).ToArray();
 
@@ -720,12 +720,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 						}
 
-						Wait(3);
+						WaitComplete(3);
 
 						if(tasksSet.Any(t => !t.IsCompleted)) {
 							this.CancelTokenSource.Cancel();
 
-							Wait(10);
+							WaitComplete(10);
 						}
 
 						// lets push forward the faults
@@ -870,7 +870,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 
 					if(this.downloadedBlockIdsHistory.Any()) {
-						if(this.downloadedBlockIdsHistory.All(e => e.Entry == this.currentBlockDownloadId)) {
+						if(this.downloadedBlockIdsHistory.Count > 5 && this.downloadedBlockIdsHistory.All(e => e.Entry == this.currentBlockDownloadId)) {
 							// this is bad, we repeated the same block request too many times.
 							Thread.Sleep(TimeSpan.FromSeconds(10));
 

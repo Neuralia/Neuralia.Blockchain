@@ -304,22 +304,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			try {
 				await this.BuildDelta(activeDirectoryInfo, physicalDirectoryInfo, fileDeltas).ConfigureAwait(false);
 
-				await this.CreateSafetyBackup(backupPath, fileDeltas).ConfigureAwait(false);
+				if(fileDeltas.Any()) {
+					await this.CreateSafetyBackup(backupPath, fileDeltas).ConfigureAwait(false);
 
-				await this.ApplyFileDeltas(fileDeltas).ConfigureAwait(false);
+					await this.ApplyFileDeltas(fileDeltas).ConfigureAwait(false);
 
-				await this.CompleteFileChanges(fileDeltas).ConfigureAwait(false);
+					await this.CompleteFileChanges(fileDeltas).ConfigureAwait(false);
 
-				await this.RepeatAsync(async () => {
+					await this.RepeatAsync(async () => {
 
-					foreach(string file in Narballer.GetPackageFilesList(backupPath)) {
-						FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file);
+						foreach(string file in Narballer.GetPackageFilesList(backupPath)) {
+							FileEntry fileInfo = this.physicalFileSystem.GetFileEntryUnconditional(file);
 
-						if(fileInfo?.Exists ?? false) {
-                            await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
+							if(fileInfo?.Exists ?? false) {
+								await this.FullyDeleteFile(fileInfo.ToOsPath(this.physicalFileSystem), this.physicalFileSystem).ConfigureAwait(false);
+							}
 						}
-					}
-				}).ConfigureAwait(false);
+					}).ConfigureAwait(false);
+				}
 
 			} catch(Exception ex) {
 				// delete our temp work
