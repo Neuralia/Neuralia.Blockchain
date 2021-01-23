@@ -115,7 +115,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.S
 			jsonDeserializer.SetProperty("Publication", this.Publication);
 			jsonDeserializer.SetProperty("MiningTierCount", this.MiningTiers.Count);
 
-			jsonDeserializer.SetArray("miningTiers", this.MiningTiers);
+			jsonDeserializer.SetArray("MiningTiers", this.MiningTiers);
 			
 			foreach(Enums.MiningTiers tier in this.MiningTiers) {
 				jsonDeserializer.SetProperty($"{tier.ToString()}_MaximumElectedTransactionCount", this.MaximumElectedTransactionCount[tier]);

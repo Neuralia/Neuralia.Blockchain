@@ -3,9 +3,21 @@ using Neuralia.Blockchains.Core.General.Types;
 namespace Neuralia.Blockchains.Core {
 	public static class Enums {
 		
+		/// <summary>
+		///   Describes how memory used by Time Hard Signature is handled. 
+		/// </summary>
 		public enum THSMemoryTypes {
+			/// <summary>
+			/// Use RAM memory
+			/// </summary>
 			RAM = 1,
+			/// <summary>
+			/// Use hard disk for memory.
+			/// </summary>
 			HDD = 2,
+			/// <summary>
+			/// Write data to database or if not possible write to hard disk.
+			/// </summary>
 			HDD_DB = 3
 		}
 		
@@ -106,6 +118,9 @@ namespace Neuralia.Blockchains.Core {
 			
 		}
 
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum MiningStatus : byte {
 			Unknown = 0,
 			Mining = 1,
@@ -113,6 +128,9 @@ namespace Neuralia.Blockchains.Core {
 			NotMining = byte.MaxValue
 		}
 
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum MiningTiers : byte {
 
 			FirstTier = 1,
@@ -122,6 +140,9 @@ namespace Neuralia.Blockchains.Core {
 			Other = byte.MaxValue
 		}
 
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum PeerTypes : byte {
 			Unknown = 0,
 			FullNode = 1,
@@ -130,6 +151,9 @@ namespace Neuralia.Blockchains.Core {
 			Hub = 4
 		}
 
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum PublicationStatus : byte {
 			Unknown = 0,
 			New = 1,
@@ -139,6 +163,9 @@ namespace Neuralia.Blockchains.Core {
 			Rejected = byte.MaxValue
 		}
 		
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum AccountPublicationModes : byte {
 			Unknown = 0,
 			Appointment = 1,
@@ -146,13 +173,18 @@ namespace Neuralia.Blockchains.Core {
 			Server = 3
 		}
 
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum OperationStatus : byte {
 			Unknown = 0,
 			None = 1,
 			Appointment = 2,
 			Presenting = 3,
 		}
-		
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum AppointmentStatus : byte {
 			None = 0,
 			AppointmentRequested = 1,
@@ -173,12 +205,31 @@ namespace Neuralia.Blockchains.Core {
 			Threaded,
 			Synchronous
 		}
-
+		/** @brief 
+		**/
+		/// <summary>
+		/// How much of the available processor's cores should we use?
+		/// </summary>
 		public enum ThreadMode:byte {
+			/// <summary>
+			/// Use only 1 core
+			/// </summary>
 			Single = 0,
+			/// <summary>
+			/// Use 25% of the available processor's cores
+			/// </summary>
 			Quarter = 1,
+			/// <summary>
+			/// Use 50% or the available processor's cores
+			/// </summary>
 			Half = 2,
+			/// <summary>
+			/// Use 75% of the available processor's cores
+			/// </summary>
 			ThreeQuarter = 3,
+			/// <summary>
+			/// Use all available processor cores
+			/// </summary>
 			Full = 4
 		}
 

@@ -180,7 +180,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				}
 			} catch(Exception ex) {
 				//TODO: do something?
-				NLog.Default.Error(ex, "Timer exception");
+				NLog.Connections.Error(ex, "Timer exception");
 			}
 
 		}, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(10));
@@ -321,7 +321,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public double Latency { get; private set; } = Double.MaxValue;
 		
-		// A UUiD we set and use itnernally
+		// A UUiD we set and use internally
 		public Guid InternalUuid { get; } = Guid.NewGuid();
 
 		public Guid ReportedUuid { get; private set; }
@@ -402,7 +402,7 @@ namespace Neuralia.Blockchains.Core.Network {
 						this.State = ConnectionState.NotConnected;
 
 						// seems we are not connected after all
-						NLog.Default.Verbose("Socket was disconnected ungracefully from the other side. Disconnecting.");
+						NLog.Connections.Verbose("Socket was disconnected ungracefully from the other side. Disconnecting.");
 						this.Close();
 						this.Latency = Double.MaxValue;
 						return false;
@@ -618,7 +618,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.dataReceptionTask = this.StartReceptionStream(this.tokenSource.Token, handshakeCallback).WithAllExceptions().ContinueWith(task => {
 				if(task.IsFaulted) {
 					// an exception occured. but alert only if we should, otherwise let the connection die silently.
-
+					NLog.Connections.Verbose($"[{nameof(TcpConnection)}] Error in {nameof(StartReceptionStream)}, task exception: '{task.Exception}'");
 					if(this.alertExceptions) {
 						var exception = new P2pException("A serious exception occured while receiving data from the socket.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
 
@@ -639,6 +639,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private async Task<int> StartReceptionStream(CancellationToken ct, TcpConnection.MessageBytesReceived handshakeCallback = null) {
 
+			Exception? e = null;
 			try {
 
 				await this.ReadHandshake(ct).ConfigureAwait(false);
@@ -651,6 +652,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					this.resetEvent.Set();
 				}
 
+				
 				await this.ReadMessage(bytes => {
 
 					if(handshakeCallback != null) {
@@ -668,23 +670,35 @@ namespace Neuralia.Blockchains.Core.Network {
 					return Task.CompletedTask;
 				}, ct).ConfigureAwait(false);
 
-			} catch(InvalidPeerException ipex) {
+			} catch(InvalidPeerException ipex)
+			{
+				e = ipex;
 				// ok, we got an invalid peer. we dont need to do anything, lost let it go and disconnect
 				this.alertExceptions = false;
-			} catch(CounterConnectionException cex) {
+			} catch(CounterConnectionException cex)
+			{
+				e = cex;
 				this.alertExceptions = false;
-			} catch(TaskCanceledException tex) {
+			} catch(TaskCanceledException tex)
+			{
+				e = tex;
 				this.alertExceptions = false;
-			} catch(OperationCanceledException opex) {
+			} catch(OperationCanceledException opex)
+			{
+				e = opex;
 				this.alertExceptions = false;
-			} catch(ObjectDisposedException ode) {
+			} catch(ObjectDisposedException ode)
+			{
+				e = ode;
 				// do nothing
 				this.alertExceptions = false;
-			} catch(Exception ex) {
-
-				NLog.Default.Verbose(ex, "Error occured on the connection");
+			} catch(Exception ex)
+			{
+				e = ex;
+				NLog.Connections.Verbose(ex, "Error occured on the connection");
 			} finally {
 				// disconnected
+				NLog.Connections.Verbose($"[{nameof(TcpConnection)}] {this.InternalUuid} {this.EndPoint} Disconnecting, exception: '{e?.Message??"None"}', stack trace {Environment.StackTrace}");
 				this.Close();
 			}
 
@@ -838,145 +852,156 @@ namespace Neuralia.Blockchains.Core.Network {
 			var tryAttempt = 0;
 
 			READING_CONTEXT read = default;
+			try
+			{
+				while(true) {
+					if(cancellationNeuralium.IsCancellationRequested) {
+						this.ReadTaskCancelled();
+						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Cancellation Requested (1)");
+						throw new TaskCanceledException();
+					}
 
-			while(true) {
-				if(cancellationNeuralium.IsCancellationRequested) {
-					this.ReadTaskCancelled();
+					read = await this.ReadDataFrame(read, cancellationNeuralium).ConfigureAwait(false);
 
-					throw new TaskCanceledException();
-				}
+					if(read.IsCanceled) {
+						this.ReadTaskCancelled();
+						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Cancellation Requested (2)");
+						throw new TaskCanceledException();
+					}
 
-				read = await this.ReadDataFrame(read, cancellationNeuralium).ConfigureAwait(false);
+					// can we find a complete frame?
+					if(!read.IsEmpty) {
 
-				if(read.IsCanceled) {
-					this.ReadTaskCancelled();
+						// first thing, extract the message size
 
-					throw new TaskCanceledException();
-				}
+						var segmentOffset = 0;
 
-				// can we find a complete frame?
-				if(!read.IsEmpty) {
+						// first we always read the message size
+						var messageSize = 0;
 
-					// first thing, extract the message size
+						if(sizeByteSize == 0) {
+							try {
+								bytesCopied = 0;
+								tryAttempt = 0;
+								sizeByteSize = this.receiveByteShrinker.ReadBytes(read);
+								messageSize = (int) this.receiveByteShrinker.Value;
 
-					var segmentOffset = 0;
+								// yup, we will need this so lets not make it clearable
+								mainBuffer = SafeArrayHandle.Create(messageSize);
 
-					// first we always read the message size
-					var messageSize = 0;
+								read.DataRead(sizeByteSize);
 
-					if(sizeByteSize == 0) {
-						try {
-							bytesCopied = 0;
-							tryAttempt = 0;
-							sizeByteSize = this.receiveByteShrinker.ReadBytes(read);
-							messageSize = (int) this.receiveByteShrinker.Value;
+								continue;
 
-							// yup, we will need this so lets not make it clearable
-							mainBuffer = SafeArrayHandle.Create(messageSize);
-
-							read.DataRead(sizeByteSize);
-
-							continue;
-
-						} catch(Exception) {
-							sizeByteSize = 0;
-							mainBuffer?.Dispose();
-							mainBuffer = null;
-						}
-					} else if(mainBuffer != null) {
-
-						int usefulBufferLength = (int) read.Length - segmentOffset;
-
-						// accumulate data		
-						if(usefulBufferLength != 0) {
-
-							tryAttempt = 0;
-
-							if(mainBuffer.Length < usefulBufferLength) {
-								usefulBufferLength = mainBuffer.Length;
-							}
-
-							int remainingLength = usefulBufferLength + bytesCopied;
-
-							if(remainingLength > mainBuffer.Length) {
-								usefulBufferLength = mainBuffer.Length - bytesCopied;
-							}
-
-							//lets check if we received more data than we expected. if we did, this is critical, means everything is offsetted. this is serious and we break.
-							if(bytesCopied > mainBuffer.Length) {
-								throw new TcpApplicationException("The amount of data received is greater than expected. fatal error.");
-							}
-
-							read.CopyTo(mainBuffer.Span, segmentOffset, bytesCopied, usefulBufferLength);
-
-							bytesCopied += usefulBufferLength;
-
-							// ok we are done with this
-							read.DataRead(usefulBufferLength);
-
-							if(bytesCopied == mainBuffer.Length) {
-
-								IMessageEntry messageEntry = null;
-
-								//we expect to read the header to start. if the header is corrupted, this will break and thats it.
-								messageEntry = this.protocolFactory.CreateMessageParser(mainBuffer.Branch()).RehydrateHeader(this.protocolMessageFilters);
-
-								// use the entry
-								IMessageEntry entry = messageEntry;
+							} catch(Exception) {
 								sizeByteSize = 0;
-								messageSize = 0;
-
-								// free the message entry for another message
-								SafeArrayHandle releasedMainBuffer = mainBuffer;
-
+								mainBuffer?.Dispose();
 								mainBuffer = null;
+							}
+						} else if(mainBuffer != null) {
 
-								if(cancellationNeuralium.IsCancellationRequested) {
-									this.ReadTaskCancelled();
+							int usefulBufferLength = (int) read.Length - segmentOffset;
 
-									throw new TaskCanceledException();
+							// accumulate data		
+							if(usefulBufferLength != 0) {
+
+								tryAttempt = 0;
+
+								if(mainBuffer.Length < usefulBufferLength) {
+									usefulBufferLength = mainBuffer.Length;
 								}
 
-								//lets handle the completed message. we can launch it in its own thread since message pumping can continue meanwhile independently
+								int remainingLength = usefulBufferLength + bytesCopied;
 
-								await Task.Run(async () => {
+								if(remainingLength > mainBuffer.Length) {
+									usefulBufferLength = mainBuffer.Length - bytesCopied;
+								}
 
-									SafeArrayHandle localMainBuffer = releasedMainBuffer;
+								//lets check if we received more data than we expected. if we did, this is critical, means everything is offsetted. this is serious and we break.
+								if(bytesCopied > mainBuffer.Length) {
+									NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: (throwing) The amount of data received is greater than expected. fatal error.");
+									throw new TcpApplicationException("The amount of data received is greater than expected. fatal error.");
+								}
 
-									using(localMainBuffer) {
-										using(IDataRehydrator bufferRehydrator = DataSerializationFactory.CreateRehydrator(localMainBuffer)) {
+								read.CopyTo(mainBuffer.Span, segmentOffset, bytesCopied, usefulBufferLength);
 
-											// skip the header offset
-											bufferRehydrator.Forward(messageEntry.Header.MessageOffset);
+								bytesCopied += usefulBufferLength;
 
-											entry.SetMessageContent(bufferRehydrator);
+								// ok we are done with this
+								read.DataRead(usefulBufferLength);
 
-											await protocolFactory.HandleCompetedMessage(entry, callback, this).ConfigureAwait(false);
+								if(bytesCopied == mainBuffer.Length) {
+
+									IMessageEntry messageEntry = null;
+
+									//we expect to read the header to start. if the header is corrupted, this will break and thats it.
+									messageEntry = this.protocolFactory.CreateMessageParser(mainBuffer.Branch()).RehydrateHeader(this.protocolMessageFilters);
+
+									// use the entry
+									IMessageEntry entry = messageEntry;
+									sizeByteSize = 0;
+									messageSize = 0;
+
+									// free the message entry for another message
+									SafeArrayHandle releasedMainBuffer = mainBuffer;
+
+									mainBuffer = null;
+
+									if(cancellationNeuralium.IsCancellationRequested) {
+										NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Cancellation Requested (3)");
+										this.ReadTaskCancelled();
+
+										throw new TaskCanceledException();
+									}
+
+									//lets handle the completed message. we can launch it in its own thread since message pumping can continue meanwhile independently
+
+									await Task.Run(async () => {
+
+										SafeArrayHandle localMainBuffer = releasedMainBuffer;
+
+										using(localMainBuffer) {
+											using(IDataRehydrator bufferRehydrator = DataSerializationFactory.CreateRehydrator(localMainBuffer)) {
+
+												// skip the header offset
+												bufferRehydrator.Forward(messageEntry.Header.MessageOffset);
+
+												entry.SetMessageContent(bufferRehydrator);
+
+												await protocolFactory.HandleCompetedMessage(entry, callback, this).ConfigureAwait(false);
+											}
 										}
-									}
 
-									return true;
-								}, cancellationNeuralium).WithAllExceptions().ContinueWith(task => {
-									if(task.IsFaulted) {
-										//an exception occured
-										throw new P2pException("An exception occured while processing a message response.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
-									}
-								}, cancellationNeuralium).ConfigureAwait(false);
+										return true;
+									}, cancellationNeuralium).WithAllExceptions().ContinueWith(task => {
+										if(task.IsFaulted) {
+											//an exception occured
+											NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: task is faulted : {task.Exception}");
+											throw new P2pException("An exception occured while processing a message response.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
+										}
+									}, cancellationNeuralium, TaskContinuationOptions.None, TaskScheduler.Current).ConfigureAwait(false);
 
-							}
-						} else {
-							tryAttempt++;
+								}
+							} else {
+								tryAttempt++;
 
-							if(tryAttempt == 5) {
-								throw new TcpApplicationException("Our sender just hanged. we received no new data that we expected.");
+								if(tryAttempt == 5) {
+									NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Spent all 5 attempts");
+									throw new TcpApplicationException("Our sender just hanged. we received no new data that we expected.");
+								}
 							}
 						}
 					}
-				}
 
-				if(read.IsCompleted) {
-					break;
+					if(read.IsCompleted) {
+						break;
+					}
 				}
+			}
+			catch (Exception e)
+			{
+				NLog.Connections.Verbose(e, $"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Caught Exception");
+				throw;
 			}
 		}
 

@@ -8,7 +8,9 @@ using Serilog.Events;
 
 namespace Neuralia.Blockchains.Core.Logging {
 	public class NLog {
-
+		/// <summary>
+		/// 
+		/// </summary>
 		public enum LoggerTypes {
 			All, 
 			Standard, 

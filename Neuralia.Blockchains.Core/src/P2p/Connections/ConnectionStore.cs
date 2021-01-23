@@ -843,7 +843,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				if(connection.ClientUuid == Guid.Empty) {
 					NLog.Connections.Verbose("Removing connection for as of yet unidentified client");
 				} else {
-					NLog.Connections.Verbose($"Closing connection for client {connection.ClientUuid}");
+					NLog.Connections.Verbose($"Closing connection for client {connection.ClientUuid}, here is why : {Environment.StackTrace}");
 				}
 
 				try {
@@ -851,8 +851,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						PeerConnection localConnection = this.Connections[connection.ClientUuid];
 
 						if(localConnection.connection.InternalUuid == connection.connection.InternalUuid) {
-							// remove it only if it is the same connection. otherwise it amy be another to the same peer. we dont want to remove rthe original
+							// remove it only if it is the same connection. otherwise it amy be another to the same peer. we dont want to remove the original
 							if(!this.Connections.TryRemove(connection.ClientUuid, out PeerConnection outPeerInfo)) {
+								NLog.Connections.Verbose($"Removing connection for client {connection.ClientUuid}({connection.connection.InternalUuid}) ({connection.NodeAddressInfo}) from {nameof(this.Connections)}");
 								this.Connections.RemoveSafe(connection.ClientUuid);
 							}
 
@@ -871,6 +872,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// alert the world we lost a peer
 					this.TriggerPeerConnectionsCountUpdated().WaitAndUnwrapException();
 					if(this.removingConnections.Contains(connection.ClientUuid)) {
+						NLog.Connections.Verbose($"Removing connection for client {connection.ClientUuid} ({connection.NodeAddressInfo}) from {nameof(this.removingConnections)}");
 						this.removingConnections.Remove(connection.ClientUuid);
 					}
 				}
@@ -897,6 +899,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public Task ConfirmConnection(PeerConnection connection) {
 			lock(this.locker) {
+				
+				NLog.Connections.Verbose($"ConfirmConnection {connection.ClientUuid} ({connection.NodeAddressInfo})");
+				
 				if(connection.ClientUuid == Guid.Empty) {
 					throw new ApplicationException("Peer uuid cannot be empty");
 				}
@@ -911,10 +916,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					throw new ApplicationException("We are already connected to this peer!");
 				}
 
-				if(this.AllConnections.ContainsKey(connection.ClientUuid)) {
+				if(this.Connections.ContainsKey(connection.ClientUuid)) {
 					// clear the old connection
-					NLog.Connections.Verbose($"ConfirmConnection {connection.ClientUuid} already in AllConnections, removing....");
-					this.RemoveConnection(this.AllConnections[connection.ClientUuid]);
+					NLog.Connections.Verbose($"({nameof(ConfirmConnection)}: {connection.ClientUuid} already in ({this.Connections}) (now {connection.NodeAddressInfo}, was {this.Connections[connection.ClientUuid].NodeAddressInfo}), removing...");
+					this.RemoveConnection(this.Connections[connection.ClientUuid]);
 				}
 
 				this.RemoveConnectingConnection(connection.connection);
@@ -933,8 +938,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						throw new ApplicationException("We cannot connect to ourselves. connection refused.");
 					}
 				}
-				if(this.Connections.ContainsKey(connection.ClientUuid))
-					NLog.Connections.Verbose($"ConfirmConnection {connection.ClientUuid} already in Connections, calling AddSafe anyway....");
+
+				NLog.Connections.Verbose($"{nameof(ConfirmConnection)} adding {connection.ClientUuid} ({connection.NodeAddressInfo})");
 				
 				this.Connections.AddSafe(connection.ClientUuid, connection);
 
@@ -1458,7 +1463,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public void RemoveConnectingConnection(ITcpConnection tcpConnection) {
 			lock(this.locker) {
 				if(this.ConnectingConnections.ContainsKey(tcpConnection.InternalUuid)) {
-					NLog.Connections.Verbose($"ConfirmConnection {tcpConnection.InternalUuid} already in ConnectingConnections, removing....");
+					NLog.Connections.Verbose($"{nameof(RemoveConnectingConnection)} was present in {(nameof(this.ConnectingConnections))} {tcpConnection.InternalUuid} (end point {tcpConnection.RemoteEndPoint})  removing....");
 					this.ConnectingConnections.RemoveSafe(tcpConnection.InternalUuid);
 				}
 			}
@@ -1647,6 +1652,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			lock(this.locker) {
 
 				PeerConnection peerConnection = this.WrapConnection(tcpConnection, direction);
+				
+				NLog.Connections.Verbose($"{nameof(AddNewConnection)} {peerConnection.connection.InternalUuid} ({peerConnection.NodeAddressInfo})");
 
 				// add it to the connecting state
 				this.ConnectingConnections.AddSafe(peerConnection.connection.InternalUuid, (peerConnection, DateTimeEx.CurrentTime));

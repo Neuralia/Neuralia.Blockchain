@@ -500,6 +500,12 @@ namespace Neuralia.Blockchains.Core.Network {
 						this.blacklist.TryAdd(ip, new QuarantinedInfo {Expiry = DateTimeEx.MaxValue, Reason = QuarantineReason.AppSettingsBlacklist});
 					}
 				}
+				foreach(AppSettingsBase.Node node in GlobalSettings.ApplicationSettings.LocalNodes) {
+					if(IPAddress.TryParse(node.Ip, out IPAddress? ip))
+					{
+						this.isWhiteList.TryAdd(ip, (true, AppSettingsBase.WhitelistedNode.AcceptanceTypes.Always));
+					}
+				}
 			}
 		}
 

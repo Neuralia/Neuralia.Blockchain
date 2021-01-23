@@ -60,7 +60,9 @@ namespace Neuralia.Blockchains.Core.Network {
 					} else if(this.validationServer?.IsRunning ?? false) {
 						// outside of windows, no server
 						this.validationServer?.Stop();
+						this.validationServer = null;
 						this.restValidatorServer?.Stop();
+						this.restValidatorServer = null;
 					}
 
 					if(!verificationWindowValid) {
@@ -84,14 +86,18 @@ namespace Neuralia.Blockchains.Core.Network {
 		public void EnableVerificationWindow() {
 			this.verificationEnd = DateTimeEx.CurrentTime.AddMinutes(3);
 
-			if(!this.validationServer.IsRunning) {
-				this.StartServer(10);
+			if(this.validationServer == null || !this.validationServer.IsRunning) {
+				this.StartServer(10, ValidationServers.Default);
 			}
 		}
 
-		protected virtual void StartServer(int requesterCount) {
+		[Flags]
+		public enum ValidationServers:byte {
+			None = 0, Default = 1, Backup = 1 << 1, Both = Default | Backup
+		}
 
-
+		protected virtual void StartServer(int requesterCount, ValidationServers servers = ValidationServers.Both) {
+			
 			if(this.validationServer == null || !this.validationServer.IsRunning || (this.validationServer.IsRunning && this.validationServer.RequesterCount < requesterCount)) {
 
 				if(this.validationServer != null) {
@@ -116,29 +122,49 @@ namespace Neuralia.Blockchains.Core.Network {
 				}
 				
 #if NET5_0
-				this.validationServer = new TcpValidatorServer(Math.Max(requesterCount, this.MinimumRequesterCount), new NetworkEndPoint(address, GlobalSettings.ApplicationSettings.ValidatorPort, ipMode));
-				this.validationServer.Initialize();
-				
-				this.validationServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
 
-				this.validationServer.Start();
+				ValidationServers startedServers = ValidationServers.None;
+				if(servers.HasFlag(ValidationServers.Default)) {
+					try {
+						this.validationServer = new TcpValidatorServer(Math.Max(requesterCount, this.MinimumRequesterCount), new NetworkEndPoint(address, GlobalSettings.ApplicationSettings.ValidatorPort, ipMode));
+						this.validationServer.Initialize();
 
-				if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol) {
-					this.restValidatorServer = new RESTValidatorServer(GlobalSettings.ApplicationSettings.ValidatorHttpPort);
-					
-					this.restValidatorServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
+						this.validationServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
 
-					this.restValidatorServer.Start();
+						this.validationServer.Start();
+
+						startedServers |= ValidationServers.Default;
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, "Failed to start validator TCP server. This is not critical if backup HTTP server can start");
+					}
 				}
 
-				this.ValidatorServersStarted();
+				if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol && servers.HasFlag(ValidationServers.Backup)) {
+					try {
+						this.restValidatorServer = new RESTValidatorServer(GlobalSettings.ApplicationSettings.ValidatorHttpPort);
+
+						this.restValidatorServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
+
+						this.restValidatorServer.Start();
+						
+						startedServers |= ValidationServers.Backup;
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, "Failed to start validator backup http server. This is not critical");
+					}
+				}
+
+				if(startedServers == ValidationServers.None) {
+					throw new ApplicationException("Failed to start ALL validation servers");
+				}
+				
+				this.ValidatorServersStarted(startedServers);
 #else
 				NLog.Default.Warning("Appointments validators are not possible in netstandard mode");
 #endif
 			} 
 		}
 		
-		protected virtual void ValidatorServersStarted() {
+		protected virtual void ValidatorServersStarted(ValidationServers servers) {
 			
 		}
 		

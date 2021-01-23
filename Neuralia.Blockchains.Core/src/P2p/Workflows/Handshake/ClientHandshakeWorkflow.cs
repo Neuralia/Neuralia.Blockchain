@@ -240,12 +240,20 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					}
 					catch (Exception e)
 					{
-						NLog.Connections.Warning(e,$"[ClientHandshakeWorkflow] Failed to add connection with {this.serverConnection.NodeAddressInfo}");
+						NLog.Connections.Warning(e,$"[{nameof(ClientHandshakeWorkflow)}] Failed to add connection with {this.serverConnection.NodeAddressInfo}");
 						throw;
 					}
+					NLog.Default.Verbose($"{this.serverConnection.NodeAddressInfo} successfully added to connection store (async), sending client reply...");
+					
+					bool result = this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
+					
+					NLog.Default.Verbose($"{this.serverConnection.NodeAddressInfo} {nameof(this.SendClientReadyReply)} returned {result}");
 
-					return this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
+					return result;
+
 				}
+				
+				NLog.Connections.Verbose($"[{nameof(ClientHandshakeWorkflow)}] ProcessServerHandshakeConfirm failed for node {this.serverConnection.NodeAddressInfo}!");
 			} finally {
 				if(ClientHandshakeWorkflow.ConnectingNonces.ContainsKey(handshakeTrigger.Message.nonce)) {
 					ClientHandshakeWorkflow.ConnectingNonces.RemoveSafe(handshakeTrigger.Message.nonce);
@@ -284,7 +292,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			await this.networkingService.ConnectionStore.ConfirmConnection(peerConnectionn).ConfigureAwait(false);
 			await this.networkingService.ConnectionStore.FullyConfirmConnection(peerConnectionn).ConfigureAwait(false);
 
-			NLog.Default.Verbose($"handshake with {peerConnectionn.ScopedAdjustedIp} is now confirmed");
+			NLog.Default.Verbose($"handshake with {peerConnectionn.NodeAddressInfo} is now confirmed, presence in AllConnectionsList: {this.networkingService.ConnectionStore.AllConnectionsList.Any(peer => peer.NodeAddressInfo.Equals(peerConnectionn.NodeAddressInfo))}");
 			
 		}
 
