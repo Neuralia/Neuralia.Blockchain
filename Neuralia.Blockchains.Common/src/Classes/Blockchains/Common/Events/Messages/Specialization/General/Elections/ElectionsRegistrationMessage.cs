@@ -46,7 +46,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Messages
 		/// </summary>
 		public Enums.MiningTiers MiningTier { get; set; } = MiningTierUtils.DefaultTier;
 
-		public List<AccreditationCertificateMetadata> Certificates { get; private set; }
+		public List<AccreditationCertificateMetadata> Certificates { get; private set; } = new List<AccreditationCertificateMetadata>();
 
 		protected override void RehydrateContents(IDataRehydrator rehydrator, IMessageRehydrationFactory rehydrationFactory) {
 			base.RehydrateContents(rehydrator, rehydrationFactory);

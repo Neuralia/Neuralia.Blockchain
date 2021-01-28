@@ -62,6 +62,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			socket.SendBufferSize = 8192;
 			socket.SendTimeout = 3000;
 		}
+		
 		// configured for very short sessions
 		public static void InitializeSocketParametersFast(this Socket socket, int buffer) {
 
@@ -70,9 +71,9 @@ namespace Neuralia.Blockchains.Core.Network {
 			socket.LingerState = new LingerOption(false, 0);
 			socket.ExclusiveAddressUse = true;
 			socket.ReceiveBufferSize = buffer;
-			socket.ReceiveTimeout = 10000;
+			socket.ReceiveTimeout = 1000;
 			socket.SendBufferSize = buffer;
-			socket.SendTimeout = 10000;
+			socket.SendTimeout = 1000;
 		}
 
 		/// <summary>

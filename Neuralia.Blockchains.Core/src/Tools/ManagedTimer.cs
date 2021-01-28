@@ -94,8 +94,12 @@ namespace Neuralia.Blockchains.Core.Tools {
 					if(Interlocked.Read(ref this.sessionId) == long.MaxValue) {
 						Interlocked.Exchange(ref this.sessionId, 0);
 					}
-					
-					this.timer?.Change(this.period, this.period);
+
+					try {
+						this.timer?.Change(this.period, this.period);
+					} catch {
+						
+					}
 				}
 			}
 		}

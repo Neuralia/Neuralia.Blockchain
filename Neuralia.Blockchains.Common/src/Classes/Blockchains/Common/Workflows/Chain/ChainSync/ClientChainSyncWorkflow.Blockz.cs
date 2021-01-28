@@ -865,8 +865,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 
 					if(this.currentBlockDownloadId < this.downloadBlockHeight) {
+						// Although downloadQueue was filled up from downloadBlockHeight to min(downloadBlockHeight + 100, publicBlockHeight), it is only done once empty
 						// we are downloading a block that is back in time, lets free the loosely banned peers
-						connections.FreeLowLevelBans();
+						this.CentralCoordinator.Log.Verbose($"Block id {this.currentBlockDownloadId} is below our downloadBlockHeight, the queue is out of date, we'll free banned connections");
+						connections.FreeLowLevelBans(); //why?? what's the relation between having an out of date downloadQueue and lacking connections, shouldn't we purge downloadQueue of all irrelevant ids (maxlem)?
 					}
 
 					if(this.downloadedBlockIdsHistory.Any()) {
@@ -875,14 +877,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							Thread.Sleep(TimeSpan.FromSeconds(10));
 
 							// lets stop the sync, something went wrong.
-							throw new WorkflowException();
+							throw new WorkflowException($"We repeated the same block (id {this.currentBlockDownloadId}) request too many times (5)");
 						}
 					}
 
 					this.downloadedBlockIdsHistory.Enqueue(this.currentBlockDownloadId);
 
 					while(this.downloadedBlockIdsHistory.Count > 5) {
-						this.downloadedBlockIdsHistory.TryDequeue(out _);
+						this.downloadedBlockIdsHistory.TryDequeue(out var dumped);
+						this.CentralCoordinator.Log.Verbose($"trimming block id {dumped} from downloadedBlockIdsHistory");
 					}
 
 					bool force = this.downloadQueue[this.currentBlockDownloadId];
@@ -904,6 +907,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					if(done) {
 						if(force) {
 							// reset it all
+							this.CentralCoordinator.Log.Verbose($"Block id {this.currentBlockDownloadId} was already downloaded, but a force was requested, clearing manifest...");
 							this.ClearBlockSyncManifest(this.currentBlockDownloadId);
 						} else {
 							// we already have it, we move on.
@@ -1275,12 +1279,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			if((singleEntryContext.syncManifest != null) && singleEntryContext.syncManifest.IsComplete) {
 				//TODO: check this
+				this.CentralCoordinator.Log.Verbose($"Block Id {blockId} was already downloaded, according to synchManifest");
 				return (nextBlockSpecs, ResultsState.OK);
 			}
 
 			if(singleEntryContext.details.Id == this.ChainStateProvider.DownloadBlockHeight) {
 				// ok, the last download must have been lost, so we reset to the previous and do it all again
-				this.ChainStateProvider.DownloadBlockHeight -= 1;
+				this.CentralCoordinator.Log.Verbose($"{nameof(ChainStateProvider)}'s DownloadBlockHeight is the same as manifest Id, this means it was wrongly incremented... decrementing");
+				this.ChainStateProvider.DownloadBlockHeight -= 1; //isn't that a bit fishy? (maxlem)
 			}
 
 			if(singleEntryContext.syncManifest == null) {

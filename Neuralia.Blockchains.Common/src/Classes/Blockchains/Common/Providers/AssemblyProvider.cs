@@ -1055,8 +1055,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						ClosureWrapper<int> lastRound = new ClosureWrapper<int>(state.thsState.Round);
 						ClosureWrapper<DateTime> lastCheckpoint = DateTime.Now.AddMinutes(1);
 						
-						thsEnvelope.THSEnvelopeSignatureBase.Solution = await thsEngine.PerformTHS(thsHash, cancellationToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
-							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSBegin(hashTargetDifficulty, rulesSetDescriptor.NonceTarget, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions), correlationContext);
+						thsEnvelope.THSEnvelopeSignatureBase.Solution = await thsEngine.PerformTHS(thsHash, cancellationToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingRound, targetRoundNonce, solutions) => {
+							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSBegin(hashTargetDifficulty, rulesSetDescriptor.Rounds, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingRound, targetRoundNonce, solutions), correlationContext);
 
 							return Task.CompletedTask;
 						}, async (currentNonces, currentRound, totalNonce, solutions, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio) => {
@@ -1090,10 +1090,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 								lastCheckpoint.Value = DateTime.Now.AddMinutes(1);
 							}
 
-						}, (currentRound, totalNonce, lastNonce, lastSolution) => {
-							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSRound(currentRound, totalNonce, lastNonce, lastSolution), correlationContext);
+						}, (currentRound, lastNonce, lastSolution) => {
+							this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.THSRound(currentRound, lastNonce, lastSolution), correlationContext);
 
-							this.CentralCoordinator.Log.Information($"THS Round. Current round: {currentRound}. Total nonce: {totalNonce}. last solution nonce: {lastNonce}. Last solution: {lastSolution}");
+							this.CentralCoordinator.Log.Information($"THS Round. Current round: {currentRound}. last solution nonce: {lastNonce}. Last solution: {lastSolution}");
 
 							return Task.CompletedTask;
 						}, state.thsState).ConfigureAwait(false);

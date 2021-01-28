@@ -66,6 +66,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private readonly double peerIPsRequestPeriod;
 		private readonly double peerReconnectionPeriod;
 		private readonly double dynamicBlacklistPeriod;
+		private readonly int maxConnectionRequestPerCrawl;
 		
 		private DateTime lastHubIpsRequested;
 		private DateTime lastHubIpsReceived;
@@ -85,7 +86,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		
 		public IPCrawler(int averagePeerCount, int maxPeerCount, int maxMobilePeerCount, int maxNonConnectablePeerCount = -1, List<NodeAddressInfo> localNodes = null
 			, double hubIPsRequestPeriod = 1800.0, double peerIPsRequestPeriod = 600.0
-			, double peerReconnectionPeriod = 60.0, double dynamicBlacklistPeriod = 24 * 60 * 60) {
+			, double peerReconnectionPeriod = 60.0, double dynamicBlacklistPeriod = 24 * 60 * 60, int maxConnectionRequestPerCrawl = 20) {
 			
 			this.connections.maxConnected = maxPeerCount;
 			this.averagePeerCount = averagePeerCount;
@@ -103,6 +104,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.hubIPsRequestPeriod = hubIPsRequestPeriod;
 			this.peerReconnectionPeriod = peerReconnectionPeriod;
 			this.dynamicBlacklistPeriod = dynamicBlacklistPeriod;
+			this.maxConnectionRequestPerCrawl = maxConnectionRequestPerCrawl;
 		}
 
 		private class ConnectionsDict
@@ -721,12 +723,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			for (int i = 0; i < Math.Min(nConnectable - this.connections.maxConnected, nConnectable); i++)
 				RemoveIfNotWhitelisted(connectedConnectableNodes[i].Key);
 			
-			//non-connectable
-			for(int i = 0; i < Math.Min(nNonConnectable - this.nonConnectableConnections.nConnected, nNonConnectable); i++)
+			
+			for(int i = 0; i < Math.Min(nNonConnectable - this.nonConnectableConnections.maxConnected, nNonConnectable); i++)
 				RemoveIfNotWhitelisted(connectedNonConnectableNodes[i].Key);
 			
 			//mobile
-			for(int i = 0; i < Math.Min(connectedMobileNodes.Count - this.mobileConnections.nConnected, connectedMobileNodes.Count); i++)
+			for(int i = 0; i < Math.Min(connectedMobileNodes.Count - this.mobileConnections.maxConnected, connectedMobileNodes.Count); i++)
 				RemoveIfNotWhitelisted(connectedMobileNodes[i].Key);
 			
 			// request peers, print stats
@@ -778,7 +780,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				mobileConnections.peerCounts.Enqueue(connectedMobileNodes.Count);
 			}
 
-			for (int i = 0; i < Math.Min(averagePeerCount - Convert.ToInt32(avg), connectionCandidates.Count); i++)
+			for (int i = 0; i < Math.Min(averagePeerCount - Convert.ToInt32(avg), Math.Min(maxConnectionRequestPerCrawl, connectionCandidates.Count)); i++)
 			{
 				var candidate = connectionCandidates[i];
 				var node = candidate.Key;

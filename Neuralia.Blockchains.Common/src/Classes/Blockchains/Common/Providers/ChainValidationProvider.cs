@@ -1834,8 +1834,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_SOLUTION);
 				}
 
-				if(thsEnvelope.THSEnvelopeSignatureBase.Solution.Solutions.Count > rulesSetDescriptor.MaxRounds) {
-					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_TOO_MANY_SOLUTIONS);
+				if(thsEnvelope.THSEnvelopeSignatureBase.Solution.Solutions.Count != rulesSetDescriptor.Rounds) {
+					return this.CreateTransactionValidationResult(ValidationResult.ValidationResults.Invalid, TransactionValidationErrorCodes.Instance.INVALID_THS_WRONG_SOLUTION_COUNT);
 				}
 				
 				using THSEngine thsEngine = new THSEngine(thsEnvelope.THSEnvelopeSignatureBase.RuleSet, rulesSetDescriptor, GlobalSettings.ApplicationSettings.THSMemoryType);

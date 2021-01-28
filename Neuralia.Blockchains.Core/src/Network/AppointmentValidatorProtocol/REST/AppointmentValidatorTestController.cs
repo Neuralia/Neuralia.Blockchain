@@ -26,6 +26,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.REST {
 		[ProducesResponseType(400)]
 		public IActionResult Test() {
 
+			NLog.Default.Information("HTTP REST Validator ping message received. sending pong.");
+			
 			return this.Ok("1");
 		}
 	}

@@ -485,8 +485,8 @@ namespace Neuralia.Blockchains.Core.Network {
 					endpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(this.EndPoint), this.EndPoint.EndPoint.Port);
 				}
 
-				IAsyncResult result = this.socket.BeginConnect(endpoint, null, null);
-				bool success = result.AsyncWaitHandle.WaitOne(1000 * 10, true);
+				var connect = Task.Factory.FromAsync(this.socket.BeginConnect, this.socket.EndConnect, endpoint, null);
+				var success = connect.Wait(TimeSpan.FromSeconds(10));
 
 				if(!success) {
 					throw new SocketException((int) SocketError.TimedOut);
@@ -624,17 +624,16 @@ namespace Neuralia.Blockchains.Core.Network {
 
 						try {
 							this.Close();
-						} finally {
+						} finally
+						{
 							// inform the users we had a serious exception. We only invoke this when we receive data, since we want to capture evil peers. we trust ourselves, so we dont act on our own sending errors.
-							if(this.exceptionCallback != null) {
-								this.exceptionCallback(exception, this);
-							}
+							exceptionCallback?.Invoke(exception, this);
 						}
 					}
 				}
 
 				this.resetEvent.Set();
-			});
+			},default, TaskContinuationOptions.None, TaskScheduler.Current);
 		}
 
 		private async Task<int> StartReceptionStream(CancellationToken ct, TcpConnection.MessageBytesReceived handshakeCallback = null) {
@@ -668,7 +667,14 @@ namespace Neuralia.Blockchains.Core.Network {
 					}
 					
 					return Task.CompletedTask;
-				}, ct).ConfigureAwait(false);
+				}, ct).ContinueWith(task => {
+					if(task.IsFaulted) {
+						//an exception occured
+						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.StartReceptionStream)}]: task is faulted : {task.Exception}");
+						throw new P2pException("An exception occured while processing a message response.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
+					}
+					NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.StartReceptionStream)}]: task is not faulted");
+				}, ct, TaskContinuationOptions.None, TaskScheduler.Current).ConfigureAwait(false);
 
 			} catch(InvalidPeerException ipex)
 			{
@@ -698,7 +704,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				NLog.Connections.Verbose(ex, "Error occured on the connection");
 			} finally {
 				// disconnected
-				NLog.Connections.Verbose($"[{nameof(TcpConnection)}] {this.InternalUuid} {this.EndPoint} Disconnecting, exception: '{e?.Message??"None"}', stack trace {Environment.StackTrace}");
+				// NLog.Connections.Verbose($"[{nameof(TcpConnection)}] {this.InternalUuid} {this.EndPoint} Disconnecting, exception: '{e?.Message??"None"}', stack trace {Environment.StackTrace}");
 				this.Close();
 			}
 
@@ -857,7 +863,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				while(true) {
 					if(cancellationNeuralium.IsCancellationRequested) {
 						this.ReadTaskCancelled();
-						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Cancellation Requested (1)");
+						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) Cancellation Requested (1)");
 						throw new TaskCanceledException();
 					}
 
@@ -865,7 +871,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 					if(read.IsCanceled) {
 						this.ReadTaskCancelled();
-						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Cancellation Requested (2)");
+						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) Cancellation Requested (2)");
 						throw new TaskCanceledException();
 					}
 
@@ -919,7 +925,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 								//lets check if we received more data than we expected. if we did, this is critical, means everything is offsetted. this is serious and we break.
 								if(bytesCopied > mainBuffer.Length) {
-									NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: (throwing) The amount of data received is greater than expected. fatal error.");
+									NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) (throwing) The amount of data received is greater than expected. fatal error.");
 									throw new TcpApplicationException("The amount of data received is greater than expected. fatal error.");
 								}
 
@@ -948,7 +954,7 @@ namespace Neuralia.Blockchains.Core.Network {
 									mainBuffer = null;
 
 									if(cancellationNeuralium.IsCancellationRequested) {
-										NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Cancellation Requested (3)");
+										NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) Cancellation Requested (3)");
 										this.ReadTaskCancelled();
 
 										throw new TaskCanceledException();
@@ -976,7 +982,7 @@ namespace Neuralia.Blockchains.Core.Network {
 									}, cancellationNeuralium).WithAllExceptions().ContinueWith(task => {
 										if(task.IsFaulted) {
 											//an exception occured
-											NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: task is faulted : {task.Exception}");
+											NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) task is faulted : {task.Exception}");
 											throw new P2pException("An exception occured while processing a message response.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
 										}
 									}, cancellationNeuralium, TaskContinuationOptions.None, TaskScheduler.Current).ConfigureAwait(false);
@@ -986,7 +992,7 @@ namespace Neuralia.Blockchains.Core.Network {
 								tryAttempt++;
 
 								if(tryAttempt == 5) {
-									NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Spent all 5 attempts");
+									NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) Spent all 5 attempts");
 									throw new TcpApplicationException("Our sender just hanged. we received no new data that we expected.");
 								}
 							}
@@ -994,13 +1000,14 @@ namespace Neuralia.Blockchains.Core.Network {
 					}
 
 					if(read.IsCompleted) {
+						NLog.Connections.Verbose($"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) read is completed");
 						break;
 					}
 				}
 			}
 			catch (Exception e)
 			{
-				NLog.Connections.Verbose(e, $"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: Caught Exception");
+				NLog.Connections.Verbose(e, $"[{nameof(TcpConnection)}{nameof(this.ReadMessage)}: ({this.EndPoint}) Caught Exception");
 				throw;
 			}
 		}

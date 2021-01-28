@@ -84,7 +84,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		protected DateTime? verificationEnd = null;
 
 		public void EnableVerificationWindow() {
-			this.verificationEnd = DateTimeEx.CurrentTime.AddMinutes(3);
+			this.verificationEnd = DateTimeEx.CurrentTime.AddMinutes(1);
 
 			if(this.validationServer == null || !this.validationServer.IsRunning) {
 				this.StartServer(10, ValidationServers.Default);
@@ -98,7 +98,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		protected virtual void StartServer(int requesterCount, ValidationServers servers = ValidationServers.Both) {
 			
-			if(this.validationServer == null || !this.validationServer.IsRunning || (this.validationServer.IsRunning && this.validationServer.RequesterCount < requesterCount)) {
+			if(this.validationServer == null || !this.validationServer.IsRunning || (this.validationServer.IsRunning && this.InAppointmentWindow && this.validationServer.RequesterCount < requesterCount)) {
 
 				if(this.validationServer != null) {
 					this.validationServer?.Dispose();

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Tools;
@@ -104,7 +105,11 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 				this.socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
 			}
 
-			this.socket.InitializeSocketParametersFast(TcpValidatorServer.BYTES_PER_REQUESTER);
+			if(GlobalSettings.ApplicationSettings.SlowValidatorPort) {
+				this.socket.InitializeSocketParameters();
+			} else {
+				this.socket.InitializeSocketParametersFast(TcpValidatorServer.BYTES_PER_REQUESTER);
+			}
 		}
 
 		private bool IsDisposing { get; set; }
@@ -231,9 +236,9 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 					endpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(this.EndPoint), this.EndPoint.EndPoint.Port);
 				}
 
-				IAsyncResult result = this.socket.BeginConnect(endpoint, null, null);
-				bool success = result.AsyncWaitHandle.WaitOne(1000 * 10, true);
-
+				var connect = Task.Factory.FromAsync(this.socket.BeginConnect, this.socket.EndConnect, endpoint, null);
+				var success = connect.Wait(TimeSpan.FromSeconds(10));
+				
 				if(!success) {
 					throw new SocketException((int) SocketError.TimedOut);
 				}

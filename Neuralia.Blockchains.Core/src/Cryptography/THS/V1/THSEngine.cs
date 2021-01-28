@@ -214,30 +214,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 			return HashDifficultyUtils.GetBigInteger(rootHash);
 		}
-
-		long GetTotalNonce(THSSolutionSet solutions) {
-			return this.GetTotalNonce(0, solutions);
-		}
-
-		private object getTotalNonceLocker = new object();
-
-		long GetTotalNonce(long nonce, THSSolutionSet solutions) {
-			long solutionSum = 0;
-
-			(int solution, long nonce)[] solutionSet = default;
-
-			lock(this.getTotalNonceLocker) {
-				solutionSet = solutions.Solutions.ToArray();
-			}
-
-			if(solutionSet.Any()) {
-				solutionSum = solutionSet.Sum(s => s.nonce);
-			}
-
-			return nonce + solutionSum;
-		}
-
-		public async Task<THSSolutionSet> PerformTHS(SafeArrayHandle root, CancellationToken? cancellationToken, Func<long, long, long, long, long, long, long, List<(int solution, long nonce)>, Task> starting = null, Func<long[], int, long, List<(int solution, long nonce)>, long, long, double, Task> iteration = null, Func<int, long, long, int, Task> roundCallback = null, THSProcessState thsState = null) {
+		
+		public async Task<THSSolutionSet> PerformTHS(SafeArrayHandle root, CancellationToken? cancellationToken, Func<long, long, long, long, long, int, long, List<(int solution, long nonce)>, Task> starting = null, Func<long[], int, long, List<(int solution, long nonce)>, long, long, double, Task> iteration = null, Func<int, long, int, Task> roundCallback = null, THSProcessState thsState = null) {
 
 			if(this.Mode == THSModes.Verify) {
 				throw new ApplicationException("Invalid THS engine mode");
@@ -250,7 +228,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			NLog.Default.Debug("Difficulty: {0}", hashTargetDifficulty);
 			NLog.Default.Debug("target: {0}", hashTarget);
 			NLog.Default.Debug("number of threads: {0}", this.threadCount);
-
+			NLog.Default.Debug("We are searching for {0} solution rounds", this.rulesSetDescriptor.Rounds);
+			
 			int startingRound = 1;
 			long startingNonce = 0;
 
@@ -258,17 +237,15 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 				startingRound = thsState.Round;
 				startingNonce = thsState.Nonce;
 
+				if(thsState.Solutions.Count > this.rulesSetDescriptor.Rounds) {
+					throw new ApplicationException("We have too many rounds");
+				}
+				
 				foreach(var solution in thsState.Solutions) {
 					solutionSet.AddSolution(solution.Solution, solution.Nonce);
 				}
-
-				if(thsState.TotalNonce != this.GetTotalNonce(startingNonce, solutionSet)) {
-					throw new ApplicationException("The total nonce values do not match");
-				}
 			}
 
-			long totalNonce = this.GetTotalNonce(startingNonce, solutionSet);
-			long lastTotalNonceSnapshot = 0;
 			int round = startingRound;
 
 			// start with the estimated amount of total seconds as per the descriptor
@@ -277,11 +254,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			long nonceTarget = this.rulesSetDescriptor.NonceTarget;
 			long benchmarkEstimatedIterationTime = (long) this.rulesSetDescriptor.EstimatedIterationTime.TotalSeconds;
 			long estimatedIterationTime = benchmarkEstimatedIterationTime;
-			long estimatedRemainingTime = estimatedIterationTime * (nonceTarget - totalNonce);
+			long estimatedRemainingTime = estimatedIterationTime * nonceTarget;
 			double benchmarkSpeedRatio = 1;
-
+			int zeroSolutions = 0;
+			
 			if(starting != null) {
-				await starting(this.rulesSetDescriptor.HashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, totalNonce, startingRound, solutionSet.Solutions).ConfigureAwait(false);
+				await starting(this.rulesSetDescriptor.HashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingRound, this.rulesSetDescriptor.EstimatedRoundTarget, solutionSet.Solutions).ConfigureAwait(false);
 			}
 		
 			using xxHasher32 hasher = new xxHasher32();
@@ -302,7 +280,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 				object solutionLocker = new object();
 				long roundSolutionFound = 0;
 				long roundNonceFound = 0;
-				long roundTotal = this.GetTotalNonce(0, solutionSet);
 
 				using CancellationTokenSource tokenSource = new CancellationTokenSource();
 				
@@ -327,7 +304,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 								threadNonce = nonce;
 							}
 
-							long updatedRoundTotal = roundTotal + threadNonce;
 							localThreadContext.CurrentNonce = threadNonce;
 							
 							resetEvent.Set();
@@ -344,7 +320,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 							long localEstimatedIterationTime = (long) (DateTime.Now - start).TotalSeconds;
 							Interlocked.Exchange(ref estimatedIterationTime, localEstimatedIterationTime);
 
-							long remainingTime = (localEstimatedIterationTime * (nonceTarget - updatedRoundTotal)) / this.threadCount;
+							decimal roundTime = localEstimatedIterationTime * rulesSetDescriptor.EstimatedRoundTarget;
+							int currentRound = round;
+							long remainingTime = (long)((roundTime * rulesSetDescriptor.Rounds) - ((roundTime * (currentRound-1)) - (threadNonce * localEstimatedIterationTime)) / this.threadCount);
 
 							if(remainingTime < 0) {
 								remainingTime = 0;
@@ -402,7 +380,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 						if(!lastNonces.SequenceEqual(currentNonces)) {
 							var orderedNonces = currentNonces.OrderBy(e => e).ToArray();
-							long smallestTotalNonce = roundTotal + orderedNonces[0];
+							long smallestTotalNonce = orderedNonces[0];
 
 							
 							await iteration(orderedNonces, round, smallestTotalNonce, solutionSet.Solutions, Interlocked.Read(ref estimatedIterationTime), Interlocked.Read(ref estimatedRemainingTime), Interlocked.CompareExchange(ref benchmarkSpeedRatio, 0,0)).ConfigureAwait(false);
@@ -415,26 +393,30 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 					}
 				}
 
-				solutionSet.AddSolution((int)roundSolutionFound, roundNonceFound);
+				if(roundSolutionFound == 0 || roundNonceFound == 0) {
+					// seems this was a bug, let's retry the round
+					zeroSolutions++;
 
-				totalNonce = roundTotal + roundNonceFound;
-				if(roundCallback != null) {
-					await roundCallback(round, totalNonce, roundNonceFound, (int)roundSolutionFound).ConfigureAwait(false);
+					if(zeroSolutions == 3) {
+						throw new ApplicationException("We had zero solutions multiple times");
+					}
+					continue;
 				}
 
-				if(totalNonce < nonceTarget) {
-					// no choice, we were too low, we increment the padding
+				zeroSolutions = 0;
+				solutionSet.AddSolution((int)roundSolutionFound, roundNonceFound);
 
-					if(solutionSet.Solutions.Count >= this.rulesSetDescriptor.MaxRounds) {
-						throw new ApplicationException($"Number of solutions has passed the maximum count of {this.rulesSetDescriptor.MaxRounds}");
-					}
+				if(roundCallback != null) {
+					await roundCallback(round, roundNonceFound, (int)roundSolutionFound).ConfigureAwait(false);
+				}
 
+				if(solutionSet.Solutions.Count != this.rulesSetDescriptor.Rounds) {
 					round++;
 
 					continue;
 				}
 
-				NLog.Default.Debug("Found a solution!");
+				NLog.Default.Debug($"THS successfully completed! Found {solutionSet.Solutions.Count} solutions.");
 
 				return solutionSet;
 
@@ -453,7 +435,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 				throw new ApplicationException("Invalid THS engine mode");
 			}
 
-			if((root == null) || root.IsZero || solutionSet.IsEmpty) {
+			if((root == null) || root.IsZero || solutionSet.IsEmpty || solutionSet.Solutions.Count != this.rulesSetDescriptor.Rounds || !solutionSet.IsValid) {
 				return false;
 			}
 
@@ -461,11 +443,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			BigInteger hashTarget = HashDifficultyUtils.GetHash512TargetByIncrementalDifficulty(hashTargetDifficulty);
 			NLog.Default.Debug("target: {0}", hashTarget);
 			NLog.Default.Debug("Difficulty: {0}", hashTargetDifficulty);
-
+			NLog.Default.Debug("Testing: {0} rounds", this.rulesSetDescriptor.Rounds);
+			
 			int round = 1;
 			int solutionsCount = solutionSet.Solutions.Count;
 			long nonceTarget = this.rulesSetDescriptor.NonceTarget;
-			long totalNonce = 0;
 
 			foreach((int solution, long nonce) in solutionSet.Solutions) {
 
@@ -473,14 +455,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 					return false;
 				}
 
-				totalNonce += nonce;
 				BigInteger hash = this.BuildRootHash(root, round);
-
-				if(totalNonce > nonceTarget && round < solutionsCount) {
-
-					// we dont go any more rounds after reaching target
-					return false;
-				}
 
 				int currentSolution = 0;
 
@@ -501,14 +476,6 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 				}
 
 				round++;
-			}
-
-			var solutionsTotal = this.GetTotalNonce(solutionSet);
-
-			if(totalNonce != solutionsTotal || solutionsTotal < nonceTarget) {
-
-				// we did not meet the minimum
-				return false;
 			}
 
 			return true;

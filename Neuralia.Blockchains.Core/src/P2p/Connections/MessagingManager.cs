@@ -89,6 +89,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			this.dataDispatcher = new DataDispatcher(serviceSet.TimeService, faultyConnection => {
 				// just in case, attempt to remove the connection if it was not already
+				NLog.Connections.Verbose($"[{nameof(MessagingManager<IRehydrationFactory>)} removing faulty connection {faultyConnection.NodeAddressInfo}.");
 				this.networkingService.ConnectionStore.RemoveConnection(faultyConnection);
 			});
 		}

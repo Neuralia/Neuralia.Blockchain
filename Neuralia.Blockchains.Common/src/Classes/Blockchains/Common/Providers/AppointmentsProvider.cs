@@ -1494,9 +1494,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(success && result != null) {
 
-				List<DateTime> registryAppointments = (await this.AppointmentRegistryDal.GetAppointments().ConfigureAwait(false)).Select(a => a.appointment.ToUniversalTime()).ToList();
-
-				List<DateTime> remoteAppointmentsList = result.Appointments.Select(a => a.ToUniversalTime()).ToList();
+				List<DateTime> registryAppointments = (await this.AppointmentRegistryDal.GetAppointments().ConfigureAwait(false)).Select(a => a.appointment.ToUniversalTime()).Where(a => a > DateTimeEx.CurrentTime).ToList();
+				List<DateTime> remoteAppointmentsList = result.Appointments.Select(a => a.ToUniversalTime()).Where(a => a > DateTimeEx.CurrentTime).ToList();
 
 				// determine which ones we are missing
 				List<DateTime> containedAppointments = remoteAppointmentsList.Where(a => registryAppointments.Contains(a)).ToList();
@@ -1525,6 +1524,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				List<Guid> hashesList = missingContextsAppointments.Where(a => hashes.ContainsKey(a)).Select(a => hashes[a]).ToList();
 
+				if(!hashesList.Any()) {
+					return;
+				}
 				(bool success2, QueryValidatorAppointmentSessionsResult result2) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.QueryValidatorAppointmentSessions(miningAccountId, missingContextsAppointments, hashesList, lockContext).ConfigureAwait(false);
 
 				if(success2 && result2 != null) {

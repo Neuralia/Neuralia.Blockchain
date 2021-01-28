@@ -59,7 +59,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections
         
         public int? localPort;
         public int? validatorPort;
-
+        public int? validatorBackupPort;
+        
         private NatDevice device;
         
         public PortMappingService()
@@ -95,6 +96,16 @@ namespace Neuralia.Blockchains.Core.P2p.Connections
             }
             set => this.validatorPort = value;
         }
+        
+        public int ValidatorBackupPort {
+            get {
+                if(!this.validatorBackupPort.HasValue) {
+                    this.validatorBackupPort = GlobalSettings.ApplicationSettings.ValidatorHttpPort;
+                }
+                return this.validatorBackupPort.Value;
+            }
+            set => this.validatorBackupPort = value;
+        }
 
         private void ResetStatus()
         {
@@ -109,10 +120,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections
                 return false;
             
             if(this.Status.UseUPnP)
-                NLog.Connections.Information($"You are using UPnP, make sure you open the needed ports in your firewall (UDP IN/OUT 1900:1901 for UPnP, and TCP IN {this.LocalPort} and {this.ValidatorPort} for the Neuralium)");
-	
+                if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol) {
+                    NLog.Connections.Information($"You are using UPnP, make sure you open the needed ports in your firewall (UDP IN/OUT 1900:1901 for UPnP, and TCP IN {this.LocalPort}, {this.ValidatorPort} and {this.ValidatorBackupPort} for the Neuralium)");
+                } else {
+                    NLog.Connections.Information($"You are using UPnP, make sure you open the needed ports in your firewall (UDP IN/OUT 1900:1901 for UPnP, and TCP IN {this.LocalPort} and {this.ValidatorPort} for the Neuralium)");
+                }
+
             if(this.Status.UsePmP)
-                NLog.Connections.Information($"You are using PmP, make sure you open the needed ports in your firewall (UDP IN/OUT 5350:5351 for Pmp, and TCP IN {this.LocalPort} and {this.ValidatorPort} for the Neuralium)");
+                if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol) {
+                    NLog.Connections.Information($"You are using PmP, make sure you open the needed ports in your firewall (UDP IN/OUT 5350:5351 for Pmp, and TCP IN {this.LocalPort}, {this.ValidatorPort} and {this.ValidatorBackupPort} for the Neuralium)");
+                } else {
+                    NLog.Connections.Information($"You are using PmP, make sure you open the needed ports in your firewall (UDP IN/OUT 5350:5351 for Pmp, and TCP IN {this.LocalPort} and {this.ValidatorPort} for the Neuralium)");
+                }
             
             try
             {
@@ -144,7 +163,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections
                 await this.device.CreatePortMapAsync(new Mapping(Protocol.Tcp, this.ValidatorPort, this.ValidatorPort, $"Neuralium port {this.ValidatorPort}")).ConfigureAwait(false);
                 
                 NLog.Connections.Verbose($"{TAG}: port mapping successful: {this.ValidatorPort}");
-                
+
+                if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol) {
+                    await this.device.CreatePortMapAsync(new Mapping(Protocol.Tcp, this.ValidatorBackupPort, this.ValidatorBackupPort, $"Neuralium port {this.ValidatorBackupPort}")).ConfigureAwait(false);
+
+                    NLog.Connections.Verbose($"{TAG}: port mapping successful: {this.ValidatorBackupPort}");
+                }
+
                 var mappings = await this.device.GetAllMappingsAsync().ConfigureAwait(false);
 
                 NLog.Connections.Verbose($"{TAG}: port mapping found: {mappings.Count()}");
@@ -162,7 +187,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections
             }
             catch (Exception e)
             {
-                NLog.Connections.Warning($"{TAG}: Exception caught during UPnP port mapping attempt {e.ToString()}");
+                string protocol = this.Status.UseUPnP ? "UPnP" : (this.Status.UsePmP ? "PmP" : "No protocol");
+                NLog.Connections.Information($"Port mapping unsuccessful, please verify that your router supports the {protocol} protocol and that it is enabled." +
+                                             $"Also make sure only one device (and ip) is trying to map ports {this.LocalPort} and {this.ValidatorPort}. " +
+                                             $"Finally, remember that you can also skip using a port mapping API and instead configure the port mapping yourself on your router." +
+                " In that case, you can put 'UseUPnP' : false in your config.json");
+                NLog.Connections.Verbose(e,$"{TAG}: Exception caught during UPnP port mapping attempt");
                 
                 return false;
             }

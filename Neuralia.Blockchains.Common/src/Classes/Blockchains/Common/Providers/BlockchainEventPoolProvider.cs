@@ -82,9 +82,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public virtual async Task InsertTransaction(ITransactionEnvelope signedTransactionEnvelope, LockContext lockContext) {
 			if(this.EventPoolEnabled) {
-				await this.ChainPoolDal.InsertTransactionEntry(signedTransactionEnvelope, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception).ConfigureAwait(false);
+				bool stored = await this.ChainPoolDal.InsertTransactionEntry(signedTransactionEnvelope, this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.ChainInception).ConfigureAwait(false);
 
-				if(this.SaveTransactionEnvelopes) {
+				if(stored && this.SaveTransactionEnvelopes) {
 					using SafeArrayHandle envelope = signedTransactionEnvelope.DehydrateEnvelope();
 
 					string publicPath = this.GetPublicPath();

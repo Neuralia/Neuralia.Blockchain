@@ -27,7 +27,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 		public List<(int solution, long nonce)> Solutions { get; } = new List<(int solution, long nonce)>();
 
 		public bool IsEmpty => !this.Solutions.Any() || this.Solutions.Any(s => (s.nonce == 0) || (s.solution == 0));
-		public bool IsValid => this.Solutions.Any() && this.Solutions.All(s => (s.nonce != 0) && (s.solution != 0));
+		public bool IsValid => !this.IsEmpty && this.Solutions.All(s => (s.nonce != 0) && (s.solution != 0));
 
 		public void AddSolution(int solution, long nonce) {
 			this.Solutions.Add((solution, nonce));

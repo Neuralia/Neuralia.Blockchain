@@ -420,12 +420,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				return generator;
 			}
 			
-			public static SystemEventGenerator THSBegin(long difficulty, long targetNonce, long targetTotalDuration, long estimatedIterationTime, long estimatedRemainingTime, long startingNonce, long startingTotalNonce, long startingRound, List<(int solution, long nonce)> solutions) {
+			public static SystemEventGenerator THSBegin(long difficulty, int rounds, long targetTotalDuration, long estimatedIterationTime, long estimatedRemainingTime, long startingNonce, int startingRound, long targetRoundNonce, List<(int solution, long nonce)> solutions) {
 				SystemEventGenerator generator = new SystemEventGenerator();
 
 				generator.EventType = BlockchainSystemEventTypes.Instance.THSBegin;
 
-				generator.Parameters = new object[] {difficulty, targetNonce, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions.Select(e => e.nonce).ToArray(), solutions.Select(e => e.solution).ToArray()};
+				generator.Parameters = new object[] {difficulty, rounds, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingRound, targetRoundNonce, solutions.Select(e => e.nonce).ToArray(), solutions.Select(e => e.solution).ToArray()};
 
 				return generator;
 			}
@@ -439,11 +439,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			}
 			
 			
-			public static SystemEventGenerator THSRound(int round, long totalNonce, long lastNonce, int lastSolution) {
+			public static SystemEventGenerator THSRound(int round, long lastNonce, int lastSolution) {
 				SystemEventGenerator generator = new SystemEventGenerator();
 
 				generator.EventType = BlockchainSystemEventTypes.Instance.THSRound;
-				generator.Parameters = new object[] {round, totalNonce, lastNonce, lastSolution};
+				generator.Parameters = new object[] {round, lastNonce, lastSolution};
 
 				return generator;
 			}

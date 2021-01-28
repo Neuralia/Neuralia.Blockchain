@@ -531,7 +531,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							using var thsHash = AppointmentUtils.PrepareTHSHash(key, puzzleAnswers);
 
-							thsResult = await thsEngine.PerformTHS(thsHash, this.CancelToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingTotalNonce, startingRound, solutions) => {
+							thsResult = await thsEngine.PerformTHS(thsHash, this.CancelToken, (hashTargetDifficulty, targetTotalDuration, estimatedIterationTime, estimatedRemainingTime, startingNonce, startingRound, targetRoundNonce, solutions) => {
 								//TODO: anything to do with these events?
 								return Task.CompletedTask;
 							}, (currentNonce, currentRound, totalNonce, solutions, estimatedIterationTime, estimatedRemainingTime, benchmarkSpeedRatio) => {

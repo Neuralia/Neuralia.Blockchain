@@ -255,7 +255,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		}
 
 		/// <summary>
-		/// How much CPU to dedicate to XMSS operations.\n
+		/// How much CPU to dedicate to XMSS operations.
 		/// Default: Half of the available processor cores ::Neuralia::Blockchains::Core::Enums::ThreadMode.
 		/// </summary>
 		public Enums.ThreadMode XmssThreadMode { get; set; } = Enums.ThreadMode.Half;
@@ -364,6 +364,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public bool EnableAppointmentValidatorIPMarshall { get; set; } = true;
 
 		/// <summary>
+		/// sometimes with certain setups and port triggering, connections can be too fast and trigger fails. Setting this options enables a heavier socket mode that may help traverse the router
+		/// </summary>
+		public bool SlowValidatorPort  { get; set; }
+		
+		/// <summary>
 		/// 
 		/// </summary>
 		public bool UseUPnP { get; set; } = true;
@@ -465,6 +470,11 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <summary>
 		/// 
 		/// </summary>
+		public int MaxConnectionRequestPerCrawl { get; set; } = 20;
+		
+		/// <summary>
+		/// 
+		/// </summary>
 		public double HubIPsRequestPeriod { get; set; } = 1800;
 		
 		/// <summary>
@@ -478,6 +488,11 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public double PeerReconnectionPeriod { get; set; } = 60;
 
 		public double IPCrawlerStartupDelay { get; set; } = 5.0;
+		
+		/// <summary>
+		/// Wait time between ip crawling calls 
+		/// </summary>
+		public double IPCrawlerCrawlPeriod { get; set; } = 3.0;
 
 		/// <summary>
 		///     how do we delete the files when doing wallet transctions? safe is slower but clears data much better
@@ -754,8 +769,17 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 #else
 		public string HashUrl { get; set; } = "https://hash.neuralium.com";
 	    public string WebElectionsRegistrationUrl { get; set; } = "https://election-registration.neuralium.com";
+	    
+	    public string WebIpv4ElectionsRegistrationUrl { get; set; } = "https://ipv4-election-registration.neuralium.com";
+	    public string WebIpv6ElectionsRegistrationUrl { get; set; } = "https://ipv6-election-registration.neuralium.com";
+	    
 		public string WebElectionsRecordsUrl { get; set; } = "https://election-records.neuralium.com";
+		
 		public string WebElectionsStatusUrl { get; set; } = "https://election-status.neuralium.com";
+		
+		public string WebIpv4ElectionsStatusUrl { get; set; } = "https://ipv4-election-status.neuralium.com";
+		public string WebIpv6ElectionsStatusUrl { get; set; } = "https://ipv6-election-status.neuralium.com";
+		
 		public string WebPresentationRegistrationUrl { get; set; } = "https://presentation-registration.neuralium.com";
 		public string WebTransactionRegistrationUrl { get; set; } = "https://transaction-registration.neuralium.com";
 		public string WebMessageRegistrationUrl { get; set; } = "https://message-registration.neuralium.com";
@@ -763,7 +787,16 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public string WebTransactionPoolUrl { get; set; } = "https://transaction-pool.neuralium.com";
 		public string WebSyncUrl { get; set; } = "https://sync.neuralium.com";
 #endif
+
+		/// <summary>
+		/// This allows to set which IP protocol the mining server will use to be verified
+		/// </summary>
+		public IPMode ServerMiningVerificationIpProtocol { get; set; } = IPMode.IPv4;
 		
+		/// <summary>
+		/// here you can force your IP on which you want to be contacted by the validation service
+		/// </summary>
+		public string ServerMiningVerificationStaticIp { get; set; }
 
 		/// <summary>
 		/// if true, we will contact the web transaction pools to get the webreg ones
@@ -892,7 +925,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool DisableSync { get; set; } = false;
 		
 		/// <summary>
-		///  Should we use key gates to check key valid ranges in blocks?\n
+		///  Should we use key gates to check key valid ranges in blocks?
 		///  It is highly recommended to do so but takes more space.
 		/// </summary>
 		public bool EnableKeyGates { get; set; } = true;
@@ -1183,6 +1216,11 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		///     Enable key height checking for the backup key
 		/// </summary>
 		public bool CheckSuperKeyHeight { get; set; } = false;
+		
+		/// <summary>
+		/// if EnableKeyHeightChecks is enabled in KeyLog, a bad index will raise a stop warning. If this option is set to true, the index issue will be ignored and the key index will fast forward.
+		/// </summary>
+		public bool EnableKeyHeightIndexFastForwards { get; set; }
 	}
 	
 	/// <summary>

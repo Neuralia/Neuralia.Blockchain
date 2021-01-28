@@ -4,6 +4,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serializatio
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.Tools;
@@ -43,6 +44,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			if(GlobalSettings.ApplicationSettings.P2PEnabled) {
 				this.dataDispatcher = new DataDispatcher(centralCoordinator.BlockchainServiceSet.TimeService, faultyConnection => {
 					// just in case, attempt to remove the connection if it was not already
+					NLog.Connections.Verbose($"[{nameof(NetworkingWorkflow)} removing faulty connection {faultyConnection.NodeAddressInfo}.");
 					this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.RemoveConnection(faultyConnection);
 				});
 			} else {

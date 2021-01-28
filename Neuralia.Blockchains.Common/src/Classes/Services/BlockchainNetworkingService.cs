@@ -55,6 +55,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		protected override async Task HandleIpValidatorRequest(SafeArrayHandle buffer, ITcpConnection connection) {
 
 			MiningRegistrationParameters parameters = null;
+
 			try {
 				(byte version, IValidatorRequest request, IMinerResponse response) messages = IpValidationFactory.RehydrateRequest(buffer);
 
@@ -64,30 +65,30 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 						//TODO: log this, if it happens to often, block the IP. the validator will never abuse this.
 					}
-					
+
 					parameters = this.chainMiningRegistrationParameters[messages.request.Chain];
-					
+
 					using SafeArrayHandle passwordBytes = SafeArrayHandle.Create(16);
 					TypeSerializer.Serialize(parameters.Password, passwordBytes.Span);
-					
+
 					using SafeArrayHandle saltBytes = SafeArrayHandle.Create(16);
 					TypeSerializer.Serialize(parameters.SecretCode, saltBytes.Span);
-					
+
 					TypeSerializer.Deserialize(saltBytes.Span.Slice(0, sizeof(int)), out int iterations);
 
 					(SafeArrayHandle nonce, SafeArrayHandle key) = CryptoUtil.GenerateKeyNonceSet(passwordBytes, saltBytes, CryptoUtil.GetIterations(iterations & 0xFF, 2000, 5000));
 					XchachaEncryptor xchachaEncryptor = new XchachaEncryptor();
 
 					var resultBytes = xchachaEncryptor.Decrypt(messages.request.Secret, nonce, key);
-					
+
 					// ok, this is where we start the validation server so they can verify our validation port. we can star this in parallel
 					var task = Task.Run(() => EnableVerificationWindow());
-					
+
 					using SafeArrayHandle hashingBytes = SafeArrayHandle.Create(nonce.Length + resultBytes.Length);
 
 					nonce.CopyTo(hashingBytes);
 					resultBytes.CopyTo(hashingBytes, 0, nonce.Length, resultBytes.Length);
-					
+
 					// ok, seems this is the right secret, lets confirm our miner status
 					messages.response.ResponseCode = HashingUtils.XxHash32(hashingBytes);
 					messages.response.AccountId = parameters.AccountId;
@@ -98,7 +99,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 						messages.response.SecondTierAnswer = answers.secondTierAnswer;
 						messages.response.DigestTierAnswer = answers.digestAnswer;
-						messages.response.FirstTierAnswer  = answers.firstTierAnswer;
+						messages.response.FirstTierAnswer = answers.firstTierAnswer;
 					} catch(Exception ex) {
 						NLog.Default.Error(ex, "Failed to answer questions to validator request. this could be bad...");
 					}
@@ -116,7 +117,7 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 				if(messages.response.Response == ResponseType.Invalid) {
 					throw new ApplicationException();
 				}
-				
+
 			} catch(Exception e) {
 				NLog.Default.Error(e, "Failed to respond to IP validation request");
 
@@ -133,14 +134,12 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 					LockContext lockContext = null;
 					await parameters.ChainMiningStatusProvider.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
 				}
-			}
-			catch(Exception e) {
+			} catch(Exception e) {
 				NLog.Default.Error(e, "Failed to update account mining cache expiration. this is not very important, the response seems to have worked.");
 			}
 		}
-		
-		private void BanOther(ITcpConnection connection, string details, IPMarshall.QuarantineReason reason = IPMarshall.QuarantineReason.ValidationFailed)
-		{
+
+		private void BanOther(ITcpConnection connection, string details, IPMarshall.QuarantineReason reason = IPMarshall.QuarantineReason.ValidationFailed) {
 			var endpoint = (IPEndPoint) connection.RemoteEndPoint;
 			IPMarshall.ValidationInstance.Quarantine(endpoint.Address, reason, DateTimeEx.CurrentTime.AddDays(2).Subtract(TimeSpan.FromMinutes(5)), details);
 		}
@@ -153,11 +152,11 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		///     a special class to hold our published mining registration paramters so we can answer the IP Validators
 		/// </summary>
 		public class MiningRegistrationParameters {
-			public Guid Password                  { get; set; }
+			public Guid Password { get; set; }
 			public Guid SecretCode { get; set; }
-			public AccountId                  AccountId                 { get; set; }
-			public AccountId                  DelegateAccountId         { get; set; }
-			public SafeArrayHandle            Autograph                 { get; } = SafeArrayHandle.Create();
+			public AccountId AccountId { get; set; }
+			public AccountId DelegateAccountId { get; set; }
+			public SafeArrayHandle Autograph { get; } = SafeArrayHandle.Create();
 			public IChainMiningStatusProvider ChainMiningStatusProvider { get; set; }
 		}
 	}

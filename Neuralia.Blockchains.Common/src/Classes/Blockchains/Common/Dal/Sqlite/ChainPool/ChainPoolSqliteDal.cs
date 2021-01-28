@@ -33,17 +33,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			this.timeService = serviceSet.BlockchainTimeService;
 		}
 
-		public async Task InsertTransactionEntry(ITransactionEnvelope signedTransactionEnvelope, DateTime chainInception) {
+		public async Task<bool> InsertTransactionEntry(ITransactionEnvelope signedTransactionEnvelope, DateTime chainInception) {
 			CHAIN_POOL_PUBLIC_TRANSACTIONS entry = new CHAIN_POOL_PUBLIC_TRANSACTIONS();
 
 			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
 			this.PrepareTransactionEntry(entry, signedTransactionEnvelope, chainInception);
 
-			await this.PerformOperationAsync(db => {
-				db.PublicTransactions.Add(entry);
+			return await this.PerformOperationAsync(async db => {
 
-				return db.SaveChangesAsync();
+				if(!await db.PublicTransactions.AnyAsync(t => t.TransactionId == entry.TransactionId).ConfigureAwait(false)) {
+					db.PublicTransactions.Add(entry);
+					
+					await db.SaveChangesAsync().ConfigureAwait(false);
+
+					return true;
+				}
+
+				return false;
+
 			}).ConfigureAwait(false);
 		}
 

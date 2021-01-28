@@ -81,7 +81,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 			this.RoutedTaskReceiver.TaskReceived += () => {
 			};
-
+			
 			this.nextSyncProxiesAction = this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerStartupDelay);
 
 			this.ReceiveTask(new SimpleTask(async s => {
@@ -112,7 +112,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				, GlobalSettings.ApplicationSettings.MaxMobilePeerCount
 				, GlobalSettings.ApplicationSettings.MaxNonConnectablePeerCount
 				, GlobalSettings.ApplicationSettings.LocalNodes.Select(n => new NodeAddressInfo(n.Ip, n.Port, NodeInfo.Full)).ToList()
-				, 1800.0, 600.0, 60.0, 24 * 60 * 60);
+				, GlobalSettings.ApplicationSettings.HubIPsRequestPeriod
+				, GlobalSettings.ApplicationSettings.PeerIPsRequestPeriod
+				, GlobalSettings.ApplicationSettings.PeerReconnectionPeriod
+				, 24 * 60 * 60
+				, GlobalSettings.ApplicationSettings.MaxConnectionRequestPerCrawl);
 		}
 
 		private void HandleNewConnection(PeerConnection connection) {
@@ -349,13 +353,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 										}));
 									};
 								} else {
-									NLog.IPCrawler.Debug($"{IPCrawler.TAG} could not find node {node} within AllConnectionsList. This is unexpected.");
-
-									foreach(PeerConnection c in this.connectionStore.AllConnectionsList) {
-										NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Found connection {c.NodeAddressInfo} searching for {node}");
-									}
-
-									NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.Crawler.HandleTimeout)} (Failed Login) from node {node}");
+									NLog.IPCrawler.Verbose($"{IPCrawler.TAG} could not find node {node} within AllConnectionsList. Other side probably dropped the connection right after handshake.");
 									this.Crawler.HandleTimeout(node, now);
 								}
 							} else //success == false
@@ -408,13 +406,10 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				if(!this.ShouldAct(ref this.nextAction))
 					return;
 
-				// ok, its time to act
-				var secondsToWait = 3; // default next action time in seconds. we can play on this
-
 				if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
 					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} networking status is paused.");
 					// its paused, we dont do anything, just return
-					this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
+					this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerCrawlPeriod);
 
 					return;
 				}
@@ -476,7 +471,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// done, lets sleep for a while
 
 				// lets act again in X seconds
-				this.nextAction = DateTimeEx.CurrentTime.AddSeconds(secondsToWait);
+				this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerCrawlPeriod);
 
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} remaining tasks.");
 

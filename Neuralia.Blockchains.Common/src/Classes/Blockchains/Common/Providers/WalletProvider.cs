@@ -4869,9 +4869,16 @@ clean above
 				IdKeyUseIndexSet lastSyncedIdKeyUse = await this.GetChainStateLastSyncedKeyHeight(key, lockContext).ConfigureAwait(false);
 
 				if(lastSyncedIdKeyUse.IsSet && key.KeyAddress.KeyUseIndex < lastSyncedIdKeyUse) {
-					string message =$"Your key height for your key named {key.Name} is lower than the blockchain key use height. This is a very serious security issue. You might be using an older copy of your regular wallet.";
-					throw new ReportableException(ReportableErrorTypes.Instance.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER_THAN_DETECTED, ReportableException.PriorityLevels.Warning, ReportableException.ReportLevels.Modal, this.centralCoordinator.ChainId, this.centralCoordinator.ChainName, message, new string[]{key.Name, key.Ordinal.ToString()});
 					
+					string message = $"Your key height for your key named {key.Name} is lower than the blockchain key use height. This is a very serious security issue. You might be using an older copy of your regular wallet.";
+					if(!configuration.KeySecurityConfigurations.EnableKeyHeightIndexFastForwards || key.KeyAddress.KeyUseIndex.KeyUseSequenceId != lastSyncedIdKeyUse.KeyUseSequenceId) {
+
+						throw new ReportableException(ReportableErrorTypes.Instance.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER_THAN_DETECTED, ReportableException.PriorityLevels.Warning, ReportableException.ReportLevels.Modal, this.centralCoordinator.ChainId, this.centralCoordinator.ChainName, message, new string[] {key.Name, key.Ordinal.ToString()});
+					}
+					
+					this.CentralCoordinator.Log.Warning(message + " As per configuration, we will still proceed.");
+					
+					// we can keep going
 				}
 			}
 

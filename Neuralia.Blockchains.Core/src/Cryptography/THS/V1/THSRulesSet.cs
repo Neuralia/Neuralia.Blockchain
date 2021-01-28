@@ -66,8 +66,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			ServerPresentationDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
 			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromSeconds(5);
 			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(1);
-			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 3;
-			ServerPresentationDefaultRulesSetDescriptor.MaxRounds = 27;
+			ServerPresentationDefaultRulesSetDescriptor.Rounds = 3;
 			
 			ServerPresentationDefaultRulesSet = new THSRulesSet();
 
@@ -98,10 +97,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 			ServerPresentationDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
 			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromHours(24);
-			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(6);
-			ServerPresentationDefaultRulesSetDescriptor.AverageRounds = 9;
-			ServerPresentationDefaultRulesSetDescriptor.MaxRounds = 27;
-			
+			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(13);
+			ServerPresentationDefaultRulesSetDescriptor.Rounds = 9;
+
 			ServerPresentationDefaultRulesSet = new THSRulesSet();
 
 			ServerPresentationDefaultRulesSet.AddHashSet(Hashes.SHA2_512, 5);
@@ -117,7 +115,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			ServerPresentationDefaultRulesSet.AddPrngSet(Prngs.JSF_256);
 			ServerPresentationDefaultRulesSet.AddPrngSet(Prngs.XOSHIRO_256_SS);
 
-			ServerPresentationDefaultRulesSet.MainBufferDataSize = THSEngine.THSMemorySizes.THS_2_GB;
+			ServerPresentationDefaultRulesSet.MainBufferDataSize = THSEngine.THSMemorySizes.THS_4_GB;
 			ServerPresentationDefaultRulesSet.CryptoIterations = 1;
 			ServerPresentationDefaultRulesSet.CryptoSuccessRate = 3;
 
@@ -133,8 +131,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			PresentationDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
 			PresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromMinutes(3);
 			PresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromMilliseconds(250);
-			PresentationDefaultRulesSetDescriptor.AverageRounds = 3;
-			PresentationDefaultRulesSetDescriptor.MaxRounds = 13;
+			PresentationDefaultRulesSetDescriptor.Rounds = 3;
 
 			PresentationDefaultRulesSet = new THSRulesSet();
 			PresentationDefaultRulesSet.AddHashSet(Hashes.SHA3_512);
@@ -162,8 +159,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			InitiationAppointmentDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
 			InitiationAppointmentDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromMinutes(3);
 			InitiationAppointmentDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromMilliseconds(250);
-			InitiationAppointmentDefaultRulesSetDescriptor.AverageRounds = 3;
-			InitiationAppointmentDefaultRulesSetDescriptor.MaxRounds = 13;
+			InitiationAppointmentDefaultRulesSetDescriptor.Rounds = 3;
 
 			InitiationAppointmentDefaultRulesSet = new THSRulesSet();
 			InitiationAppointmentDefaultRulesSet.AddHashSet(Hashes.SHA3_512);
@@ -190,8 +186,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			PuzzleDefaultRulesetDescriptor = new THSRulesSetDescriptor();
 			PuzzleDefaultRulesetDescriptor.TargetTimespan = TimeSpan.FromSeconds(30);
 			PuzzleDefaultRulesetDescriptor.EstimatedIterationTime = TimeSpan.FromMilliseconds(250);
-			PuzzleDefaultRulesetDescriptor.AverageRounds = 3;
-			PuzzleDefaultRulesetDescriptor.MaxRounds = 13;
+			PuzzleDefaultRulesetDescriptor.Rounds = 3;
 
 			PuzzleDefaultRuleset = new THSRulesSet();
 			PuzzleDefaultRuleset.AddHashSet(Hashes.SHA3_512);
@@ -219,9 +214,8 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 			TestRulesetDescriptor = new THSRulesSetDescriptor();
 			TestRulesetDescriptor.TargetTimespan = TimeSpan.FromSeconds(40);
 			TestRulesetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(6);
-			TestRulesetDescriptor.AverageRounds = 3;
-			TestRulesetDescriptor.MaxRounds = 13;
-			
+			TestRulesetDescriptor.Rounds = 3;
+
 
 			TestRuleset = new THSRulesSet();
 			TestRuleset.AddHashSet(Hashes.SHA3_512);
@@ -565,25 +559,26 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 
 		}
 
-		public THSRulesSetDescriptor(TimeSpan estimatedIterationTime, int averageRounds, int maxRounds) {
+		public THSRulesSetDescriptor(TimeSpan estimatedIterationTime, int rounds) {
 			this.EstimatedIterationTime = estimatedIterationTime;
-			this.AverageRounds = averageRounds;
-			this.MaxRounds = maxRounds;
+			this.Rounds = rounds;
 		}
 
 		public TimeSpan TargetTimespan { get; set; } = TimeSpan.FromSeconds(1);
 		public TimeSpan EstimatedIterationTime { get; set; } = TimeSpan.FromSeconds(1);
-		public TimeSpan EstimatedNonceTime => this.EstimatedIterationTime * this.AverageRounds;
+
+		public long EstimatedRoundTarget => this.NonceTarget / this.Rounds;
+		public TimeSpan EstimatedRoundTime => this.EstimatedIterationTime * this.EstimatedRoundTarget;
+		
+		public TimeSpan EstimatedNonceTime => this.EstimatedIterationTime * this.Rounds;
 
 		public TimeSpan EstimatedHigherRoundTime => this.EstimatedIterationTime * MAXIMUM_BOUND_MULTIPLIER;
 		public TimeSpan EstimatedHigherNonceTime => this.EstimatedNonceTime * MAXIMUM_BOUND_MULTIPLIER;
 
 		public long NonceTarget => (long) (this.TargetTimespan.TotalSeconds / this.EstimatedIterationTime.TotalSeconds);
-		public long HashTargetDifficulty => (long) (((decimal) this.TargetTimespan.TotalSeconds / (decimal) this.EstimatedIterationTime.TotalSeconds) * HashDifficultyUtils.Default512Difficulty) / this.AverageRounds;
+		public long HashTargetDifficulty => (long) (((decimal) this.TargetTimespan.TotalSeconds / (decimal) this.EstimatedIterationTime.TotalSeconds) * HashDifficultyUtils.Default512Difficulty) / this.Rounds;
 
 		// how many rounds do we expect in this set
-		public int AverageRounds { get; set; } = 1;
-		public int MaxRounds { get; set; } = 10;
-		
+		public int Rounds { get; set; } = 1;
 	}
 }

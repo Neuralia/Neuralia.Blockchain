@@ -41,6 +41,7 @@ using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1;
+using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
@@ -747,34 +748,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(this.updateMiningRegistrationTimer == null) {
 				TimeSpan waitTime = GlobalsService.MinerSafeDelay;
-
-				ClosureWrapper<bool> executing = false;
-
-				this.updateMiningRegistrationTimer = new ManagedTimer(state => {
-
-					if(executing == false) {
-						try {
-							executing = true;
-							this.UpdateWebapiAccountRegistration(lockContext).WaitAndUnwrapException();
-
-						} catch(Exception ex) {
-							//TODO: do something?
-							this.CentralCoordinator.Log.Error(ex, "Timer exception");
-						} finally {
-
-							executing = false;
-
-							// reset the timer
-							try {
-							} catch(Exception ex) {
-								//TODO: do something?
-								this.CentralCoordinator.Log.Error(ex, "Timer exception");
-							}
-						}
-					}
-
-					return Task.CompletedTask;
-				}, waitTime, waitTime);
+				
+				this.updateMiningRegistrationTimer = new ManagedTimer(state => this.UpdateWebapiAccountRegistration(lockContext), waitTime, waitTime);
 				
 				this.updateMiningRegistrationTimer.Start();
 			}
@@ -870,10 +845,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			ElectionsCandidateRegistrationInfo info = new ElectionsCandidateRegistrationInfo();
 
-			if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv6 != null) {
-				info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv6);
-			} else if(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4 != null) {
-				info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4);
+			bool addressSet = false;
+
+			try {
+				if(!string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
+					NodeAddressInfo nodeAddress = new NodeAddressInfo(this.ChainConfiguration.ServerMiningVerificationStaticIp, null);
+
+					info.Ip = IPUtils.IPtoGuid(nodeAddress.AdjustedAddress);
+					addressSet = true;
+				}
+			} catch(Exception ex) {
+				this.CentralCoordinator.Log.Error(ex, $"Failed to set static ip from configuration. Value provided was {this.ChainConfiguration.ServerMiningVerificationStaticIp}.");
+			}
+
+			if(!addressSet) {
+				bool ipv4Set = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4 != null;
+				bool ipv6Set = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv6 != null;
+
+				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+					ipv6Set = false;
+				} else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+					ipv4Set = false;
+				}
+				
+				if(ipv4Set) {
+					info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4);
+				} else if(ipv6Set) {
+					info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv6);
+				} else {
+					throw new ApplicationException("out public IP is not set!");
+				}
 			}
 
 			info.Port = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.P2pPort;
@@ -958,7 +959,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
 			string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
-
+			
+			if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+				url = this.ChainConfiguration.WebIpv4ElectionsRegistrationUrl;
+			}
+			else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+				url = this.ChainConfiguration.WebIpv6ElectionsRegistrationUrl;
+			}
+			
 			Dictionary<string, object> parameters = new Dictionary<string, object>();
 			parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
 
@@ -971,6 +979,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			
 			if(MiningTierUtils.IsFirstOrSecondTier(registrationInfo.MiningTier)) {
 				parameters.Add("secret-code", registrationInfo.SecretCode);
+				if(!string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
+					parameters.Add("address", registrationInfo.Ip);
+				}
 			}
 
 			int wait = 3;
@@ -1075,6 +1086,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				string autograph64 = Convert.ToBase64String(registrationInfo.Autograph);
 				string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
+
+				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+					url = this.ChainConfiguration.WebIpv4ElectionsRegistrationUrl;
+				}
+				else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+					url = this.ChainConfiguration.WebIpv6ElectionsRegistrationUrl;
+				}
+				
 				long longAccountId = registrationInfo.AccountId.ToLongRepresentation();
 
 				await Repeater.RepeatAsync(async () => {
@@ -1095,6 +1114,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						parameters.Add("secret-code", registrationInfo.SecretCode);
 						parameters.Add("port", registrationInfo.Port);
 						parameters.Add("validator-port", registrationInfo.ValidatorPort);
+
+						if(!string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
+							parameters.Add("address", registrationInfo.Ip);
+						}
 					}
 
 					IRestResponse result = await restUtility.Put(url, "elections/register", parameters).ConfigureAwait(false);
@@ -1128,7 +1151,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				restUtility.Timeout = TimeSpan.FromSeconds(15);
 
 				string url = this.ChainConfiguration.WebElectionsStatusUrl;
-
+				
+				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+					url = this.ChainConfiguration.WebIpv4ElectionsStatusUrl;
+				}
+				else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+					url = this.ChainConfiguration.WebIpv6ElectionsStatusUrl;
+				}
+				
 				ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo();
 
 				if(electionsCandidateRegistrationInfo.Password == Guid.Empty) {
@@ -1139,6 +1169,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				parameters.Add("accountId", electionsCandidateRegistrationInfo.AccountId.ToLongRepresentation());
 				parameters.Add("password", electionsCandidateRegistrationInfo.Password);
 				parameters.Add("miningTier", (int) electionsCandidateRegistrationInfo.MiningTier);
+				
+				if(MiningTierUtils.IsFirstOrSecondTier(electionsCandidateRegistrationInfo.MiningTier) && !string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
+					parameters.Add("address", electionsCandidateRegistrationInfo.Ip);
+				}
 
 				ManualResetEventSlim resetEventSlim = null;
 				Enums.MiningStatus status = Enums.MiningStatus.NotMining;
@@ -1182,7 +1216,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						resetEventSlim.Wait(TimeSpan.FromSeconds(10));
 
 						throw new ApplicationException();
-					}).ConfigureAwait(false);
+					}, 2).ConfigureAwait(false);
 
 					if(status != Enums.MiningStatus.Mining) {
 						// we are not mining, lets blow it up
@@ -1203,7 +1237,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// ok, well this is it, we will register for mining on chain
 			var chainNetworkingProvider = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase;
 
-			if((chainNetworkingProvider.PublicIpv4 == null && chainNetworkingProvider.PublicIpv6 == null) || (registrationInfo.Ip == Guid.Empty)) {
+			bool ipv4null = false;
+			bool ipv6null = false;
+			if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+				ipv4null = chainNetworkingProvider.PublicIpv4 == null;
+			}
+			else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+				ipv6null = chainNetworkingProvider.PublicIpv6 == null;
+			}
+			
+			if((ipv4null && ipv6null) || (registrationInfo.Ip == Guid.Empty)) {
 				throw new ApplicationException("Our public IP is still undefined. We can not register for mining on chain without an IP address to provide.");
 			}
 

@@ -843,7 +843,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				if(connection.ClientUuid == Guid.Empty) {
 					NLog.Connections.Verbose("Removing connection for as of yet unidentified client");
 				} else {
-					NLog.Connections.Verbose($"Closing connection for client {connection.ClientUuid}, here is why : {Environment.StackTrace}");
+					NLog.Connections.Verbose($"Closing connection for client {connection.ClientUuid} ({connection.NodeAddressInfo})");
 				}
 
 				try {

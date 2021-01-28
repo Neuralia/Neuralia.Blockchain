@@ -155,17 +155,25 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 			this.Stop();
 
 			try {
-				if(NodeAddressInfo.IsAddressIpV4(this.networkEndPoint)) {
-					this.listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-				} else {
-					if(!Socket.OSSupportsIPv6) {
-						throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
-					}
-
-					this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-					this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+				
+				if(!Socket.OSSupportsIPv6 && this.networkEndPoint.IPMode.HasFlag(IPMode.IPv6)) {
+					throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
 				}
+			
+				if(TcpConnection.IPv6Supported && this.networkEndPoint.IPMode.HasFlag(IPMode.IPv6)) {
+					this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
 
+					if(this.networkEndPoint.IPMode.HasFlag(IPMode.IPv4)) {
+						this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+						this.listener.DualMode = true;
+					
+					} else {
+						this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+					}
+				} else {
+					this.listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+				}
+				
 				// seems to be needed in case the listener is not completely disposed yet (on linux and MacOs)
 				//https://github.com/dotnet/corefx/issues/24562
 				//TODO: this is a bug fix, and maybe in the future we may not need the below anymore.
@@ -173,7 +181,12 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 					this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 					this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
 				}
-				this.listener.InitializeSocketParametersFast(BYTES_PER_REQUESTER);
+				
+				if(GlobalSettings.ApplicationSettings.SlowValidatorPort) {
+					this.listener.InitializeSocketParameters();
+				} else {
+					this.listener.InitializeSocketParametersFast(BYTES_PER_REQUESTER);
+				}
 
 				this.listener.Bind(this.EndPoint);
 				this.listener.Listen((int) SocketOptionName.MaxConnections);
@@ -470,6 +483,8 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 						// send the pong
 						e.Buffer[e.Offset] = PONG_BYTE;
 
+						NLog.Default.Information("TCP Validator ping message received. sending pong.");
+						
 						token.Step = ValidatorConnectionInstance.Steps.SendPong;
 
 						if(!token.listener.SendAsync(e)) {
