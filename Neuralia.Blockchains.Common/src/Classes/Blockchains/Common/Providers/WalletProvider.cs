@@ -370,7 +370,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<SafeArrayHandle> SignTransaction(SafeArrayHandle transactionHash, IWalletKey key, LockContext lockContext, bool allowPassKeyLimit = false);
 		Task<SafeArrayHandle> SignMessageXmss(string accountCode, SafeArrayHandle message, LockContext lockContext);
 		Task<SafeArrayHandle> SignMessageXmss(SafeArrayHandle messageHash, IXmssWalletKey key, LockContext lockContext);
-		Task<SafeArrayHandle> SignMessage(SafeArrayHandle messageHash, IWalletKey key, LockContext lockContext);
 		Task EnsureWalletKeyIsReady(string accountCode, string keyname, LockContext lockContext);
 		Task EnsureWalletKeyIsReady(string accountCode, byte ordinal, LockContext lockContext);
 		Task<bool> LoadWallet(CorrelationContext correlationContext, LockContext lockContext, string passphrase = null);
@@ -748,8 +747,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.EnsureWalletIsLoaded();
 
 			List<string> keys = (await this.WalletFileInfo.Accounts.WhereAsync(a => a.Value.WalletChainStatesInfo.ChainState(lockContext),
-				e => (e.LastBlockSynced == lastSyncedBlockId)
-				|| (newBlockId.HasValue && (e.LastBlockSynced == newBlockId.Value && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced))
+				//Fully Synced to lastSyncedBlockId case
+				e => (e.LastBlockSynced == lastSyncedBlockId && ((WalletAccountChainState.BlockSyncStatuses)e.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.FullySyncedBlockHeightNotUpdated))
+				//Retrying to sync the last "synced" block case
+				|| (e.PreviousBlockSynced == lastSyncedBlockId && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced)
+				//Currently syncing the new block case
+				|| (newBlockId.HasValue && e.LastBlockSynced == newBlockId.Value && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced)
 				).ConfigureAwait(false)).Select(a => a.Key).ToList();
 
 			return (await this.GetAccounts(lockContext).ConfigureAwait(false)).Where(a => keys.Contains(a.AccountCode)).ToList();
@@ -1662,7 +1665,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			foreach(IWalletAccount a in syncableAccounts) {
 				WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[a.AccountCode].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
-				if(!((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(status)) {
+				if (!((WalletAccountChainState.BlockSyncStatuses) chainState.BlockSyncStatus).HasFlag(status)) {
 					return false;
 				}
 			}
@@ -1685,8 +1688,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					                                          WalletAccountChainState chainState = await this.WalletFileInfo.Accounts[a.AccountCode].WalletChainStatesInfo.ChainState(lockContext).ConfigureAwait(false);
 
-					                                          return new {chainState.BlockSyncStatus, chainState.LastBlockSynced};
-				                                          }, e => (e.BlockSyncStatus == (int) WalletAccountChainState.BlockSyncStatuses.FullySynced && e.LastBlockSynced == latestSyncedBlockId) || (e.BlockSyncStatus != (int) WalletAccountChainState.BlockSyncStatuses.FullySynced && e.LastBlockSynced == synthesizedBlock.BlockId) || (e.LastBlockSynced == 0)).ConfigureAwait(false)).ToList();
+					                                          return new {chainState.BlockSyncStatus, chainState.LastBlockSynced, chainState.PreviousBlockSynced};
+				                                          }, e => (e.LastBlockSynced == latestSyncedBlockId && ((WalletAccountChainState.BlockSyncStatuses)e.BlockSyncStatus).HasFlag(WalletAccountChainState.BlockSyncStatuses.FullySyncedBlockHeightNotUpdated))
+																//Retrying to sync the last "synced" block case
+																|| (e.PreviousBlockSynced == latestSyncedBlockId && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced)
+																//Currently syncing the new block case
+																|| (e.LastBlockSynced == synthesizedBlock.BlockId && e.BlockSyncStatus != (int)WalletAccountChainState.BlockSyncStatuses.FullySynced)
+																|| (e.LastBlockSynced == 0)).ConfigureAwait(false)).ToList();
 
 			if (!availableAccounts.Any())
 			{
@@ -4917,12 +4925,6 @@ clean above
 			// and sign the whole thing with our key
 			return await this.SignMessageXmss(message, key, lockContext).ConfigureAwait(false);
 
-		}
-
-		public Task<SafeArrayHandle> SignMessage(SafeArrayHandle messageHash, IWalletKey key, LockContext lockContext) {
-
-			// thats it, lets perform the signature
-			return this.SignTransaction(messageHash, key, lockContext);
 		}
 
 		public virtual async Task<SynthesizedBlock> ConvertApiSynthesizedBlock(SynthesizedBlockAPI synthesizedBlockApi, LockContext lockContext) {

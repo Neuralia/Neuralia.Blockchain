@@ -10,12 +10,12 @@
         <AssemblyName>Neuralia.Blockchains.Components</AssemblyName>
         <TargetFrameworks>netstandard2.1;net5.0</TargetFrameworks>
         <PackageId>Neuralia.Blockchains.Components</PackageId>
-        <VersionPrefix>1.0.1.8</VersionPrefix>
+        <VersionPrefix>1.0.1.9</VersionPrefix>
 
     </PropertyGroup>
  <ItemGroup>
 
-    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.1.8" />
+    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.1.9" />
 
   </ItemGroup> 
     <ItemGroup>

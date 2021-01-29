@@ -81,8 +81,14 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 
 					var resultBytes = xchachaEncryptor.Decrypt(messages.request.Secret, nonce, key);
 
-					// ok, this is where we start the validation server so they can verify our validation port. we can star this in parallel
-					var task = Task.Run(() => EnableVerificationWindow());
+					// ok, this is where we start the validation server so they can verify our validation port.
+					try {
+						this.EnableVerificationWindow();
+					} catch(Exception ex) {
+						NLog.Default.Error(ex, "Failed to start validation verification server...");
+
+						throw;
+					}
 
 					using SafeArrayHandle hashingBytes = SafeArrayHandle.Create(nonce.Length + resultBytes.Length);
 

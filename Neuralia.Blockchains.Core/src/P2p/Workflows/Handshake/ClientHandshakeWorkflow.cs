@@ -151,7 +151,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				TargettedMessageSet<ServerHandshake<R>, R> serverHandshake = null;
 
 				try {
-					serverHandshake = this.WaitSingleNetworkMessage<ServerHandshake<R>, TargettedMessageSet<ServerHandshake<R>, R>, R>();
+					serverHandshake = await WaitSingleNetworkMessage<ServerHandshake<R>, TargettedMessageSet<ServerHandshake<R>, R>, R>().ConfigureAwait(false);
 				} catch(Exception ex) {
 
 					NLog.Default.Verbose("Failed to connect to peer");
@@ -228,7 +228,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmDropped);
 				}
 
-				TargettedMessageSet<ServerHandshakeConfirm<R>, R> serverResponse = this.WaitSingleNetworkMessage<ServerHandshakeConfirm<R>, TargettedMessageSet<ServerHandshakeConfirm<R>, R>, R>();
+				TargettedMessageSet<ServerHandshakeConfirm<R>, R> serverResponse = await WaitSingleNetworkMessage<ServerHandshakeConfirm<R>, TargettedMessageSet<ServerHandshakeConfirm<R>, R>, R>().ConfigureAwait(false);
 
 				if(this.ProcessServerHandshakeConfirm(handshakeTrigger, serverHandshake.Message, serverResponse.Message, this.serverConnection)) {
 					// it is a confirmed connection, we are now friends

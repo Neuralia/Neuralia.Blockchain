@@ -40,6 +40,7 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.Blockchains.Tools.Threading;
 using Newtonsoft.Json;
 using Serilog;
 
@@ -532,7 +533,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 
 			// lets acquire a new auto event on the workflow
-			ManualResetEventSlim autoEvent = this.RegisterNewAutoEvent();
+			AsyncManualResetEventSlim autoEvent = this.RegisterNewAutoEvent();
 
 			this.CheckShouldStopThrow();
 
@@ -1564,7 +1565,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			if(waitMessagesFunc == null) {
 				
-				waitMessagesFunc = async (timeout, peerSendCountWait) => this.WaitNetworkMessages(new[] {typeof(FINISH_SYNC), typeof(T)}, timeout, peerSendCountWait);
+				waitMessagesFunc = (timeout, peerSendCountWait) => this.WaitNetworkMessages(new[] {typeof(FINISH_SYNC), typeof(T)}, timeout, peerSendCountWait);
 			}
 
 			try {

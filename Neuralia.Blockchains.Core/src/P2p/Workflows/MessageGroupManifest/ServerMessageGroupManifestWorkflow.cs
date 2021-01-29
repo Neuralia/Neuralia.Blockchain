@@ -73,7 +73,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				return;
 			}
 
-			TargettedMessageSet<ClientMessageGroupReply<R>, R> serverMessageGroupManifest = this.WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>(TimeSpan.FromSeconds(10));
+			TargettedMessageSet<ClientMessageGroupReply<R>, R> serverMessageGroupManifest = await WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
 			NLog.Default.Verbose($"We received {serverMessageGroupManifest.Message.gossipMessageSets.Count} gossip messages from peer {this.ClientConnection.ScopedAdjustedIp}");
 

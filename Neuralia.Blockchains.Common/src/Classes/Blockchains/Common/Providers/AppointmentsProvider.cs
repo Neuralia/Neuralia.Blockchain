@@ -1127,21 +1127,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			if(this.IsValidator) {
 
-				DateTime? appointment = await this.AppointmentRegistryDal.GetInRangeAppointments().ConfigureAwait(false);
+				DateTime? appointment = null;
+				
+				if(this.ShouldAct(ref this.checkAppointmentsContexts)) {
 
-				if(!appointment.HasValue) {
-					if(this.ShouldAct(ref this.checkAppointmentsContexts)) {
-
-						await this.QueryWebAppointments(lockContext).ConfigureAwait(false);
+					await this.QueryWebAppointments(lockContext).ConfigureAwait(false);
 #if TESTING
-						this.checkAppointmentsContexts = DateTimeEx.CurrentTime.AddSeconds(15);
+					this.checkAppointmentsContexts = DateTimeEx.CurrentTime.AddSeconds(15);
 #else
-						this.checkAppointmentsContexts = DateTimeEx.CurrentTime.AddHours(2);
+					this.checkAppointmentsContexts = DateTimeEx.CurrentTime.AddHours(6);
 #endif
 
-						appointment = await this.AppointmentRegistryDal.GetInRangeAppointments().ConfigureAwait(false);
-					}
+					appointment = await this.AppointmentRegistryDal.GetInRangeAppointments().ConfigureAwait(false);
 				}
+				
 
 				if(appointment.HasValue) {
 					await this.EnsureAppointmentDetails(appointment.Value).ConfigureAwait(false);

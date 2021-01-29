@@ -40,6 +40,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections
         public List<string> DiscoveredDevicesNames { get; set; } = new List<string>();
         
         public int deviceIndex { get; set; }
+        public string PrivateIp { get; set; }
         public string PublicIp { get; set; }
         public List<PortMapping> PortMappings { get; set; } = new List<PortMapping>();
 
@@ -151,39 +152,87 @@ namespace Neuralia.Blockchains.Core.P2p.Connections
                 NLog.Connections.Verbose($"{TAG}: discovered {devices.Count} nat devices, using index {this.Status.deviceIndex} one");
 
                 this.device = devices[this.Status.deviceIndex];
-                
+
+                var internalIp = this.device.LocalAddress;
                 var externalIp = await this.device.GetExternalIPAsync().ConfigureAwait(false);
-                NLog.Connections.Verbose($"{TAG}: your external ip is {externalIp}, as found by device {this.device}");
+                NLog.Connections.Verbose($"{TAG}: your external ip is {externalIp}, and your internal ip is {internalIp} as found by device {this.device}");
                 this.Status.PublicIp = externalIp.ToString();
-                
-                await this.device.CreatePortMapAsync(new Mapping(Protocol.Tcp, this.LocalPort, this.LocalPort, $"Neuralium port {this.LocalPort}")).ConfigureAwait(false);
-                
-                NLog.Connections.Verbose($"{TAG}: port mapping successful: {this.LocalPort}");
-                
-                await this.device.CreatePortMapAsync(new Mapping(Protocol.Tcp, this.ValidatorPort, this.ValidatorPort, $"Neuralium port {this.ValidatorPort}")).ConfigureAwait(false);
-                
-                NLog.Connections.Verbose($"{TAG}: port mapping successful: {this.ValidatorPort}");
+                this.Status.PrivateIp = internalIp.ToString();
 
-                if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol) {
-                    await this.device.CreatePortMapAsync(new Mapping(Protocol.Tcp, this.ValidatorBackupPort, this.ValidatorBackupPort, $"Neuralium port {this.ValidatorBackupPort}")).ConfigureAwait(false);
-
-                    NLog.Connections.Verbose($"{TAG}: port mapping successful: {this.ValidatorBackupPort}");
+                List<Mapping> mappings = new();
+                try
+                {
+                    var mappingsResult = await this.device.GetAllMappingsAsync().ConfigureAwait(false);
+                    mappings.AddRange(mappingsResult);
                 }
-
-                var mappings = await this.device.GetAllMappingsAsync().ConfigureAwait(false);
+                catch (Exception e)
+                {
+                    NLog.Connections.Verbose(e,$"{TAG}: {nameof(this.device.GetAllMappingsAsync)} failed, continuing anyway...");
+                }
+                
+                
 
                 NLog.Connections.Verbose($"{TAG}: port mapping found: {mappings.Count()}");
-						
-                foreach (var mapping in mappings)
-                    NLog.Connections.Verbose($"{TAG}: port mapping found: {mapping}");
 
+                List<Mapping> requiredMappings = new()
+                {
+                    new Mapping(Protocol.Tcp, this.LocalPort, this.LocalPort,
+                        $"Neuralium p2p port {this.LocalPort}"), 
+                    new Mapping(Protocol.Tcp, this.ValidatorPort, this.ValidatorPort,
+                        $"Neuralium Validator port {this.ValidatorPort}")
+                };
+                
+                if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol) 
+                    requiredMappings.Add(new Mapping(Protocol.Tcp, this.ValidatorBackupPort, this.ValidatorBackupPort, $"Neuralium port {this.ValidatorBackupPort}"));
+                
+                foreach (var mapping in mappings)
+                {
+                    var requiredMapping = requiredMappings.Find(m => m.PrivatePort == mapping.PrivatePort
+                                                       && m.PublicPort == mapping.PublicPort
+                                                       && !mapping.IsExpired());
+                    
+                    if (requiredMapping != null)
+                    {
+                        if (internalIp.Equals(mapping.PrivateIP))
+                        {
+                            NLog.Connections.Information($"{TAG}: port mapping already present ({mapping}) for local ip {internalIp}, nothing to do.");
+                            requiredMappings.Remove(requiredMapping);
+                        }
+                        else if(GlobalSettings.ApplicationSettings.ReplaceConflictingPortMappings)
+                        {
+                            NLog.Connections.Warning($"{TAG}: port mapping already present ({mapping}) for another local ip {mapping.PrivateIP}, we're **DELETING** it to replace it with a mapping toward our own local ip ({internalIp}), to disable this behavior, use '{nameof(GlobalSettings.ApplicationSettings.ReplaceConflictingPortMappings)}': false in your node's config.json.");
+                            await this.device.DeletePortMapAsync(mapping).ConfigureAwait(false);
+                        }
+                    }
+                    else
+                        NLog.Connections.Verbose($"{TAG}: foreign port mapping found: {mapping}");
+                }
+
+
+                foreach (var mapping in requiredMappings)
+                {
+                    try
+                    {
+                        await this.device.CreatePortMapAsync(mapping).ConfigureAwait(false);
+                        mappings.Add(mapping);
+                        NLog.Connections.Verbose($"{TAG}: new port mapping successfully added: {mapping}");
+
+                    }
+                    catch (Exception e)
+                    {
+                        NLog.Connections.Warning(e,$"{TAG}: port mapping failed: {mapping}");
+                    }
+                    
+                }
+                
                 this.Status.PortMappings = mappings.Select(m => new PortMapping{PrivatePort = m.PrivatePort
                     , PublicPort = m.PublicPort
                     , PrivateIp = m.PrivateIP.ToString()
                     , PublicIp = m.PublicIP.ToString()
                     , Expiration = m.Expiration,
                     Description = m.Description}).ToList();
-						
+
+
             }
             catch (Exception e)
             {

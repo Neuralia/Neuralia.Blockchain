@@ -160,7 +160,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 					throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
 				}
 			
-				if(TcpConnection.IPv6Supported && this.networkEndPoint.IPMode.HasFlag(IPMode.IPv6)) {
+				if(TcpConnection.IPv6Supported && (networkEndPoint.IPMode.HasFlag(IPMode.IPv6) || !GlobalSettings.ApplicationSettings.ForceIpv4Socket)) {
 					this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
 
 					if(this.networkEndPoint.IPMode.HasFlag(IPMode.IPv4)) {

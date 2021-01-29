@@ -303,6 +303,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public IPMode IPProtocol { get; set; } = IPMode.Both;
 
 		/// <summary>
+		/// if connecting to server as ipv4, we can use an ipv6 socket that can do ipv4, or FORCE an ipv4 socket. 
+		/// </summary>
+		public bool ForceIpv4Socket { get; set; }
+
+		/// <summary>
 		///     What type of tcp socket to use
 		/// </summary>
 		public SocketTypes SocketType { get; set; } = SocketTypes.Duplex;
@@ -335,6 +340,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		/// Which port are we arunning the server.
 		/// </summary>
+		/// <returns>Returns the port number to use. Default value: <see cref="GlobalsService.DEFAULT_PORT"/></returns>
 		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
 		
 		/// <summary>
@@ -346,6 +352,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		/// 
 		/// </summary>
+		/// <returns>Returns the port number to use. Default value: <see cref="GlobalsService.DEFAULT_VALIDATOR_HTTP_PORT"/></returns>
 		public int ValidatorHttpPort { get; set; } = GlobalsService.DEFAULT_VALIDATOR_HTTP_PORT;
 		
 		/// <summary>
@@ -376,7 +383,11 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// 
 		/// </summary>
 		public bool UsePmP { get; set; } = false;
-	
+		/// <summary>
+		/// When using UPnP or PmP, we check for existing port mappings. If we find a mapping that routes traffic from
+		/// one of required ports toward a foreign local ip, we try to delete the conflicting mapping and enforce ours.
+		/// </summary>
+		public bool ReplaceConflictingPortMappings { get; set; } = true;
 		/// <summary>
 		/// 
 		/// </summary>

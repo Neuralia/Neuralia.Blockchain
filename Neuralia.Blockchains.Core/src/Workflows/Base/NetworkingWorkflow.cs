@@ -16,6 +16,7 @@ using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Cryptography.Hash;
 using Neuralia.Blockchains.Tools.Exceptions;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.Blockchains.Tools.Threading;
 
 namespace Neuralia.Blockchains.Core.Workflows.Base {
 
@@ -124,7 +125,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// </summary>
 		/// <param name="Process">returns true if satisfied to end the loop, false if it still needs to wait</param>
 		/// <returns></returns>
-		private List<MESSAGE_SET> WaitNetworkMessages(Func<MESSAGE_SET, bool> ProcessSingle, Func<List<MESSAGE_SET>, bool> ProcessBatch, TimeSpan? timeout = null, int expectedCount = -1, ManualResetEventSlim autoEvent = null) {
+		private async Task<List<MESSAGE_SET>> WaitNetworkMessages(Func<MESSAGE_SET, bool> ProcessSingle, Func<List<MESSAGE_SET>, bool> ProcessBatch, TimeSpan? timeout = null, int expectedCount = -1, AsyncManualResetEventSlim autoEvent = null) {
 
 			if(!timeout.HasValue) {
 				timeout = DEFAULT_HIBERNATE_TIMEOUT;
@@ -165,7 +166,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 					// lets hibernate for a maximum of 3 second
 					int minTimeout = (int) Math.Min(timeRemaining.TotalMilliseconds, 3000);
-					this.Hibernate(TimeSpan.FromMilliseconds(minTimeout), autoEvent);
+					await Hibernate(TimeSpan.FromMilliseconds(minTimeout), autoEvent).ConfigureAwait(false);
 
 				} catch(ThreadTimeoutException ex) {
 					//NLog.Default.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
@@ -185,18 +186,18 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		///     Get a single message of a specific type. wait untl we receive it
 		/// </summary>
 		/// <returns></returns>
-		protected SPECIALIZED_MESSAGE_SET WaitSingleNetworkMessage<T, SPECIALIZED_MESSAGE_SET, R>(TimeSpan? timeout = null, ManualResetEventSlim autoEvent = null)
+		protected async Task<SPECIALIZED_MESSAGE_SET> WaitSingleNetworkMessage<T, SPECIALIZED_MESSAGE_SET, R>(TimeSpan? timeout = null, AsyncManualResetEventSlim autoEvent = null)
 			where T : NetworkMessage<R>
 			where SPECIALIZED_MESSAGE_SET : class, MESSAGE_SET, INetworkMessageSet<T, HEADER, R>
 			where R : IRehydrationFactory {
 
-			List<MESSAGE_SET> messages = this.WaitNetworkMessages(messageSet => {
+			List<MESSAGE_SET> messages = await WaitNetworkMessages(messageSet => {
 				if(messageSet.BaseMessage is T) {
 					return true;
 				}
 
 				return false; // keep waiting
-			}, null, timeout, 1, autoEvent);
+			}, null, timeout, 1, autoEvent).ConfigureAwait(false);
 
 			if(messages.Count == 0) {
 				throw new WorkflowException("We got no message, we were waiting for only one");
@@ -241,9 +242,9 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		/// <param name="types"></param>
 		/// <returns></returns>
 		/// <exception cref="WorkflowException"></exception>
-		protected MESSAGE_SET WaitSingleNetworkMessage(IEnumerable<Type> types, TimeSpan? timeout = null, ManualResetEventSlim autoEvent = null) {
+		protected async Task<MESSAGE_SET> WaitSingleNetworkMessage(IEnumerable<Type> types, TimeSpan? timeout = null, AsyncManualResetEventSlim autoEvent = null) {
 
-			List<MESSAGE_SET> messages = this.WaitNetworkMessages(types, timeout, 1, autoEvent);
+			List<MESSAGE_SET> messages = await WaitNetworkMessages(types, timeout, 1, autoEvent).ConfigureAwait(false);
 
 			if(messages.Count == 0) {
 				throw new MessageReceptionException("We got no message, we were waiting for only one");
@@ -284,17 +285,17 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		///     Get a list of messages of a specific type. wait untl we receive them
 		/// </summary>
 		/// <returns></returns>
-		protected List<ITargettedMessageSet<T, R>> WaitNetworkMessages<T, R>(TimeSpan? timeout = null, int expectedCount = -1, ManualResetEventSlim autoEvent = null)
+		protected async Task<List<ITargettedMessageSet<T, R>>> WaitNetworkMessages<T, R>(TimeSpan? timeout = null, int expectedCount = -1, AsyncManualResetEventSlim autoEvent = null)
 			where T : class, INetworkMessage<R>
 			where R : IRehydrationFactory {
 
-			List<MESSAGE_SET> messages = this.WaitNetworkMessages(messageSet => {
+			List<MESSAGE_SET> messages = await WaitNetworkMessages(messageSet => {
 				if(messageSet.BaseMessage is T) {
 					return true;
 				}
 
 				return false; // keep waiting
-			}, null, timeout, expectedCount, autoEvent);
+			}, null, timeout, expectedCount, autoEvent).ConfigureAwait(false);
 
 			return messages.Cast<ITargettedMessageSet<T, R>>().ToList();
 		}
@@ -303,7 +304,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 		///     Get a list of messages of a specific list of types. wait until we receive them
 		/// </summary>
 		/// <returns></returns>
-		protected List<MESSAGE_SET> WaitNetworkMessages(IEnumerable<Type> messageTypes, TimeSpan? timeout = null, int expectedCount = -1, ManualResetEventSlim autoEvent = null) {
+		protected Task<List<MESSAGE_SET>> WaitNetworkMessages(IEnumerable<Type> messageTypes, TimeSpan? timeout = null, int expectedCount = -1, AsyncManualResetEventSlim autoEvent = null) {
 			return this.WaitNetworkMessages(messageSet => messageTypes.Contains(messageSet.BaseMessage.GetType()), null, timeout, expectedCount, autoEvent);
 		}
 

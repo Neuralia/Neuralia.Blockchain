@@ -36,14 +36,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.index = index;
 		}
 
-		protected override Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+		protected override async Task PerformWork(IChainWorkflow workflow, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 			taskRoutingContext.SetCorrelationContext(this.correlationContext);
 
 			// let's sleep a little, give it time to pass
 			//TODO: do we need this? it could impede with high rate signatures.
-			this.Hibernate(TimeSpan.FromSeconds(3));
+			await Hibernate(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
 			
-			return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GenerateXmssKeyIndexNodeCache(this.accountCode, this.ordinal, this.index, lockContext);
+			await centralCoordinator.ChainComponentProvider.WalletProviderBase.GenerateXmssKeyIndexNodeCache(accountCode, ordinal, index, lockContext).ConfigureAwait(false);
 		}
 	}
 }

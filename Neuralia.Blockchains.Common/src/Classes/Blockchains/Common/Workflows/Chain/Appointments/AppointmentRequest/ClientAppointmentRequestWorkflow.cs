@@ -85,7 +85,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 						return;
 					}
 
-					BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> serverAppointmentRequest = (BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY>) this.WaitSingleNetworkMessage<SERVER_TRIGGER_REPLY, TargettedMessageSet<SERVER_TRIGGER_REPLY, IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>();
+					BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> serverAppointmentRequest = (BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY>) await WaitSingleNetworkMessage<SERVER_TRIGGER_REPLY, TargettedMessageSet<SERVER_TRIGGER_REPLY, IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>().ConfigureAwait(false);
 
 					if(serverAppointmentRequest.Message.Message != null && !serverAppointmentRequest.Message.Message.IsZero) {
 						this.Result = serverAppointmentRequest.Message.Message;

@@ -277,7 +277,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								return;
 							}
 
-							requestSets = this.WaitNetworkMessages(new[] {typeof(CLOSE_CONNECTION), typeof(REQUEST_BLOCK_INFO), typeof(REQUEST_BLOCK_SLICE_HASHES), typeof(REQUEST_BLOCK), typeof(REQUEST_DIGEST_INFO), typeof(REQUEST_DIGEST), typeof(REQUEST_DIGEST_FILE)}, TimeSpan.FromSeconds(2));
+							requestSets = await WaitNetworkMessages(new[] {typeof(CLOSE_CONNECTION), typeof(REQUEST_BLOCK_INFO), typeof(REQUEST_BLOCK_SLICE_HASHES), typeof(REQUEST_BLOCK), typeof(REQUEST_DIGEST_INFO), typeof(REQUEST_DIGEST), typeof(REQUEST_DIGEST_FILE)}, TimeSpan.FromSeconds(2)).ConfigureAwait(false);
 
 							hasMessages = requestSets.Any();
 

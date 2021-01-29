@@ -179,7 +179,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletSyncStarted(currentBlockHeight, targetBlockHeight)).ConfigureAwait(false);
 
 				// now lets run then sequence
-				await this.RunWalletUpdateSequence(currentBlockHeight, targetBlockHeight, taskRoutingContext, lockContext).ConfigureAwait(false);
+				await this.RunWalletUpdateSequence(currentBlockHeight, previousSyncedBlockHeight, targetBlockHeight, taskRoutingContext, lockContext).ConfigureAwait(false);
 
 				lowestAccountBlockSyncHeight = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
 
@@ -221,7 +221,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <param name="targetBlockHeight"></param>
 		/// <param name="lockContext"></param>
 		/// <returns></returns>
-		private async Task RunWalletUpdateSequence(long currentBlockHeight, long targetBlockHeight, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+		private async Task RunWalletUpdateSequence(long currentBlockHeight, long previousSyncedBlockHeight, long targetBlockHeight, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
 			Func<long, LockContext, bool> isBlockAvailableCallback = null;
 
@@ -240,7 +240,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			// The latestSyncedBlockId is the same as the currentBlockHeight, so the same value is used for both parameters.
 			if(!await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.AllAccountsHaveSyncStatus(currentBlockHeight, currentBlockHeight, WalletAccountChainState.BlockSyncStatuses.FullySynced, lockContext).ConfigureAwait(false)) {
 				// let's run a resync of the latest just in case
-				currentBlockHeight -= 1;
+				currentBlockHeight = previousSyncedBlockHeight;
 			}
 
 			// Get initialized outside the loop once and must stay outside because the sync is different for mobile. It gets updated at every full block sync (which is not every block for mobile, but it is for desktop).
@@ -373,9 +373,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				} else {
 					//interpolation
 
-					// if anything gets done here, then uncomment the below to give it a relative cost.
-					transactionUnits -= 0; //INTERPOLATED_MINOR_UNIT_COUNT;
-
+					transactionUnits -= INTERPOLATED_MINOR_UNIT_COUNT;
 					mode = BlockModes.InterpolatedMinor;
 				}
 
@@ -435,26 +433,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
-		private async Task SynchronizeBlock(IWalletProvider provider, SynthesizedBlock synthesizedBlock, long currentHeight, long previousBlockId, long targetHeight, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+		private async Task SynchronizeBlock(IWalletProvider provider, SynthesizedBlock synthesizedBlock, long currentHeight, long lastSyncedBlockId, long targetHeight, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
 			this.CentralCoordinator.Log.Information($"Performing Wallet sync for block {synthesizedBlock.BlockId} out of {Math.Max(currentHeight, synthesizedBlock.BlockId)}");
 
 			// run the workflow sequence!
 			this.CheckShouldStopThrow();
 
-			await provider.UpdateWalletBlock(synthesizedBlock, previousBlockId, async (sb, lc) => {
+			await provider.UpdateWalletBlock(synthesizedBlock, lastSyncedBlockId, async (sb, lc) => {
 
 				this.CheckShouldStopThrow();
 				this.CentralCoordinator.Log.Verbose($"ProcessBlockImmediateAccountsImpact for block {synthesizedBlock.BlockId}...");
 
 				// run the interpretation if any account is tracked
-				await this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateAccountsImpact(synthesizedBlock, previousBlockId, lockContext).ConfigureAwait(false);
+				await this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.ProcessBlockImmediateAccountsImpact(synthesizedBlock, lastSyncedBlockId, lockContext).ConfigureAwait(false);
 
 				this.CheckShouldStopThrow();
 				this.CentralCoordinator.Log.Verbose($"InterpretNewBlockLocalWallet for block {synthesizedBlock.BlockId}...");
 
 				// run the interpretation if any account is tracked
-				await this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.InterpretNewBlockLocalWallet(synthesizedBlock, previousBlockId, taskRoutingContext, lockContext).ConfigureAwait(false);
+				await this.centralCoordinator.ChainComponentProvider.InterpretationProviderBase.InterpretNewBlockLocalWallet(synthesizedBlock, lastSyncedBlockId, taskRoutingContext, lockContext).ConfigureAwait(false);
 
 			}, lockContext).ConfigureAwait(false);
 

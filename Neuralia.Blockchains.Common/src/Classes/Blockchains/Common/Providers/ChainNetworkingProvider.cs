@@ -990,7 +990,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						
 						parameters.Add("miningAccountId", miningAccountId.ToLongRepresentation());
 						
-						parameters.Add("appointments", string.Join(";", appointments.Select(h => h.ToString("o"))));
+						parameters.Add("appointments", string.Join(";", appointments.Select(h => h.Ticks)));
 						parameters.Add("hashes", string.Join(";", hashes.Select(h => h.ToString())));
 						
 						string url = chainConfiguration.WebAppointmentsRegistrationUrl;
@@ -1009,6 +1009,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 							
 							return (true, JsonSerializer.Deserialize<QueryValidatorAppointmentSessionsResult>(webResult.Content, serializerSettings));
+						}
+						else if(webResult.StatusCode == HttpStatusCode.NoContent) {
+							return (true, null);
 						}
 
 						throw new ApplicationException("Failed to register message through web");

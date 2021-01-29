@@ -86,9 +86,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		public void EnableVerificationWindow() {
 			this.verificationEnd = DateTimeEx.CurrentTime.AddMinutes(1);
 
-			if(this.validationServer == null || !this.validationServer.IsRunning) {
-				this.StartServer(10, ValidationServers.Default);
-			}
+			this.StartServer(10, ValidationServers.Default);
 		}
 
 		[Flags]

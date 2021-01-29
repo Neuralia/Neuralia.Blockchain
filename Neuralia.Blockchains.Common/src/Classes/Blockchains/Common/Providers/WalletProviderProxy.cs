@@ -1134,16 +1134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			});
 		}
-
-		public Task<SafeArrayHandle> SignMessage(SafeArrayHandle messageHash, IWalletKey key, LockContext lockContext) {
-			return this.ScheduleTransaction((p, ct, lc) => p.SignMessage(messageHash, key, lc), lockContext, 20, lc => {
-				// load wallet & key
-				this.walletProvider.EnsureWalletIsLoaded();
-
-				return this.walletProvider.EnsureWalletKeyIsReady(key.AccountCode, key.Name, lc);
-
-			});
-		}
+		
 
 		public Task EnsureWalletKeyIsReady(string accountCode, string keyname, LockContext lockContext) {
 			return this.ScheduleKeyedRead((t, lc) => {

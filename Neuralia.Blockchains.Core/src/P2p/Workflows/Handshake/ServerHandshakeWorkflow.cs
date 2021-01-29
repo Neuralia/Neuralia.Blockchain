@@ -83,7 +83,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				return false;
 			}
 
-			TargettedMessageSet<ClientHandshakeConfirm<R>, R> responseNetworkMessageSet = this.WaitSingleNetworkMessage<ClientHandshakeConfirm<R>, TargettedMessageSet<ClientHandshakeConfirm<R>, R>, R>();
+			TargettedMessageSet<ClientHandshakeConfirm<R>, R> responseNetworkMessageSet = await WaitSingleNetworkMessage<ClientHandshakeConfirm<R>, TargettedMessageSet<ClientHandshakeConfirm<R>, R>, R>().ConfigureAwait(false);
 
 			if(responseNetworkMessageSet.Message.Status != ServerHandshake<R>.HandshakeStatuses.Ok) {
 				NLog.Default.Verbose($"Client returned an error: {responseNetworkMessageSet.Message.Status}. Sending handshake negative response");
@@ -134,7 +134,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 		}
 
 		protected virtual async Task WaitFinalClientReady() {
-			TargettedMessageSet<ClientReady<R>, R> finalNetworkMessageSet = this.WaitSingleNetworkMessage<ClientReady<R>, TargettedMessageSet<ClientReady<R>, R>, R>();
+			TargettedMessageSet<ClientReady<R>, R> finalNetworkMessageSet = await WaitSingleNetworkMessage<ClientReady<R>, TargettedMessageSet<ClientReady<R>, R>, R>().ConfigureAwait(false);
 
 			await this.networkingService.ConnectionStore.FullyConfirmConnection(this.ClientConnection).ConfigureAwait(false);
 		}

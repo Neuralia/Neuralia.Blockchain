@@ -280,7 +280,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				List<ITargettedMessageSet<MessageGroupManifestServerReply<R>, R>> serverMessageGroupManifests;
 
 				try {
-					serverMessageGroupManifests = this.WaitNetworkMessages<MessageGroupManifestServerReply<R>, R>(TimeSpan.FromSeconds(1));
+					serverMessageGroupManifests = await WaitNetworkMessages<MessageGroupManifestServerReply<R>, R>(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 				} catch {
 					// seems we have no messages
 					return;

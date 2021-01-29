@@ -42,7 +42,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 				return;
 			}
 
-			TargettedMessageSet<PeerListRequestServerReply<R>, R> serverPeerListRequest = this.WaitSingleNetworkMessage<PeerListRequestServerReply<R>, TargettedMessageSet<PeerListRequestServerReply<R>, R>, R>();
+			TargettedMessageSet<PeerListRequestServerReply<R>, R> serverPeerListRequest = await WaitSingleNetworkMessage<PeerListRequestServerReply<R>, TargettedMessageSet<PeerListRequestServerReply<R>, R>, R>().ConfigureAwait(false);
 
 			// take the peer nodes and update our system
 			this.networkingService.ConnectionStore.UpdatePeerNodes(this.peerConnection, serverPeerListRequest.Message.nodes);

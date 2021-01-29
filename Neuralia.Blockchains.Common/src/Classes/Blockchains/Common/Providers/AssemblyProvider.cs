@@ -1002,7 +1002,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					// and sign the whole thing with our key
 					messageEnvelope.Signature.AccountSignature.Autograph.Entry = (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(messageEnvelope.Hash, key, lockContext).ConfigureAwait(false)).Entry;
-
+					
 					this.CentralCoordinator.Log.Verbose("Message successfully signed.");
 				}
 			} catch(Exception ex) {

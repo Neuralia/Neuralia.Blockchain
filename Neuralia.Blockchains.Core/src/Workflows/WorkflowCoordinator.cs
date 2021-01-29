@@ -56,7 +56,9 @@ namespace Neuralia.Blockchains.Core.Workflows {
 		}
 
 		public int WaitingWorkflows => this.queuedWorkflows.Count;
-
+		public int ExecutingWorkflows => this.executingWorkflows.Count;
+		public int TotalWorkflowsLoad => this.WaitingWorkflows + this.ExecutingWorkflows;
+		
 		public bool IsDisposed { get; private set; }
 
 		public void Dispose() {

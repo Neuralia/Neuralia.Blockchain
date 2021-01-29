@@ -66,6 +66,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		HashNodeList GetStructuresArray(SafeArrayHandle previousBlockHash);
 
 		List<TransactionId> GetAllTransactions();
+		List<TransactionId> GetAllValidTransactions();
 		List<(TransactionId TransactionId, int index)> GetAllIndexedTransactions();
 		Dictionary<int, TransactionId> GetAllIndexedTransactionsDictionary();
 		Dictionary<TransactionId, ITransaction> GetAllConfirmedTransactions();
@@ -351,13 +352,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks {
 		}
 
 		public List<TransactionId> GetAllTransactions() {
-			List<TransactionId> transactions = this.ConfirmedIndexedTransactions.Select(t => t.TransactionId).ToList();
-			transactions.AddRange(this.ConfirmedTransactions.Select(t => t.TransactionId));
+			List<TransactionId> transactions = this.GetAllValidTransactions();
 			transactions.AddRange(this.RejectedTransactions.Select(t => t.TransactionId));
 
 			return transactions;
 		}
 
+		public List<TransactionId> GetAllValidTransactions() {
+			List<TransactionId> transactions = this.ConfirmedIndexedTransactions.Select(t => t.TransactionId).ToList();
+			transactions.AddRange(this.ConfirmedTransactions.Select(t => t.TransactionId));
+
+			return transactions;
+		}
+		
 		public List<(TransactionId TransactionId, int index)> GetAllIndexedTransactions() {
 			List<(TransactionId TransactionId, int index)> transactionIndexes = this.ConfirmedIndexedTransactions.Select((t, index) => (t.TransactionId, index)).ToList();
 			int count = transactionIndexes.Count;

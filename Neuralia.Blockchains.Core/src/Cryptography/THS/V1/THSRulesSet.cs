@@ -96,7 +96,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 #else
 
 			ServerPresentationDefaultRulesSetDescriptor = new THSRulesSetDescriptor();
-			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromHours(24);
+			ServerPresentationDefaultRulesSetDescriptor.TargetTimespan = TimeSpan.FromHours(48);
 			ServerPresentationDefaultRulesSetDescriptor.EstimatedIterationTime = TimeSpan.FromSeconds(13);
 			ServerPresentationDefaultRulesSetDescriptor.Rounds = 9;
 
