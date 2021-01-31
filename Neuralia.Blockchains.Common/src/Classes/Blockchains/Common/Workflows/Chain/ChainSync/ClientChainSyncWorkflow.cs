@@ -451,7 +451,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						try {
 							// lets be nice, lets inform them that we will close the connection for this workflow
-							this.SendMessageToPeers(closeMessage, activeConnections, connections);
+							await SendMessageToPeers(closeMessage, activeConnections, connections).ConfigureAwait(false);
 						} catch(Exception ex) {
 							this.CentralCoordinator.Log.Error(ex, $"{TAG} Failed to close all peer connections but workflow is over.");
 						}
@@ -563,7 +563,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(FetchNewPeers)}: We will now attempt to connect and sync with {activeConnections.Count} new peer(s).");
 
 					// invite them to join
-					int peerSendCount = this.SendMessageToPeers(this.trigger, activeConnections, potentialConnections);
+					int peerSendCount = await this.SendMessageToPeers(this.trigger, activeConnections, potentialConnections).ConfigureAwait(false);
 
 					this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(FetchNewPeers)}: Turns out we sent connection requests to {peerSendCount} new peer(s).");
 
@@ -857,7 +857,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				// and now we send it to each peer
-				int peerSendCount = this.SendMessagesToPeers(dispatchedInfos, parameters.singleEntryContext.Connections);
+				int peerSendCount = await SendMessagesToPeers(dispatchedInfos, parameters.singleEntryContext.Connections).ConfigureAwait(false);
 
 				// log the peers we sent this to
 				foreach(PeerRequestInfo<KEY, INFO_REQUEST, INFO_RESPONSE> requestInfo in dispatchedInfos) {
@@ -1048,7 +1048,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				// and now we send it to each peer
-				int peerSendCount = this.SendMessagesToPeers(dispatchedInfos, parameters.Connections);
+				int peerSendCount = await this.SendMessagesToPeers(dispatchedInfos, parameters.Connections).ConfigureAwait(false);
 
 				// log the peers we sent this to
 				foreach(PeerRequestInfo<KEY, INFO_REQUEST, INFO_RESPONSE> requestInfo in dispatchedInfos) {
@@ -1381,7 +1381,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						this.CheckShouldStopThrow();
 
-						dispatchedPeerSendCount += this.SendMessagesToPeers(availableSlices.Select(s => s.SliceInfo).ToList(), parameters.singleEntryContext.Connections);
+						dispatchedPeerSendCount += await SendMessagesToPeers(availableSlices.Select(s => s.SliceInfo).ToList(), parameters.singleEntryContext.Connections).ConfigureAwait(false);
 
 						// update the sliding absolute timeout
 						absoluteTimeoutTime = UpdateTimeout();
@@ -1500,7 +1500,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}
 		}
 
-		protected virtual int SendMessagesToPeers<KEY, DATA_REQUEST, DATA_RESPONSE>(IEnumerable<PeerRequestInfo<KEY, DATA_REQUEST, DATA_RESPONSE>> peerSlices, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connectionSet)
+		protected virtual async Task<int> SendMessagesToPeers<KEY, DATA_REQUEST, DATA_RESPONSE>(IEnumerable<PeerRequestInfo<KEY, DATA_REQUEST, DATA_RESPONSE>> peerSlices, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connectionSet)
 			where DATA_REQUEST : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncRequest<KEY>
 			where DATA_RESPONSE : NetworkMessage<IBlockchainEventsRehydrationFactory>, ISyncResponse<KEY> {
 
@@ -1514,7 +1514,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 					// dehydrate it only once
 
-					if(!this.SendBytes(slice.connection.PeerConnection, triggerData)) {
+					if(!await SendBytes(slice.connection.PeerConnection, triggerData).ConfigureAwait(false)) {
 						this.CentralCoordinator.Log.Verbose($"{TAG} Connection with peer  {slice.connection.PeerConnection.ScopedAdjustedIp} was terminated");
 
 						throw new SendMessageException();
@@ -1563,9 +1563,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			List<(ResponseValidationResults success, T reply, PeerConnection connection)> replies = new List<(ResponseValidationResults success, T reply, PeerConnection connection)>();
 			List<PeerConnection> finishedConnections = new List<PeerConnection>();
 
+			
 			if(waitMessagesFunc == null) {
 				
 				waitMessagesFunc = (timeout, peerSendCountWait) => this.WaitNetworkMessages(new[] {typeof(FINISH_SYNC), typeof(T)}, timeout, peerSendCountWait);
+				
 			}
 
 			try {
@@ -1579,73 +1581,64 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				TimeSpan timeout = TimeSpan.FromSeconds(WAIT_MESSAGES_TIME);
 				DateTime maxWaitTime = DateTimeEx.CurrentTime + timeout;
 
-				//TODO; check all of this
-				try {
-					List<ITargettedMessageSet<IBlockchainEventsRehydrationFactory>> messages = (await waitMessagesFunc(timeout, peerSendCount).ConfigureAwait(false))?.ToList();
+		
+				List<ITargettedMessageSet<IBlockchainEventsRehydrationFactory>> messages = (await waitMessagesFunc(timeout, peerSendCount).ConfigureAwait(false))?.ToList();
+				
+				if(messages?.Any() ?? false) {
+					// these are some peers that replied to our request
+					foreach(ITargettedMessageSet<IBlockchainEventsRehydrationFactory> replyMessage in messages) {
 
-					if(messages?.Any() ?? false) {
-						// these are some peers that replied to our request
-						foreach(ITargettedMessageSet<IBlockchainEventsRehydrationFactory> replyMessage in messages) {
+						// we got a reply from this guy, so we are now ON!!
+						ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> currentConnection = connections.GetActiveConnections().SingleOrDefault(c => c.PeerConnection.ClientUuid == replyMessage.BaseHeader.ClientId);
 
-							// we got a reply from this guy, so we are now ON!!
-							ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> currentConnection = connections.GetActiveConnections().SingleOrDefault(c => c.PeerConnection.ClientUuid == replyMessage.BaseHeader.ClientId);
-
-							if(currentConnection == null) {
-								//TODO: the connection was not found, should we do something?
-								this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: connection matching reply client's id '{replyMessage.BaseHeader.ClientId}' could not be found, how's that possible? ignoring...");
-								continue;
-							}
-
-							// too bad, we can't use it, we remove it
-							if(replyMessage.BaseMessage is FINISH_SYNC finishResponseTrigger) {
-
-								finishedConnections.Add(currentConnection.PeerConnection);
-
-								if(finishResponseTrigger.Reason == FinishSync.FinishReason.Busy) {
-									// this peer tells us it wants to stop, so we remove it
-									connections.SleepActiveConnection(currentConnection.PeerConnection, TimeSpan.FromSeconds(3));
-								} else {
-									// this peer tells us it wants to stop, so we remove it
-									this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: finish sync with {currentConnection.PeerConnection.ScopedAdjustedIp} received with reason {finishResponseTrigger.Reason}, we're not happy with it, so we're banning it.");
-									connections.AddBannedConnection(currentConnection.PeerConnection, ConnectionSet.BlockedConnection.BanReason.CantHelp);
-								}
-
-								continue;
-							}
-
-							if(replyMessage is ITargettedMessageSet<T, IBlockchainEventsRehydrationFactory> castedReplyMessage) {
-								ResponseValidationResults peerValid = replyValidFunction(castedReplyMessage, currentConnection);
-
-								if(peerValid != ResponseValidationResults.Valid) {
-
-									if(replyMessage.BaseMessage is SERVER_TRIGGER_REPLY responseTrigger) {
-										if(responseTrigger.Status != ServerTriggerReply.SyncHandshakeStatuses.Ok) {
-											// if we have a non ok status from the server here
-											this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: reply from {currentConnection.PeerConnection.ScopedAdjustedIp} is not valid with status {responseTrigger.Status}, ignoring.");
-										}
-									}
-
-									if(peerValid == ResponseValidationResults.Invalid) {
-										this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: reply from {currentConnection.PeerConnection.ScopedAdjustedIp} is invalid, this deserves a strike.");
-										this.ChainNetworkingProvider.HandleSyncError(currentConnection.PeerConnection.NodeAddressInfo, DateTimeEx.CurrentTime);
-										connections.AddConnectionStrike(currentConnection.PeerConnection, ConnectionSet.ConnectionStrikeset.RejectionReason.InvalidResponse);
-									}
-								}
-
-								replies.Add((peerValid, castedReplyMessage.Message, currentConnection.PeerConnection));
-							}
-
+						if(currentConnection == null) {
+							//TODO: the connection was not found, should we do something?
+							this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: connection matching reply client's id '{replyMessage.BaseHeader.ClientId}' could not be found, how's that possible? ignoring...");
+							continue;
 						}
-					}
 
-				} catch(ObjectDisposedException ex) {
-					// do nothing
-					this.CentralCoordinator.Log.Verbose(ex, $"{TAG} {nameof(WaitForAllPeerReplies)}: Object Disposed!");
+						// too bad, we can't use it, we remove it
+						if(replyMessage.BaseMessage is FINISH_SYNC finishResponseTrigger) {
+
+							finishedConnections.Add(currentConnection.PeerConnection);
+
+							if(finishResponseTrigger.Reason == FinishSync.FinishReason.Busy) {
+								// this peer tells us it wants to stop, so we remove it
+								connections.SleepActiveConnection(currentConnection.PeerConnection, TimeSpan.FromSeconds(3));
+							} else {
+								// this peer tells us it wants to stop, so we remove it
+								this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: finish sync with {currentConnection.PeerConnection.ScopedAdjustedIp} received with reason {finishResponseTrigger.Reason}, we're not happy with it, so we're banning it.");
+								connections.AddBannedConnection(currentConnection.PeerConnection, ConnectionSet.BlockedConnection.BanReason.CantHelp);
+							}
+
+							continue;
+						}
+
+						if(replyMessage is ITargettedMessageSet<T, IBlockchainEventsRehydrationFactory> castedReplyMessage) {
+							ResponseValidationResults peerValid = replyValidFunction(castedReplyMessage, currentConnection);
+
+							if(peerValid != ResponseValidationResults.Valid) {
+
+								if(replyMessage.BaseMessage is SERVER_TRIGGER_REPLY responseTrigger) {
+									if(responseTrigger.Status != ServerTriggerReply.SyncHandshakeStatuses.Ok) {
+										// if we have a non ok status from the server here
+										this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: reply from {currentConnection.PeerConnection.ScopedAdjustedIp} is not valid with status {responseTrigger.Status}, ignoring.");
+									}
+								}
+
+								if(peerValid == ResponseValidationResults.Invalid) {
+									this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(WaitForAllPeerReplies)}: reply from {currentConnection.PeerConnection.ScopedAdjustedIp} is invalid, this deserves a strike.");
+									this.ChainNetworkingProvider.HandleSyncError(currentConnection.PeerConnection.NodeAddressInfo, DateTimeEx.CurrentTime);
+									connections.AddConnectionStrike(currentConnection.PeerConnection, ConnectionSet.ConnectionStrikeset.RejectionReason.InvalidResponse);
+								}
+							}
+
+							replies.Add((peerValid, castedReplyMessage.Message, currentConnection.PeerConnection));
+						}
+
+					}
 				}
-				catch(Exception ex) {
-					this.CentralCoordinator.Log.Verbose(ex, $"{TAG} {nameof(WaitForAllPeerReplies)}: Error occured while waiting for messages (A)");
-					// what to do here?
-				}
+				
 			} catch(ObjectDisposedException ex) {
 				// do nothing
 				this.CentralCoordinator.Log.Verbose(ex, $"{TAG} {nameof(WaitForAllPeerReplies)}: Object Disposed!");
@@ -1669,7 +1662,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <param name="message"></param>
 		/// <param name="connections"></param>
 		/// <returns>The connections the data was successfully sent to</returns>
-		protected virtual int SendMessageToPeers(ITargettedMessageSet message, List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> connections, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connectionSet) {
+		protected virtual async Task<int> SendMessageToPeers(ITargettedMessageSet message, List<ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>> connections, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connectionSet) {
 			SafeArrayHandle triggerData = message.Dehydrate(); // dehydrate it only once
 
 			int peerSendCount = 0;
@@ -1683,7 +1676,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			foreach(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connection in currentConnections) {
 
 				try {
-					if(!this.SendBytes(connection.PeerConnection, triggerData)) {
+					if(!await SendBytes(connection.PeerConnection, triggerData).ConfigureAwait(false)) {
 
 						throw new WorkflowException($"{TAG} {nameof(SendBytes)} returned false, connection with peer {connection.PeerConnection.ScopedAdjustedIp} was terminated");
 					}

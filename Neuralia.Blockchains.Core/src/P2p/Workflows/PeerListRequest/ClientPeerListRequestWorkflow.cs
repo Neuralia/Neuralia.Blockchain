@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
@@ -7,18 +8,20 @@ using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages;
 using Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest.Messages.V1;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
+using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 	
 	public interface IClientPeerListRequestWorkflow<R> : IClientWorkflow<NullMessageFactory<R>, R>
 		where R : IRehydrationFactory{
-
+		TimeSpan Latency { get; }
 	}
 	
 	public class ClientPeerListRequestWorkflow<R> : ClientWorkflow<PeerListRequestMessageFactory<R>, R>, IClientPeerListRequestWorkflow<R>
 		where R : IRehydrationFactory {
 		public readonly PeerConnection peerConnection;
+		public TimeSpan Latency { get; private set; } = TimeSpan.MaxValue;
 
 		public ClientPeerListRequestWorkflow(PeerConnection peerConnection, ServiceSet<R> serviceSet) : base(serviceSet) {
 			this.peerConnection = peerConnection;
@@ -36,7 +39,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 
 			NLog.Default.Verbose($"Sending peer list request to peer {this.peerConnection.ScopedAdjustedIp}");
 
-			if(!this.SendMessage(this.peerConnection, peerListRequestTrigger)) {
+			var startTime = DateTimeEx.CurrentTime;
+			
+			if(!await SendMessage(peerConnection, peerListRequestTrigger).ConfigureAwait(false)) {
 				NLog.Default.Verbose($"Connection with peer  {this.peerConnection.ScopedAdjustedIp} was terminated");
 
 				return;
@@ -44,6 +49,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 
 			TargettedMessageSet<PeerListRequestServerReply<R>, R> serverPeerListRequest = await WaitSingleNetworkMessage<PeerListRequestServerReply<R>, TargettedMessageSet<PeerListRequestServerReply<R>, R>, R>().ConfigureAwait(false);
 
+			this.Latency = DateTimeEx.CurrentTime - startTime;
 			// take the peer nodes and update our system
 			this.networkingService.ConnectionStore.UpdatePeerNodes(this.peerConnection, serverPeerListRequest.Message.nodes);
 

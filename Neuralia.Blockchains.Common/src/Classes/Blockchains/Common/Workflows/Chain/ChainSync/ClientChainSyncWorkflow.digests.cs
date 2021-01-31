@@ -145,7 +145,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				if(useWeb || (webOrGossip && !connections.HasSyncingConnections)) {
 
 					singleEntryContext.details.digestId = await this.DownloadWebDigestId(lockContext).ConfigureAwait(false);
-					
+
 				} else {
 					ConsensusUtilities.ConsensusType nextDigestIdConsensusType;
 					(singleEntryContext.details.digestId, nextDigestIdConsensusType) = ConsensusUtilities.GetConsensus(singleEntryContext.Connections.GetSyncingConnections().Where(v => v.TriggerResponse.Message.ShareType.HasDigests), a => a.ReportedDigestHeight);
@@ -171,6 +171,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						return resultState;
 					}
 				}
+
 				// ok, lets start the sync process
 				singleEntryContext.syncManifest = new DigestFilesetSyncManifest();
 
@@ -331,35 +332,33 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			//			this.CentralCoordinator.Log.Information($"Block {digestId} has been synced successfully");
 			return ResultsState.OK;
 		}
-		
-		protected Task<int> DownloadWebDigestId(LockContext lockContext) {
+
+		protected async Task<int> DownloadWebDigestId(LockContext lockContext) {
 
 			Log.Information($"Downloading digest Id via web sync service");
+
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.None);
 
-			return Repeater.RepeatAsync(async () => {
-				string url = this.ChainConfiguration.WebSyncUrl;
-				
-				IRestResponse result = await restUtility.Get(url, $"sync/digestid").ConfigureAwait(false);
+			var restParameterSet = new RestUtility.RestParameterSet<int>();
 
-				// ok, check the result
-				if(result.StatusCode == HttpStatusCode.OK) {
-
-					try {
-						if(!string.IsNullOrWhiteSpace(result.Content)) {
-							if(int.TryParse(result.Content, out int digestHeight)) {
-								return digestHeight;
-							}
-						}
-						
-					} catch(Exception ex) {
-						Log.Error(ex, "Failed to sync from web. may try again...");
-						throw;
-					}
+			restParameterSet.transform = webResult => {
+				if(int.TryParse(webResult, out int digestHeight)) {
+					return digestHeight;
 				}
 
-				throw new ApplicationException("Failed to download block from web");
-			});
+				return 0;
+			};
+
+			string url = this.ChainConfiguration.WebSyncUrl;
+
+			(bool sent, int digestId) = await restUtility.PerformSecurePost(url, $"sync/digestid", restParameterSet).ConfigureAwait(false);
+
+			if(sent) {
+				return digestId;
+			}
+
+			throw new ApplicationException("Failed to download block from web");
+
 		}
 
 		protected Task<(Dictionary<Guid, PeerDigestSpecs> results, ResultsState state)> FetchPeerDigestInfo(DigestSingleEntryContext singleEntryContext) {

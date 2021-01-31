@@ -32,6 +32,7 @@ using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx.Synchronous;
 using Serilog;
 
@@ -637,10 +638,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 	#region wallet manager
 
-		private Task CopyWalletRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
+		private async Task CopyWalletRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
 			this.CentralCoordinator.Log.Information("Requesting loading wallet.");
 
-			using(ManualResetEventSlim resetEvent = new ManualResetEventSlim(false)) {
+			using(AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false)) {
 
 				RequestCopyWalletSystemMessageTask requestCopyWalletTask = new RequestCopyWalletSystemMessageTask(() => {
 					resetEvent.Set();
@@ -649,16 +650,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				this.PostChainEvent(requestCopyWalletTask);
 
 				// wait up to 5 minutes for the wallet to be ready to load
-				resetEvent.Wait(TimeSpan.FromMinutes(5));
+				await resetEvent.WaitAsync(TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 			}
-
-			return Task.CompletedTask;
 		}
 
-		private Task<(SecureString passphrase, bool keysToo)> WalletProviderOnWalletPassphraseRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
+		private async Task<(SecureString passphrase, bool keysToo)> WalletProviderOnWalletPassphraseRequest(CorrelationContext correlationContext, int attempt, LockContext lockContext) {
 			this.CentralCoordinator.Log.Information("Requesting wallet passphrase.");
 
-			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 			RequestWalletPassphraseSystemMessageTask loadWalletPassphraseTask = new RequestWalletPassphraseSystemMessageTask(attempt, () => {
 				resetEvent.Set();
@@ -667,16 +666,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.PostChainEvent(loadWalletPassphraseTask, correlationContext);
 
 			// wait until we get the passphrase back
-			resetEvent.Wait();
+			await resetEvent.WaitAsync().ConfigureAwait(false);
 
-			return Task.FromResult((loadWalletPassphraseTask.Passphrase, loadWalletPassphraseTask.KeysToo));
+			return (loadWalletPassphraseTask.Passphrase, loadWalletPassphraseTask.KeysToo);
 
 		}
 
-		private Task<SecureString> WalletProviderOnWalletKeyPassphraseRequest(CorrelationContext correlationContext, string accountCode, string keyname, int attempt, LockContext lockContext) {
+		private async Task<SecureString> WalletProviderOnWalletKeyPassphraseRequest(CorrelationContext correlationContext, string accountCode, string keyname, int attempt, LockContext lockContext) {
 			this.CentralCoordinator.Log.Information($"Requesting wallet key {keyname} passphrase.");
 
-			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 			RequestWalletKeyPassphraseSystemMessageTask loadWalletKeyPasshraseTask = new RequestWalletKeyPassphraseSystemMessageTask(accountCode, keyname, attempt, () => {
 				resetEvent.Set();
@@ -685,16 +684,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.PostChainEvent(loadWalletKeyPasshraseTask);
 
 			// wait up to 5 hours for the wallet to be ready to load
-			resetEvent.Wait(TimeSpan.FromHours(5));
+			await resetEvent.WaitAsync(TimeSpan.FromHours(5)).ConfigureAwait(false);
 
-			return Task.FromResult(loadWalletKeyPasshraseTask.Passphrase);
+			return loadWalletKeyPasshraseTask.Passphrase;
 
 		}
 
-		private Task WalletProviderOnWalletCopyKeyFileRequest(CorrelationContext correlationContext, string accountCode, string keyname, int attempt, LockContext lockContext) {
+		private async Task WalletProviderOnWalletCopyKeyFileRequest(CorrelationContext correlationContext, string accountCode, string keyname, int attempt, LockContext lockContext) {
 			this.CentralCoordinator.Log.Information($"Requesting wallet key {keyname} passphrase.");
 
-			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 			RequestCopyWalletKeyFileSystemMessageTask loadCopyWalletKeyFileTask = new RequestCopyWalletKeyFileSystemMessageTask(accountCode, keyname, attempt, () => {
 				resetEvent.Set();
@@ -703,9 +702,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			this.PostChainEvent(loadCopyWalletKeyFileTask);
 
 			// wait up to 5 hours for the wallet to be ready to load
-			resetEvent.Wait(TimeSpan.FromHours(5));
-
-			return Task.CompletedTask;
+			await resetEvent.WaitAsync(TimeSpan.FromHours(5)).ConfigureAwait(false);
 		}
 
 		public Task ChangeWalletEncryption(CorrelationContext correlationContext, bool encryptWallet, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases, LockContext lockContext) {

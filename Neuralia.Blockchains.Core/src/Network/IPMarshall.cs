@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Net;
 using System.Threading;
-using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
@@ -30,10 +28,19 @@ namespace Neuralia.Blockchains.Core.Network {
 			AppSettingsBlacklist,
 			ValidationFailed,
 			DynamicBlacklist,
-			NonConnectable
+			NonConnectable,
+			InvalidGossip,
+			GossipRateLimit,
+			CantValidateGossip,
+			GossipEmbeddedKeyValid
 		}
 
 		public const string TAG = "[" + nameof(IPMarshall) + "]";
+		
+		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsWatchlist = new();
+		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsGreylist = new();
+		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsBlacklist = new();
+		
 		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> blacklist = new();
 		private readonly int blacklistStrikes = 5;
 		private readonly TimeSpan cleanupPeriod = TimeSpan.FromSeconds(20);
@@ -146,7 +153,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			bool accepted = false;
 
 			// should we perform a cleaning?
-			this.PeriodicWatchListsUpdate(now);
+			this.PeriodicWatchListsUpdate(this.watchlist, this.blacklist, now);
 
 			// return early if blacklisted
 			QuarantinedInfo info = null;
@@ -289,10 +296,10 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		}
 
-		private void PeriodicWatchListsUpdate(DateTime now, bool force = false)
+		private void PeriodicWatchListsUpdate<ID_TYPE> (ConcurrentDictionary<ID_TYPE, QuarantinedInfo> watchlist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> blacklist, DateTime now, bool force = false)
 		{
 			if (force || LockRead(this.NextClearanceCheckMutex, _ => this.NextCleanCheck < now)) {
-				foreach(KeyValuePair<IPAddress, QuarantinedInfo> expired in this.blacklist.Where(e => e.Value.Expiry < now))
+				foreach(KeyValuePair<ID_TYPE, QuarantinedInfo> expired in blacklist.Where(e => e.Value.Expiry < now))
 				{
 					LockRead(expired.Value, mutex =>
 					{
@@ -308,13 +315,13 @@ namespace Neuralia.Blockchains.Core.Network {
 							return true;
 						}
 
-						this.blacklist.TryRemove(expired.Key, out QuarantinedInfo removed);
+						watchlist.TryRemove(expired.Key, out QuarantinedInfo removed);
 						
 						mutex.UpgradeToWriterLock(mutexTimeout);
 						removed.Reason = QuarantineReason.Cleared;
 						removed.Expiry = now.Add(this.minPeriodBetweenConnections);
 
-						if (!this.watchlist.TryAdd(expired.Key, removed))
+						if (!watchlist.TryAdd(expired.Key, removed))
 						{
 							NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in watchlist");
 						}
@@ -326,11 +333,10 @@ namespace Neuralia.Blockchains.Core.Network {
 				LockWrite(this.NextClearanceCheckMutex, _ => this.NextCleanCheck = DateTimeEx.CurrentTime.Add(this.cleanupPeriod));
 			}
 		}
+		private bool IsQuarantined<ID_TYPE>(ID_TYPE ip, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> watchlist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> blacklist, out DateTime expiry, out QuarantineReason reason) {
+			this.PeriodicWatchListsUpdate(watchlist, blacklist, DateTimeEx.CurrentTime, true); //we need up to date results
 
-		public bool IsQuarantined(IPAddress ip, out DateTime expiry, out QuarantineReason reason) {
-			this.PeriodicWatchListsUpdate(DateTimeEx.CurrentTime, true); //we need up to date results
-
-			if(this.blacklist.TryGetValue(ip, out QuarantinedInfo info))
+			if(blacklist.TryGetValue(ip, out QuarantinedInfo info))
 			{
 				(expiry, reason) = LockRead(info, _ => (info.Expiry, info.Reason));
 				return true;
@@ -342,6 +348,15 @@ namespace Neuralia.Blockchains.Core.Network {
 			return false;
 		}
 
+		public bool IsQuarantined(IPAddress ip, out DateTime expiry, out QuarantineReason reason)
+		{
+			bool result = IsQuarantined(ip, this.watchlist, this.blacklist, out var expiry_, out var reason_);
+
+			expiry = expiry_;
+			reason = reason_;
+			return result;
+		}
+
 		public bool IsQuarantined(IPAddress ip) {
 			return this.IsQuarantined(ip, out _, out _);
 		}
@@ -351,27 +366,39 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 		
 
-		public void Quarantine(IPAddress ip, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
-			if(this.IsWhiteList(ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType)) {
+		
+		public bool IsQuarantined(long ip, out DateTime expiry, out QuarantineReason reason)
+		{
+			bool result = IsQuarantined(ip, this.accountsWatchlist, this.accountsBlacklist, out var expiry_, out var reason_);
 
-				NLog.LoggingBatcher.Error($"{TAG} Trying to Quarantine whitelisted node {ip}, aborting");
+			expiry = expiry_;
+			reason = reason_;
+			return result;
+		}
+		public bool IsQuarantined(long ip) {
+			return this.IsQuarantined(ip, out _, out _);
+		}
 
-				return;
-			}
+		public bool IsQuarantined(long ip, out DateTime expiry) {
+			return this.IsQuarantined(ip, out expiry, out _);
+		}
+		
+		private void Quarantine<ID_TYPE>(ID_TYPE ip, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> watchlist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> greylist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> blacklist, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
 
-			this.PeriodicWatchListsUpdate(DateTimeEx.CurrentTime, true);
+
+			this.PeriodicWatchListsUpdate(watchlist, blacklist, DateTimeEx.CurrentTime, true);
 
 			QuarantinedInfo info = null;
 
-			if(this.blacklist.TryGetValue(ip, out info)) {
+			if(blacklist.TryGetValue(ip, out info)) {
 				NLog.LoggingBatcher.Warning($"{TAG} Node {ip} is already blacklisted ({info.Reason}, expiry {info.Expiry}), updating...");
 			}
 
 			if(graceStrikes > 0) {
-				if(!this.greylist.TryGetValue(ip, out info)) {
+				if(!greylist.TryGetValue(ip, out info)) {
 					info = new QuarantinedInfo {Expiry = DateTimeEx.CurrentTime.Add(this.minPeriodBetweenConnections)};
 
-					if(!this.greylist.TryAdd(ip, info)) {
+					if(!greylist.TryAdd(ip, info)) {
 						NLog.LoggingBatcher.Warning($"{TAG} Node {ip} is already in greylist ({info.Reason}, expiry {info.Expiry}), this is an unexpected race condition, not very worrying..");
 					}
 				}
@@ -403,17 +430,17 @@ namespace Neuralia.Blockchains.Core.Network {
 				}
 
 				NLog.LoggingBatcher.Verbose($"{message}, blacklisting...");
-				this.greylist.TryRemove(ip, out _);
+				greylist.TryRemove(ip, out _);
 			}
 
-			if(this.watchlist.TryGetValue(ip, out info)) {
-				this.watchlist.TryRemove(ip, out _);
+			if(watchlist.TryGetValue(ip, out info)) {
+				watchlist.TryRemove(ip, out _);
 			} else {
 				info = new QuarantinedInfo {Expiry = DateTimeEx.CurrentTime.Add(this.minPeriodBetweenConnections)};
 			}
 
-			if(!this.blacklist.TryAdd(ip, info)) {
-				info = this.blacklist[ip];
+			if(!blacklist.TryAdd(ip, info)) {
+				info = blacklist[ip];
 			}
 
 			info.Expiry = expiry;
@@ -422,7 +449,21 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.LogQuarantine(ip, info, details);
 		}
 
-		private void LogQuarantine(IPAddress ip, QuarantinedInfo info, string details) {
+		public void Quarantine(IPAddress ip, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
+			if(this.IsWhiteList(ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType)) {
+
+				NLog.LoggingBatcher.Error($"{TAG} Trying to Quarantine whitelisted node {ip}, aborting");
+
+				return;
+			}
+
+			this.Quarantine(ip, this.watchlist, this.greylist, this.blacklist, reason, expiry, details, graceStrikes, graceObservationPeriod);
+		}
+		public void Quarantine(long id, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
+
+			this.Quarantine(id, this.accountsWatchlist, this.accountsGreylist, this.accountsBlacklist, reason, expiry, details, graceStrikes, graceObservationPeriod);
+		}
+		private void LogQuarantine<ID_TYPE>(ID_TYPE ip, QuarantinedInfo info, string details) {
 			string reason = $"{info.Reason}";
 
 			if(details.Length > 0) {

@@ -125,7 +125,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 
 		}
 
-		public abstract SafeArrayHandle SetPrivateKeyIndex(int index, SafeArrayHandle privateKey);
+		public abstract SafeArrayHandle SetPrivateKeyIndex(long index, SafeArrayHandle privateKey);
 
 		public abstract long GetMaxMessagePerKey();
 	}

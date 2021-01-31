@@ -42,7 +42,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		string GetWalletKeysFilePath(string accountCode, string name);
 		string GetWalletKeyLogPath(string accountCode);
 		string GetWalletChainStatePath(string accountCode);
-
+		Task<bool> RescueFromNarballStructure();
+		
 		/// <summary>
 		///     check the wallet file to know if it is encrypted
 		/// </summary>
@@ -159,7 +160,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		protected readonly bool compressFiles;
 
 		protected readonly ICompression walletCompressor;
-
+		private SafeArrayHandle encryptionFlagBytes;
+		
 		public WalletSerialisationFal(CENTRAL_COORDINATOR centralCoordinator, string chainFilesDirectoryPath, FileSystemWrapper fileSystem) {
 			this.ChainFilesDirectoryPath = chainFilesDirectoryPath;
 
@@ -224,7 +226,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		public virtual string GetWalletChainStatePath(string accountCode) {
 			return Path.Combine(this.GetWalletAccountsContentsFolderPath(accountCode), WALLET_CHAINSTATE_FILE_NAME);
 		}
-		
+
+		public Task<bool> RescueFromNarballStructure() {
+			return this.TransactionalFileSystem.RescueFromNarballStructure();
+		}
+
 		public Task<bool> WalletFullyCreated(LockContext lockContext) {
 
 			return Task.FromResult(!this.TransactionalFileSystem.FileExists(this.GetWalletCreatingTagPath()));
@@ -397,18 +403,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						}
 						
 						encryptedBytes = FileEncryptor.Encrypt(activeBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters);
-
-						if(wrapEncryptedBytes) {
-							// wrap the encrypted byes with the flag marker
-							SafeArrayHandle wrappedBytes = this.WrapEncryptedBytes(encryptedBytes);
-							encryptedBytes.Entry.Clear();
-							encryptedBytes.Return();
-							encryptedBytes = wrappedBytes;
-						}
-
-						// create or overwrite the file
-						await this.TransactionalFileSystem.OpenWriteAsync(filename, encryptedBytes).ConfigureAwait(false);
-
+						
+						activeBytes = encryptedBytes;
 					} else {
 						if(this.compressFiles) {
 							compressedBytes = this.walletCompressor.Compress(databaseBytes);
@@ -416,9 +412,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 						} else {
 							activeBytes = databaseBytes;
 						}
-
-						await this.TransactionalFileSystem.OpenWriteAsync(filename, activeBytes).ConfigureAwait(false);
 					}
+					
+					if(activeBytes.Length == 0) {
+						throw new ApplicationException("Write size can not be 0!");
+					}
+
+					SafeArrayHandle[] bytes = null;
+					if(encryptionInfo.Encrypt && wrapEncryptedBytes) {
+						
+						if(this.encryptionFlagBytes == null) {
+							this.encryptionFlagBytes = SafeArrayHandle.Create(sizeof(long));
+
+							TypeSerializer.Serialize(ENCRYPTED_WALLET_TAG, this.encryptionFlagBytes.Span);
+						}
+						bytes = new[] {this.encryptionFlagBytes, activeBytes};
+					} else {
+						bytes = new[] {activeBytes};
+					}
+
+					await this.TransactionalFileSystem.OpenWriteAsync(filename, bytes).ConfigureAwait(false);
 				} finally {
 					if(compressedBytes != null) {
 						compressedBytes.Entry.Clear();

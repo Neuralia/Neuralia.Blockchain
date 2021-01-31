@@ -25,6 +25,7 @@ using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation {
@@ -577,7 +578,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		}
 
 		private async Task WaitForSync(Action<IBlockchainManager<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, LockContext> syncAction, LockContext lockContext, Action<Func<LockContext, Task>> register, Action<Func<LockContext, Task>> unregister, string name) {
-			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 			Task Catcher(LockContext lc) {
 				resetEvent.Set();
@@ -596,7 +597,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 				await this.DispatchTaskSync(blockchainTask, lockContext).ConfigureAwait(false);
 
-				if(!resetEvent.Wait(TimeSpan.FromSeconds(10))) {
+				if(!await resetEvent.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false)) {
 
 					throw new ApplicationException($"The {name} is not synced. Cannot continue");
 				}

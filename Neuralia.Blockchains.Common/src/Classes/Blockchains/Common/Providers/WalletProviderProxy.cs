@@ -1079,6 +1079,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext) {
 			return this.ScheduleWrite((t, lc) => this.walletProvider.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lockContext), lockContext, 60 * 5);
 		}
+		
+		public Task<bool> AttemptWalletRescue(LockContext lockContext) {
+			return this.ScheduleWrite((t, lc) => this.walletProvider.AttemptWalletRescue(lc), lockContext, 60 * 5);
+		}
 
 		public Task UpdateWalletChainStateSyncStatus(string accountCode, long BlockId, WalletAccountChainState.BlockSyncStatuses blockSyncStatus, LockContext lockContext) {
 			return this.ScheduleWrite((t, lc) => {

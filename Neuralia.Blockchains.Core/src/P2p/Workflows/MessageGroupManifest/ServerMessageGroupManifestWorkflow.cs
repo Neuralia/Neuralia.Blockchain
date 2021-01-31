@@ -56,12 +56,12 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 
 			try {
 
-				Repeater.Repeat(() => {
-					if(!this.Send(reply)) {
+				await Repeater.RepeatAsync(async () => {
+					if(!await Send(reply).ConfigureAwait(false)) {
 						throw new ApplicationException();
 					}
 
-				});
+				}).ConfigureAwait(false);
 			} catch(Exception ex) {
 				NLog.Default.Verbose($"Connection with peer {this.ClientConnection.ScopedAdjustedIp} was terminated");
 

@@ -41,6 +41,7 @@ using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx.Synchronous;
 using RestSharp;
 using Serilog;
@@ -557,15 +558,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			// launch the various tasks
 
-			ManualResetEventSlim downloadResetEvent = null;
-			ManualResetEventSlim insertResetEvent = null;
-			ManualResetEventSlim interpretResetEvent = null;
+			AsyncManualResetEventSlim downloadResetEvent = null;
+			AsyncManualResetEventSlim insertResetEvent = null;
+			AsyncManualResetEventSlim interpretResetEvent = null;
 
 			try {
 
-				downloadResetEvent = new ManualResetEventSlim(false);
-				insertResetEvent = new ManualResetEventSlim(false);
-				interpretResetEvent = new ManualResetEventSlim(false);
+				downloadResetEvent = new AsyncManualResetEventSlim(false);
+				insertResetEvent = new AsyncManualResetEventSlim(false);
+				interpretResetEvent = new AsyncManualResetEventSlim(false);
 
 				RunningWrapper running1 = running;
 
@@ -604,7 +605,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 
 							if(sleepTime != 0) {
-								downloadResetEvent.Wait(TimeSpan.FromMilliseconds(sleepTime), this.CancelTokenSource.Token);
+								await downloadResetEvent.WaitAsync(TimeSpan.FromMilliseconds(sleepTime), CancelTokenSource.Token).ConfigureAwait(false);
 							}
 						} catch(Exception ex) {
 							this.CentralCoordinator.Log.Error(ex, "Failed to download block while syncing");
@@ -633,7 +634,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 
 							if(!await this.InsertNextBlock(connections, lc).ConfigureAwait(false)) {
-								if(insertResetEvent.Wait(TimeSpan.FromSeconds(2), this.CancelTokenSource.Token) || insertResetEvent.IsSet) {
+								if(await insertResetEvent.WaitAsync(TimeSpan.FromSeconds(2), CancelTokenSource.Token).ConfigureAwait(false) || insertResetEvent.IsSet) {
 									insertResetEvent.Reset();
 								}
 							} else {
@@ -674,7 +675,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								// we can stop syncing!
 								return true;
 							} else {
-								if(interpretResetEvent.Wait(TimeSpan.FromSeconds(2), this.CancelTokenSource.Token) || interpretResetEvent.IsSet) {
+								if(await interpretResetEvent.WaitAsync(TimeSpan.FromSeconds(2), CancelTokenSource.Token).ConfigureAwait(false) || interpretResetEvent.IsSet) {
 									interpretResetEvent.Reset();
 								}
 							}
@@ -768,7 +769,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		}
 
 		protected virtual bool CheckShouldStop() {
-			return this.NetworkPaused || this.shutdownRequest || this.CheckCancelRequested();
+			return this.NetworkPaused || this.shutdownRequest || this.CheckCancelRequested() || this.IsDisposed;
 		}
 
 		protected void CheckShouldStopThrow() {
@@ -1200,42 +1201,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			}, 2);
 		}
 
-		protected Task<PeerBlockSpecs> DownloadBlockWeb(BlockId blockId, BlockSingleEntryContext singleEntryContext, LockContext lockContext) {
+		protected async Task<PeerBlockSpecs> DownloadBlockWeb(BlockId blockId, BlockSingleEntryContext singleEntryContext, LockContext lockContext) {
 
 			this.CentralCoordinator.Log.Information($"Downloading block Id {blockId} via web sync service");
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.None);
-
-			return Repeater.RepeatAsync(async () => {
-				string url = this.ChainConfiguration.WebSyncUrl;
-				
-				IRestResponse result = await restUtility.Get(url, $"sync/block/{blockId.Value}").ConfigureAwait(false);
-
-				// ok, check the result
-				if(result.StatusCode == HttpStatusCode.OK) {
-
-					try {
-						var options = new JsonSerializerOptions();
-						options.PropertyNameCaseInsensitive = true;
-						WebSyncContainer container = System.Text.Json.JsonSerializer.Deserialize<WebSyncContainer>(result.Content, options);
+			
+			var restParameterSet = new RestUtility.RestParameterSet<PeerBlockSpecs>();
+			restParameterSet.transform = webResult => {
+				var options = new JsonSerializerOptions();
+				options.PropertyNameCaseInsensitive = true;
+				WebSyncContainer container = System.Text.Json.JsonSerializer.Deserialize<WebSyncContainer>(webResult, options);
 						
-						this.WriteBlockSyncWebData(singleEntryContext.syncManifest, SafeArrayHandle.Wrap(container.Data));
+				this.WriteBlockSyncWebData(singleEntryContext.syncManifest, SafeArrayHandle.Wrap(container.Data));
 						
-						PeerBlockSpecs specs = new PeerBlockSpecs();
+				PeerBlockSpecs specs = new PeerBlockSpecs();
 
-						specs.Id = blockId.Value;
-						specs.publicChainBlockHeight = container.ChainHeight;
+				specs.Id = blockId.Value;
+				specs.publicChainBlockHeight = container.ChainHeight;
 
-						specs.end = specs.Id == specs.publicChainBlockHeight;
+				specs.end = specs.Id == specs.publicChainBlockHeight;
 
-						return specs;
-					} catch(Exception ex) {
-						this.CentralCoordinator.Log.Error(ex, "Failed to sync from web. may try again...");
-						throw;
-					}
-				}
+				return specs;
+			};
+			string url = this.ChainConfiguration.WebSyncUrl;
 
-				throw new ApplicationException("Failed to download block from web");
-			});
+			(bool sent, PeerBlockSpecs result) = await restUtility.PerformSecureGet(url, $"sync/block/{blockId.Value}", restParameterSet).ConfigureAwait(false);
+
+			if(sent) {
+				return result;
+			}
+			throw new ApplicationException("Failed to download block from web");
 		}
 		
 		/// <summary>
@@ -1279,13 +1274,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			if((singleEntryContext.syncManifest != null) && singleEntryContext.syncManifest.IsComplete) {
 				//TODO: check this
-				this.CentralCoordinator.Log.Verbose($"Block Id {blockId} was already downloaded, according to synchManifest");
+				this.CentralCoordinator.Log.Verbose($"{TAG} Block Id {blockId} was already downloaded, according to synchManifest");
 				return (nextBlockSpecs, ResultsState.OK);
 			}
 
 			if(singleEntryContext.details.Id == this.ChainStateProvider.DownloadBlockHeight) {
 				// ok, the last download must have been lost, so we reset to the previous and do it all again
-				this.CentralCoordinator.Log.Verbose($"{nameof(ChainStateProvider)}'s DownloadBlockHeight is the same as manifest Id, this means it was wrongly incremented... decrementing");
+				this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(ChainStateProvider)}'s DownloadBlockHeight is the same as manifest Id, this means it was wrongly incremented... decrementing");
 				this.ChainStateProvider.DownloadBlockHeight -= 1; //isn't that a bit fishy? (maxlem)
 			}
 
@@ -1300,14 +1295,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						await this.UpdateBlockInfo(singleEntryContext).ConfigureAwait(false);
 
 						if(fullyLoaded || (singleEntryContext.details.Id == this.ChainStateProvider.DownloadBlockHeight) || singleEntryContext.details.end) {
+							this.CentralCoordinator.Log.Verbose($"{TAG} suspicious condition encountered fullyLoaded ({fullyLoaded}) or manifest Id is same as DownloadBlockHeight ({singleEntryContext.details.Id == this.ChainStateProvider.DownloadBlockHeight}) or end is reached {singleEntryContext.details.end}");
 							// seems we are at the end, no need to go any further
-							singleEntryContext.details.end = singleEntryContext.details.end;
+							singleEntryContext.details.end = singleEntryContext.details.end; //FIXME: **weird statement** what was the real intent (maxlem)
 
 							return (singleEntryContext.details, ResultsState.OK);
 						}
 					}
 					else if(useWeb || (webOrGossip && !connections.HasSyncingConnections)) {
 						// do nothing
+						this.CentralCoordinator.Log.Verbose($"{TAG} using web ({useWeb}) or webOrGossip without syncing connections ({webOrGossip} and not {connections.HasSyncingConnections}), doing nothing...");
 					} else {
 						return (singleEntryContext.details, ResultsState.NoSyncingConnections);
 					}

@@ -12,6 +12,7 @@ using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
@@ -95,6 +96,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return;
 			}
 
+			PeerConnection connection = gossipMessageTask.Connection;
+			
 			try {
 
 				if(blockchainGossipMessageSet == null) {
@@ -105,7 +108,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					throw new ApplicationException("Gossip message transaction must be valid");
 				}
 
-				PeerConnection connection = gossipMessageTask.Connection;
+
+				if (IPMarshall.Instance.IsQuarantined(connection.NodeAddressInfo.AdjustedAddress))
+				{
+					this.CentralCoordinator.Log.Verbose($"Gossip message rate limited for ip {connection.NodeAddressInfo.AdjustedAddress}");
+					return;
+				}
 
 				if(GlobalSettings.ApplicationSettings.SynclessMode) {
 					if(blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope) {
@@ -172,30 +180,79 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					return this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.ForwardValidGossipMessage(blockchainGossipMessageSet, connection);
 				}
 
+				bool Gate() {
+					if(blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IMessageEnvelope messageEnvelope) {
+						if(messageEnvelope is ISignedMessageEnvelope signedMessageEnvelope) {
+							var accountId = signedMessageEnvelope.Signature.AccountSignature.KeyAddress.AccountId;
+
+							if (!accountId.IsModerator)
+							{
+								IPMarshall.Instance.Quarantine(accountId.ToLongRepresentation(), IPMarshall.QuarantineReason.GossipRateLimit, DateTimeEx.CurrentTime.AddDays(3), $"Too many gossip from {accountId}", 5, TimeSpan.FromMinutes(1));
+								
+								if (IPMarshall.Instance.IsQuarantined(accountId.ToLongRepresentation()))
+								{
+									this.CentralCoordinator.Log.Verbose($"Gossip message rate limited for account {accountId}");
+									return false;
+								}
+							}
+
+							return true;
+						}else {
+							IPMarshall.Instance.Quarantine(connection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.GossipRateLimit, DateTimeEx.CurrentTime.AddDays(3), $"Bad gossip envelope signature {connection.ScopedAdjustedIp}", 3, TimeSpan.FromHours(1));
+						}
+					} else {
+						IPMarshall.Instance.Quarantine(connection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.GossipRateLimit, DateTimeEx.CurrentTime.AddDays(3), $"Bad gossip envelope {connection.ScopedAdjustedIp}", 3, TimeSpan.FromHours(1));
+					}
+					
+					return false;
+				}
+
 				if(valid.Result == ValidationResult.ValidationResults.Invalid) {
 
 					// this is the end, we go no further with an invalid message
 
 					//TODO: what should we do here? perhaps we should log it about the peer
-					this.CentralCoordinator.Log.Error($"Gossip message received by peer {connection.ScopedAdjustedIp} was invalid. errors: {valid}");
+					string message =
+						$"Gossip message received by peer {connection.ScopedAdjustedIp} was invalid. errors: {valid}";
+					
+					this.CentralCoordinator.Log.Error(message);
+					
+					IPMarshall.Instance.Quarantine(connection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.InvalidGossip, DateTimeEx.CurrentTime.AddDays(3), message, 3, TimeSpan.FromHours(1));
+					
 					await this.RequestSync(lockContext).ConfigureAwait(false);
 				} else if(valid == ValidationResult.ValidationResults.CantValidate) {
 					// seems we could do nothing with it. we just let it go
 					this.CentralCoordinator.Log.Verbose($"Gossip message received by peer {connection.ScopedAdjustedIp} but could not be validated. the message will be ignored. errors: {valid}");
+
+					//TODO: can a node abuse this? 
+					if(this.CentralCoordinator.IsChainSynchronized) {
+						IPMarshall.Instance.Quarantine(connection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.CantValidateGossip, DateTimeEx.CurrentTime.AddDays(3), $"Can't validate message {connection.ScopedAdjustedIp}", 3, TimeSpan.FromHours(1));
+					}
 
 					await this.RequestSync(lockContext).ConfigureAwait(false);
 				} else if(valid == ValidationResult.ValidationResults.EmbededKeyValid) {
 					// seems we could do nothing with it. we just let it go
 					this.CentralCoordinator.Log.Verbose($"Gossip message received by peer {connection.ScopedAdjustedIp} could not be validated, but the embeded public key was valid. errors: {valid}");
 
+					// we still log this, it could be suspicious...
+					IPMarshall.Instance.Quarantine(connection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.GossipEmbeddedKeyValid, DateTimeEx.CurrentTime.AddDays(3), $"Can't validate message {connection.ScopedAdjustedIp}", 3, TimeSpan.FromHours(1));
+
+					if(!Gate()) {
+						return;
+					}
 					// ok, in this case, we can at least forward it on the gossip network
 					await ForwardValidGossipMessage().ConfigureAwait(false);
 
-				} else if(valid.Valid) {
+				} else if(valid.Valid){
+					
+					if(!Gate()) {
+						return;
+					}
 
 					// and since this is good or possibly valid, now we ensure it will get forwarded to our peers
 					await ForwardValidGossipMessage().ConfigureAwait(false);
 
+					
 					// ok, if we get here, this message is fully valid!  first step, we instantiate the workflow for this gossip transaction
 
 					if(blockchainGossipMessageSet.BaseMessage is IGossipWorkflowTriggerMessage gossipWorkflowTriggerMessage) {
@@ -222,9 +279,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 									blockInserted = true;
 								} else if(blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.MESSAGE_RECEIVED) {
-									IMessageEnvelope messageEnvelope = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
+									IMessageEnvelope messageEnvelope2 = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
 									
-									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.HandleBlockchainMessage(messageEnvelope.Contents.RehydratedEvent, messageEnvelope, lc).ConfigureAwait(false);
+									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.HandleBlockchainMessage(messageEnvelope2.Contents.RehydratedEvent, messageEnvelope2, lc).ConfigureAwait(false);
 								} else {
 									throw new InvalidOperationException("Invalid gossip message type");
 								}
@@ -249,6 +306,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			} catch(Exception ex) {
 
 				this.CentralCoordinator.Log.Error(ex, "Failed to process gossip message.");
+
+				IPMarshall.Instance.Quarantine(connection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.GossipRateLimit, DateTimeEx.CurrentTime.AddDays(3), $"Bad gossip envelope {connection.ScopedAdjustedIp}", 3, TimeSpan.FromHours(1));
 
 				if(blockchainGossipMessageSet.BaseMessage.BaseEnvelope is IBlockEnvelope blockEnvelope) {
 

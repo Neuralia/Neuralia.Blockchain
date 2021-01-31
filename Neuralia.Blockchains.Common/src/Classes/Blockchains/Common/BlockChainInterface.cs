@@ -182,7 +182,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<IPMode> GetMiningRegistrationIpMode();
 		
 		TaskResult<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations);
-
+		TaskResult<bool> AttemptWalletRescue();
+			
 		TaskResult<bool> CreateNewStandardAccount(CorrelationContext correlationContext, string name, Enums.AccountTypes accountType, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
 		TaskResult<bool> SetActiveAccount(string accountCode);
 		
@@ -222,7 +223,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		private Task<bool> eventsPoller;
 		private bool poller_active = true;
 
-		private ManualResetEventSlim pollerResetEvent;
+		private AsyncManualResetEventSlim pollerResetEvent;
 		private ManagedTimer tasksPoller;
 
 		protected BlockChainInterface(CENTRAL_COORDINATOR centralCoordinator, TimeSpan? taskCheckSpan = null) {
@@ -400,7 +401,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		private async Task StartEventsPoller() {
 
-			this.pollerResetEvent = new ManualResetEventSlim(false);
+			this.pollerResetEvent = new AsyncManualResetEventSlim(false);
 
 			//TODO: a timer here would be better
 			// here we prepare the events poller that will check if we have events. This works better as a task than a timer.
@@ -420,7 +421,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 					}
 					
 					this.pollerResetEvent.Reset();
-					this.pollerResetEvent.Wait(TimeSpan.FromSeconds(3));
+					await pollerResetEvent.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
 				}
 
 				return true;
@@ -559,7 +560,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			return this.RunTaskMethodAsync(async lc => {
 
-				await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNextXmssKey(accountCode, ordinal, null).ConfigureAwait(false);
+				await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.CreateNextXmssKey(accountCode, ordinal, lc).ConfigureAwait(false);
 
 				return true;
 			}, lockContext);
@@ -570,7 +571,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			return this.RunTaskMethodAsync(lc => {
 
-				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(accountCode, message, null);
+				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(accountCode, message, lc);
 			}, lockContext);
 		}
 
@@ -927,9 +928,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<bool> PresentAccountPublicly(CorrelationContext correlationContext, string accountCode, byte expiration = 0) {
 
-			return this.RunTaskMethod(lc => {
+			return this.RunTaskMethodAsync(async lc => {
 
-				using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+				using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 				ICreatePresentationTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreatePresentationTransactionChainWorkflow(correlationContext, accountCode, expiration);
 
@@ -941,7 +942,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				this.centralCoordinator.PostWorkflow(workflow);
 
-				resetEvent.Wait();
+				await resetEvent.WaitAsync().ConfigureAwait(false);
 
 				return true;
 
@@ -1040,6 +1041,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				return await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lc).ConfigureAwait(false);
 			});
 		}
+		
+		public TaskResult<bool> AttemptWalletRescue() {
+			return this.RunTaskMethodAsync(async lc => {
+				return await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.AttemptWalletRescue(lc).ConfigureAwait(false);
+			});
+		}
 
 		public TaskResult<List<ElectedCandidateResultDistillate>> PerformOnDemandElection(BlockElectionDistillate blockElectionDistillate) {
 
@@ -1081,8 +1088,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 		public TaskResult<bool> ChangeKey(byte changingKeyOrdinal, string note, CorrelationContext correlationContext) {
 
-			return this.RunTaskMethod(lc => {
-				using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			return this.RunTaskMethodAsync(async lc => {
+				using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 				ICreateChangeKeyTransactionWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> workflow = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateChangeKeyTransactionWorkflow(changingKeyOrdinal, note, correlationContext);
 
@@ -1094,7 +1101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 				this.centralCoordinator.PostWorkflow(workflow);
 
-				resetEvent.Wait();
+				await resetEvent.WaitAsync().ConfigureAwait(false);
 
 				return true;
 

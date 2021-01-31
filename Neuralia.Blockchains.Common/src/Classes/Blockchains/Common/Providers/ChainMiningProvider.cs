@@ -51,6 +51,7 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx.Synchronous;
 using RestSharp;
 using Serilog;
@@ -760,31 +761,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				TimeSpan span = TimeSpan.FromMinutes(GlobalsService.UPDATE_MINING_STATUS_START_DELAY);
 				TimeSpan span2 = TimeSpan.FromMinutes(GlobalsService.UPDATE_MINING_STATUS_DELAY);
-
-				ClosureWrapper<bool> executing = false;
-
-				this.updateMiningStatusTimer = new ManagedTimer(state => {
-
-					if(executing == false) {
-						try {
-							executing = true;
-							this.CheckMiningStatus(lockContext).WaitAndUnwrapException();
-						} catch(Exception ex) {
-							//TODO: do something?
-							this.CentralCoordinator.Log.Error(ex, "Timer exception");
-						} finally {
-							executing = false;
-
-							try {
-							} catch(Exception ex) {
-								//TODO: do something?
-								this.CentralCoordinator.Log.Error(ex, "Timer set exception");
-							}
-						}
-					}
-
-					return Task.CompletedTask;
-				}, span, span2);
+				
+				this.updateMiningStatusTimer = new ManagedTimer(state => this.CheckMiningStatus(lockContext), span, span2);
 				this.updateMiningStatusTimer.Start();
 			}
 
@@ -862,12 +840,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				bool ipv4Set = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4 != null;
 				bool ipv6Set = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv6 != null;
 
-				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
-					ipv6Set = false;
-				} else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
-					ipv4Set = false;
+				if(MiningTierUtils.IsFirstOrSecondTier(this.MiningTier)) {
+					if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+						ipv6Set = false;
+					} else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+						ipv4Set = false;
+					}
 				}
-				
+
 				if(ipv4Set) {
 					info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4);
 				} else if(ipv6Set) {
@@ -959,14 +939,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
 			string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
-			
-			if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
-				url = this.ChainConfiguration.WebIpv4ElectionsRegistrationUrl;
-			}
-			else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
-				url = this.ChainConfiguration.WebIpv6ElectionsRegistrationUrl;
-			}
-			
+
 			Dictionary<string, object> parameters = new Dictionary<string, object>();
 			parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
 
@@ -978,6 +951,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			parameters.Add("miningTier", (int) registrationInfo.MiningTier);
 			
 			if(MiningTierUtils.IsFirstOrSecondTier(registrationInfo.MiningTier)) {
+				
+				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+					url = this.ChainConfiguration.WebIpv4ElectionsRegistrationUrl;
+				}
+				else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+					url = this.ChainConfiguration.WebIpv6ElectionsRegistrationUrl;
+				}
+				
 				parameters.Add("secret-code", registrationInfo.SecretCode);
 				if(!string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
 					parameters.Add("address", registrationInfo.Ip);
@@ -986,29 +967,32 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			int wait = 3;
 
+			DateTime absoluteTimeout = DateTime.Now.AddMinutes(5);
 			// since this is an important process, we keep trying until we get it, or mining times out
-			while(this.miningEnabled && await this.ExistingMiningRegistrationValid(lockContext).ConfigureAwait(false)) {
-				try {
-					IRestResponse result = await restUtility.Put(url, "elections/update-registration", parameters).ConfigureAwait(false);
+			while(this.miningEnabled && await this.ExistingMiningRegistrationValid(lockContext).ConfigureAwait(false) && DateTime.Now < absoluteTimeout) {
+				
+				var restParameterSet = new RestUtility.RestParameterSet<IPMode>();
+				restParameterSet.parameters = parameters;
 
-					// ok, check the result
-					if(result.StatusCode == HttpStatusCode.OK) {
-
-						if(byte.TryParse(result.Content, out byte ipByte)) {
-							this.MiningRegistrationIpMode = (IPMode) ipByte;
-						}
-
-						await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
-
-						// we just updated
-						this.CentralCoordinator.Log.Verbose("Mining registration was successfully updated.");
-
-						return;
+				restParameterSet.transform = webResult => {
+					if(byte.TryParse(webResult, out byte ipByte)) {
+						return (IPMode) ipByte;
 					}
 
-					this.CentralCoordinator.Log.Error($"Failed to update mining registration through web. Status code result: {result.StatusCode}");
-				} catch(Exception ex) {
-					this.CentralCoordinator.Log.Error(ex, "Failed to update mining registration through web");
+					return IPMode.Unknown;
+				};
+					
+				(bool sent, IPMode result) = await restUtility.PerformSecurePut(url, "elections/update-registration", restParameterSet).ConfigureAwait(false);
+
+				if(sent && result != IPMode.Unknown) {
+					this.MiningRegistrationIpMode = result;
+					
+					await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
+
+					// we just updated
+					this.CentralCoordinator.Log.Verbose("Mining registration was successfully updated.");
+
+					return;
 				}
 
 				Thread.Sleep(TimeSpan.FromSeconds(wait));
@@ -1021,7 +1005,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <summary>
 		///     try to unregister a stop through the public webapi interface
 		/// </summary>
-		protected Task PerformWebapiRegistrationStop() {
+		protected async Task PerformWebapiRegistrationStop() {
 
 			ElectionsCandidateRegistrationInfo registrationInfo = this.PrepareRegistrationInfo();
 
@@ -1031,28 +1015,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
-			return Repeater.RepeatAsync(async () => {
-				string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
+			string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
 
-				Dictionary<string, object> parameters = new Dictionary<string, object>();
-				parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
-				parameters.Add("password", registrationInfo.Password);
+			Dictionary<string, object> parameters = new Dictionary<string, object>();
+			parameters.Add("accountId", registrationInfo.AccountId.ToLongRepresentation());
+			parameters.Add("password", registrationInfo.Password);
+			
+			var restParameterSet = new RestUtility.RestParameterSet<object>();
+			restParameterSet.parameters = parameters;
 
-				IRestResponse result = await restUtility.Post(url, "elections/stop", parameters).ConfigureAwait(false);
+			restParameterSet.transform = webResult => null;
+					
+			(bool sent, var _) = await restUtility.PerformSecurePost(url, "elections/stop", restParameterSet).ConfigureAwait(false);
 
-				// ok, check the result
-				if(result.StatusCode == HttpStatusCode.OK) {
+			if(sent) {
+				LockContext lockContext = null;
+				await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
 
-					// ok, we are not registered. we can await a response from the IP Validator
+				return;
+			}
 
-					LockContext lockContext = null;
-					await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
-
-					return;
-				}
-
-				throw new ApplicationException("Failed to stop mining through web");
-			});
+			throw new ApplicationException("Failed to stop mining through web");
 		}
 
 		/// <summary>
@@ -1087,13 +1070,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				string autograph64 = Convert.ToBase64String(registrationInfo.Autograph);
 				string url = this.ChainConfiguration.WebElectionsRegistrationUrl;
 
-				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
-					url = this.ChainConfiguration.WebIpv4ElectionsRegistrationUrl;
-				}
-				else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
-					url = this.ChainConfiguration.WebIpv6ElectionsRegistrationUrl;
-				}
-				
 				long longAccountId = registrationInfo.AccountId.ToLongRepresentation();
 
 				await Repeater.RepeatAsync(async () => {
@@ -1111,6 +1087,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					parameters.Add("miningTier", (int) registrationInfo.MiningTier);
 
 					if(MiningTierUtils.IsFirstOrSecondTier(registrationInfo.MiningTier)) {
+						
+						if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+							url = this.ChainConfiguration.WebIpv4ElectionsRegistrationUrl;
+						}
+						else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+							url = this.ChainConfiguration.WebIpv6ElectionsRegistrationUrl;
+						}
+						
 						parameters.Add("secret-code", registrationInfo.SecretCode);
 						parameters.Add("port", registrationInfo.Port);
 						parameters.Add("validator-port", registrationInfo.ValidatorPort);
@@ -1152,13 +1136,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				string url = this.ChainConfiguration.WebElectionsStatusUrl;
 				
-				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
-					url = this.ChainConfiguration.WebIpv4ElectionsStatusUrl;
-				}
-				else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
-					url = this.ChainConfiguration.WebIpv6ElectionsStatusUrl;
-				}
-				
 				ElectionsCandidateRegistrationInfo electionsCandidateRegistrationInfo = this.PrepareRegistrationInfo();
 
 				if(electionsCandidateRegistrationInfo.Password == Guid.Empty) {
@@ -1170,53 +1147,58 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				parameters.Add("password", electionsCandidateRegistrationInfo.Password);
 				parameters.Add("miningTier", (int) electionsCandidateRegistrationInfo.MiningTier);
 				
-				if(MiningTierUtils.IsFirstOrSecondTier(electionsCandidateRegistrationInfo.MiningTier) && !string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
-					parameters.Add("address", electionsCandidateRegistrationInfo.Ip);
+				if(MiningTierUtils.IsFirstOrSecondTier(electionsCandidateRegistrationInfo.MiningTier)) {
+					if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+						url = this.ChainConfiguration.WebIpv4ElectionsStatusUrl;
+					}
+					else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+						url = this.ChainConfiguration.WebIpv6ElectionsStatusUrl;
+					}
+					
+					if(!string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
+						parameters.Add("address", electionsCandidateRegistrationInfo.Ip);
+					}
 				}
-
-				ManualResetEventSlim resetEventSlim = null;
+				
 				Enums.MiningStatus status = Enums.MiningStatus.NotMining;
+				bool sent = false;
 
 				try {
 
-					await Repeater.RepeatAsync(async () => {
+					var restParameterSet = new RestUtility.RestParameterSet<Enums.MiningStatus>();
+					restParameterSet.parameters = parameters;
 
-						IRestResponse result = await restUtility.Post(url, "elections-states/query-mining-status", parameters).ConfigureAwait(false);
-
-						// ok, check the result
-						if(result.StatusCode == HttpStatusCode.OK) {
-
-							if(int.TryParse(result.Content, out int statusNumber)) {
-								status = (Enums.MiningStatus) statusNumber;
-							}
-
-							if(status == Enums.MiningStatus.Mining) {
-								this.CentralCoordinator.Log.Verbose($"A status check demonstrated that we are mining.");
-
-								// all is fine, we are confirmed as mining.
-								return;
-							}
-
-							if(status == Enums.MiningStatus.IpUsed) {
-
-								this.CentralCoordinator.Log.Verbose($"A status check demonstrated that our Ip is currently in use.");
-
-								// our IP is already used, nothing to do
-								return;
-							}
-
-							this.CentralCoordinator.Log.Information($"A status check demonstrated that we are not mining. Status received {status}. We may check again");
-						} else {
-							this.CentralCoordinator.Log.Warning("We could not verify if we are registered for mining. We might be, but we could not verify it.  We may check again.");
+					restParameterSet.transform = webResult => {
+						if(int.TryParse(webResult, out int statusNumber)) {
+							return (Enums.MiningStatus) statusNumber;
 						}
 
-						resetEventSlim = new ManualResetEventSlim();
+						return Enums.MiningStatus.Unknown;
+					};
+					
+					(sent, status) = await restUtility.PerformSecurePost(url, "elections-states/query-mining-status", restParameterSet).ConfigureAwait(false);
 
-						// retry a few times and sleep a bit
-						resetEventSlim.Wait(TimeSpan.FromSeconds(10));
+					if(sent) {
+						if(status == Enums.MiningStatus.Mining) {
+							this.CentralCoordinator.Log.Verbose($"A status check demonstrated that we are mining.");
 
-						throw new ApplicationException();
-					}, 2).ConfigureAwait(false);
+							// all is fine, we are confirmed as mining.
+							return;
+						}
+
+						if(status == Enums.MiningStatus.IpUsed) {
+
+							this.CentralCoordinator.Log.Verbose($"A status check demonstrated that our Ip is currently in use.");
+
+							// our IP is already used, nothing to do
+							return;
+						}
+
+						this.CentralCoordinator.Log.Information($"A status check demonstrated that we are not mining. Status received {status}. We may check again");
+					}
+					else {
+						this.CentralCoordinator.Log.Warning("We could not verify if we are registered for mining. We might be, but we could not verify it.  We may check again.");
+					}
 
 					if(status != Enums.MiningStatus.Mining) {
 						// we are not mining, lets blow it up
@@ -1224,9 +1206,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 				} catch {
 					await this.DisableMining(lockContext, status).ConfigureAwait(false);
-				} finally {
-					resetEventSlim?.Dispose();
-				}
+				} 
 			}
 		}
 
@@ -1689,7 +1669,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return true;
 			}
 
-			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 			Task Catcher(LockContext lc) {
 				resetEvent.Set();
@@ -1713,7 +1693,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				while(DateTime.Now < timeout) {
 
-					if(resetEvent.Wait(TimeSpan.FromSeconds(1)) || await validityCheck(lockContext).ConfigureAwait(false)) {
+					if(await resetEvent.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false) || await validityCheck(lockContext).ConfigureAwait(false)) {
 						break;
 					}
 				}
@@ -2152,36 +2132,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 							try {
 
-								await Repeater.RepeatAsync(async () => {
-									string url = this.ChainConfiguration.WebElectionsRecordsUrl;
+								string url = this.ChainConfiguration.WebElectionsRecordsUrl;
 
-									Dictionary<string, object> parameters = null;
-									string action = "";
+								Dictionary<string, object> parameters = null;
+								string action = "";
 
-									if(electionResult.ElectionMode == ElectionModes.Active) {
-										parameters = matureElectionProcessor.PrepareActiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password);
-										action = "election-records/record-active-election";
-									} else if(electionResult.ElectionMode == ElectionModes.Passive) {
-										parameters = matureElectionProcessor.PreparePassiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password);
-										action = "election-records/record-passive-election";
-									} else {
-										throw new ApplicationException("Invalid election type");
-									}
+								if(electionResult.ElectionMode == ElectionModes.Active) {
+									parameters = matureElectionProcessor.PrepareActiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password);
+									action = "election-records/record-active-election";
+								} else if(electionResult.ElectionMode == ElectionModes.Passive) {
+									parameters = matureElectionProcessor.PreparePassiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password);
+									action = "election-records/record-passive-election";
+								} else {
+									throw new ApplicationException("Invalid election type");
+								}
+								
+								(sent, _) = await restUtility.PerformSecurePut(url, action, new RestUtility.RestParameterSet<object>()).ConfigureAwait(false);
 
-									IRestResponse result = await restUtility.Put(url, action, parameters).ConfigureAwait(false);
-
-									// ok, check the result
-									if(result.StatusCode == HttpStatusCode.OK) {
-
-										await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
-
-										return;
-									}
-
-									throw new ApplicationException($"Failed to record election results through web. Status code: {result.StatusCode}");
-								}).ConfigureAwait(false);
-
-								sent = true;
+								if(sent) {
+									await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
+								}
+								
 							} catch(Exception ex) {
 								this.CentralCoordinator.Log.Error(ex, $"Failed to record election results through web for mining account {this.MiningAccountId}");
 

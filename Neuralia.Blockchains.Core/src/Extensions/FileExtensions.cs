@@ -52,6 +52,16 @@ namespace Neuralia.Blockchains.Core.Extensions {
 		public static Task OpenWriteAsync(string filename, SafeArrayHandle bytes, FileSystemWrapper fileSystem) {
 			return OpenWriteAsync(filename, bytes, 0, bytes.Length, fileSystem);
 		}
+		
+		public static async Task OpenWriteAsync(string filename, SafeArrayHandle[] bytesSet, FileSystemWrapper fileSystem) {
+			long offset = 0;
+			await using(Stream fileStream = fileSystem.OpenFile(filename, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) {
+				fileStream.Seek(offset, SeekOrigin.Begin);
+				foreach(var bytes in bytesSet) {
+					await fileStream.WriteAsync(bytes.Bytes, bytes.Offset, bytes.Length).ConfigureAwait(false);
+				}
+			}
+		}
 
 		public static void OpenWrite(string filename, SafeArrayHandle bytes, long offset, FileSystemWrapper fileSystem) {
 			OpenWrite(filename, bytes, offset, bytes.Length, fileSystem);

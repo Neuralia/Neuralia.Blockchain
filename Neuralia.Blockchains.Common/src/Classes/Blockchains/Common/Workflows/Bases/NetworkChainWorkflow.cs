@@ -120,20 +120,36 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			return this.RoutedTaskReceiver.WaitSingleTask(task, timeout);
 		}
 
-		protected bool SendMessage(PeerConnection peerConnection, INetworkMessageSet message) {
-			return this.dataDispatcher?.SendMessage(peerConnection, message) ?? false;
+		protected Task<bool> SendMessage(PeerConnection peerConnection, INetworkMessageSet message) {
+			if(this.dataDispatcher == null) {
+				return Task.FromResult(false);
+			}
+			LockContext lockContext = null;
+			return this.dataDispatcher.SendMessage(peerConnection, message, lockContext) ;
 		}
 
-		protected bool SendFinalMessage(PeerConnection peerConnection, INetworkMessageSet message) {
-			return this.dataDispatcher?.SendFinalMessage(peerConnection, message) ?? false;
+		protected Task<bool> SendFinalMessage(PeerConnection peerConnection, INetworkMessageSet message) {
+			if(this.dataDispatcher == null) {
+				return Task.FromResult(false);
+			}
+			LockContext lockContext = null;
+			return this.dataDispatcher.SendFinalMessage(peerConnection, message, lockContext) ;
 		}
 
-		protected bool SendBytes(PeerConnection peerConnection, SafeArrayHandle data) {
-			return this.dataDispatcher?.SendBytes(peerConnection, data) ?? false;
+		protected Task<bool> SendBytes(PeerConnection peerConnection, SafeArrayHandle data) {
+			if(this.dataDispatcher == null) {
+				return Task.FromResult(false);
+			}
+			LockContext lockContext = null;
+			return this.dataDispatcher.SendBytes(peerConnection, data, lockContext) ;
 		}
 
-		protected bool SendFinalBytes(PeerConnection peerConnection, SafeArrayHandle data) {
-			return this.dataDispatcher?.SendFinalBytes(peerConnection, data) ?? false;
+		protected Task<bool> SendFinalBytes(PeerConnection peerConnection, SafeArrayHandle data) {
+			if(this.dataDispatcher == null) {
+				return Task.FromResult(false);
+			}
+			LockContext lockContext = null;
+			return this.dataDispatcher.SendFinalBytes(peerConnection, data, lockContext) ;
 		}
 	}
 }

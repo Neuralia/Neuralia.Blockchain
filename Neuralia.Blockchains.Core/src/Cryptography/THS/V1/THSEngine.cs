@@ -19,6 +19,7 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Data.Arrays.Large;
 using Neuralia.Blockchains.Tools.General;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.Blockchains.Tools.Threading;
 
 namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 	public class THSEngine : IDisposableExtended {
@@ -264,7 +265,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 		
 			using xxHasher32 hasher = new xxHasher32();
 
-			using ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+			using AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 			
 			while(true) {
 
@@ -363,7 +364,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 				while(true) {
 					
 					resetEvent.Reset();
-					resetEvent.Wait(TimeSpan.FromSeconds(Math.Max(estimatedIterationTime>>1, 3)), tokenSource.Token);
+					await resetEvent.WaitAsync(TimeSpan.FromSeconds(Math.Max(estimatedIterationTime>>1, 3)), tokenSource.Token).ConfigureAwait(false);
 
 					if(tasks.Any(t => t.IsFaulted)) {
 						tokenSource.Cancel();

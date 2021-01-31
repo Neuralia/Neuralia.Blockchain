@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Tools.Threading;
+using Nito.AsyncEx;
 using RestSharp;
 
 namespace Neuralia.Blockchains.Core.Tools {
@@ -58,6 +60,83 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return this.PerformCall(url, action, Method.GET, null);
 		}
 
+		public class RestParameterSet<T> {
+			public Dictionary<string, object> parameters;
+			public Dictionary<string, byte[]> files;
+			public Func<string, T> transform;
+			public int tries = 6;
+		}
+
+		public Task<(bool success, T result)> PerformSecureGet<T>(string url, string action, RestParameterSet<T> restParameterSet) {
+			return this.PerformSecureCall(url, action, Method.GET, restParameterSet);
+		}
+		
+		public Task<(bool success, T result)> PerformSecurePost<T>(string url, string action, RestParameterSet<T> restParameterSet) {
+			return this.PerformSecureCall(url, action, Method.POST, restParameterSet);
+		}
+		
+		public Task<(bool success, T result)> PerformSecurePut<T>(string url, string action, RestParameterSet<T> restParameterSet) {
+			return this.PerformSecureCall(url, action, Method.PUT, restParameterSet);
+		}
+
+		public async Task<(bool success, T result)> PerformSecureCall<T>(string url, string action, Method method, RestParameterSet<T> restParameterSet) {
+
+			AsyncManualResetEventSlim manualResetEventSlim = null;
+
+			try {
+				int tries = 0;
+				int limit = restParameterSet.tries - 1;
+				do {
+					try {
+						IRestResponse webResult = await this.PerformCall(url, action, method, restParameterSet.parameters, restParameterSet.files).ConfigureAwait(false);
+
+						// ok, check the result
+						if(webResult.StatusCode == HttpStatusCode.OK) {
+
+							if(string.IsNullOrWhiteSpace(webResult.Content)) {
+								return (true, default);
+							}
+
+							if(restParameterSet.transform == null) {
+
+								if(webResult.Content is T stringResult) {
+									return (true, stringResult);
+								}
+
+								throw new ApplicationException("Invalid format");
+							}
+							
+							return (true, restParameterSet.transform(webResult.Content));
+						} 
+						else if(webResult.StatusCode == HttpStatusCode.NoContent) {
+							return (true, default);
+						}
+						else if(webResult.StatusCode == HttpStatusCode.Forbidden) {
+
+							if(manualResetEventSlim == null) {
+								manualResetEventSlim = new AsyncManualResetEventSlim();
+							}
+
+							manualResetEventSlim.Reset();
+							// ok, lets wait until rate limiting is passed
+							await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+						}
+						
+					} catch(Exception ex) {
+						if(tries == limit) {
+							throw;
+						}
+					}
+
+					tries++;
+				} while(tries == limit);
+
+				throw new ApplicationException($"Failed rest call for {action}");
+			} finally {
+				manualResetEventSlim?.Dispose();
+			}
+		}
+		
 		private Task<IRestResponse> PerformCall(string url, string action, Method method, Dictionary<string, object> parameters, Dictionary<string, byte[]> files = null) {
 
 			RestClient client = new RestClient(url);

@@ -79,7 +79,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 				try {
 					this.CentralCoordinator.Log.Verbose($"Sending peer list request to peer {peerConnection.ScopedAdjustedIp}");
 
-					if(!this.SendMessage(peerConnection, appointmentRequestTrigger)) {
+					if(!await SendMessage(peerConnection, appointmentRequestTrigger).ConfigureAwait(false)) {
 						this.CentralCoordinator.Log.Verbose($"Connection with peer  {peerConnection.ScopedAdjustedIp} was terminated");
 
 						return;

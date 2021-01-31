@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Locking;
+using Neuralia.Blockchains.Tools.Threading;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Receivers {
@@ -31,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		protected readonly int maxParallelTasks;
 
-		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+		private readonly AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 		protected readonly RouteMode routeMode;
 
@@ -402,9 +403,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 
 		public async Task Wait(TimeSpan timeout) {
 			if(timeout == TimeSpan.MaxValue) {
-				this.resetEvent.Wait();
+				await resetEvent.WaitAsync().ConfigureAwait(false);
 			} else {
-				this.resetEvent.Wait(timeout);
+				await resetEvent.WaitAsync(timeout).ConfigureAwait(false);
 			}
 
 			this.resetEvent.Reset();

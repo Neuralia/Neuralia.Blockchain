@@ -1,6 +1,6 @@
 # Neuralia.Blockchain
 
-##### Version:  MAINNET 1.0.1.9
+##### Version:  MAINNET
 
 The essential blockchain components of the Neuralia Blockchain.
 

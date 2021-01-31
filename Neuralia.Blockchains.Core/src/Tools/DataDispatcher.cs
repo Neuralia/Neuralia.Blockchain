@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Network.Exceptions;
@@ -8,6 +9,7 @@ using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.Tools {
 	/// <summary>
@@ -17,7 +19,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 		private readonly Action<PeerConnection> invalidConnectionCallback;
 
-		private readonly object locker = new object();
+		private readonly RecursiveAsyncLock locker = new RecursiveAsyncLock();
 		private readonly ITimeService timeService;
 
 		public DataDispatcher(ITimeService timeService, Action<PeerConnection> invalidConnectionCallback) {
@@ -31,26 +33,26 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return bytes;
 		}
 
-		public bool SendMessage(PeerConnection peerConnection, INetworkMessageSet message) {
+		public Task<bool> SendMessage(PeerConnection peerConnection, INetworkMessageSet message, LockContext lockContext) {
 			message.BaseHeader.SentTime = this.timeService.CurrentRealTime;
 
-			return this.SendBytes(peerConnection, this.DehydrateMessage(message));
+			return this.SendBytes(peerConnection, this.DehydrateMessage(message), lockContext);
 		}
 
-		public bool SendFinalMessage(PeerConnection peerConnection, INetworkMessageSet message) {
+		public Task<bool> SendFinalMessage(PeerConnection peerConnection, INetworkMessageSet message, LockContext lockContext) {
 			message.BaseHeader.SentTime = this.timeService.CurrentRealTime;
 
-			return this.SendFinalBytes(peerConnection, this.DehydrateMessage(message));
+			return this.SendFinalBytes(peerConnection, this.DehydrateMessage(message), lockContext);
 		}
 
-		public bool SendBytes(PeerConnection peerConnection, SafeArrayHandle data) {
-			return this.Send(() => this.SendBytesToPeer(peerConnection, data));
+		public Task<bool> SendBytes(PeerConnection peerConnection, SafeArrayHandle data, LockContext lockContext) {
+			return this.Send(() => this.SendBytesToPeer(peerConnection, data, lockContext));
 		}
 
-		public bool SendFinalBytes(PeerConnection peerConnection, SafeArrayHandle data) {
-			bool SendAction() {
+		public Task<bool> SendFinalBytes(PeerConnection peerConnection, SafeArrayHandle data, LockContext lockContext) {
+			async Task<bool> SendAction() {
 				try {
-					return this.SendBytesToPeer(peerConnection, data);
+					return await SendBytesToPeer(peerConnection, data, lockContext).ConfigureAwait(false);
 				} catch(Exception e) {
 					NLog.Default.Verbose("error occured", e);
 
@@ -63,9 +65,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return this.Send(SendAction);
 		}
 
-		private bool SendBytesToPeer(PeerConnection peerConnection, SafeArrayHandle data) {
+		private async Task<bool> SendBytesToPeer(PeerConnection peerConnection, SafeArrayHandle data, LockContext lockContext) {
 
-			lock(this.locker) {
+			using(var session = await locker.LockAsync(lockContext).ConfigureAwait(false)) {
 
 				ConnectionState state = peerConnection.connection.State;
 
@@ -81,7 +83,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 					}
 
 					if(state == ConnectionState.NotConnected) {
-						return this.ConnectAndSendBytesToPeer(peerConnection, data);
+						return await ConnectAndSendBytesToPeer(peerConnection, data, session).ConfigureAwait(false);
 					}
 
 					if(state != ConnectionState.Connected) {
@@ -122,7 +124,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return true;
 		}
 
-		private bool ConnectAndSendBytesToPeer(PeerConnection peerConnection, SafeArrayHandle data) {
+		private async Task<bool> ConnectAndSendBytesToPeer(PeerConnection peerConnection, SafeArrayHandle data, LockContext lockContext) {
 
 			if(peerConnection.IsDisposed) {
 				peerConnection.connection.Dispose();
@@ -136,7 +138,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			ConnectionState state = peerConnection.connection.State;
 
-			lock(this.locker) {
+			using(var session = await locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				try {
 					if(state != ConnectionState.NotConnected) {
 
@@ -158,7 +160,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 						}
 
 						if(state == ConnectionState.Connected) {
-							return this.SendBytesToPeer(peerConnection, data);
+							return await SendBytesToPeer(peerConnection, data, session).ConfigureAwait(false);
 						}
 
 						if(state == ConnectionState.Disconnecting) {
@@ -184,7 +186,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 					}
 
 					try {
-						peerConnection.connection.Connect(data);
+						await peerConnection.connection.Connect(data).ConfigureAwait(false);
 					} catch(Exception ex) {
 						throw new TcpApplicationException("Failed to connect to client. They are not available", ex);
 					}
@@ -230,14 +232,14 @@ namespace Neuralia.Blockchains.Core.Tools {
 		/// <param name="action"></param>
 		/// <param name="trycount"></param>
 		/// <returns></returns>
-		private bool Send(Func<bool> action, int tryCount = 3) {
+		private async Task<bool> Send(Func<Task<bool>> action, int tryCount = 3) {
 			int counter = 0;
 			Exception lastException = null;
 
 			try {
 				do {
 					try {
-						return action();
+						return await action().ConfigureAwait(false);
 					} catch(Exception ex) {
 						// lets make sure we check before every loop so we dont waste time. every connection can idle for 5 seconds. thats long at shutdown
 

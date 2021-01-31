@@ -138,6 +138,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public bool IsIpV4 => IsAddressIpV4(this.address);
 		public bool IsIpv4MappedToIpV6 => IsAddressIpv4MappedToIpV6(this.address);
 
+		public IPMode IPMode => (this.IsIpV6 && !this.IsIpv4MappedToIpV6) ? IPMode.IPv6 : IPMode.IPv4;
 		public NodeInfo PeerInfo { get; set; } = new NodeInfo();
 
 		public bool IsPeerTypeKnown => this.PeerInfo.IsKnown;

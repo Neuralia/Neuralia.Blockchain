@@ -60,7 +60,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 				return;
 			}
 
-			if(!this.Send(serverHandshake)) {
+			if(!await Send(serverHandshake).ConfigureAwait(false)) {
 				this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 			}
 		}

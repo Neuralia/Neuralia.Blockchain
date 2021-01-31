@@ -56,7 +56,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
 		private readonly CorrelationContext correlationContext;
-		private ManualResetEventSlim manualResetEvent;
+		private AsyncManualResetEventSlim manualResetEvent;
 		private List<int> answers;
 		public event Action<int, List<(string puzzle, string instructions)>> PuzzleBeginEvent;
 		protected DateTime hardStop;
@@ -418,12 +418,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					this.PuzzleBeginEvent(finalPuzzleCode, formattedPuzzles);
 				}
 
-				this.manualResetEvent = new ManualResetEventSlim();
+				this.manualResetEvent = new AsyncManualResetEventSlim();
 
 				// now we wait for the answer
 				var remainingTime = this.hardStop - DateTimeEx.CurrentTime + TimeSpan.FromSeconds(5);
 
-				if(!this.AnswersSet && !this.manualResetEvent.Wait(remainingTime)) {
+				if(!this.AnswersSet && ! (await manualResetEvent.WaitAsync(remainingTime).ConfigureAwait(false))) {
 					// we got no answer in time.
 					return;
 				}

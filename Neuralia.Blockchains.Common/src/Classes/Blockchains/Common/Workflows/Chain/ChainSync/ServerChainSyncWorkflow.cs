@@ -217,7 +217,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// yup, we are behind the caller, we can't help them
 				if(serverHandshake.Message.Status != ServerTriggerReply.SyncHandshakeStatuses.Ok) {
 					// too bad, we are currently syncing too, or some other related error, we can't help
-					this.Send(serverHandshake);
+					await Send(serverHandshake).ConfigureAwait(false);
 
 					return;
 				}
@@ -252,7 +252,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				serverHandshake.Message.Status = ServerTriggerReply.SyncHandshakeStatuses.Ok;
 
-				if(!this.Send(serverHandshake)) {
+				if(!await Send(serverHandshake).ConfigureAwait(false)) {
 					this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 
 					return;
@@ -273,7 +273,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						while(DateTime.Now <= timeout) {
 
-							if(this.ChecSyncShouldStop(chainSyncMessageFactory)) {
+							if(await ChecSyncShouldStop(chainSyncMessageFactory).ConfigureAwait(false)) {
 								return;
 							}
 
@@ -301,7 +301,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								break;
 							}
 
-							if(this.ChecSyncShouldStop(chainSyncMessageFactory)) {
+							if(await ChecSyncShouldStop(chainSyncMessageFactory).ConfigureAwait(false)) {
 								return;
 							}
 
@@ -343,7 +343,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									}
 								}
 
-								if(!this.Send(sendBlockInfoMessage)) {
+								if(!await Send(sendBlockInfoMessage).ConfigureAwait(false)) {
 									this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 
 									return;
@@ -370,7 +370,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								if((blockRequestMessage.Id == 0) || (blockRequestMessage.Id > usableDiskBlocHeight)) {
 
 									// send a default empty message
-									if(!this.Send(sendBlockMessage)) {
+									if(!await Send(sendBlockMessage).ConfigureAwait(false)) {
 										this.CentralCoordinator.Log.Verbose($"Syncing with peer  {this.PeerConnection.ScopedAdjustedIp} is over. we dont have enough blocks.");
 
 										return;
@@ -426,7 +426,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									}
 								}
 
-								if(!this.Send(sendBlockMessage)) {
+								if(!await Send(sendBlockMessage).ConfigureAwait(false)) {
 									this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 
 									return;
@@ -454,7 +454,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								if((requestBlockSliceHashes.Id == 0) || (requestBlockSliceHashes.Id > diskBlockHeight)) {
 
 									// send a default empty message
-									if(!this.Send(sendBlockMessage)) {
+									if(!await Send(sendBlockMessage).ConfigureAwait(false)) {
 										this.CentralCoordinator.Log.Verbose($"Syncing with peer  {this.PeerConnection.ScopedAdjustedIp} is over. we dont have enough blocks.");
 
 										return;
@@ -487,7 +487,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									sendBlockMessage.Message.SlicesHash = blockSlices.Value.hash;
 								}
 
-								if(!this.Send(sendBlockMessage)) {
+								if(!await Send(sendBlockMessage).ConfigureAwait(false)) {
 									this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 
 									return;
@@ -514,7 +514,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									sendDigestInfoMessage.Message.SlicesSize.FileInfo.Length = results;
 								}
 
-								if(!this.Send(sendDigestInfoMessage)) {
+								if(!await Send(sendDigestInfoMessage).ConfigureAwait(false)) {
 									this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 
 									return;
@@ -542,7 +542,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									sendDigestMessage.Message.Slices.FileInfo.Length = requestDigest.SlicesInfo.FileInfo.Length;
 								}
 
-								if(!this.Send(sendDigestMessage)) {
+								if(!await Send(sendDigestMessage).ConfigureAwait(false)) {
 									this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 
 									return;
@@ -570,7 +570,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									sendDigestFileMessage.Message.Slices.SlicesInfo.Add(key, new DataSlice(value.Length, value.Offset, data));
 								}
 
-								if(!this.Send(sendDigestFileMessage)) {
+								if(!await Send(sendDigestFileMessage).ConfigureAwait(false)) {
 									this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 
 									return;
@@ -601,7 +601,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// </summary>
 		/// <param name="chainSyncMessageFactory"></param>
 		/// <returns></returns>
-		protected bool ChecSyncShouldStop(IChainSyncMessageFactory chainSyncMessageFactory) {
+		protected async Task<bool> ChecSyncShouldStop(IChainSyncMessageFactory chainSyncMessageFactory) {
 			if(this.CheckShouldStop()) {
 
 				BlockchainTargettedMessageSet<CLOSE_CONNECTION> closeMessage = (BlockchainTargettedMessageSet<CLOSE_CONNECTION>) chainSyncMessageFactory.CreateSyncWorkflowFinishSyncSet(this.triggerMessage.BaseHeader);
@@ -610,7 +610,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				try {
 					// lets be nice, lets inform them that we will close the connection for this workflow
-					this.Send(closeMessage);
+					await Send(closeMessage).ConfigureAwait(false);
 				} catch(Exception ex) {
 					this.CentralCoordinator.Log.Error(ex, "Failed to close peer connection but workflow is over.");
 				}

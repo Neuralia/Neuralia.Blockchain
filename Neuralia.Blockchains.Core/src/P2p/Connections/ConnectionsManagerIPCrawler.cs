@@ -4,6 +4,8 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Exceptions;
@@ -68,7 +70,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private DateTime? nextAction;
 		private DateTime? nextSyncProxiesAction;
 
-		public ConnectionsManagerIPCrawler(ServiceSet<R> serviceSet) : base(10_000) {
+		public ConnectionsManagerIPCrawler(ServiceSet<R> serviceSet) : base(1000 * GlobalSettings.ApplicationSettings.IPCrawlerProcessLoopPeriod) {
 			this.networkingService = (INetworkingService<R>) DIService.Instance.GetService<INetworkingService>();
 
 			this.clientWorkflowFactory = serviceSet.InstantiationService.GetClientWorkflowFactory(serviceSet);
@@ -99,8 +101,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 					return;
 				}
-
-				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} new available peer node: {node}!");
 				this.Crawler.HandleHubIPs(new List<NodeAddressInfo> {node}, DateTimeEx.CurrentTime);
 			};
 
@@ -193,7 +193,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 									this.Crawler.HandleTimeout(node, DateTimeEx.CurrentTime);
 								}
 							}));
-
+							peer.connection.Latency = peerListRequest.Latency.TotalSeconds;
 							return Task.CompletedTask;
 						};
 
@@ -386,11 +386,116 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			return base.DisposeAllAsync();
 		}
 
+		static void DiscoverPeers()
+	    {
+        
+	        int wantedPort = 33888;    //this is the port you want
+	        
+	        byte[] msg = Encoding.ASCII.GetBytes("type msg here");
+	        
+	        
+	        foreach (NetworkInterface netwIntrf in NetworkInterface.GetAllNetworkInterfaces())
+	        {
+	        
+	            Console.WriteLine("Interface name: " + netwIntrf.Name);
+	        
+	            Console.WriteLine("Inteface working: {0}", netwIntrf.OperationalStatus == OperationalStatus.Up);
+	        
+	            //if the current interface doesn't have an IP, skip it
+	            if (! (netwIntrf.GetIPProperties().GatewayAddresses.Count > 0))
+	            {
+	                continue;
+	            }
+
+	            foreach (var gateway in netwIntrf.GetIPProperties()?.GatewayAddresses)
+	            {
+		            
+
+		            var gatewayIp = netwIntrf.GetIPProperties()?.GatewayAddresses.FirstOrDefault().Address;
+	            
+		        
+		            //Console.WriteLine("IP Address(es):");
+		        
+		            //get current IP Address(es)
+		            foreach (UnicastIPAddressInformation uniIpInfo in netwIntrf.GetIPProperties().UnicastAddresses)
+		            {
+			            var localIp = uniIpInfo.Address;
+						Console.WriteLine($"Gateway is: {gatewayIp}");
+						
+		                //get the subnet mask and the IP address as bytes
+		                byte[] subnetMask = uniIpInfo.IPv4Mask.GetAddressBytes();
+		                byte[] ipAddr = localIp.GetAddressBytes();
+		                
+		                // we reverse the byte-array if we are dealing with littl endian.
+		                if (BitConverter.IsLittleEndian)
+		                {
+		                    Array.Reverse(subnetMask);
+		                    Array.Reverse(ipAddr);
+		                }
+		        
+		                //we convert the subnet mask as uint (just for didactic purposes (to check everything is ok now and next - use thecalculator in programmer mode)
+		                uint maskAsInt = BitConverter.ToUInt32(subnetMask, 0);
+		                //we convert the ip addres as uint (just for didactic purposes (to check everything is ok now and next - use thecalculator in programmer mode)
+		                uint ipAsInt = BitConverter.ToUInt32(ipAddr, 0);
+		                //we negate the subnet to determine the maximum number of host possible in this subnet
+		                uint validHostsEndingMax = ~BitConverter.ToUInt32(subnetMask, 0);
+		                //we convert the start of the ip addres as uint (the part that is fixed wrt the subnet mask - from here we calculate each new address by incrementing with 1 and converting to byte[] afterwards 
+		                uint validHostsStart = BitConverter.ToUInt32(ipAddr, 0) & BitConverter.ToUInt32(subnetMask, 0);
+		        
+		                //we increment the startIp to the number of maximum valid hosts in this subnet and for each we check the intended port (refactoring needed)
+		                for (uint i = 1; i <= validHostsEndingMax; i++)
+		                {
+		                    uint host = validHostsStart + i;
+		                    //byte[] hostAsBytes = BitConverter.GetBytes(host);
+		                    byte[] hostBytes = BitConverter.GetBytes(host);
+		                    if (BitConverter.IsLittleEndian)
+		                    {
+		                        Array.Reverse(hostBytes);
+		                    }
+
+		                    var ip = new IPAddress(hostBytes);
+		                    if(ip.Equals(localIp) || ip.Equals(gatewayIp))
+								continue;
+		                    try
+		                    {
+		                        //try to connect
+		                        // Connect using a timeout (5 seconds)
+								
+		                        Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+		                        
+		                        IAsyncResult result = sock.BeginConnect( ip, wantedPort, null, null );
+
+		                        bool success = result.AsyncWaitHandle.WaitOne( 250, true );
+
+		                        if (sock.Connected)  // if succesful => something is listening on this port
+		                        {
+			                        sock.EndConnect( result );
+		                            Console.WriteLine("\tIt worked at " + ip);
+		                        }
+		                        // else
+			                       //  Console.WriteLine("\tIt DIDN't worked at " + ipCandidate);
+		                        
+		                        sock.Close();
+		                        
+		                    }
+		                    catch (SocketException ex)
+		                    { 
+			                    Console.WriteLine(ex.Message);
+		                    }
+		                }
+	            }
+	            
+	            }
+	            Console.ReadLine();
+	        }
+	    }
 		protected override async Task ProcessLoop(LockContext lockContext) {
 			try {
 
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ProcessLoop)}, acting next at {this.nextAction}.");
 
+				// DiscoverPeers();
+				
 				this.CheckShouldCancel();
 
 				// first thing, lets check if we have any tasks received to process
@@ -414,6 +519,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					return;
 				}
 
+				
 				//JD asked me to call this every loop for the need of child classes
 				this.connectionStore.LoadStaticStartNodes();
 
@@ -520,53 +626,54 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
-		protected Task<bool> ContactHubsWeb() {
+		protected async Task<bool> ContactHubsWeb() {
 			this.CheckShouldCancel();
 			var restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.FormData);
 
-			return Repeater.RepeatAsync(async () => {
-				var parameters = new Dictionary<string, object>();
+			var parameters = new Dictionary<string, object>();
 
-				using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
-					List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, true, true, false);
-					var nodeAddressInfoList = new NodeAddressInfoList(currentAvailableNodes);
+			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
+				List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, true, true, false);
+				var nodeAddressInfoList = new NodeAddressInfoList(currentAvailableNodes);
 
-					GlobalSettings.Instance.NodeInfo.Dehydrate(dehydrator);
-					nodeAddressInfoList.Dehydrate(dehydrator);
+				GlobalSettings.Instance.NodeInfo.Dehydrate(dehydrator);
+				nodeAddressInfoList.Dehydrate(dehydrator);
 
-					SafeArrayHandle bytes = dehydrator.ToArray();
-					parameters.Add("data", bytes.Entry.ToBase64());
-					bytes.Return();
-				}
+				SafeArrayHandle bytes = dehydrator.ToArray();
+				parameters.Add("data", bytes.Entry.ToBase64());
+				bytes.Return();
+			}
 
-				parameters.Add("networkid", GlobalSettings.Instance.NetworkId);
+			parameters.Add("networkid", GlobalSettings.Instance.NetworkId);
 
-				IRestResponse result = await restUtility.Post(GlobalSettings.ApplicationSettings.HubsWebAddress, "hub/query", parameters).ConfigureAwait(false);
+			var restParameterSet = new RestUtility.RestParameterSet<NodeAddressInfoList>();
+			restParameterSet.parameters = parameters;
+			restParameterSet.transform = webResult => {
+				using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(ByteArray.FromBase64(webResult));
 
-				// ok, check the result
-				if(result.StatusCode == HttpStatusCode.OK) {
-					// ok, all good
+				var infoList = new NodeAddressInfoList();
+				Guid ip = rehydrator.ReadGuid();
+				var ipAddress =IPUtils.GuidToIP(ip);
+				
+				this.connectionStore.AddPeerReportedPublicIp(ipAddress, ConnectionStore.PublicIpSource.Hub);
+				
+				infoList.Rehydrate(rehydrator);
 
-					using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(ByteArray.FromBase64(result.Content));
+				return infoList;
+			};
+			
+			(bool sent, NodeAddressInfoList infoListResult) = await restUtility.PerformSecurePost(GlobalSettings.ApplicationSettings.HubsWebAddress, "hub/query", restParameterSet).ConfigureAwait(false);
 
-					var infoList = new NodeAddressInfoList();
-					Guid ip = rehydrator.ReadGuid();
-					var ipAddress =IPUtils.GuidToIP(ip);
-					
-					this.connectionStore.AddPeerReportedPublicIp(ipAddress, ConnectionStore.PublicIpSource.Hub);
-					
-					infoList.Rehydrate(rehydrator);
+			if(sent) {
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.Crawler.HandleHubIPs)} (Web): {infoListResult.Nodes.Count} ips returned");
+				this.Crawler.HandleHubIPs(infoListResult.Nodes.Where(n => !this.connectionStore.IsOurAddress(n)).ToList(), DateTimeEx.CurrentTime);
 
-					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.Crawler.HandleHubIPs)} (Web): {infoList.Nodes.Count} ips returned");
-					this.Crawler.HandleHubIPs(infoList.Nodes.Where(n => !this.connectionStore.IsOurAddress(n)).ToList(), DateTimeEx.CurrentTime);
-
-					this.connectionStore.AddAvailablePeerNodes(infoList, true);
-
-					return true;
-				}
-
-				throw new QueryHubsException("Failed to query web hubs (Web)");
-			});
+				this.connectionStore.AddAvailablePeerNodes(infoListResult, true);
+				
+				return true;
+			}
+			
+			throw new QueryHubsException("Failed to query web hubs (Web)");
 		}
 
 		protected async Task ContactHubsGossip() {

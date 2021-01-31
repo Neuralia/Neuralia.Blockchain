@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -20,6 +21,7 @@ using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
 using Neuralia.Blockchains.Tools.Serialization;
+using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx;
 
 namespace Neuralia.Blockchains.Core.Network {
@@ -30,7 +32,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		IPMode IPMode { get; }
 		NetworkEndPoint EndPoint { get; }
 		ConnectionState State { get; }
-		double Latency { get; }
+		double Latency { get; set; }
 		Guid ReportedUuid { get; }
 		Guid InternalUuid { get; }
 		bool IsConnectedUuidProvidedSet { get; }
@@ -45,7 +47,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		event Action<Guid> ConnectedUuidProvided;
 
 		void Close();
-		void Connect(SafeArrayHandle bytes, int timeout = 5000);
+		Task Connect(SafeArrayHandle bytes, int timeout = 5000);
 		bool SendMessage(long hash);
 		void SendBytes(SafeArrayHandle bytes);
 		void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback);
@@ -205,7 +207,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		private readonly ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters;
 		private readonly AdaptiveInteger1_4 receiveByteShrinker = new AdaptiveInteger1_4();
 
-		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+		private readonly AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 
 		private readonly AdaptiveInteger1_4 sendByteShrinker = new AdaptiveInteger1_4();
 		protected readonly AsyncLock sendBytesLocker = new AsyncLock();
@@ -319,7 +321,8 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private bool IsDisposing { get; set; }
 
-		public double Latency { get; private set; } = Double.MaxValue;
+		private double latency = Double.MaxValue;
+		public double Latency { get => latency; set => Interlocked.Exchange(ref latency, value);} 
 		
 		// A UUiD we set and use internally
 		public Guid InternalUuid { get; } = Guid.NewGuid();
@@ -381,10 +384,10 @@ namespace Neuralia.Blockchains.Core.Network {
 							return false;
 						}
 
-						TimeSpan latency = new TimeSpan();
-						bool result = this.socket.IsReallyConnected(out latency);
-						if (result)
-							this.Latency = latency.TotalSeconds;
+						// TimeSpan latency = new TimeSpan();
+						bool result = this.socket.IsReallyConnected(out var latency);
+						// if (result)
+							// this.Latency = latency.TotalSeconds;
 						return result;
 
 					}
@@ -465,7 +468,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			GC.SuppressFinalize(this);
 		}
 
-		public void Connect(SafeArrayHandle bytes, int timeout = 5000) {
+		public async Task Connect(SafeArrayHandle bytes, int timeout = 5000) {
 			if(this.IsDisposed || this.IsDisposing) {
 				throw new SocketException((int) SocketError.Shutdown);
 			}
@@ -524,7 +527,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.SendHandshakeVersion();
 
 			// now wait for the handshake to complete
-			this.resetEvent.Wait(TimeSpan.FromSeconds(30));
+			await resetEvent.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
 
 			this.Latency = (DateTime.Now - startHandshake).TotalSeconds;
 			

@@ -506,6 +506,11 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public double IPCrawlerCrawlPeriod { get; set; } = 3.0;
 
 		/// <summary>
+		/// Wait time to loop the process in seconds
+		/// </summary>
+		public int IPCrawlerProcessLoopPeriod { get; set; } = 10;
+		
+		/// <summary>
 		///     how do we delete the files when doing wallet transctions? safe is slower but clears data much better
 		/// </summary>
 		public WalletTransactionDeletionModes WalletTransactionDeletionMode { get; set; } = WalletTransactionDeletionModes.Fast;
@@ -1227,11 +1232,11 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		///     Enable key height checking for the backup key
 		/// </summary>
 		public bool CheckSuperKeyHeight { get; set; } = false;
-		
+
 		/// <summary>
 		/// if EnableKeyHeightChecks is enabled in KeyLog, a bad index will raise a stop warning. If this option is set to true, the index issue will be ignored and the key index will fast forward.
 		/// </summary>
-		public bool EnableKeyHeightIndexFastForwards { get; set; }
+		public bool EnableKeyHeightIndexFastForwards { get; set; } = true;
 	}
 	
 	/// <summary>

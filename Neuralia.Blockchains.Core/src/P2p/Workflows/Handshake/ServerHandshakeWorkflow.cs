@@ -77,7 +77,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			NLog.Default.Verbose("Sending handshake response");
 
-			if(!this.Send(serverHandshake)) {
+			if(!await Send(serverHandshake).ConfigureAwait(false)) {
 				NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
 
 				return false;
@@ -106,7 +106,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.PerformFinalValidation(serverConfirm);
 
 			if(serverConfirm.Message.Status == ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Ok) {
-				if(!this.Send(serverConfirm)) {
+				if(!await Send(serverConfirm).ConfigureAwait(false)) {
 					NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
 
 					return false;
@@ -124,7 +124,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			}
 
 			// we end here.
-			this.SendFinal(serverConfirm);
+			await SendFinal(serverConfirm).ConfigureAwait(false);
 
 			return false;
 		}
@@ -151,7 +151,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				serverHandshake.Message.Status = ServerHandshake<R>.HandshakeStatuses.InvalidNetworkId;
 
 				NLog.Default.Verbose("Sending handshake negative response, invalid network id");
-				this.SendFinal(serverHandshake);
+				await SendFinal(serverHandshake).ConfigureAwait(false);
 
 				return null;
 			}
@@ -166,7 +166,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				NLog.Default.Verbose("We received a connection from ourselves, let's cancel that. Sending handshake negative response; loopback connection");
 
-				this.SendFinal(serverHandshake);
+				await SendFinal(serverHandshake).ConfigureAwait(false);
 
 				return null;
 			}
@@ -179,7 +179,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				NLog.Default.Verbose("We received a connection from an invalid peer; rejecting connection");
 
-				this.SendFinal(serverHandshake);
+				await SendFinal(serverHandshake).ConfigureAwait(false);
 
 				return null;
 			}
@@ -194,7 +194,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				NLog.Default.Verbose("We received a connection that we are already connected to. Sending handshake negative response; existing connection");
 
-				this.SendFinal(serverHandshake);
+				await SendFinal(serverHandshake).ConfigureAwait(false);
 
 				return null;
 			}
@@ -214,7 +214,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 					NLog.Default.Verbose("We received a connection that we are already connected to. closing");
 
-					this.SendFinal(serverHandshake);
+					await SendFinal(serverHandshake).ConfigureAwait(false);
 
 					return null;
 				}
@@ -228,13 +228,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				serverHandshake.Message.Status = ServerHandshake<R>.HandshakeStatuses.TimeOutOfSync;
 
 				NLog.Default.Verbose($"Sending handshake negative response, server time is out of sync with a delta of {DateTimeEx.CurrentTime - this.triggerMessage.Message.localTime.ToUniversalTime()}.");
-				this.SendFinal(serverHandshake);
+				await SendFinal(serverHandshake).ConfigureAwait(false);
 
 				return null;
 			}
 
 			// then we validate the client Scope, make sure its not too old
-			if(!this.TestClientVersion(serverHandshake)) {
+			if(!await TestClientVersion(serverHandshake).ConfigureAwait(false)) {
 				NLog.Default.Verbose("The client has an invalid version");
 				
 				return null;
@@ -249,7 +249,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.ClientConnection.SetGeneralSettings(this.triggerMessage.Message.generalSettings);
 
 			// next thing, lets check if we still have room for more connections
-			if(!this.CheckStaturatedConnections(serverHandshake)) {
+			if(!await CheckStaturatedConnections(serverHandshake).ConfigureAwait(false)) {
 
 				NLog.Default.Verbose("We are saturated. too many connections");
 
@@ -266,7 +266,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				this.ClientConnection.SetChainSettings(chainSetting.Key, chainSetting.Value);
 			}
 			
-			if(!this.CheckSupportedBlockchains(serverHandshake)) {
+			if(!await CheckSupportedBlockchains(serverHandshake).ConfigureAwait(false)) {
 
 				NLog.Default.Verbose("The client does not support the blockchains we want");
 
@@ -324,7 +324,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return true;
 		}
 
-		protected virtual bool CheckStaturatedConnections(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
+		protected virtual async Task<bool> CheckStaturatedConnections(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
 
 			AppSettingsBase.WhitelistedNode whiteList = GlobalSettings.ApplicationSettings.Whitelist.SingleOrDefault(e => e.Ip == this.ClientConnection.Ip);
 
@@ -347,7 +347,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 					NLog.Default.Verbose($"We received a connection {this.ClientConnection.NodeAddressInfo.PeerInfo.PeerType} but we already have too many ({this.networkingService.ConnectionStore.ActiveConnectionsCount} total, {this.networkingService.ConnectionStore.ActiveMobileConnectionsCount} mobile). rejecting nicely... ");
 
-					this.SendFinal(serverHandshake);
+					await SendFinal(serverHandshake).ConfigureAwait(false);
 
 					return false;
 				}
@@ -360,13 +360,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return true;
 		}
 
-		protected virtual bool CheckSupportedBlockchains(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
+		protected virtual async Task<bool> CheckSupportedBlockchains(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
 			if(this.ClientConnection.NoSupportedChains || this.ClientConnection.NoValidChainVersion) {
 				// ok, this is peer is just not usable, we have to disconnect
 				serverHandshake.Message.Status = ServerHandshake<R>.HandshakeStatuses.ChainUnsupported;
 
 				NLog.Default.Verbose("Sending handshake negative response, the peer does not support blockchains that interest us.");
-				this.SendFinal(serverHandshake);
+				await SendFinal(serverHandshake).ConfigureAwait(false);
 
 				return false;
 			}
@@ -374,14 +374,14 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return true;
 		}
 
-		protected virtual bool TestClientVersion(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
+		protected virtual async Task<bool> TestClientVersion(TargettedMessageSet<ServerHandshake<R>, R> serverHandshake) {
 
 			if(!GlobalSettings.BlockchainCompatibilityVersion.IsVersionAcceptable(this.triggerMessage.Message.clientSoftwareVersion)) {
 				// we do not accept this version
 				serverHandshake.Message.Status = ServerHandshake<R>.HandshakeStatuses.ClientVersionRefused;
 
 				NLog.Default.Verbose("Sending handshake negative response");
-				this.SendFinal(serverHandshake);
+				await SendFinal(serverHandshake).ConfigureAwait(false);
 
 				return false;
 			}

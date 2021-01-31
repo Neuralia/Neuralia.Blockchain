@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
@@ -33,19 +34,19 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 			this.ClientId = clientConnection.ClientUuid;
 		}
 
-		protected bool Send(INetworkMessageSet message) {
+		protected Task<bool> Send(INetworkMessageSet message) {
 			return this.SendMessage(this.ClientConnection, message);
 		}
 
-		protected bool SendFinal(INetworkMessageSet message) {
+		protected Task<bool> SendFinal(INetworkMessageSet message) {
 			return this.SendFinalMessage(this.ClientConnection, message);
 		}
 
-		private bool SendBytes(SafeArrayHandle data) {
+		private Task<bool> SendBytes(SafeArrayHandle data) {
 			return this.SendBytes(this.ClientConnection, data);
 		}
 
-		private bool SendFinalBytes(SafeArrayHandle data) {
+		private Task<bool> SendFinalBytes(SafeArrayHandle data) {
 			return this.SendFinalBytes(this.ClientConnection, data);
 		}
 	}

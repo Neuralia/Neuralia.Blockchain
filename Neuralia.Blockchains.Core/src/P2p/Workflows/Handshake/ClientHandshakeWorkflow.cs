@@ -143,7 +143,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			try {
 				this.serverConnection = this.GetNewConnection(this.Endpoint);
 
-				if(!this.SendMessage(this.serverConnection, handshakeTrigger)) {
+				if(!await SendMessage(serverConnection, handshakeTrigger).ConfigureAwait(false)) {
 					NLog.Default.Verbose($"Connection with peer  {this.serverConnection.ScopedAdjustedIp} was terminated");
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.NoAnswer);
 				}
@@ -217,13 +217,13 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				// lets take note of this peer's type
 				this.serverConnection.NodeInfo = serverHandshake.Message.nodeInfo;
 
-				TargettedMessageSet<ClientHandshakeConfirm<R>, R> clientConfirm = this.ProcessServerHandshake(handshakeTrigger, serverHandshake.Message, this.serverConnection);
+				TargettedMessageSet<ClientHandshakeConfirm<R>, R> clientConfirm = await ProcessServerHandshake(handshakeTrigger, serverHandshake.Message, serverConnection).ConfigureAwait(false);
 
 				if(clientConfirm == null) {
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmFailed);
 				}
 
-				if(!this.SendMessage(this.serverConnection, clientConfirm)) {
+				if(!await SendMessage(serverConnection, clientConfirm).ConfigureAwait(false)) {
 					NLog.Default.Verbose($"Connection with peer  {this.serverConnection.ScopedAdjustedIp} was terminated");
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmDropped);
 				}
@@ -245,7 +245,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					}
 					NLog.Default.Verbose($"{this.serverConnection.NodeAddressInfo} successfully added to connection store (async), sending client reply...");
 					
-					bool result = this.SendClientReadyReply(handshakeTrigger, this.serverConnection);
+					bool result = await SendClientReadyReply(handshakeTrigger, serverConnection).ConfigureAwait(false);
 					
 					NLog.Default.Verbose($"{this.serverConnection.NodeAddressInfo} {nameof(this.SendClientReadyReply)} returned {result}");
 
@@ -263,11 +263,11 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			return false;
 		}
 
-		protected virtual bool SendClientReadyReply(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, PeerConnection serverConnection) {
+		protected virtual async Task<bool> SendClientReadyReply(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, PeerConnection serverConnection) {
 			// lets inform the server that we are ready to go forward
 			TargettedMessageSet<ClientReady<R>, R> clientReady = this.MessageFactory.CreateClientReadySet(handshakeTrigger.Header);
 
-			if(!this.SendMessage(serverConnection, clientReady)) {
+			if(!await SendMessage(serverConnection, clientReady).ConfigureAwait(false)) {
 				NLog.Default.Verbose($"Connection with peer  {serverConnection.ScopedAdjustedIp} was terminated");
 
 				return false;
@@ -296,7 +296,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			
 		}
 
-		protected virtual TargettedMessageSet<ClientHandshakeConfirm<R>, R> ProcessServerHandshake(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, ServerHandshake<R> serverHandshake, PeerConnection peerConnectionn) {
+		protected virtual async Task<TargettedMessageSet<ClientHandshakeConfirm<R>, R>> ProcessServerHandshake(TriggerMessageSet<HandshakeTrigger<R>, R> handshakeTrigger, ServerHandshake<R> serverHandshake, PeerConnection peerConnectionn) {
 
 			NLog.Default.Verbose("Sending client confirm response");
 			TargettedMessageSet<ClientHandshakeConfirm<R>, R> clientConfirm = this.MessageFactory.CreateClientConfirmSet(handshakeTrigger.Header);
@@ -308,7 +308,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					clientConfirm.Message.Status = ServerHandshake<R>.HandshakeStatuses.TimeOutOfSync;
 
 					NLog.Default.Verbose($"Sending handshake negative response, server time is out of sync with a delta of {DateTimeEx.CurrentTime - serverHandshake.localTime.ToUniversalTime()}.");
-					this.SendFinalMessage(peerConnectionn, clientConfirm);
+					await SendFinalMessage(peerConnectionn, clientConfirm).ConfigureAwait(false);
 					
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.TimeOutOfSync);
 				}
@@ -320,7 +320,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					clientConfirm.Message.Status = ServerHandshake<R>.HandshakeStatuses.ClientVersionRefused;
 
 					NLog.Default.Verbose("Sending handshake negative response, the peer version is unacceptable");
-					this.SendFinalMessage(peerConnectionn, clientConfirm);
+					await SendFinalMessage(peerConnectionn, clientConfirm).ConfigureAwait(false);
 
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientVersionRefused);
 				}
@@ -345,7 +345,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					clientConfirm.Message.Status = ServerHandshake<R>.HandshakeStatuses.ClientVersionRefused;
 
 					NLog.Default.Verbose("Sending handshake negative response, the peer version is unacceptable");
-					this.SendFinalMessage(peerConnectionn, clientConfirm);
+					await SendFinalMessage(peerConnectionn, clientConfirm).ConfigureAwait(false);
 
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientVersionRefused);
 				}

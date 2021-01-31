@@ -508,51 +508,52 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 		}
 
-		protected Task<bool> ContactHubsWeb() {
+		protected async Task<bool> ContactHubsWeb() {
 			RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
-			return Repeater.RepeatAsync(async () => {
-				Dictionary<string, object> parameters = new Dictionary<string, object>();
+			Dictionary<string, object> parameters = new Dictionary<string, object>();
 
-				using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
-					List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, true, true, false);
-					NodeAddressInfoList nodeAddressInfoList = new NodeAddressInfoList(currentAvailableNodes);
+			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
+				List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, true, true, false);
+				NodeAddressInfoList nodeAddressInfoList = new NodeAddressInfoList(currentAvailableNodes);
 
-					GlobalSettings.Instance.NodeInfo.Dehydrate(dehydrator);
-					nodeAddressInfoList.Dehydrate(dehydrator);
+				GlobalSettings.Instance.NodeInfo.Dehydrate(dehydrator);
+				nodeAddressInfoList.Dehydrate(dehydrator);
 
-					SafeArrayHandle bytes = dehydrator.ToArray();
-					parameters.Add("data", bytes.Entry.ToBase64());
-					bytes.Return();
+				using SafeArrayHandle bytes = dehydrator.ToArray();
+				parameters.Add("data", bytes.Entry.ToBase64());
+			}
+			parameters.Add("networkid", GlobalSettings.Instance.NetworkId);
+
+			var restParameterSet = new RestUtility.RestParameterSet<NodeAddressInfoList>();
+			restParameterSet.parameters = parameters;
+			restParameterSet.transform = webResult => {
+				using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(ByteArray.FromBase64(webResult))) {
+					NodeAddressInfoList infoList = new NodeAddressInfoList();
+					
+					Guid ip = rehydrator.ReadGuid();
+					var ipAddress = IPUtils.GuidToIP(ip);
+					
+					this.connectionStore.AddPeerReportedPublicIp(ipAddress, ConnectionStore.PublicIpSource.Hub);
+					
+					infoList.Rehydrate(rehydrator);
+
+					return infoList;
 				}
+			};
+				
+			(bool sent, NodeAddressInfoList infoListResult) = await restUtility.PerformSecurePost(GlobalSettings.ApplicationSettings.HubsWebAddress, "hub/query", restParameterSet).ConfigureAwait(false);
 
-				IRestResponse result = await restUtility.Post(GlobalSettings.ApplicationSettings.HubsWebAddress, "hub/query", parameters).ConfigureAwait(false);
+			if(sent) {
+				NLog.Default.Verbose($"adding {infoListResult.Nodes.Count} connections received from hubs");
+				this.connectionStore.AddAvailablePeerNodes(infoListResult, true);
+				
+				this.nextHubContact = DateTimeEx.CurrentTime.AddMinutes(3);
 
-				// ok, check the result
-				if(result.StatusCode == HttpStatusCode.OK) {
-					// ok, all good
+				return true;
+			}
 
-					using(IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(ByteArray.FromBase64(result.Content))) {
-						NodeAddressInfoList infoList = new NodeAddressInfoList();
-						
-						Guid ip = rehydrator.ReadGuid();
-						var ipAddress = IPUtils.GuidToIP(ip);
-						
-						this.connectionStore.AddPeerReportedPublicIp(ipAddress, ConnectionStore.PublicIpSource.Hub);
-						
-						infoList.Rehydrate(rehydrator);
-
-						NLog.Default.Verbose($"adding {infoList.Nodes.Count} connections received from hubs");
-						this.connectionStore.AddAvailablePeerNodes(infoList, true);
-					}
-
-					this.nextHubContact = DateTimeEx.CurrentTime.AddMinutes(3);
-
-					return true;
-				}
-
-				throw new ApplicationException("Failed to query web hubs");
-			});
+			throw new ApplicationException("Failed to query web hubs");
 		}
 
 		protected async Task ContactHubsGossip() {

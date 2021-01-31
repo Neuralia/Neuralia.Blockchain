@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 				, NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {this.ClientConnection.NodeAddressInfo}.ToList()
 				, true, 20));
 
-			if(!this.Send(serverPeerListReply)) {
+			if(!await Send(serverPeerListReply).ConfigureAwait(false)) {
 				NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
 
 				return;

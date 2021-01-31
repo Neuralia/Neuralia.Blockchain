@@ -133,7 +133,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.Providers {
 			return this.xmss.Verify(signature.Entry, message.Entry, publicKey.Entry, xmssSignaturePathCache);
 		}
 		
-		public override SafeArrayHandle SetPrivateKeyIndex(int index, SafeArrayHandle privateKey) {
+		public override SafeArrayHandle SetPrivateKeyIndex(long index, SafeArrayHandle privateKey) {
 			using XMSSPrivateKey loadedPrivateKey = this.LoadPrivateKey(privateKey);
 
 			loadedPrivateKey.Index = index;

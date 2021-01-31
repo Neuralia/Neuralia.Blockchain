@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Serialization;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Messages;
@@ -40,19 +41,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			}
 		}
 
-		protected bool Send(INetworkMessageSet message) {
+		protected Task<bool> Send(INetworkMessageSet message) {
 			return this.SendMessage(this.PeerConnection, message);
 		}
 
-		protected bool SendFinal(INetworkMessageSet message) {
+		protected Task<bool> SendFinal(INetworkMessageSet message) {
 			return this.SendFinalMessage(this.PeerConnection, message);
 		}
 
-		private bool SendBytes(SafeArrayHandle data) {
+		private Task<bool> SendBytes(SafeArrayHandle data) {
 			return this.SendBytes(this.PeerConnection, data);
 		}
 
-		private bool SendFinalBytes(SafeArrayHandle data) {
+		private Task<bool> SendFinalBytes(SafeArrayHandle data) {
 			return this.SendFinalBytes(this.PeerConnection, data);
 		}
 	}

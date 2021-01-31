@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx;
 
 namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
@@ -34,7 +35,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		protected readonly bool isServer;
 
-		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
+		private readonly AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
 		protected readonly AsyncLock sendBytesLocker = new AsyncLock();
 
 		public bool HasConnected { get; private set; }

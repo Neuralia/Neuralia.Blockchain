@@ -313,7 +313,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				// ok,l first lets compare the hashes
 				IBlockchainMessage message = messageEnvelope.Contents.RehydratedEvent;
 
-				TimeSpan acceptableRange = TimeSpan.FromHours(1);
+				TimeSpan acceptableRange = TimeSpan.FromHours(2);
 
 				if(messageEnvelope is ISignedMessageEnvelope signedMessageEnvelope) {
 					

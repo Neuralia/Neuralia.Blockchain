@@ -88,7 +88,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 				}
 			}
 		}
-
+		
 		public event Func<long, Task> Disposed;
 
 		public void ValidateSessionContext(IWalletSerializationTransaction walletSerializationTransaction) {

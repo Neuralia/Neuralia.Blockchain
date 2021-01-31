@@ -364,6 +364,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<IWalletJointAccountSnapshot> GetJointAccountSnapshot(AccountId accountId, LockContext lockContext);
 		Task<(string path, string passphrase, string salt, string nonce, int iterations)> BackupWallet(WalletProvider.BackupTypes backupType, LockContext lockContext);
 		Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext);
+		Task<bool> AttemptWalletRescue(LockContext lockContext);
 		Task UpdateWalletChainStateSyncStatus(string accountCode, long BlockId, WalletAccountChainState.BlockSyncStatuses blockSyncStatus, LockContext lockContext);
 		Task<SafeArrayHandle> SignTransaction(SafeArrayHandle transactionHash, string keyName, LockContext lockContext, bool allowPassKeyLimit = false);
 		Task<SafeArrayHandle> SignTransactionXmss(SafeArrayHandle transactionHash, IXmssWalletKey key, LockContext lockContext, bool allowPassKeyLimit = false);
@@ -1151,10 +1152,29 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (backupInfo.Path, backupInfo.Passphrase, backupInfo.Salt, backupInfo.Nonce, backupInfo.Iterations);
 		}
 
+		/// <summary>
+		/// attempt a full restore of a wallet from a backup
+		/// </summary>
+		/// <param name="backupsPath"></param>
+		/// <param name="passphrase"></param>
+		/// <param name="salt"></param>
+		/// <param name="nonce"></param>
+		/// <param name="iterations"></param>
+		/// <param name="lockContext"></param>
+		/// <returns></returns>
 		public Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext) {
 			
 			var walletBackupProcessor = this.CreateWalletBackupProcessor();
 			return walletBackupProcessor.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lockContext);
+		}
+
+		/// <summary>
+		/// attempt a rescue of a corrupted wallet from a narball structure
+		/// </summary>
+		/// <returns></returns>
+		public Task<bool> AttemptWalletRescue(LockContext lockContext) {
+			
+			return this.SerialisationFal.RescueFromNarballStructure();
 		}
 
 		/// <summary>
@@ -2759,7 +2779,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			if(key.KeyAddress.KeyUseIndex.KeyUseSequenceId < keyChainState.LatestBlockSyncIdKeyUse?.KeyUseSequenceId) {
-				throw new ApplicationException("The key sequence is lower than the lasy synced block value");
+				throw new ApplicationException("The key sequence is lower than the last synced block value");
 			}
 
 			if(key is IXmssWalletKey xmssWalletKey) {
@@ -2769,7 +2789,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				if(keyChainState.LatestBlockSyncIdKeyUse.IsSet && key.KeyAddress.KeyUseIndex.KeyUseIndexSet < keyChainState.LatestBlockSyncIdKeyUse) {
-					throw new ApplicationException("The key sequence is lower than the lasy synced block value");
+					throw new ApplicationException("The key sequence is lower than the last synced block value");
 				}
 
 				keyChainState.LocalIdKeyUse.KeyUseIndex = key.KeyAddress.KeyUseIndex.KeyUseIndexSet.KeyUseIndex;
@@ -4884,9 +4904,15 @@ clean above
 						throw new ReportableException(ReportableErrorTypes.Instance.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER_THAN_DETECTED, ReportableException.PriorityLevels.Warning, ReportableException.ReportLevels.Modal, this.centralCoordinator.ChainId, this.centralCoordinator.ChainName, message, new string[] {key.Name, key.Ordinal.ToString()});
 					}
 					
-					this.CentralCoordinator.Log.Warning(message + " As per configuration, we will still proceed.");
+					// ok, we fast forward the key
+					using(XMSSProvider provider = new XMSSProvider(key.HashType, key.BackupHashType, key.TreeHeight, this.XmssThreadMode, key.NoncesExponent)) {
+
+						provider.Initialize();
+
+						key.PrivateKey.Entry = provider.SetPrivateKeyIndex(lastSyncedIdKeyUse.KeyUseIndex, key.PrivateKey).Entry;
+					}
 					
-					// we can keep going
+					this.CentralCoordinator.Log.Warning(message + " As per configuration, we will still proceed.");
 				}
 			}
 

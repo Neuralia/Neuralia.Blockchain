@@ -71,6 +71,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 		protected readonly ICentralCoordinator centralCoordinator;
 		public ICentralCoordinator CentralCoordinator => this.centralCoordinator;
+
+		public string GetBackupPath() {
+			return Path.Combine(this.walletsPath, BACKUP_PATH_NAME);
+		}
 		
 		public WalletSerializationTransactionalLayer(ICentralCoordinator centralCoordinator, string walletsPath, List<(string name, FilesystemTypes type)> exclusions, FileSystemWrapper fileSystem) {
 			// start with a physical filesystem
@@ -297,7 +301,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			// copy directory structure
 			DirectoryEntry activeDirectoryInfo = this.activeFileSystem.GetDirectoryEntryUnconditional(this.walletsPath);
 			DirectoryEntry physicalDirectoryInfo = this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath);
-			string backupPath = Path.Combine(this.walletsPath, BACKUP_PATH_NAME);
+			string backupPath = this.GetBackupPath();
 
 			List<FileOperationInfo> fileDeltas = new List<FileOperationInfo>();
 
@@ -552,7 +556,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 						}
 					}
 				}
-
+				
 				if(missingFileDeltas.Any()) {
 					this.RestoreFromBackup(backupPath, missingFileDeltas);
 				}
@@ -613,6 +617,42 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 			return false;
 		}
+
+		/// <summary>
+		/// this allows us to rescue a wallet from an existing narball structure
+		/// </summary>
+		/// <param name="backupPath"></param>
+		/// <returns></returns>
+		public async Task<bool> RescueFromNarballStructure() {
+
+			string backupPath = this.GetBackupPath();
+
+			if(Narballer.PackageFilesValid(backupPath, this.physicalFileSystem)) {
+
+				// ok, lets restore from the zip
+
+				try {
+					await this.RepeatAsync(async () => {
+						
+						Narballer nar = new Narballer(this.walletsPath, this.physicalFileSystem);
+
+						nar.Restore(this.walletsPath, backupPath, null, false);
+					}).ConfigureAwait(false);
+
+					// clear remaining zombie directories
+					await this.DeleteInnexistentDirectories(this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath)).ConfigureAwait(false);
+
+					return true;
+				} catch {
+					// nothing to do, its ok
+					
+				}
+			}
+
+			return false;
+		}
+
+
 
 		/// <summary>
 		///     delete directories that may be remaining in case of a rollback
@@ -1021,7 +1061,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		public async Task OpenWriteAsync(string filename, SafeArrayHandle bytes) {
+		public Task OpenWriteAsync(string filename, SafeArrayHandle bytes) {
+			return OpenWriteAsync(filename, new []{bytes});
+		}
+
+		public async Task OpenWriteAsync(string filename, SafeArrayHandle[] bytes) {
 			// complete the path if it is relative
 			string path = this.CompletePath(filename);
 
