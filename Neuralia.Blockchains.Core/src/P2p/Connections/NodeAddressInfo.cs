@@ -203,7 +203,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		public static bool IsAddressIpV4(IPAddress address) {
-			return (address.AddressFamily == AddressFamily.InterNetwork) || IsAddressIpv4MappedToIpV6(address);
+			return (address.AddressFamily == AddressFamily.InterNetwork);
+		}
+
+		public static bool IsAddressIpV4Analog(IPAddress address) {
+			return IsAddressIpV4(address) || IsAddressIpv4MappedToIpV6(address);
 		}
 
 		public static bool IsAddressIpv4MappedToIpV6(IPAddress address) {
@@ -216,6 +220,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 			return remoteEndPoint.IPMode == IPMode.IPv6;
+		}
+		
+		public static bool IsAddressIpV4Analog(NetworkEndPoint remoteEndPoint) {
+			
+			return IsAddressIpV4(remoteEndPoint) || IsAddressIpv4MappedToIpV6(remoteEndPoint);
 		}
 
 		public static bool IsAddressIpV4(NetworkEndPoint remoteEndPoint) {

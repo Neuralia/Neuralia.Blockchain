@@ -202,7 +202,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.InvalidNetworkId);	
 					case ServerHandshake<R>.HandshakeStatuses.TimeOutOfSync:
 						NLog.Default.Verbose("This peer's current time seems out of sync.");
-						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.InvalidNetworkId);
+						throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.TimeOutOfSync);
 
 					case ServerHandshake<R>.HandshakeStatuses.ChainUnsupported:
 						NLog.Default.Verbose("This peer's chain is not supported.");

@@ -69,6 +69,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		private DateTime? nextAction;
 		private DateTime? nextSyncProxiesAction;
+		private DateTime? nextDiscoverLocalNodesAction;
 
 		public ConnectionsManagerIPCrawler(ServiceSet<R> serviceSet) : base(1000 * GlobalSettings.ApplicationSettings.IPCrawlerProcessLoopPeriod) {
 			this.networkingService = (INetworkingService<R>) DIService.Instance.GetService<INetworkingService>();
@@ -84,7 +85,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			this.RoutedTaskReceiver.TaskReceived += () => {
 			};
 			
-			this.nextSyncProxiesAction = this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerStartupDelay);
+			this.nextDiscoverLocalNodesAction = this.nextSyncProxiesAction = this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerStartupDelay);
 
 			this.ReceiveTask(new SimpleTask(async s => {
 				await this.networkingService.ServiceSet.PortMappingService.DiscoverAndSetup().ConfigureAwait(false);
@@ -106,6 +107,14 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		}
 
+		public bool IsPublicAndConnectable()
+		{
+			if (this.connectionStore.PublicIpMode != IPMode.Unknown)
+				throw new Exception($"nameof(IsPublicAndConnectable)");
+			
+			return this.connectionStore.IsConnectable;
+		}
+		
 		protected virtual IPCrawler CreateIPCrawler() {
 			return new IPCrawler(GlobalSettings.ApplicationSettings.AveragePeerCount
 				, GlobalSettings.ApplicationSettings.MaxPeerCount
@@ -116,7 +125,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				, GlobalSettings.ApplicationSettings.PeerIPsRequestPeriod
 				, GlobalSettings.ApplicationSettings.PeerReconnectionPeriod
 				, 24 * 60 * 60
-				, GlobalSettings.ApplicationSettings.MaxConnectionRequestPerCrawl);
+				, GlobalSettings.ApplicationSettings.MaxConnectionRequestPerCrawl
+				, GlobalSettings.ApplicationSettings.LocalNodesDiscoveryPorts
+				, GlobalSettings.ApplicationSettings.LocalNodesDiscoveryTimeout
+				, Convert.ToInt32(GlobalSettings.ApplicationSettings.LocalNodesDiscoveryMode)
+				, GlobalSettings.ApplicationSettings.MaxLatency);
 		}
 
 		private void HandleNewConnection(PeerConnection connection) {
@@ -386,115 +399,13 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			return base.DisposeAllAsync();
 		}
 
-		static void DiscoverPeers()
-	    {
-        
-	        int wantedPort = 33888;    //this is the port you want
-	        
-	        byte[] msg = Encoding.ASCII.GetBytes("type msg here");
-	        
-	        
-	        foreach (NetworkInterface netwIntrf in NetworkInterface.GetAllNetworkInterfaces())
-	        {
-	        
-	            Console.WriteLine("Interface name: " + netwIntrf.Name);
-	        
-	            Console.WriteLine("Inteface working: {0}", netwIntrf.OperationalStatus == OperationalStatus.Up);
-	        
-	            //if the current interface doesn't have an IP, skip it
-	            if (! (netwIntrf.GetIPProperties().GatewayAddresses.Count > 0))
-	            {
-	                continue;
-	            }
 
-	            foreach (var gateway in netwIntrf.GetIPProperties()?.GatewayAddresses)
-	            {
-		            
-
-		            var gatewayIp = netwIntrf.GetIPProperties()?.GatewayAddresses.FirstOrDefault().Address;
-	            
-		        
-		            //Console.WriteLine("IP Address(es):");
-		        
-		            //get current IP Address(es)
-		            foreach (UnicastIPAddressInformation uniIpInfo in netwIntrf.GetIPProperties().UnicastAddresses)
-		            {
-			            var localIp = uniIpInfo.Address;
-						Console.WriteLine($"Gateway is: {gatewayIp}");
-						
-		                //get the subnet mask and the IP address as bytes
-		                byte[] subnetMask = uniIpInfo.IPv4Mask.GetAddressBytes();
-		                byte[] ipAddr = localIp.GetAddressBytes();
-		                
-		                // we reverse the byte-array if we are dealing with littl endian.
-		                if (BitConverter.IsLittleEndian)
-		                {
-		                    Array.Reverse(subnetMask);
-		                    Array.Reverse(ipAddr);
-		                }
-		        
-		                //we convert the subnet mask as uint (just for didactic purposes (to check everything is ok now and next - use thecalculator in programmer mode)
-		                uint maskAsInt = BitConverter.ToUInt32(subnetMask, 0);
-		                //we convert the ip addres as uint (just for didactic purposes (to check everything is ok now and next - use thecalculator in programmer mode)
-		                uint ipAsInt = BitConverter.ToUInt32(ipAddr, 0);
-		                //we negate the subnet to determine the maximum number of host possible in this subnet
-		                uint validHostsEndingMax = ~BitConverter.ToUInt32(subnetMask, 0);
-		                //we convert the start of the ip addres as uint (the part that is fixed wrt the subnet mask - from here we calculate each new address by incrementing with 1 and converting to byte[] afterwards 
-		                uint validHostsStart = BitConverter.ToUInt32(ipAddr, 0) & BitConverter.ToUInt32(subnetMask, 0);
-		        
-		                //we increment the startIp to the number of maximum valid hosts in this subnet and for each we check the intended port (refactoring needed)
-		                for (uint i = 1; i <= validHostsEndingMax; i++)
-		                {
-		                    uint host = validHostsStart + i;
-		                    //byte[] hostAsBytes = BitConverter.GetBytes(host);
-		                    byte[] hostBytes = BitConverter.GetBytes(host);
-		                    if (BitConverter.IsLittleEndian)
-		                    {
-		                        Array.Reverse(hostBytes);
-		                    }
-
-		                    var ip = new IPAddress(hostBytes);
-		                    if(ip.Equals(localIp) || ip.Equals(gatewayIp))
-								continue;
-		                    try
-		                    {
-		                        //try to connect
-		                        // Connect using a timeout (5 seconds)
-								
-		                        Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-		                        
-		                        IAsyncResult result = sock.BeginConnect( ip, wantedPort, null, null );
-
-		                        bool success = result.AsyncWaitHandle.WaitOne( 250, true );
-
-		                        if (sock.Connected)  // if succesful => something is listening on this port
-		                        {
-			                        sock.EndConnect( result );
-		                            Console.WriteLine("\tIt worked at " + ip);
-		                        }
-		                        // else
-			                       //  Console.WriteLine("\tIt DIDN't worked at " + ipCandidate);
-		                        
-		                        sock.Close();
-		                        
-		                    }
-		                    catch (SocketException ex)
-		                    { 
-			                    Console.WriteLine(ex.Message);
-		                    }
-		                }
-	            }
-	            
-	            }
-	            Console.ReadLine();
-	        }
-	    }
 		protected override async Task ProcessLoop(LockContext lockContext) {
 			try {
 
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ProcessLoop)}, acting next at {this.nextAction}.");
 
-				// DiscoverPeers();
+
 				
 				this.CheckShouldCancel();
 
@@ -507,7 +418,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					this.Crawler.QueueDynamicBlacklist(await this.SyncProxies().ConfigureAwait(false));
 					this.nextSyncProxiesAction = DateTimeEx.CurrentTime.AddSeconds(60); //FIXME: AppSettings parameter?
 				}
+				
 
+				
 				if(!this.ShouldAct(ref this.nextAction))
 					return;
 
@@ -538,7 +451,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				//at this moment, we know the ip crawler's nodes are in synch with connectionStore's nodes, now is a good time to filter them out
 				this.Crawler.SyncFilteredNodes(this.GetFilteredNodes(), this);
 
-				this.Crawler.Crawl(this, DateTimeEx.CurrentTime);
+				await this.Crawler.Crawl(this, DateTimeEx.CurrentTime).ConfigureAwait(false);
 
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} pending tasks: ");
 

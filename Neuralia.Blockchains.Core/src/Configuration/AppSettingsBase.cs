@@ -343,6 +343,8 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <returns>Returns the port number to use. Default value: <see cref="GlobalsService.DEFAULT_PORT"/></returns>
 		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
 		
+
+		
 		/// <summary>
 		/// Gets or sets the port on which the validator will listen on. 
 		/// </summary>
@@ -398,6 +400,39 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public List<FullNode> LocalNodes { get; set; } = new ();
 
+		/// <summary>
+		/// The list of port to try while discovering local nodes. Use an empty list to deactivate local nodes discovery. 
+		/// </summary>
+		public List<int> LocalNodesDiscoveryPorts { get; set; } = new(){ /*GlobalsService.DEFAULT_PORT*/ }; //TODO enable by default
+		
+		/// <summary>
+		/// How are you going to use the socket to send and receive data?
+		/// </summary>
+		public enum LocalNodesMode {
+			/// <summary>
+			/// Automatically discover our mode (need to connect with peers)
+			/// </summary>
+			Auto,
+			/// <summary>
+			/// Force mode to slave, only local peers will be accepted
+			/// </summary>
+			Slave,
+			/// <summary>
+			/// Force mode to master, local and remote peers will be accepted
+			/// </summary>
+			Master
+		}
+		
+		/// <summary>
+		/// The list of port to try while discovering local nodes. Use an empty list to deactivate local nodes discovery. 
+		/// </summary>
+		public LocalNodesMode LocalNodesDiscoveryMode { get; set; } = LocalNodesMode.Auto;
+		/// <summary>
+		/// To try to discover nodes on your local network, we try to open a socket at each ports listed in LocalNodesDiscoveryPorts.
+		/// This property controls how long (in seconds) we wait for an answer before giving up.
+		/// </summary>
+		public double LocalNodesDiscoveryTimeout { get; set; } = 0.1;
+		
 		/// <summary>
 		/// 
 		/// </summary>
@@ -509,6 +544,8 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// Wait time to loop the process in seconds
 		/// </summary>
 		public int IPCrawlerProcessLoopPeriod { get; set; } = 10;
+		
+		public double MaxLatency { get; set; } = 2.0;
 		
 		/// <summary>
 		///     how do we delete the files when doing wallet transctions? safe is slower but clears data much better
@@ -784,15 +821,14 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public string WebSyncUrl { get; set; } = "http://dev-sync.neuralium.com";
 #else
 		public string HashUrl { get; set; } = "https://hash.neuralium.com";
+		
 	    public string WebElectionsRegistrationUrl { get; set; } = "https://election-registration.neuralium.com";
-	    
 	    public string WebIpv4ElectionsRegistrationUrl { get; set; } = "https://ipv4-election-registration.neuralium.com";
 	    public string WebIpv6ElectionsRegistrationUrl { get; set; } = "https://ipv6-election-registration.neuralium.com";
 	    
 		public string WebElectionsRecordsUrl { get; set; } = "https://election-records.neuralium.com";
 		
 		public string WebElectionsStatusUrl { get; set; } = "https://election-status.neuralium.com";
-		
 		public string WebIpv4ElectionsStatusUrl { get; set; } = "https://ipv4-election-status.neuralium.com";
 		public string WebIpv6ElectionsStatusUrl { get; set; } = "https://ipv6-election-status.neuralium.com";
 		

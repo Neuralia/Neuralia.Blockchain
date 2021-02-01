@@ -234,7 +234,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						
 					});
 				} else {
-					if(NodeAddressInfo.IsAddressIpV4(endpoint.Address)) {
+					if(NodeAddressInfo.IsAddressIpV4Analog(endpoint.Address)) {
 						socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 					} else {
 						if(!Socket.OSSupportsIPv6) {
@@ -307,7 +307,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					}, TaskCreationOptions.None);
 				}
 
-				return await task.HandleTimeout(timeout).ConfigureAwait(false);
+				return (await task.HandleTimeout(timeout).ConfigureAwait(false)).result;
 
 			} catch(Exception ex) {
 				// do nothing, we got our answer

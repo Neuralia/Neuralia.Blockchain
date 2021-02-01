@@ -273,7 +273,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						while(DateTime.Now <= timeout) {
 
-							if(await ChecSyncShouldStop(chainSyncMessageFactory).ConfigureAwait(false)) {
+							if(await this.CheckSyncShouldStop(chainSyncMessageFactory).ConfigureAwait(false)) {
 								return;
 							}
 
@@ -301,7 +301,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								break;
 							}
 
-							if(await ChecSyncShouldStop(chainSyncMessageFactory).ConfigureAwait(false)) {
+							if(await this.CheckSyncShouldStop(chainSyncMessageFactory).ConfigureAwait(false)) {
 								return;
 							}
 
@@ -601,7 +601,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// </summary>
 		/// <param name="chainSyncMessageFactory"></param>
 		/// <returns></returns>
-		protected async Task<bool> ChecSyncShouldStop(IChainSyncMessageFactory chainSyncMessageFactory) {
+		protected async Task<bool> CheckSyncShouldStop(IChainSyncMessageFactory chainSyncMessageFactory) {
 			if(this.CheckShouldStop()) {
 
 				BlockchainTargettedMessageSet<CLOSE_CONNECTION> closeMessage = (BlockchainTargettedMessageSet<CLOSE_CONNECTION>) chainSyncMessageFactory.CreateSyncWorkflowFinishSyncSet(this.triggerMessage.BaseHeader);
@@ -612,7 +612,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					// lets be nice, lets inform them that we will close the connection for this workflow
 					await Send(closeMessage).ConfigureAwait(false);
 				} catch(Exception ex) {
-					this.CentralCoordinator.Log.Error(ex, "Failed to close peer connection but workflow is over.");
+					this.CentralCoordinator.Log.Debug(ex, "Failed to close peer connection but workflow is over.");
 				}
 
 				return true;

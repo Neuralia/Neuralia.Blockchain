@@ -836,24 +836,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				this.CentralCoordinator.Log.Error(ex, $"Failed to set static ip from configuration. Value provided was {this.ChainConfiguration.ServerMiningVerificationStaticIp}.");
 			}
 
-			if(!addressSet) {
+			if(!addressSet && MiningTierUtils.IsFirstOrSecondTier(this.MiningTier)) {
+				
 				bool ipv4Set = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4 != null;
 				bool ipv6Set = this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv6 != null;
-
-				if(MiningTierUtils.IsFirstOrSecondTier(this.MiningTier)) {
-					if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
-						ipv6Set = false;
-					} else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
-						ipv4Set = false;
-					}
+				if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+					ipv6Set = false;
+				} else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+					ipv4Set = false;
 				}
-
+				
 				if(ipv4Set) {
 					info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv4);
 				} else if(ipv6Set) {
 					info.Ip = IPUtils.IPtoGuid(this.centralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PublicIpv6);
 				} else {
-					throw new ApplicationException("out public IP is not set!");
+					throw new ApplicationException("our public IP is not set!");
 				}
 			}
 
@@ -1386,6 +1384,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			BlockElectionDistillate blockElectionDistillate = this.CreateBlockElectionContext();
 
+			blockElectionDistillate.MiningAccountId = miningAccountId; 
 			blockElectionDistillate.electionBockId = currentBlock.BlockId.Value;
 			blockElectionDistillate.blockHash.Entry = currentBlock.Hash.Entry;
 			blockElectionDistillate.blockType = currentBlock.Version;

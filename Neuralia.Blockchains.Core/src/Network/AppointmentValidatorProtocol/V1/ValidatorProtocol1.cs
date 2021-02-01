@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			operation.ValidatorCode = validatorCode;
 			operation.Index = index;
 
-			using ITcpValidatorConnection connection = ValidatorProtocol1Tools.Connect(operation, this.blockchainType.Value, address, port);
+			using ITcpValidatorConnection connection = await ValidatorProtocol1Tools.Connect(operation, blockchainType.Value, address, port).ConfigureAwait(false);
 
 			Task<CodeTranslationResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<CodeTranslationResponseOperation>(connection, default);
 			using CancellationTokenSource tokenSource = new();
@@ -75,7 +75,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			operation.SecretCode = code;
 			operation.Index = index;
 
-			using ITcpValidatorConnection connection = ValidatorProtocol1Tools.Connect(operation, this.blockchainType.Value, address, port);
+			using ITcpValidatorConnection connection = await ValidatorProtocol1Tools.Connect(operation, blockchainType.Value, address, port).ConfigureAwait(false);
 
 			Task<TriggerSessionResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<TriggerSessionResponseOperation>(connection, default);
 			using CancellationTokenSource tokenSource = new();
@@ -101,7 +101,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 				operation.Results.Add(key, value);
 			}
 
-			using ITcpValidatorConnection connection = ValidatorProtocol1Tools.Connect(operation, this.blockchainType.Value, address, port);
+			using ITcpValidatorConnection connection = await ValidatorProtocol1Tools.Connect(operation, blockchainType.Value, address, port).ConfigureAwait(false);
 
 			Task<PuzzleCompletedResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<PuzzleCompletedResponseOperation>(connection, default);
 			using CancellationTokenSource tokenSource = new();
@@ -124,7 +124,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			operation.Index = index;
 			operation.THSResults.Entry = thsResults?.Entry;
 
-			using ITcpValidatorConnection connection = ValidatorProtocol1Tools.Connect(operation, this.blockchainType.Value, address, port);
+			using ITcpValidatorConnection connection = await ValidatorProtocol1Tools.Connect(operation, blockchainType.Value, address, port).ConfigureAwait(false);
 
 			Task<THSCompletedResponseOperation> task = ValidatorProtocol1Tools.ReceiveOperation<THSCompletedResponseOperation>(connection, default);
 			using CancellationTokenSource tokenSource = new();

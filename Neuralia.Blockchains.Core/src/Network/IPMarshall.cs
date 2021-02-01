@@ -32,7 +32,8 @@ namespace Neuralia.Blockchains.Core.Network {
 			InvalidGossip,
 			GossipRateLimit,
 			CantValidateGossip,
-			GossipEmbeddedKeyValid
+			GossipEmbeddedKeyValid,
+			LatencyTooHigh
 		}
 
 		public const string TAG = "[" + nameof(IPMarshall) + "]";
@@ -41,12 +42,13 @@ namespace Neuralia.Blockchains.Core.Network {
 		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsGreylist = new();
 		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsBlacklist = new();
 		
+		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> watchlist = new();
+		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> greylist = new();
 		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> blacklist = new();
 		private readonly int blacklistStrikes = 5;
 		private readonly TimeSpan cleanupPeriod = TimeSpan.FromSeconds(20);
 		private readonly TimeSpan mutexTimeout = TimeSpan.FromSeconds(30);
 		private readonly int connectionRefusalStrikes = 100;
-		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> greylist = new();
 
 		private readonly
 			ConcurrentDictionary<IPAddress, (bool whitelisted, AppSettingsBase.WhitelistedNode.AcceptanceTypes
@@ -57,7 +59,6 @@ namespace Neuralia.Blockchains.Core.Network {
 		private readonly int rateLimitGraceStrikes;
 		private readonly int rateLimitStrikes = 5;
 		private readonly TimeSpan ratLimitTimePenalty = TimeSpan.FromMinutes(5);
-		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> watchlist = new();
 
 		private DateTime NextCleanCheck = DateTimeEx.CurrentTime;
 
@@ -66,6 +67,14 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public static ReaderWriterLock GocMutex(object obj)
 		{
+			if (obj == null)
+			{
+				string message = $"{TAG} lock object null, this is unexpected...";
+				NLog.LoggingBatcher.Error(message);
+				NLog.LoggingBatcher.Verbose($"{TAG} here is the stack trace {Environment.StackTrace}");
+				throw new ArgumentNullException(message);
+			}
+			
 			if (mutexes.TryGetValue(obj, out var mutex))
 			{
 				return mutex;
@@ -82,6 +91,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		public static T LockRead<T>(object lockObject, Func<ReaderWriterLock, T> f, TimeSpan timeout)
 		{
 			var mutex = GocMutex(lockObject);
+
 			try
 			{
 				mutex.AcquireReaderLock(timeout);
@@ -105,6 +115,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		public T LockWrite<T>(object lockObject, Func<ReaderWriterLock, T> f)
 		{
+
 			return LockWrite(lockObject, f, this.mutexTimeout);
 		}
 
@@ -143,7 +154,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			if (this.IsWhiteList(ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType))
 			{
-				NLog.LoggingBatcher.Information($"{TAG} ignoring acceptanceType", NLog.LoggerTypes.Connections);
+				NLog.LoggingBatcher.Verbose($"{TAG} {ip} is whitelisted, ignoring acceptanceType {acceptanceType}", NLog.LoggerTypes.Connections);
 
 				return true;
 			}
@@ -192,13 +203,18 @@ namespace Neuralia.Blockchains.Core.Network {
 						if (info.rateLimitStrikes >= this.rateLimitStrikes)
 						{
 
-							this.watchlist.TryRemove(ip, out _);
+							if (!this.watchlist.TryRemove(ip, out _))
+							{
+								NLog.LoggingBatcher.Error($"{TAG}: {ip} was not found in watchlist, this is unexpected",
+									NLog.LoggerTypes.Connections);
+							}
 
 							// that's it, this peer is blacklist
 							if (!this.blacklist.TryAdd(ip, info))
 							{
-								NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in blacklist",
+								NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in blacklist, updating",
 									NLog.LoggerTypes.Connections);
+								this.blacklist[ip] = info;
 							}
 
 							info.blacklistStrikes++;
@@ -233,6 +249,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					NLog.LoggingBatcher.Warning(
 						$"{TAG} Node {ip} is already in watchlist ({info.Reason}, expiry {info.Expiry}), this is an unexpected race condition, not very worrying..",
 						NLog.LoggerTypes.Connections);
+					this.watchlist[ip] = info;
 				}
 
 				accepted = true;
@@ -288,7 +305,13 @@ namespace Neuralia.Blockchains.Core.Network {
 				});
 			}
 
-			this.isWhiteList.TryAdd(ip, (result, localAcceptanceType));
+			if (!this.isWhiteList.TryAdd(ip, (result, localAcceptanceType)))
+			{
+				NLog.LoggingBatcher.Warning(
+					$"{TAG} Node {ip} is already in isWhitelist, this is an unexpected race condition, not very worrying..",
+					NLog.LoggerTypes.Connections);
+				this.isWhiteList[ip] = (result, localAcceptanceType);
+			}
 
 			acceptanceType = localAcceptanceType;
 			return result;
@@ -299,35 +322,43 @@ namespace Neuralia.Blockchains.Core.Network {
 		private void PeriodicWatchListsUpdate<ID_TYPE> (ConcurrentDictionary<ID_TYPE, QuarantinedInfo> watchlist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> blacklist, DateTime now, bool force = false)
 		{
 			if (force || LockRead(this.NextClearanceCheckMutex, _ => this.NextCleanCheck < now)) {
-				foreach(KeyValuePair<ID_TYPE, QuarantinedInfo> expired in blacklist.Where(e => e.Value.Expiry < now))
+				foreach(KeyValuePair<ID_TYPE, QuarantinedInfo> expired in blacklist.Where(e => (e.Value?.Expiry??DateTime.MaxValue) < now))
 				{
-					LockRead(expired.Value, mutex =>
+					try
 					{
-						if (expired.Value.refusalCount >= this.connectionRefusalStrikes)
+						LockRead(expired.Value, mutex =>
 						{
-							NLog.LoggingBatcher.Warning(
-								$"{TAG} Permanently banning {expired.Key}: {expired.Value.refusalCount} refused connection attempts" +
-								", consider adding this ip to your firewall.");
+							if (expired.Value.refusalCount >= this.connectionRefusalStrikes)
+							{
+								NLog.LoggingBatcher.Warning(
+									$"{TAG} Permanently banning {expired.Key}: {expired.Value.refusalCount} refused connection attempts" +
+									", consider adding this ip to your firewall.");
+								mutex.UpgradeToWriterLock(mutexTimeout);
+								expired.Value.Reason = QuarantineReason.PermanentBan;
+								expired.Value.Expiry = DateTimeEx.MaxValue; //won't enter in this scope anymore
+
+								return true;
+							}
+
+							blacklist.TryRemove(expired.Key, out QuarantinedInfo removed);
+							
 							mutex.UpgradeToWriterLock(mutexTimeout);
-							expired.Value.Reason = QuarantineReason.PermanentBan;
-							expired.Value.Expiry = DateTimeEx.MaxValue; //won't enter in this scope anymore
+							removed.Reason = QuarantineReason.Cleared;
+							removed.Expiry = now.Add(this.minPeriodBetweenConnections);
 
-							return true;
-						}
+							if (!watchlist.TryAdd(expired.Key, removed))
+							{
+								NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in watchlist");
+							}
 
-						watchlist.TryRemove(expired.Key, out QuarantinedInfo removed);
-						
-						mutex.UpgradeToWriterLock(mutexTimeout);
-						removed.Reason = QuarantineReason.Cleared;
-						removed.Expiry = now.Add(this.minPeriodBetweenConnections);
+							return false;
+						});
 
-						if (!watchlist.TryAdd(expired.Key, removed))
-						{
-							NLog.LoggingBatcher.Error($"{TAG}: unexpectedly already in watchlist");
-						}
-
-						return false;
-					});
+					}
+					catch (Exception e)
+					{
+						NLog.LoggingBatcher.Error(e, $"{TAG}: error in {nameof(PeriodicWatchListsUpdate)}, continuing...");
+					}
 				}
 
 				LockWrite(this.NextClearanceCheckMutex, _ => this.NextCleanCheck = DateTimeEx.CurrentTime.Add(this.cleanupPeriod));

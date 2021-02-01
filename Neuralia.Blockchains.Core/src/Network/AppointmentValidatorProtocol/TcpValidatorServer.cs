@@ -149,7 +149,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		public void Start() {
 			if(this.IsDisposed) {
-				throw new ApplicationException("Cannot start adisposed tcp server");
+				throw new ApplicationException("Cannot start a disposed tcp server");
 			}
 
 			this.Stop();
@@ -160,18 +160,23 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 					throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
 				}
 			
-				if(TcpConnection.IPv6Supported && (networkEndPoint.IPMode.HasFlag(IPMode.IPv6) || !GlobalSettings.ApplicationSettings.ForceIpv4Socket)) {
+				if(TcpConnection.IPv6Supported && !GlobalSettings.ApplicationSettings.ForceIpv4Socket) {
 					this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
 
 					if(this.networkEndPoint.IPMode.HasFlag(IPMode.IPv4)) {
 						this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
 						this.listener.DualMode = true;
 					
+						NLog.Default.Information("Validator TCP Server using IPv6 socket in dual mode");
 					} else {
 						this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+						
+						NLog.Default.Information("Validator TCP Server using pure IPv6 socket mode");
 					}
 				} else {
 					this.listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+					
+					NLog.Default.Information("Validator TCP Server using IPv4 socket");
 				}
 				
 				// seems to be needed in case the listener is not completely disposed yet (on linux and MacOs)

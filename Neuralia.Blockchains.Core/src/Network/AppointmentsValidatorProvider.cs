@@ -94,72 +94,82 @@ namespace Neuralia.Blockchains.Core.Network {
 			None = 0, Default = 1, Backup = 1 << 1, Both = Default | Backup
 		}
 
+		private readonly object serverLocker = new object();
 		protected virtual void StartServer(int requesterCount, ValidationServers servers = ValidationServers.Both) {
-			
-			if(this.validationServer == null || !this.validationServer.IsRunning || (this.validationServer.IsRunning && this.InAppointmentWindow && this.validationServer.RequesterCount < requesterCount)) {
 
-				if(this.validationServer != null) {
-					this.validationServer?.Dispose();
-					this.validationServer = null;
-				}
+			lock(this.serverLocker) {
+				if(this.validationServer == null || !this.validationServer.IsRunning || (this.validationServer.IsRunning && this.InAppointmentWindow && this.validationServer.RequesterCount < requesterCount)) {
 
-				if(this.restValidatorServer != null) {
-					this.restValidatorServer?.Dispose();
-					this.restValidatorServer = null;
-				}
-				
-				var ipMode = IPMode.IPv4;
-				var address = IPAddress.Any;
+					if(this.validationServer != null) {
+						this.validationServer?.Dispose();
+						this.validationServer = null;
+					}
 
-				if(Socket.OSSupportsIPv6) {
-					ipMode = IPMode.IPv6;
-					address = IPAddress.IPv6Any;
-				} else {
-					ipMode = IPMode.IPv4;
-					address = IPAddress.Any;
-				}
-				
+					if(this.restValidatorServer != null) {
+						this.restValidatorServer?.Dispose();
+						this.restValidatorServer = null;
+					}
+
+					var ipMode = IPMode.IPv4;
+					var address = IPAddress.Any;
+
+					if(Socket.OSSupportsIPv6 && !GlobalSettings.ApplicationSettings.ForceIpv4Socket) {
+						ipMode = IPMode.Both;
+						address = IPAddress.IPv6Any;
+					} else {
+						ipMode = IPMode.IPv4;
+						address = IPAddress.Any;
+					}
+
 #if NET5_0
 
-				ValidationServers startedServers = ValidationServers.None;
-				if(servers.HasFlag(ValidationServers.Default)) {
-					try {
-						this.validationServer = new TcpValidatorServer(Math.Max(requesterCount, this.MinimumRequesterCount), new NetworkEndPoint(address, GlobalSettings.ApplicationSettings.ValidatorPort, ipMode));
-						this.validationServer.Initialize();
+					ValidationServers startedServers = ValidationServers.None;
 
-						this.validationServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
+					if(servers.HasFlag(ValidationServers.Default)) {
+						try {
 
-						this.validationServer.Start();
 
-						startedServers |= ValidationServers.Default;
-					} catch(Exception ex) {
-						NLog.Default.Error(ex, "Failed to start validator TCP server. This is not critical if backup HTTP server can start");
+							this.validationServer = new TcpValidatorServer(Math.Max(requesterCount, this.MinimumRequesterCount), new NetworkEndPoint(address, GlobalSettings.ApplicationSettings.ValidatorPort, ipMode));
+
+							this.validationServer.Initialize();
+
+							this.validationServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
+
+							this.validationServer.Start();
+
+							startedServers |= ValidationServers.Default;
+
+						} catch(Exception ex) {
+							NLog.Default.Error(ex, "Failed to start validator TCP server. This is not critical if backup HTTP server can start");
+						}
 					}
-				}
 
-				if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol && servers.HasFlag(ValidationServers.Backup)) {
-					try {
-						this.restValidatorServer = new RESTValidatorServer(GlobalSettings.ApplicationSettings.ValidatorHttpPort);
+					if(GlobalSettings.ApplicationSettings.EnableAppointmentValidatorBackupProtocol && servers.HasFlag(ValidationServers.Backup)) {
+						try {
 
-						this.restValidatorServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
+							this.restValidatorServer = new RESTValidatorServer(GlobalSettings.ApplicationSettings.ValidatorHttpPort);
 
-						this.restValidatorServer.Start();
-						
-						startedServers |= ValidationServers.Backup;
-					} catch(Exception ex) {
-						NLog.Default.Error(ex, "Failed to start validator backup http server. This is not critical");
+							this.restValidatorServer.RegisterBlockchainDelegate(blockchainType, appointmentValidatorDelegate, () => this.InAppointmentWindow);
+
+							this.restValidatorServer.Start();
+
+							startedServers |= ValidationServers.Backup;
+
+						} catch(Exception ex) {
+							NLog.Default.Error(ex, "Failed to start validator backup http server. This is not critical");
+						}
 					}
-				}
 
-				if(startedServers == ValidationServers.None) {
-					throw new ApplicationException("Failed to start ALL validation servers");
-				}
-				
-				this.ValidatorServersStarted(startedServers);
+					if(startedServers == ValidationServers.None) {
+						throw new ApplicationException("Failed to start ALL validation servers");
+					}
+
+					this.ValidatorServersStarted(startedServers);
 #else
 				NLog.Default.Warning("Appointments validators are not possible in netstandard mode");
 #endif
-			} 
+				}
+			}
 		}
 		
 		protected virtual void ValidatorServersStarted(ValidationServers servers) {

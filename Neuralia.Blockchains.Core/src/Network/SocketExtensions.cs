@@ -4,8 +4,16 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
+using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Extensions;
+using Neuralia.Blockchains.Tools.General;
+using Neuralia.Blockchains.Tools.Threading;
 
 namespace Neuralia.Blockchains.Core.Network {
 	public static class SocketExtensions {
@@ -50,8 +58,176 @@ namespace Neuralia.Blockchains.Core.Network {
 			socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 		}
 
+		/// <summary>
+		/// Attempt to parallel shoot either a single socket for ipv6, or the 2 types for ipv4 and return the first that connects, clean up the rest
+		/// </summary>
+		/// <param name="endpoint"></param>
+		/// <param name="setParameters"></param>
+		/// <param name="timeout"></param>
+		/// <param name="connectCallback"></param>
+		/// <returns></returns>
+		/// <exception cref="P2pException"></exception>
+		public static async Task<(Socket socket, bool success)> ConnectSocket(NetworkEndPoint endpoint, Action<Socket> setParameters, int timeout = 5, Func<Socket, IPEndPoint, Task> connectCallback = null) {
+
+			bool ipv4 = NodeAddressInfo.IsAddressIpV4Analog(endpoint);
+
+			(Socket socket, IPEndPoint adjustedEndpoint) PrepareSocket(bool second = false) {
+				Socket socket = null;
+
+				IPEndPoint adjustedEndpoint = endpoint.EndPoint;
+
+				if(ipv4 && !second) {
+					socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+					if(NodeAddressInfo.IsAddressIpv4MappedToIpV6(endpoint)) {
+						adjustedEndpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(endpoint), endpoint.EndPoint.Port);
+					}
+				} else {
+					if(ipv4 && !Socket.OSSupportsIPv6) {
+						return default;
+					}
+
+					if(!Socket.OSSupportsIPv6) {
+						throw new P2pException("IPV6 not supported!", P2pException.Direction.Send, P2pException.Severity.Casual);
+					}
+
+					socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+					socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+				}
+
+				setParameters(socket);
+
+				return (socket, adjustedEndpoint);
+			}
+
+			ClosureWrapper<bool> results = false;
+
+			if(connectCallback == null) {
+				connectCallback = (s, a) => {
+					return Task.Factory.FromAsync(s.BeginConnect, s.EndConnect, a, null);
+				};
+			}
+
+			using AsyncManualResetEventSlim manualResetEventSlim = new AsyncManualResetEventSlim();
+
+			//
+			Task<Socket> task1 = Task.Run(async () => {
+				Socket socket = null;
+				IPEndPoint adjustedEndpoint = null;
+				int graceTimeout = 1;
+
+				try {
+					(socket, adjustedEndpoint) = PrepareSocket(false);
+					var connect = Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, adjustedEndpoint, null);
+					bool success = await connect.HandleTimeout(TimeSpan.FromSeconds(ipv4 ? graceTimeout : timeout)).ConfigureAwait(false);
+
+					if(success || !ipv4) {
+						results.Value = true;
+					}
+
+					manualResetEventSlim.Set();
+
+					if(results.Value) {
+						return socket;
+					}
+
+					success = await connect.HandleTimeout(TimeSpan.FromSeconds(Math.Max(timeout - graceTimeout, 1))).ConfigureAwait(false);
+
+					if(success) {
+						return socket;
+					}
+				} catch {
+				}
+
+				try {
+					socket?.Shutdown(SocketShutdown.Both);
+				} catch {
+				}
+
+				try {
+					socket?.Dispose();
+				} catch {
+				}
+
+				return (Socket) null;
+			});
+
+			if(!ipv4) {
+				var result = await task1.ConfigureAwait(false);
+
+				return (result, result != null);
+			} else {
+				await manualResetEventSlim.WaitAsync().ConfigureAwait(false);
+
+				if(results.Value) {
+					var result = await task1.ConfigureAwait(false);
+
+					return (result, result != null);
+				}
+
+				// ok, lets double shoot!
+
+				var task2 = Task.Run(async () => {
+					Socket socket = null;
+					IPEndPoint adjustedEndpoint = null;
+
+					try {
+						(socket, adjustedEndpoint) = PrepareSocket(true);
+						var connect = connectCallback(socket, adjustedEndpoint);
+						bool success = await connect.HandleTimeout(TimeSpan.FromSeconds(timeout)).ConfigureAwait(false);
+
+						if(success) {
+							return socket;
+						}
+					} catch {
+					}
+
+					try {
+						socket?.Shutdown(SocketShutdown.Both);
+					} catch {
+					}
+
+					try {
+						socket?.Dispose();
+					} catch {
+					}
+
+					return (Socket) null;
+				});
+
+				Task<Socket> resultTask = await Task.WhenAny(task1, task2).ConfigureAwait(false);
+
+				Task<Socket> otherTask = resultTask == task1 ? task2 : task1;
+
+				if(resultTask.Result != null) {
+
+					var final = otherTask.ContinueWith(t => {
+						if(t.Result != null) {
+							try {
+								t.Result.Shutdown(SocketShutdown.Both);
+							} catch {
+							}
+
+							try {
+								t.Result.Dispose();
+							} catch {
+							}
+						}
+					});
+
+					return (resultTask.Result, resultTask.Result != null);
+				}
+
+				var lastSocket = await otherTask.ConfigureAwait(false);
+
+				return (lastSocket, lastSocket != null);
+			}
+
+			return default;
+		}
+
 		public static void InitializeSocketParameters(this Socket socket) {
-			
+
 			// Ensure a keep alive to know if connection is still active
 			socket.SetSocketKeepAliveValues(2000, 1000);
 			socket.NoDelay = false;
@@ -62,7 +238,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			socket.SendBufferSize = 8192;
 			socket.SendTimeout = 3000;
 		}
-		
+
 		// configured for very short sessions
 		public static void InitializeSocketParametersFast(this Socket socket, int buffer) {
 
@@ -125,17 +301,17 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// </summary>
 		/// <param name="s"></param>
 		/// <returns></returns>
-		public static bool IsReallyConnected(this Socket socket)
-		{
+		public static bool IsReallyConnected(this Socket socket) {
 			return IsReallyConnected(socket, out var latency);
 		}
 
 		public static bool IsReallyConnected(this Socket socket, out TimeSpan latency) {
 			latency = TimeSpan.Zero;
-			
+
 			if(!socket.Connected) {
 				return false;
 			}
+
 			// first, check the active connections and simply check the state of the active connections
 			bool success = false;
 
@@ -153,6 +329,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			bool blockingState = false;
 			DateTime start = DateTimeEx.CurrentTime;
+
 			try {
 				// next, we try send a 0 byte array and see if we are still connected
 				blockingState = socket.Blocking;
@@ -160,7 +337,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				socket.Blocking = false;
 				socket.Send(Empty, 0, 0);
 				latency = DateTimeEx.CurrentTime - start;
-				
+
 				success = true;
 			} catch(ObjectDisposedException oe) {
 				return false;
@@ -190,8 +367,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			}
 
 			// sometimes the empty send technique does not work (with network streams notably), so we do a poll to confirm.
-			try
-			{
+			try {
 				start = DateTimeEx.CurrentTime;
 				success = !(socket.Poll(1, SelectMode.SelectRead) && (socket.Available == 0));
 				latency = (latency + (DateTimeEx.CurrentTime - start)) / 2;

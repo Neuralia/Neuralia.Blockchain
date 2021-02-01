@@ -392,8 +392,9 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 		
 		public static bool IsIPV4(IPAddress ip) {
-			
-			return new NodeAddressInfo(ip, NodeInfo.Unknown).IsIpV4;
+
+			var node = new NodeAddressInfo(ip, NodeInfo.Unknown);
+			return node.IsIpV4 || node.IsIpv4MappedToIpV6;
 		}
 
 		public static string TranslateDnsToIP(string host) {

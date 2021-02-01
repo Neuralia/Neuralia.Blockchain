@@ -120,6 +120,14 @@ namespace Neuralia.Blockchains.Core.Tools {
 							manualResetEventSlim.Reset();
 							// ok, lets wait until rate limiting is passed
 							await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+						} else {
+							if(manualResetEventSlim == null) {
+								manualResetEventSlim = new AsyncManualResetEventSlim();
+							}
+
+							manualResetEventSlim.Reset();
+							// ok, lets wait until rate limiting is passed
+							await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
 						}
 						
 					} catch(Exception ex) {

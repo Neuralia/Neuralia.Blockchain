@@ -168,8 +168,10 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 					int minTimeout = (int) Math.Min(timeRemaining.TotalMilliseconds, 3000);
 					await Hibernate(TimeSpan.FromMilliseconds(minTimeout), autoEvent).ConfigureAwait(false);
 
-				} catch(ThreadTimeoutException ex) {
-					//NLog.Default.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
+				} catch(Exception ex) {
+					if(ex is ThreadTimeoutException || ex is OperationCanceledException) {
+						//NLog.Default.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
+					}
 
 					// we return what we have
 					return messages;

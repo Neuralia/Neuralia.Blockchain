@@ -104,43 +104,42 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <returns></returns>
 		/// <exception cref="P2pException"></exception>
 		public static async Task<bool> PerformCounterConnection(IPAddress address, int port) {
+
 			Socket counterSocket = null;
-			
+			bool success = false;
 			try {
 				var node = new NodeAddressInfo(address, NodeInfo.Unknown);
 				
 				//TODO: this can be made more efficient by releasing the thread but keeping the timeout.
 				
 				// make sure we are in the right ip format
-				var endpoint = new IPEndPoint(node.AdjustedAddress, port);
+				
+				var endpoint = new NetworkEndPoint(new IPEndPoint(node.AdjustedAddress, port));
+				
+				(counterSocket, success) = await SocketExtensions.ConnectSocket(endpoint, s => {
+					
+					s.InitializeSocketParametersFast(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length);
+				}, 3, (s, e) => {
+					
+					return Task.Factory.FromAsync(s.BeginConnect(e, null, null), result => {
+						try {
+							if(s.Connected && (s.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length)) {
 
-				if(NodeAddressInfo.IsAddressIpV4(endpoint.Address)) {
-					counterSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-				} else {
-					if(!Socket.OSSupportsIPv6) {
-						throw new ApplicationException();
-					}
+								return true;
+							}
+						} catch {
 
-					counterSocket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-					counterSocket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+						}
+
+						return false;
+					}, TaskCreationOptions.None);
+				}).ConfigureAwait(false);
+				
+				if(!success) {
+					throw new SocketException((int) SocketError.TimedOut);
 				}
 
-				counterSocket.InitializeSocketParametersFast(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length);
-
-				Task<bool> task = Task.Factory.FromAsync(counterSocket.BeginConnect(endpoint, null, null), result => {
-					try {
-						if(counterSocket.Connected && (counterSocket.Send(ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES) == ProtocolFactory.HANDSHAKE_COUNTERCONNECT_BYTES.Length)) {
-
-							return true;
-						}
-					} catch {
-
-					}
-
-					return false;
-				}, TaskCreationOptions.None);
-
-				return await task.HandleTimeout(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+				return true;
 
 			} catch(Exception ex) {
 				// do nothing, we got our answer
@@ -215,7 +214,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <summary>
 		///     The socket we're managing.
 		/// </summary>
-		protected readonly Socket socket;
+		protected Socket socket;
 
 		/// <summary>
 		///     if true, any exception will be alerted. whjen we know what we are doing and we want to shutup any further noise, we
@@ -293,21 +292,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.EndPoint = remoteEndPoint;
 			this.RemoteEndPoint = remoteEndPoint.EndPoint;
 			this.IPMode = remoteEndPoint.IPMode;
-
-			//Create a socket
-			if(NodeAddressInfo.IsAddressIpV4(remoteEndPoint)) {
-				this.socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-			} else {
-				if(!Socket.OSSupportsIPv6) {
-					throw new P2pException("IPV6 not supported!", P2pException.Direction.Send, P2pException.Severity.Casual);
-				}
-
-				this.socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-				this.socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-			}
-
-			this.socket.InitializeSocketParameters();
-
+			
 			AddConnectionState(this);
 		}
 
@@ -385,7 +370,11 @@ namespace Neuralia.Blockchains.Core.Network {
 						}
 
 						// TimeSpan latency = new TimeSpan();
-						bool result = this.socket.IsReallyConnected(out var latency);
+						bool result = false;
+
+						if(this.socket != null) {
+							result = this.socket.IsReallyConnected(out var latency);
+						}
 						// if (result)
 							// this.Latency = latency.TotalSeconds;
 						return result;
@@ -481,16 +470,12 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.State = ConnectionState.Connecting;
 
 			try {
-				// we want this synchronously
-				EndPoint endpoint = this.RemoteEndPoint;
-
-				if(NodeAddressInfo.IsAddressIpV4(this.EndPoint) && NodeAddressInfo.IsAddressIpv4MappedToIpV6(this.EndPoint)) {
-					endpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(this.EndPoint), this.EndPoint.EndPoint.Port);
-				}
-
-				var connect = Task.Factory.FromAsync(this.socket.BeginConnect, this.socket.EndConnect, endpoint, null);
-				var success = connect.Wait(TimeSpan.FromSeconds(10));
-
+				bool success = false;
+				(this.socket, success) = await SocketExtensions.ConnectSocket(this.EndPoint, s => {
+					
+					s.InitializeSocketParameters();
+				}, 5).ConfigureAwait(false);
+				
 				if(!success) {
 					throw new SocketException((int) SocketError.TimedOut);
 				}
@@ -689,10 +674,6 @@ namespace Neuralia.Blockchains.Core.Network {
 			} catch(CounterConnectionException cex)
 			{
 				e = cex;
-				this.alertExceptions = false;
-			} catch(TaskCanceledException tex)
-			{
-				e = tex;
 				this.alertExceptions = false;
 			} catch(OperationCanceledException opex)
 			{
@@ -1010,7 +991,7 @@ namespace Neuralia.Blockchains.Core.Network {
 					}
 				}
 			}
-			catch (TaskCanceledException e)
+			catch (OperationCanceledException e)
 			{
 				throw;
 			}

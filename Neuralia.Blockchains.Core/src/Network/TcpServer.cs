@@ -80,7 +80,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
 			}
 			
-			if(TcpConnection.IPv6Supported && (endPoint.IPMode.HasFlag(IPMode.IPv6) || !GlobalSettings.ApplicationSettings.ForceIpv4Socket)) {
+			if(TcpConnection.IPv6Supported && !GlobalSettings.ApplicationSettings.ForceIpv4Socket) {
 				this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
 
 				if(endPoint.IPMode.HasFlag(IPMode.IPv4)) {

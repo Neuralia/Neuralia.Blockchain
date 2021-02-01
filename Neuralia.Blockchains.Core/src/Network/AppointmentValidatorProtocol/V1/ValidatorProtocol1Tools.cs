@@ -1,6 +1,9 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Network.Exceptions;
+using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -15,12 +18,12 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			if(port.HasValue) {
 				actualPort = port.Value;
 			}
-
-			return new TcpValidatorConnection(new NetworkEndPoint(address, actualPort), ex => {
+			
+			return new TcpValidatorConnection(new NetworkEndPoint(address, actualPort, IPMode.Both), ex => {
 			});
 		}
 		
-		public static ITcpValidatorConnection Connect(ValidatorOperation operation, ushort blockchainId, IPAddress address, int? port = null) {
+		public static async Task<ITcpValidatorConnection> Connect(ValidatorOperation operation, ushort blockchainId, IPAddress address, int? port = null) {
 
 			var connection = BuildConnection(address, port);
 
@@ -32,7 +35,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 			header.ProtocolVersion = ValidatorProtocol1.PROTOCOL_VERSION;
 			header.ChainId = blockchainId;
 
-			connection.Connect(() => header.Dehydrate(operationBytes));
+			await connection.Connect(() => header.Dehydrate(operationBytes)).ConfigureAwait(false);
 
 			return connection;
 		}

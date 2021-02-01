@@ -39,13 +39,13 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			try {
 				await Repeater.RepeatAsync(action, 2).ConfigureAwait(false);
 			} catch(DbUpdateConcurrencyException bdcex) {
-				LogError(bdcex, logError);
+				//LogError(bdcex, logError);
 			} catch(SynchronizationLockException syncEx) {
-				LogError(syncEx, logError);
+				//LogError(syncEx, logError);
 			} catch(DbUpdateException syncEx) {
-				LogError(syncEx, logError);
+				//LogError(syncEx, logError);
 			} catch(Exception ex) {
-				LogError(ex, logError);
+			//	LogError(ex, logError);
 			}
 		}
 
@@ -59,9 +59,9 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			try {
 				Repeater.Repeat(action, 2);
 			} catch(DbUpdateConcurrencyException bdcex) {
-				LogError(bdcex, logError);
+				//LogError(bdcex, logError);
 			} catch(SynchronizationLockException syncEx) {
-				LogError(syncEx, logError);
+				//LogError(syncEx, logError);
 			}
 		}
 
@@ -70,9 +70,9 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 			try {
 				await Repeater.RepeatAsync(action, 2).ConfigureAwait(false);
 			} catch(DbUpdateConcurrencyException bdcex) {
-				LogError(bdcex, logError);
+				//LogError(bdcex, logError);
 			} catch(SynchronizationLockException syncEx) {
-				LogError(syncEx, logError);
+				//LogError(syncEx, logError);
 			}
 		}
 	}

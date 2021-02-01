@@ -38,6 +38,7 @@ using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Exceptions;
 using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Threading;
@@ -453,12 +454,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							// lets be nice, lets inform them that we will close the connection for this workflow
 							await SendMessageToPeers(closeMessage, activeConnections, connections).ConfigureAwait(false);
 						} catch(Exception ex) {
-							this.CentralCoordinator.Log.Error(ex, $"{TAG} Failed to close all peer connections but workflow is over.");
+							this.CentralCoordinator.Log.Debug(ex, $"{TAG} Failed to close all peer connections but workflow is over.");
 						}
 					}
 				} catch(Exception ex) {
 					// do nothing, we tried but failed, we will stop disgracefully
-					this.CentralCoordinator.Log.Error(ex, $"{TAG} Failed to alert our peers and stop the workflow gracefully. we must do a disgraceful stop");
+					this.CentralCoordinator.Log.Debug(ex, $"{TAG} Failed to alert our peers and stop the workflow gracefully. we must do a disgraceful stop");
 				}
 			}
 
@@ -506,7 +507,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					using(newPeerTask) {
 						using(newPeerTask.Result) {
 							if(newPeerTask.IsFaulted) {
-								this.CentralCoordinator.Log.Error(newPeerTask.WithAllExceptions().Exception, $"{TAG} Failed to fetch new syncing peers...");
+								this.CentralCoordinator.Log.Debug(newPeerTask.WithAllExceptions().Exception, $"{TAG} Failed to fetch new syncing peers...");
 							} else {
 								// all good, merge our connections
 								connections.Merge(newPeerTask.Result);
@@ -629,18 +630,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 								return ResponseValidationResults.Valid;
 							}, potentialConnections).ConfigureAwait(false);
-						} 
-						catch(ObjectDisposedException oex) {
-							throw;
-						}
-						catch(TaskCanceledException tex) {
-							throw;
+							
 						}
 						catch(Exception ex) {
+							if(ex is ThreadTimeoutException || ex is OperationCanceledException || ex is ObjectDisposedException) {
+							} 
 							// do nothing
 						}
 
-						if(validReplies.messages == null) {
+						if(validReplies.messages == null || !validReplies.messages.Any()) {
 							continue;
 						}
 
@@ -700,16 +698,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(FetchNewPeers)}: Not a single active connection found");
 
 				this.CentralCoordinator.Log.Information($"{TAG} Workflow to check for new Synchronization peers is completed. Added {validRepliesCount} new peers.");
-			} catch(ObjectDisposedException oex) {
-
-				throw;
 			} 
-			catch(TaskCanceledException tcex) {
-
-				throw;
-			} 
-			catch(Exception e) {
-				this.CentralCoordinator.Log.Error(e, $"{TAG} Exception occured");
+			catch(Exception ex) {
+				if(ex is ThreadTimeoutException || ex is OperationCanceledException || ex is ObjectDisposedException) {
+				} else {
+					this.CentralCoordinator.Log.Debug(ex, $"{TAG} Exception occured");
+				}
 
 				throw;
 			} finally {
@@ -1401,8 +1395,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 						validPeerReplies = await this.WaitForAnyPeerReplies<DATA_RESPONSE>((IBlockchainTriggerMessageSet<CHAIN_SYNC_TRIGGER>) trigger, (peerReply, peerConnection) => parameters.validSlicesFunc(peerReply, nextBlockPeerSpecs, slices, peersWithNoNextEntry, peerConnection), parameters.singleEntryContext.Connections).ConfigureAwait(false);
 
-					} catch(TimeoutException tex) {
-						this.CentralCoordinator.Log.Error(tex, $"{TAG} Timeout waiting for block replies");
+					} catch(Exception ex) {
+						this.CentralCoordinator.Log.Debug(ex, $"{TAG} exception waiting for block replies");
 
 						// keep going, we will truly timeout if we need to
 						continue;
@@ -1427,7 +1421,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							SlicePeersContext<CHANNEL_INFO_SET_REQUEST, T_REQUEST, CHANNEL_INFO_SET_RESPONSE, T_RESPONSE, KEY, SLICE_KEY, DATA_REQUEST, DATA_RESPONSE> sliceEntry = slicePeersContexts.Values.SingleOrDefault(s => s.SliceInfo.requestMessage.Message.SlicesInfo.FileId == message.Slices.FileId);
 
 							if(sliceEntry == null) {
-								this.CentralCoordinator.Log.Error($"{TAG} Timeout waiting for block replies");
+								this.CentralCoordinator.Log.Debug($"{TAG} Timeout waiting for block replies");
 								//TODO: what to do here? perhaps we should log the peer
 								this.ChainNetworkingProvider.HandleSyncError(connection.NodeAddressInfo, DateTimeEx.CurrentTime);
 								continue;
@@ -1639,17 +1633,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				}
 				
-			} catch(ObjectDisposedException ex) {
-				// do nothing
-				this.CentralCoordinator.Log.Verbose(ex, $"{TAG} {nameof(WaitForAllPeerReplies)}: Object Disposed!");
-				throw;
-			}
-			catch(Exception e) {
-				this.CentralCoordinator.Log.Error(e, $"{TAG} {nameof(WaitForAllPeerReplies)}: Error occured while waiting for messages (B)");
+			} 
+			catch(Exception ex) {
+				if(ex is ThreadTimeoutException || ex is OperationCanceledException || ex is ObjectDisposedException) {
+					//NLog.Default.Verbose(ex, $"Timeout occured while waiting for a network message for workflow type: {this.GetType().Name}");
+				} else {
+					this.CentralCoordinator.Log.Debug(ex, $"{TAG} {nameof(WaitForAllPeerReplies)}: Error occured while waiting for messages (B)");
+				}
 
 				throw;
-
-				//TODO: if error is serious enough to stop the whole process, then we return an exception. it will kill the whole sync though
 			}
 
 			// ok, we got our replies 
@@ -1793,7 +1785,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 						});
 					} catch(Exception ex) {
-						Log.Error(ex, $"While creating a new one, failed to clear old sync manifest file {filepath}");
+						this.CentralCoordinator.Log.Debug(ex, $"While creating a new one, failed to clear old sync manifest file {filepath}");
 					}
 					
 
@@ -1805,7 +1797,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				}
 			} catch(Exception ex) {
-				this.CentralCoordinator.Log.Error($"{TAG} error: ", ex);
+				this.CentralCoordinator.Log.Debug($"{TAG} error: ", ex);
 
 				throw;
 			}
@@ -1882,7 +1874,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				});
 			} catch(Exception ex) {
-				Log.Error(ex, $"Failed to clear sync manifest file {path}");
+				this.CentralCoordinator.Log.Debug(ex, $"Failed to clear sync manifest file {path}");
 			}
 
 			string dirName = this.GetDownloadTempDirName(path);
@@ -1894,7 +1886,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				});
 			} catch(Exception ex) {
-				Log.Error(ex, $"Failed to clear sync manifest directory {dirName}");
+				this.CentralCoordinator.Log.Debug(ex, $"Failed to clear sync manifest directory {dirName}");
 			}
 			
 		}

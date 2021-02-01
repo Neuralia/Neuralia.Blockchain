@@ -40,6 +40,7 @@ using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Exceptions;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx.Synchronous;
@@ -507,8 +508,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							this.CentralCoordinator.Log.Verbose(e, "We have attempted to correct errors and have reached an overflow limit.");
 
 							throw new ImpossibleToSyncException("We have attempted to correct errors and have reached an overflow limit.", e);
-						} catch(Exception e) {
-							this.CentralCoordinator.Log.Verbose(e, "");
+						}
+						catch(Exception ex) {
+							if(ex is ThreadTimeoutException || ex is OperationCanceledException || ex is ObjectDisposedException) {
+							} else {
+								this.CentralCoordinator.Log.Verbose(ex, "");
+							}
 
 							retryAttempt++;
 						}
@@ -608,7 +613,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								await downloadResetEvent.WaitAsync(TimeSpan.FromMilliseconds(sleepTime), CancelTokenSource.Token).ConfigureAwait(false);
 							}
 						} catch(Exception ex) {
-							this.CentralCoordinator.Log.Error(ex, "Failed to download block while syncing");
+							this.CentralCoordinator.Log.Debug(ex, "Failed to download block while syncing");
 
 							throw;
 						}
@@ -642,7 +647,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								interpretResetEvent.Set();
 							}
 						} catch(Exception ex) {
-							this.CentralCoordinator.Log.Error(ex, "Failed to insert block into chain while syncing");
+							this.CentralCoordinator.Log.Debug(ex, "Failed to insert block into chain while syncing");
 
 							throw;
 						}
@@ -680,7 +685,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								}
 							}
 						} catch(Exception ex) {
-							this.CentralCoordinator.Log.Error(ex, "Failed to interpret block into chain while syncing");
+							this.CentralCoordinator.Log.Debug(ex, "Failed to interpret block into chain while syncing");
 
 							throw;
 						}
@@ -706,12 +711,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								if(continueTasks.Any()) {
 									Task.WaitAll(continueTasks, TimeSpan.FromSeconds(time));
 								}
-							} catch(TaskCanceledException tex) {
+							} catch(OperationCanceledException tex) {
 								// ignore it						
 							} catch(AggregateException agex) {
 								agex.Handle(ex => {
 
-									if(ex is TaskCanceledException) {
+									if(ex is OperationCanceledException) {
 										// ignore it					
 										return true;
 									}
@@ -738,7 +743,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							foreach(Task task in faultedTasks) {
 
 								if(task.Exception is AggregateException agex) {
-									exceptions.AddRange(agex.InnerExceptions.Where(e => !(e is TaskCanceledException)));
+									exceptions.AddRange(agex.InnerExceptions.Where(e => !(e is OperationCanceledException)));
 								} else {
 									exceptions.Add(task.Exception);
 								}
@@ -1059,7 +1064,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									await sqliteDal.CheckMessageInCache(xxHash, true).ConfigureAwait(false);
 
 								} catch(Exception ex) {
-									this.CentralCoordinator.Log.Error(ex, "Failed to update cached message validation status");
+									this.CentralCoordinator.Log.Debug(ex, "Failed to update cached message validation status");
 								}
 
 								break;
@@ -1371,7 +1376,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				} catch(NoSyncingConnectionsException e) {
 					throw;
 				} catch(Exception e) {
-					this.CentralCoordinator.Log.Error(e, "Failed to fetch block data. might try again...");
+					this.CentralCoordinator.Log.Debug(e, "Failed to fetch block data. might try again...");
 				}
 
 				if(!success) {
@@ -2204,7 +2209,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				});
 			} catch(Exception ex) {
-				this.CentralCoordinator.Log.Error(ex, $"Failed to clear block sync manifest file {path}");
+				this.CentralCoordinator.Log.Debug(ex, $"Failed to clear block sync manifest file {path}");
 			}
 			
 			path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSyncManifestCacheFolder(blockId);
@@ -2216,7 +2221,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					}
 				});
 			} catch(Exception ex) {
-				this.CentralCoordinator.Log.Error(ex, $"Failed to clear block sync manifest directory {path}");
+				this.CentralCoordinator.Log.Debug(ex, $"Failed to clear block sync manifest directory {path}");
 			}
 		}
 

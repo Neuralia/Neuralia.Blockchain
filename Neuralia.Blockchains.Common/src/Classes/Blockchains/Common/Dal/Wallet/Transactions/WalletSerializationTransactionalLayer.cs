@@ -571,7 +571,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 					}
 				}).ConfigureAwait(false);
 
-				// clear remaining zomkbie directories
+				// clear remaining zombie directories
 				await this.DeleteInnexistentDirectories(this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath)).ConfigureAwait(false);
 
 				return true;
@@ -638,10 +638,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 
 						nar.Restore(this.walletsPath, backupPath, null, false);
 					}).ConfigureAwait(false);
-
-					// clear remaining zombie directories
-					await this.DeleteInnexistentDirectories(this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath)).ConfigureAwait(false);
-
+					
 					return true;
 				} catch {
 					// nothing to do, its ok

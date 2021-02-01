@@ -434,6 +434,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			public Guid Id {get; set;}
 			public string Ip {get; set;} = "0.0.0.0";
 			public int Port {get; set;} = 0;
+			public int IPMode {get; set;}
 			public bool IsConnectable {get; set;} = false;
 			public bool IsConnected {get; set;} = false;
 			public string Type { get; set; } = "Unknown";
@@ -811,8 +812,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			List<NodeAddressInfo> nodes = null;
 
 			lock(this.locker) {
-				nodes = this.GetAvailablePeerNodes(excludeAddresses, true, false, onlyConnectable)
-					.Where(n => GlobalSettings.ApplicationSettings.LocalNodes.All(ln => ln.Ip != n.Ip)).ToList();
+				excludeAddresses.AddRange(this.networkingService.IPCrawler.LocalNodes);
+				nodes = this.GetAvailablePeerNodes(excludeAddresses, true, false, onlyConnectable);
 			}
 
 			return NodeSelectionHeuristicTools.SelectNodes(nodeInfo, nodes, blockchainTypes, heuristic, excludeAddresses, limit);
@@ -1295,7 +1296,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				var detail = new PeerConnectionDetails
 				{
 					Id = guid,
-					Ip = (node.IsIpV4 ? node.Address.MapToIPv4() : node.Address).ToString(),
+					Ip = node.AdjustedIp,
+					IPMode = (int)node.IPMode,
 					Port = peerConnection.NodeAddressInfo.RealPort,
 					IsConnectable = peerConnection.NodeAddressInfo.IsConnectable,
 					IsConnected = true,

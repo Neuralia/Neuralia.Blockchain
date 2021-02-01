@@ -12,6 +12,10 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx;
 
+#if NET5_0
+using Microsoft.AspNetCore.Http;
+#endif
+
 namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 	public interface ITcpValidatorConnection : IDisposableExtended {
@@ -43,7 +47,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 		/// <summary>
 		///     The socket we're managing.
 		/// </summary>
-		protected readonly Socket socket;
+		protected Socket socket;
 
 		protected NetworkStream networkStream;
 		private volatile ConnectionState state;
@@ -94,23 +98,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 			this.RemoteEndPoint = remoteEndPoint.EndPoint;
 			this.IPMode = remoteEndPoint.IPMode;
 
-			//Create a socket
-			if(NodeAddressInfo.IsAddressIpV4(remoteEndPoint)) {
-				this.socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-			} else {
-				if(!Socket.OSSupportsIPv6) {
-					throw new P2pException("IPV6 not supported!", P2pException.Direction.Send, P2pException.Severity.Casual);
-				}
-
-				this.socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-				this.socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-			}
-
-			if(GlobalSettings.ApplicationSettings.SlowValidatorPort) {
-				this.socket.InitializeSocketParameters();
-			} else {
-				this.socket.InitializeSocketParametersFast(TcpValidatorServer.BYTES_PER_REQUESTER);
-			}
+			
 		}
 
 		private bool IsDisposing { get; set; }
@@ -215,7 +203,9 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 			this.HasConnected = true;
 		}
 
-		public void Connect(Func<SafeArrayHandle> transformBytes, int timeout = 5000) {
+		
+		
+		public async Task Connect(Func<SafeArrayHandle> transformBytes, int timeout = 5000) {
 			if(this.IsDisposed || this.IsDisposing) {
 				throw new SocketException((int) SocketError.Shutdown);
 			}
@@ -230,15 +220,15 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 			this.State = ConnectionState.Connecting;
 
 			try {
-				// we want this synchronously
-				EndPoint endpoint = this.RemoteEndPoint;
-
-				if(NodeAddressInfo.IsAddressIpV4(this.EndPoint) && NodeAddressInfo.IsAddressIpv4MappedToIpV6(this.EndPoint)) {
-					endpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(this.EndPoint), this.EndPoint.EndPoint.Port);
-				}
-
-				var connect = Task.Factory.FromAsync(this.socket.BeginConnect, this.socket.EndConnect, endpoint, null);
-				var success = connect.Wait(TimeSpan.FromSeconds(10));
+				bool success = false;
+				(this.socket, success) = await SocketExtensions.ConnectSocket(this.EndPoint, s => {
+					
+					if(GlobalSettings.ApplicationSettings.SlowValidatorPort) {
+						s.InitializeSocketParameters();
+					} else {
+						s.InitializeSocketParametersFast(TcpValidatorServer.BYTES_PER_REQUESTER);
+					}
+				}, 5).ConfigureAwait(false);
 				
 				if(!success) {
 					throw new SocketException((int) SocketError.TimedOut);
