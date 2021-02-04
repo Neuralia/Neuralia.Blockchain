@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Tools.Threading;
@@ -128,6 +129,10 @@ namespace Neuralia.Blockchains.Core.Tools {
 							manualResetEventSlim.Reset();
 							// ok, lets wait until rate limiting is passed
 							await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+							
+							if(webResult.ErrorException != null) {
+								throw webResult.ErrorException;
+							}
 						}
 						
 					} catch(Exception ex) {

@@ -118,7 +118,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 		}
 
-		public Dictionary<string, object> PrepareActiveElectionWebConfirmation(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, Guid password) {
+		public Dictionary<string, object> PrepareActiveElectionWebConfirmation(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, Guid password, Guid forcedIp) {
 			if(matureBlockElectionDistillate.ElectionContext is IActiveElectionContext activeElectionContext) {
 
 				Dictionary<string, object> parameters = new Dictionary<string, object>();
@@ -141,6 +141,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 
 				if(MiningTierUtils.IsFirstTier(electedCandidateResultDistillate.MiningTier) && electedCandidateResultDistillate.firstTierAnswer.HasValue) {
 					parameters.Add("firstTierAnswer", electedCandidateResultDistillate.firstTierAnswer.Value);
+				}
+				
+				if(MiningTierUtils.IsFirstOrSecondTier(electedCandidateResultDistillate.MiningTier) && forcedIp != Guid.Empty) {
+					parameters.Add("address", forcedIp);
 				}
 
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
@@ -178,7 +182,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 			throw new ApplicationException("Must be an active election!");
 		}
 
-		public Dictionary<string, object> PreparePassiveElectionWebConfirmation(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, Guid password) {
+		public Dictionary<string, object> PreparePassiveElectionWebConfirmation(BlockElectionDistillate matureBlockElectionDistillate, ElectedCandidateResultDistillate electedCandidateResultDistillate, Guid password, Guid forcedIp) {
 			if(matureBlockElectionDistillate.ElectionContext is IPassiveElectionContext passiveElectionContext) {
 				this.CentralCoordinator.Log.Information("We are elected in a passive election!...");
 
@@ -202,7 +206,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Elections.Proce
 				if(electedCandidateResultDistillate.firstTierAnswer.HasValue && (electedCandidateResultDistillate.firstTierAnswer != 0)) {
 					parameters.Add("firstTierAnswer", electedCandidateResultDistillate.firstTierAnswer);
 				}
-
+				
+				if(forcedIp != Guid.Empty) {
+					parameters.Add("address", forcedIp);
+				}
+				
 				// note:  we send a message even if we have no transactions. we may not get transaction fees, but the bounty is still applicable for being present and elected.
 				if(electedCandidateResultDistillate.SelectedTransactionIds?.Any() ?? false) {
 

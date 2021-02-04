@@ -1491,7 +1491,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			(bool success, CheckAppointmentsResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.QueryAvailableAppointments(lockContext).ConfigureAwait(false);
 
-			if(success && result != null) {
+			if(success && result != null && result.Appointments != null && result.Appointments.Any()) {
 
 				List<DateTime> registryAppointments = (await this.AppointmentRegistryDal.GetAppointments().ConfigureAwait(false)).Select(a => a.appointment.ToUniversalTime()).Where(a => a > DateTimeEx.CurrentTime).ToList();
 				List<DateTime> remoteAppointmentsList = result.Appointments.Select(a => a.ToUniversalTime()).Where(a => a > DateTimeEx.CurrentTime).ToList();

@@ -597,7 +597,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 				await this.DispatchTaskSync(blockchainTask, lockContext).ConfigureAwait(false);
 
-				if(!await resetEvent.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false)) {
+				if(! await resetEvent.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false)) {
 
 					throw new ApplicationException($"The {name} is not synced. Cannot continue");
 				}

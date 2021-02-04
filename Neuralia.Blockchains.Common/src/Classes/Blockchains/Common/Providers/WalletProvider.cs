@@ -146,6 +146,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public void EnsureWalletIsLoaded();
 
+		Task<bool> ResetWalletIndex(LockContext lockContext);
+
 		public Task RemovePIDLock();
 
 		void HashKey(IWalletKey key);
@@ -2299,23 +2301,41 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						ITransaction transaction = transactionId.Value;
 
 						if(transaction.Version.Type == TransactionTypes.Instance.STANDARD_PRESENTATION) {
-							// the presentation trnasaction is a special case, which we never sign with a ey in our wallet, so we just ignore it
+							// the presentation trnasaction is a special case, which we never sign with a key in our wallet, so we just ignore it
 							continue;
 						}
 
 						IdKeyUseIndexSet idKeyUseIndexSet = transaction.TransactionMeta.KeyUseIndex;
 
-						if(transaction is IJointTransaction joinTransaction) {
+						if(transaction is IJointTransaction jointTransaction) {
 							// ok, we need to check if we are not the main sender but still a cosinger
 
 						}
-
+						ChainConfigurations configuration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.GetChainConfiguration();
+						
 						if(!await accountFile.WalletKeyLogsInfo.ConfirmKeyLogTransactionEntry(transaction.TransactionId, transaction.TransactionMeta.KeyUseIndex, synthesizedBlock.BlockId, lockContext).ConfigureAwait(false)) {
 							// ok, this transction was not in our key log. this means we might have a bad wallet. this is very serious adn we alert the user
 							//TODO: what to do with this?
-
+							
 							string message = $"Block {synthesizedBlock.BlockId} has our transaction {transaction.TransactionId} which belongs to us but is NOT in our keylog. We might have an old wallet.";
-							throw new ReportableException(ReportableErrorTypes.Instance.BLOCKCHAIN_TRANSACTION_NOT_IN_KEYLOG, ReportableException.PriorityLevels.Warning, ReportableException.ReportLevels.Modal, this.centralCoordinator.ChainId, this.centralCoordinator.ChainName, message, new string[]{synthesizedBlock.BlockId.ToString(), transaction.TransactionId.ToString()});
+
+							if(!configuration.KeySecurityConfigurations.EnableKeyLogFastForwards) {
+
+								throw new ReportableException(ReportableErrorTypes.Instance.BLOCKCHAIN_TRANSACTION_NOT_IN_KEYLOG, ReportableException.PriorityLevels.Warning, ReportableException.ReportLevels.Modal, this.centralCoordinator.ChainId, this.centralCoordinator.ChainName, message, new string[] {synthesizedBlock.BlockId.ToString(), transaction.TransactionId.ToString()});
+							} else {
+								
+							}
+							
+							using IXmssWalletKey key = await this.LoadKey<IXmssWalletKey>(account.AccountCode, GlobalsService.TRANSACTION_KEY_NAME, lockContext).ConfigureAwait(false);
+
+							if(!configuration.KeySecurityConfigurations.EnableKeyHeightIndexFastForwards || key.KeyAddress.KeyUseIndex.KeyUseSequenceId != transaction.TransactionMeta.KeyUseIndex.KeyUseSequenceId) {
+								throw new ReportableException(ReportableErrorTypes.Instance.BLOCKCHAIN_TRANSACTION_NOT_IN_KEYLOG, ReportableException.PriorityLevels.Warning, ReportableException.ReportLevels.Modal, this.centralCoordinator.ChainId, this.centralCoordinator.ChainName, message, new string[]{synthesizedBlock.BlockId.ToString(), transaction.TransactionId.ToString()});
+							}
+
+							if(configuration.KeySecurityConfigurations.EnableKeyHeightIndexFastForwards && key.KeyAddress.KeyUseIndex.KeyUseSequenceId < transaction.TransactionMeta.KeyUseIndex.KeyUseSequenceId){
+								
+								await this.UpdateKeyIndex(key, transaction.TransactionMeta.KeyUseIndex.KeyUseIndex, lockContext).ConfigureAwait(false);
+							}
 						}
 					}
 				}
@@ -2328,7 +2348,65 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			return changed;
 		}
+		
+		/// <summary>
+		/// for the index of the key to be updated to this index value
+		/// </summary>
+		/// <param name="key"></param>
+		/// <param name="index"></param>
+		/// <param name="lockContext"></param>
+		/// <returns></returns>
+		private async Task UpdateKeyIndex(IXmssWalletKey key, long index, LockContext lockContext) {
 
+			if(key.Index.KeyUseIndex > index) {
+				throw new ApplicationException("Can not set an older index to the key");
+			}
+			else if(key.Index.KeyUseIndex == index) {
+				return;
+			}
+
+			using(XMSSProvider provider = new XMSSProvider(key.HashType, key.BackupHashType, key.TreeHeight, this.XmssThreadMode, key.NoncesExponent)) {
+
+				provider.Initialize();
+
+				key.PrivateKey.Entry = provider.SetPrivateKeyIndex(index, key.PrivateKey).Entry;
+			}
+					
+			await this.UpdateLocalChainStateKeyHeight(key, lockContext).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// This method will reset a wallet like new, ready to be reindexed
+		/// </summary>
+		/// <param name="lockContext"></param>
+		/// <returns></returns>
+		public virtual async Task<bool> ResetWalletIndex(LockContext lockContext) {
+			
+			this.EnsureWalletIsLoaded();
+
+			var wallet = (await this.WalletBase(lockContext).ConfigureAwait(false));
+
+			foreach(var account in wallet.Accounts.Values) {
+
+				WalletChainStateFileInfo walletChainStateInfo = this.WalletFileInfo.Accounts[account.AccountCode].WalletChainStatesInfo;
+				
+				var accountFileInfo = this.WalletFileInfo.Accounts[account.AccountCode].WalletSnapshotInfo;
+
+				IWalletAccountSnapshot snapshot = await (accountFileInfo.WalletAccountSnapshot(lockContext)).ConfigureAwait(false);
+
+				snapshot.ClearCollection();
+				snapshot.TrustLevel = 0;
+				
+				IWalletAccountChainState chainState = await walletChainStateInfo.ChainState(lockContext).ConfigureAwait(false);
+
+				chainState.LastBlockSynced = Math.Max(snapshot.InceptionBlockId-1, 0);
+				chainState.PreviousBlockSynced = Math.Max(snapshot.InceptionBlockId-1, 0);
+				chainState.BlockSyncStatus = (int) WalletAccountChainState.BlockSyncStatuses.Blank;
+
+			}
+
+			return true;
+		}
 	#region Physical key management
 
 		public void EnsureWalletIsLoaded() {
@@ -4905,12 +4983,7 @@ clean above
 					}
 					
 					// ok, we fast forward the key
-					using(XMSSProvider provider = new XMSSProvider(key.HashType, key.BackupHashType, key.TreeHeight, this.XmssThreadMode, key.NoncesExponent)) {
-
-						provider.Initialize();
-
-						key.PrivateKey.Entry = provider.SetPrivateKeyIndex(lastSyncedIdKeyUse.KeyUseIndex, key.PrivateKey).Entry;
-					}
+					await this.UpdateKeyIndex(key, lastSyncedIdKeyUse.KeyUseIndex, lockContext).ConfigureAwait(false);
 					
 					this.CentralCoordinator.Log.Warning(message + " As per configuration, we will still proceed.");
 				}

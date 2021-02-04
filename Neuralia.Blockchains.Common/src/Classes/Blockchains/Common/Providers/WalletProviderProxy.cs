@@ -132,6 +132,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.walletProvider.EnsureWalletIsLoaded();
 		}
 
+		public Task<bool> ResetWalletIndex(LockContext lockContext) {
+			return this.ScheduleTransaction((p, ct, lc) => p.ResetWalletIndex(lc), lockContext);
+		}
+
 		public Task RemovePIDLock() {
 			return this.walletProvider.RemovePIDLock();
 		}

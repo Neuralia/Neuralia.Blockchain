@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.Network.Exceptions;
 using Neuralia.Blockchains.Core.P2p.Connections;
@@ -70,34 +71,44 @@ namespace Neuralia.Blockchains.Core.Network {
 		public static async Task<(Socket socket, bool success)> ConnectSocket(NetworkEndPoint endpoint, Action<Socket> setParameters, int timeout = 5, Func<Socket, IPEndPoint, Task> connectCallback = null) {
 
 			bool ipv4 = NodeAddressInfo.IsAddressIpV4Analog(endpoint);
+			bool doubleConnections = GlobalSettings.ApplicationSettings.EnableDoubleSocketConnections;
 
 			(Socket socket, IPEndPoint adjustedEndpoint) PrepareSocket(bool second = false) {
-				Socket socket = null;
 
-				IPEndPoint adjustedEndpoint = endpoint.EndPoint;
+				try {
+					Socket socket = null;
 
-				if(ipv4 && !second) {
-					socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+					IPEndPoint adjustedEndpoint = endpoint.EndPoint;
 
-					if(NodeAddressInfo.IsAddressIpv4MappedToIpV6(endpoint)) {
-						adjustedEndpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(endpoint), endpoint.EndPoint.Port);
+					if(ipv4 && !second) {
+						socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+						if(NodeAddressInfo.IsAddressIpv4MappedToIpV6(endpoint)) {
+							adjustedEndpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(endpoint), endpoint.EndPoint.Port);
+						}
+					} else {
+						if(ipv4 && !Socket.OSSupportsIPv6) {
+							return default;
+						}
+
+						if(!Socket.OSSupportsIPv6) {
+							NLog.Default.Debug("IPV6 not supported!");
+
+							return default;
+						}
+
+						socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+						socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, !ipv4);
 					}
-				} else {
-					if(ipv4 && !Socket.OSSupportsIPv6) {
-						return default;
-					}
 
-					if(!Socket.OSSupportsIPv6) {
-						throw new P2pException("IPV6 not supported!", P2pException.Direction.Send, P2pException.Severity.Casual);
-					}
+					setParameters(socket);
 
-					socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-					socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+					return (socket, adjustedEndpoint);
+				} catch(Exception) {
+
 				}
 
-				setParameters(socket);
-
-				return (socket, adjustedEndpoint);
+				return default;
 			}
 
 			ClosureWrapper<bool> results = false;
@@ -119,9 +130,9 @@ namespace Neuralia.Blockchains.Core.Network {
 				try {
 					(socket, adjustedEndpoint) = PrepareSocket(false);
 					var connect = Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, adjustedEndpoint, null);
-					bool success = await connect.HandleTimeout(TimeSpan.FromSeconds(ipv4 ? graceTimeout : timeout)).ConfigureAwait(false);
+					bool success = await connect.HandleTimeout(TimeSpan.FromSeconds((ipv4 || !doubleConnections) ? graceTimeout : timeout)).ConfigureAwait(false);
 
-					if(success || !ipv4) {
+					if(success || !ipv4 || !doubleConnections) {
 						results.Value = true;
 					}
 
@@ -152,7 +163,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				return (Socket) null;
 			});
 
-			if(!ipv4) {
+			if(!ipv4 || !doubleConnections) {
 				var result = await task1.ConfigureAwait(false);
 
 				return (result, result != null);
@@ -168,6 +179,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				// ok, lets double shoot!
 
 				var task2 = Task.Run(async () => {
+					
 					Socket socket = null;
 					IPEndPoint adjustedEndpoint = null;
 

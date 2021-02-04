@@ -11,12 +11,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TargetFrameworks>netstandard2.1;net5.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
-    <VersionPrefix>1.0.1.12</VersionPrefix>
+    <VersionPrefix>1.0.1.15</VersionPrefix>
 </PropertyGroup>
   <ItemGroup>
 
 
-    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.1.12" />
+    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.1.15" />
     <PackageReference Include="Neuralia.BouncyCastle" Version="1.0.0" />
     <PackageReference Include="Neuralia.Open.Nat" Version="1.0.0" />
 

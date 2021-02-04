@@ -1102,21 +1102,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 					}
 
-					IRestResponse result = await restUtility.Put(url, "elections/register", parameters).ConfigureAwait(false);
-
-					// ok, check the result
-					if(result.StatusCode == HttpStatusCode.OK) {
-
-						if(byte.TryParse(result.Content, out byte ipByte)) {
-							this.MiningRegistrationIpMode = (IPMode) ipByte;
+					var restParameterSet = new RestUtility.RestParameterSet<IPMode>();
+					restParameterSet.parameters = parameters;
+					restParameterSet.transform = webResult => {
+						if(byte.TryParse(webResult, out byte ipByte)) {
+							return (IPMode) ipByte;
 						}
 
+						return IPMode.Unknown;
+					};
+					(bool sent, IPMode ipMode) =await restUtility.PerformSecurePut(url, "elections/register", restParameterSet).ConfigureAwait(false);
+
+					if(sent) {
+						this.MiningRegistrationIpMode = ipMode;
 						await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);
 
-						// ok, we are not registered. we can await a response from the IP Validator
 						return;
 					}
-
 					throw new ApplicationException("Failed to register for mining through web");
 
 				}).ConfigureAwait(false);
@@ -2133,20 +2135,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 								string url = this.ChainConfiguration.WebElectionsRecordsUrl;
 
+								Guid forcedIp = Guid.Empty;
+								if(MiningTierUtils.IsFirstOrSecondTier(electionsCandidateRegistrationInfo.MiningTier)) {
+				
+									if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv4) {
+										url = this.ChainConfiguration.WebIpv4ElectionsRecordsUrl;
+									}
+									else if(this.ChainConfiguration.ServerMiningVerificationIpProtocol == IPMode.IPv6) {
+										url = this.ChainConfiguration.WebIpv6ElectionsRecordsUrl;
+									}
+				
+									if(!string.IsNullOrWhiteSpace(this.ChainConfiguration.ServerMiningVerificationStaticIp)) {
+										forcedIp = electionsCandidateRegistrationInfo.Ip;
+									}
+								}
 								Dictionary<string, object> parameters = null;
 								string action = "";
 
 								if(electionResult.ElectionMode == ElectionModes.Active) {
-									parameters = matureElectionProcessor.PrepareActiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password);
+									parameters = matureElectionProcessor.PrepareActiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password, forcedIp);
 									action = "election-records/record-active-election";
 								} else if(electionResult.ElectionMode == ElectionModes.Passive) {
-									parameters = matureElectionProcessor.PreparePassiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password);
+									parameters = matureElectionProcessor.PreparePassiveElectionWebConfirmation(currentBlockElectionDistillate, electionResult, electionsCandidateRegistrationInfo.Password, forcedIp);
 									action = "election-records/record-passive-election";
 								} else {
 									throw new ApplicationException("Invalid election type");
 								}
 								
-								(sent, _) = await restUtility.PerformSecurePut(url, action, new RestUtility.RestParameterSet<object>()).ConfigureAwait(false);
+								var restParameterSet = new RestUtility.RestParameterSet<object>();
+								restParameterSet.parameters = parameters;
+
+								restParameterSet.transform = webResult => null;
+								
+								(sent, _) = await restUtility.PerformSecurePut(url, action, restParameterSet).ConfigureAwait(false);
 
 								if(sent) {
 									await this.UpdateAccountMiningCacheExpiration(lockContext).ConfigureAwait(false);

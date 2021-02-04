@@ -208,7 +208,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// </summary>
 		public enum RpcTransports {
 			/// <summary>
-			/// No extra security aded.
+			/// No extra security added.
 			/// </summary>
 			Unsecured,
 			/// <summary>
@@ -218,45 +218,57 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		}
 
 		/// <summary>
-		/// 
+		/// Configures the way one can communicate with the node from CLI or wallet
 		/// </summary>
 		public enum RpcBindModes {
 			/// <summary>
-			/// 
+			/// Only allows to bind locally
 			/// </summary>
 			Localhost,
 			/// <summary>
-			/// 
+			/// Allows to bind from another computer (make sure your rpc port is enabled by your firewall)
 			/// </summary>
 			Any
 		}
 
 		/// <summary>
-		/// 
+		/// TODO: JDB
 		/// </summary>
-		public enum RpcLoggingLevels {
-			Information,
-			Verbose
-		}
-
 		public enum SnapshotIndexTypes {
+			/// <summary>
+			/// No shapshot mode TODO
+			/// </summary>
 			None,
+			/// <summary>
+			/// List snapshot mode TODO
+			/// </summary>
 			List,
+			/// <summary>
+			/// All snapshot mode TODO
+			/// </summary>
 			All
 		}
 		
 		/// <summary>
-		/// 
+		/// Configure Out-Of-Memory checking mode
 		/// </summary>
 		public enum MemoryCheckModes {
+			/// <summary>
+			/// No memory checks TODO
+			/// </summary>
 			Disabled,
+			/// <summary>
+			/// Virtual memory checks TODO appears unused
+			/// </summary>
 			Virtual,
+			/// <summary>
+			/// CGroup memory checks TODO
+			/// </summary>
 			CGroup
 		}
 
 		/// <summary>
 		/// How much CPU to dedicate to XMSS operations.
-		/// Default: Half of the available processor cores ::Neuralia::Blockchains::Core::Enums::ThreadMode.
 		/// </summary>
 		public Enums.ThreadMode XmssThreadMode { get; set; } = Enums.ThreadMode.Half;
 
@@ -274,7 +286,6 @@ namespace Neuralia.Blockchains.Core.Configuration {
 
 		/// <summary>
 		/// Describes how handle wallet transaction deletion.
-		///     
 		/// </summary>
 		public enum WalletTransactionDeletionModes {
 			/// <summary>
@@ -288,115 +299,114 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		}
 
 		/// <summary>
-		/// When performing a THS, do we use ram, or harddisk (slower)
+		/// When performing a THS, do we use ram, or hard disk (slower)
 		/// </summary>
 		public Enums.THSMemoryTypes THSMemoryType { get; set; } = Enums.THSMemoryTypes.RAM;
 
 		/// <summary>
-		/// how many thraeds to use for the THS
+		/// How many thraeds to use for the THS, remember you will need ram to match the thread count
 		/// </summary>
 		public int THSThreadCount { get; set; } = 1;
 		
 		/// <summary>
-		/// which protocol should we try to use
+		/// Which protocol should we try to use
 		/// </summary>
 		public IPMode IPProtocol { get; set; } = IPMode.Both;
 
 		/// <summary>
-		/// if connecting to server as ipv4, we can use an ipv6 socket that can do ipv4, or FORCE an ipv4 socket. 
+		/// If connecting to server as ipv4, we can use an ipv6 socket that can do ipv4, or **force** an ipv4 socket. 
 		/// </summary>
 		public bool ForceIpv4Socket { get; set; }
 
 		/// <summary>
-		///     What type of tcp socket to use
+		/// if true, two socket connections will be attempted
+		/// </summary>
+		public bool EnableDoubleSocketConnections { get; set; } = true;
+		
+
+		/// <summary>
+		///  What type of tcp socket to use
 		/// </summary>
 		public SocketTypes SocketType { get; set; } = SocketTypes.Duplex;
 
 		/// <summary>
-		///     If true, we will use faster but larger memory buffers from the array pool. if false, we will use the regular exact
-		///     sized buffer. slower but less ram
+		///  If true, we will use faster but larger memory buffers from the array pool. if false, we will use the regular exact
+		///  sized buffer. slower but less ram
 		/// </summary>
 		public bool UseArrayPools { get; set; } = true;
 
 		public string SystemFilesPath { get; set; }
 
 		/// <summary>
-		///     Turn on special behaviors for mobiles.
+		///  Turn on special behaviors for mobiles.
 		/// </summary>
-		/// <value>Default is false</value>
 		public bool MobileMode { get; set; } = false;
 
 		/// <summary>
-		///     Turn on special behaviors for syncless.
+		/// Turn on special behaviors for syncless.
 		/// </summary>
-		/// <value>Default is false</value>
 		public bool SynclessMode { get; set; } = false;
-
-		/// <summary>
-		/// 
-		/// </summary>
-		public int LogLevel { get; set; }
+		
 
 		/// <summary>
 		/// Which port are we arunning the server.
 		/// </summary>
-		/// <returns>Returns the port number to use. Default value: <see cref="GlobalsService.DEFAULT_PORT"/></returns>
 		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
 		
 
 		
 		/// <summary>
-		/// Gets or sets the port on which the validator will listen on. 
+		/// Configures the port on which the validator will listen on. 
 		/// </summary>
-		/// <returns>Returns the port number to use. Default value: <see cref="GlobalsService.DEFAULT_VALIDATOR_PORT"/></returns>
 		public int ValidatorPort { get; set; } = GlobalsService.DEFAULT_VALIDATOR_PORT;
 		
 		/// <summary>
-		/// 
+		/// Configures the backup (http) port on which the validator will listen on. 
 		/// </summary>
-		/// <returns>Returns the port number to use. Default value: <see cref="GlobalsService.DEFAULT_VALIDATOR_HTTP_PORT"/></returns>
 		public int ValidatorHttpPort { get; set; } = GlobalsService.DEFAULT_VALIDATOR_HTTP_PORT;
 		
 		/// <summary>
-		/// 
+		/// The port used to communicate with the node via RPC calls (used by CLI and Wallet)
 		/// </summary>
 		public int RpcPort { get; set; } = GlobalsService.DEFAULT_RPC_PORT;
 
 		/// <summary>
-		/// if true, the port 80 HTTP backup protocol will be started and used
+		/// if true, the HTTP backup protocol will be started and used (using port defined by *ValidatorHttpPort*)
 		/// </summary>
 		public bool EnableAppointmentValidatorBackupProtocol { get; set; } = true;
 
 		/// <summary>
-		/// should the IPMarshall be enabled during appointments. some may wish to disable it due to proxies 
+		/// Should the IPMarshall be enabled during appointments. Some may wish to disable it due to proxies 
 		/// </summary>
 		public bool EnableAppointmentValidatorIPMarshall { get; set; } = true;
 
 		/// <summary>
-		/// sometimes with certain setups and port triggering, connections can be too fast and trigger fails. Setting this options enables a heavier socket mode that may help traverse the router
+		/// Sometimes with certain setups and port triggering, connections can be too fast and trigger fails. Setting this options enables a heavier socket mode that may help traverse the router
 		/// </summary>
 		public bool SlowValidatorPort  { get; set; }
 		
 		/// <summary>
-		/// 
+		/// Defines whether to enable automatic port mapping (forwarding) using the Universal Plug and Play protocol (UPnP)
 		/// </summary>
 		public bool UseUPnP { get; set; } = true;
 		/// <summary>
-		/// 
+		/// Defines whether to enable automatic port mapping (forwarding) using the Port mapping Protocol (PmP, used by most Apple routers)
 		/// </summary>
 		public bool UsePmP { get; set; } = false;
+		
 		/// <summary>
 		/// When using UPnP or PmP, we check for existing port mappings. If we find a mapping that routes traffic from
-		/// one of required ports toward a foreign local ip, we try to delete the conflicting mapping and enforce ours.
+		/// one of required ports toward a local ip other than ours, we try to delete the conflicting mapping and enforce ours.
 		/// </summary>
 		public bool ReplaceConflictingPortMappings { get; set; } = true;
+		
 		/// <summary>
-		/// 
+		/// The list of nodes we try to connect to at startup (without any need for discovery). These nodes **will** count in totals and **might** be discarded in favor of better scoring nodes.
 		/// </summary>
 		public List<FullNode> Nodes { get; set; } = new ();
 
 		/// <summary>
-		/// Connections to local nodes will be maintained aggressively, and won't count in totals, meant to be used with each-others under a LAN
+		/// List of nodes deemed "local" to us. Connections to local nodes will be maintained aggressively, and won't count in totals, meant to be used with each-others under a LAN
 		/// </summary>
 		public List<FullNode> LocalNodes { get; set; } = new ();
 
@@ -408,7 +418,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		/// How are you going to use the socket to send and receive data?
 		/// </summary>
-		public enum LocalNodesMode {
+		public enum LocalNodesDiscoveryModes {
 			/// <summary>
 			/// Automatically discover our mode (need to connect with peers)
 			/// </summary>
@@ -426,7 +436,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		/// <summary>
 		/// The list of port to try while discovering local nodes. Use an empty list to deactivate local nodes discovery. 
 		/// </summary>
-		public LocalNodesMode LocalNodesDiscoveryMode { get; set; } = LocalNodesMode.Auto;
+		public LocalNodesDiscoveryModes LocalNodesDiscoveryMode { get; set; } = LocalNodesDiscoveryModes.Auto;
 		/// <summary>
 		/// To try to discover nodes on your local network, we try to open a socket at each ports listed in LocalNodesDiscoveryPorts.
 		/// This property controls how long (in seconds) we wait for an answer before giving up.
@@ -434,35 +444,40 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public double LocalNodesDiscoveryTimeout { get; set; } = 0.1;
 		
 		/// <summary>
-		/// 
+		/// List of nodes we IPMarshall and IPCrawler will treat differently. Whitelisting can be configured according to *WhitelistedNode.AcceptanceTypes*
 		/// </summary>
 		public List<WhitelistedNode> Whitelist { get; set; } = new ();
 		
 		/// <summary>
-		/// 
+		/// List of nodes we IPMarshall will blacklist on startup, permanently.
 		/// </summary>
 		public List<Node> Blacklist { get; set; } = new ();
 
 		/// <summary>
-		/// Gets of sets the logger types to be enabled in the application.
+		/// Gets of sets the logger types to be enabled in the application, see *NLog.LoggerTypes*
 		/// </summary>
-		/// <value>Returns the type of logger NLog.LoggerTypes. Empty means all.</value>
 		public List<NLog.LoggerTypes> EnabledLoggers { get; set; } = new List<NLog.LoggerTypes>{NLog.LoggerTypes.Standard}; 
 		
 		/// <summary>
-		///     how does it serialize?  if main, it will have its full blockchain files, and database. if feeder, it simply
-		///     observes the files and databases that are updated by a master
+		/// How does it serialize?  if main, it will have its full blockchain files, and database. if feeder, it simply
+		/// observes the files and databases that are updated by a master
 		/// </summary>
 		public SerializationTypes SerializationType { get; set; } = SerializationTypes.Main;
 
 		/// <summary>
-		///     Use the rest webapi to register transactions & messages. its sipler, faster and bypasses p2p transaction limits, so
-		///     its preferable to use.
+		/// Should we contact the hubs if we need to get more peers?
+		/// *Hubs are p2p IP registries, helps to bootstrap your p2p network*
+		/// </summary>
+		public bool EnableHubs { get; set; } = true;
+		
+		/// <summary>
+		/// Configure how we should contact hubs
+		/// *Hubs are p2p IP registries, helps to bootstrap your p2p network*
 		/// </summary>
 		public ContactMethods HubContactMethod { get; set; } = ContactMethods.WebOrGossip;
 
 		/// <summary>
-		/// Gets or sets the way that scoped logging is done for the blockchains.
+		/// Configures the way that scoped logging is done for the blockchains.
 		/// </summary>
 		/// <value>For possible values see <see cref="ChainScopedLogging"/>. Default value is <see cref="ChainScopedLoggingTypes.WhenMany"./></value>
 		/// <returns>The type of blockchain scoped logging. For possible types see: <see cref="ChainScopedLoggingTypes"/></returns>
@@ -478,159 +493,161 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public string PortTestDns { get; set; } = "dev-port-test.neuralium.com";
 		public string HubsWebAddress { get; set; } = "http://dev-web-hubs.neuralium.com";
 #else
+		/// <summary>
+		/// Hubs dns (gossip mode)
+		/// </summary>
 	    public string HubsGossipDNS { get; set; } = "hubs.neuralium.com";
+		/// <summary>
+		/// Port testing tool dns
+		/// </summary>
 		public string PortTestDns { get; set; } = "port-test.neuralium.com";
+		/// <summary>
+		/// Hubs dns (webapi mode)
+		/// </summary>
 		public string HubsWebAddress { get; set; } = "https://web-hubs.neuralium.com";
 #endif
 		
 		/// <summary>
-		/// if set, it will override the DNS check
+		/// If set, it will use this IP instead of the one associated with *PortTestDns*'s url
 		/// </summary>
 		public string PortTestIpOverride { get; set; }
 
 		/// <summary>
-		///     the maximum amount of IPs to keep in our cache
+		///  The maximum amount of IPs to keep in our cache
 		/// </summary>
 		public int MaximumIpCacheCount { get; set; } = 1000;
 
 		/// <summary>
-		/// 
+		/// IPCrawler's maximum number of simultaneous connections to fully-connectable peers
 		/// </summary>
 		public int MaxPeerCount { get; set; } = 10;
 		
 		/// <summary>
-		/// 
+		/// IPCrawler's maximum number of simultaneous connections to non-connectable peers
 		/// </summary>
 		public int MaxNonConnectablePeerCount { get; set; } = 3;
 
 		/// <summary>
-		/// 
+		/// IPCrawler's target number of simultaneous connections to fully-connectable peers
 		/// </summary>
 		public int AveragePeerCount { get; set; } = 5;
 		
 		/// <summary>
-		/// 
+		/// IPCrawler's maximum number of simultaneous connections to mobile peers
 		/// </summary>
 		public int MaxMobilePeerCount { get; set; } = 30;
 		
 		/// <summary>
-		/// 
+		/// IPCrawler's maximum number of new connection request per crawling iteration
 		/// </summary>
 		public int MaxConnectionRequestPerCrawl { get; set; } = 20;
 		
 		/// <summary>
-		/// 
+		/// IPCrawler will contact the hups for new ips every *HubIPsRequestPeriod* seconds
 		/// </summary>
 		public double HubIPsRequestPeriod { get; set; } = 1800;
 		
 		/// <summary>
-		/// 
+		/// IPCrawler will ask its peers for their list of ips every *PeerIPsRequestPeriod* seconds
 		/// </summary>
 		public double PeerIPsRequestPeriod { get; set; } = 600;
 		
 		/// <summary>
-		/// 
+		///  IPCrawler wait at least *PeerReconnectionPeriod* before requesting connection to a given peer again after a failed request
 		/// </summary>
 		public double PeerReconnectionPeriod { get; set; } = 60;
 
+		/// <summary>
+		///  IPCrawler will wait *IPCrawlerStartupDelay* seconds after application startup before starting to crawl for peers.
+		/// </summary>
 		public double IPCrawlerStartupDelay { get; set; } = 5.0;
 		
 		/// <summary>
-		/// Wait time between ip crawling calls 
+		/// Wait time between ip crawling calls (FIXME too functionaly similar to *IPCrawlerProcessLoopPeriod*)
 		/// </summary>
 		public double IPCrawlerCrawlPeriod { get; set; } = 3.0;
 
 		/// <summary>
-		/// Wait time to loop the process in seconds
+		/// Wait time to loop the process in seconds (FIXME too functionaly similar to *IPCrawlerCrawlPeriod*)
 		/// </summary>
 		public int IPCrawlerProcessLoopPeriod { get; set; } = 10;
 		
-		public double MaxLatency { get; set; } = 2.0;
+		/// <summary>
+		/// Maximum round trip latency tolerated with a connected peer (in seconds).
+		/// </summary>
+		public double MaxPeerLatency { get; set; } = 2.0;
 		
 		/// <summary>
-		///     how do we delete the files when doing wallet transctions? safe is slower but clears data much better
+		/// How do we delete the files when doing wallet transactions? safe is slower but clears data much better. TODO: improve me
 		/// </summary>
 		public WalletTransactionDeletionModes WalletTransactionDeletionMode { get; set; } = WalletTransactionDeletionModes.Fast;
 
 		/// <summary>
-		///     If true, the same IP can connect multiple times with different ports. if false, we allow only one connection by IP
+		/// Allows to configure proxies. TODO: improve me
 		/// </summary>
-		public bool AllowMultipleConnectionsFromSameIp { get; set; } = true;
-
-		/// <summary>
-		///     here we can reject IPs from the same CIDR range as ours.
-		/// </summary>
-		public bool AllowConnectionsFromLocalCidrRange { get; set; } = true;
-
 		public ProxySettings ProxySettings { get; set; } = null;
 
 		/// <summary>
-		///     Should we contact the hubs if we need to get more peers?
-		/// </summary>
-		public bool EnableHubs { get; set; } = true;
-
-		/// <summary>
-		///     How do we handle the transaction pool? by default, we store only metadata if we are
-		///     mining
+		/// How do we handle the transaction pool? by default, we store only metadata if we are
+		/// mining. TODO: improve me
 		/// </summary>
 		public TransactionPoolHandling TransactionPoolHandlingMode { get; set; } = TransactionPoolHandling.MiningMetadata;
 
 		/// <summary>
-		///     Various configurations only useful for debugging. we dont document them as regular uses should have no use for
-		///     them.
+		/// Various configurations only useful for debugging. We dont document them as regular users should have no use for
+		/// them.
 		/// </summary>
 		public UndocumentedDebugConfigurations UndocumentedDebugConfigurations { get; set; } = new UndocumentedDebugConfigurations();
 
+		/// <summary>
+		/// A STUN server (Session Traversal Utilities for NAT) helps to discover your actual public IP.
+		/// (From https://en.wikipedia.org/wiki/STUN: The protocol requires assistance from a third-party network server (STUN server) located on the opposing (public) side of the NAT, usually the public Internet.)
+		/// </summary>
 		public bool UseStunServer { get; set; } = false;
 
 		//TODO: set to proper value
 		/// <summary>
-		///     The amount of time in seconds before we attempt to sync again
+		/// The amount of time in seconds before we attempt to sync blockchain again
 		/// </summary>
 		public int SyncDelay { get; set; } = 60;
 
 		/// <summary>
-		///     The amount of time in seconds before we attempt to sync again
+		/// The amount of time in seconds before we attempt to sync the wallet again
 		/// </summary>
 		public int WalletSyncDelay { get; set; } = 60;
 
 		/// <summary>
-		///     do we delete blocks saved after X many days? its not very nice, so by default, we store them all.
+		///     do we delete blocks saved after X many days? its not very nice, so by default, we store them all. //TODO unused
 		/// </summary>
 		public int? DeleteBlocksAfterDays { get; set; } = null;
 
 		/// <summary>
-		/// gets or sets which RPC mode to enable.
+		/// Configure which RPC mode to enable.
 		/// <returns>see: <see cref="RpcModes"/>. Default value: <see cref="RpcModes.Signal"/></returns>
 		/// </summary>
 		public RpcModes RpcMode { get; set; } = RpcModes.Signal;
 
 		/// <summary>
-		/// Gets or sets the type of remote Procedure call transport.
+		/// Configures the type of remote Procedure call transport.
 		/// </summary>
 		/// <remarks> Enable Transport Layer Security (TLS) secure communication or not.</remarks>
 		/// <returns>return <see cref="RpcTransport"/>. Default value is <see cref="RpcTransports.Unsecured"/>.</returns>
 		public RpcTransports RpcTransport { get; set; } = RpcTransports.Unsecured;
 
 		/// <summary>
-		/// Gets or sets the RPC bidning mode.
-		///     Do we allow the Rpc to listen only to localhost, or any address
+		/// Configures the RPC bidning mode.
+		/// Do we allow the Rpc to listen only to localhost, or any address
 		/// </summary>
 		public RpcBindModes RpcBindMode { get; set; } = RpcBindModes.Localhost;
 
 		/// <summary>
-		///     What level should we use for Rpc message logging
-		/// </summary>
-		public RpcLoggingLevels RpcLoggingLevel { get; set; } = RpcLoggingLevels.Information;
-
-		/// <summary>
-		///     The TLS certificate to use. can be a path too, otherwise app root.  if null, a dynamic certificate will be
-		///     generated.
+		/// The TLS certificate to use. can be a path too, otherwise app root.  if null, a dynamic certificate will be
+		/// generated.
 		/// </summary>
 		public string TlsCertificate { get; set; } = "neuralium.com.rpc.crt";
 
 		/// <summary>
-		/// should we use memory limits
+		/// Should we use memory limits
 		/// </summary>
 		/// <remarks>CGroup this is very OS specific and best suited for containers, may not be set on the OS and not all methods may be implemented. see latest documentation</remarks>
 		public MemoryCheckModes MemoryLimitCheckMode { get; set; } = MemoryCheckModes.Disabled;
@@ -641,12 +658,12 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public long TotalUsableMemory { get; set; } = 0;
 		
 		/// <summary>
-		/// start warning that we are using a lot of memory
+		/// Threshold to tart warning that we are using a lot of memory  (value between 0.0 and 1.0, where 1.0 means 100%)
 		/// </summary>
 		public double MemoryLimitWarning { get; set; } = 0.7;
 		
 		/// <summary>
-		/// stop the app, if we reach this and limits are enabled
+		/// Threshold to stop the app, if this limit is reached and limits are enabled (value between <see cref="MemoryLimitWarning"/> and 1.0, where 1.0 means 100%)
 		/// </summary>
 		public double MemoryLimit { get; set; } = 0.9;
 		
@@ -656,7 +673,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public int TargetAppointmentRequesterCount { get; set; } = 30;
 		
 		/// <summary>
-		/// 
+		/// <returns> the current <see cref="ChainConfigurations"/> for a given <see cref="BlockchainType"/></returns>
 		/// </summary>
 		public abstract ChainConfigurations GetChainConfiguration(BlockchainType chainType);
 
@@ -665,9 +682,8 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// </summary>
 		public class Node {
 			/// <summary>
-			/// Gets or sets the IP of the node.
+			/// Configures the IP of the node.
 			/// </summary>
-			/// <returns>The IP address of the node.</returns>
 			public string Ip { get; set; }
 		}
 
@@ -676,10 +692,9 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// </summary>
 		public class FullNode : Node {
 			/// <summary>
-			/// Gets or sets the port of the node.
+			/// Configures the port of the node.
 			/// <see cref="GlobalsService.DEFAULT_PORT"/>
 			/// </summary>
-			/// <returns>The <see cref="int"/> value of the node port. Default value: <see cref="GlobalsService.DEFAULT_PORT"/></returns>
 			public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
 		}
 
@@ -704,10 +719,13 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 			}
 
 			/// <summary>
-			///  Gets or 
+			/// Configures the acceptance type <see cref="AcceptanceTypes"/>
 			/// </summary>
 			public AcceptanceTypes AcceptanceType { get; set; } = AcceptanceTypes.WithRemainingSlots;
 
+			/// <summary>
+			/// Configures whether we use a CIDR ip address range 
+			/// </summary>
 			public bool CIDR { get; set; } = false;
 		}
 
@@ -783,7 +801,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool EnableAutomaticRetry{ get; set; } = true;
 		
 		/// <summary>
-		///     Gets or sets the way serialization will be performed.
+		///     Configures the way serialization will be performed.
 		/// </summary>
 		/// <remarks><para>If master is set the full blockchain files, and database will be serialized.</para>
 		/// If feeder is set simply observes the files and databases that are updated by a master</remarks>
@@ -827,6 +845,8 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 	    public string WebIpv6ElectionsRegistrationUrl { get; set; } = "https://ipv6-election-registration.neuralium.com";
 	    
 		public string WebElectionsRecordsUrl { get; set; } = "https://election-records.neuralium.com";
+		public string WebIpv4ElectionsRecordsUrl { get; set; } = "https://ipv4-election-records.neuralium.com";
+		public string WebIpv6ElectionsRecordsUrl { get; set; } = "https://ipv6-election-records.neuralium.com";
 		
 		public string WebElectionsStatusUrl { get; set; } = "https://election-status.neuralium.com";
 		public string WebIpv4ElectionsStatusUrl { get; set; } = "https://ipv4-election-status.neuralium.com";
@@ -856,7 +876,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool UseWebTransactionPool  { get; set; } = true;
 		
 		/// <summary>
-		///     Gets or sets weather If true, during the wallet sync, the public block height will be updated, causing a creaping sync target. at false,
+		///     Configures weather If true, during the wallet sync, the public block height will be updated, causing a creaping sync target. at false,
 		///     it will sync with the height it had when it started,
 		///     even if it changes along the way.
 		/// </summary>
@@ -1000,7 +1020,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool DisableWebRegAppointmentInitiationTHS { get; set; } = true;
 		
 		/// <summary>
-		///  <para>Gets or sets if the appointment puzzle time hard signature is enabled.</para>
+		///  <para>Configures if the appointment puzzle time hard signature is enabled.</para>
 		/// </summary>
 		/// 
 		/// <returns><i>false</i>: Enables the appointment initiation request time hard signature.<br/>
@@ -1080,7 +1100,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public AppSettingsBase.ContactMethods RegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 		
 		/// <summary>
-		/// Gets or sets the blockchain sync method. 
+		/// Configures the blockchain sync method. 
 		/// </summary>
 		/// <value>return the Contact method do use for blockchain syncing. <br>
 		///Default value: <see cref="AppSettingsBase.ContactMethods.Gossip"/>. Also <seealso cref="AppSettingsBase.ContactMethods"/>
@@ -1273,6 +1293,9 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// if EnableKeyHeightChecks is enabled in KeyLog, a bad index will raise a stop warning. If this option is set to true, the index issue will be ignored and the key index will fast forward.
 		/// </summary>
 		public bool EnableKeyHeightIndexFastForwards { get; set; } = true;
+		
+		
+		public bool EnableKeyLogFastForwards { get; set; } = true;
 	}
 	
 	/// <summary>
@@ -1315,15 +1338,15 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// </summary>
 		public string Host { get; set; }
 		/// <summary>
-		///  Gets or sets the connection port for the proxy.
+		///  Configures the connection port for the proxy.
 		/// </summary>
 		public int Port { get; set; }
 		/// <summary>
-		/// Gets or sets the username to connect to the proxy.
+		/// Configures the username to connect to the proxy.
 		/// </summary>
 		public string User { get; set; }
 		/// <summary>
-		/// Gets or sets the password to connect to the proxy.
+		/// Configures the password to connect to the proxy.
 		/// </summary>
 		public string Password { get; set; }
 	}

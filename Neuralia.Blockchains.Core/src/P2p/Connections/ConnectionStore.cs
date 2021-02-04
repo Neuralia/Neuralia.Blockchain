@@ -1918,16 +1918,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		public bool PeerConnecting(NetworkEndPoint endpoint, PeerConnection.Directions direction) {
-			if(GlobalSettings.ApplicationSettings.AllowMultipleConnectionsFromSameIp) {
-				lock(this.locker) {
-					return this.ConnectingConnections.Values.ToArray().Any(c => {
-						NetworkEndPoint currentEndpoint = GetEndpoint(c.connection);
-
-						return currentEndpoint.EndPoint.Equals(endpoint.EndPoint) && currentEndpoint.IPMode.Equals(endpoint.IPMode);
-					});
-				}
-			}
-
 			return this.PeerConnecting(GetEndpointIp(endpoint), direction);
 		}
 
@@ -1951,18 +1941,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		public bool PeerConnected(NetworkEndPoint endpoint) {
-
-			if(GlobalSettings.ApplicationSettings.AllowMultipleConnectionsFromSameIp) {
-				lock(this.locker) {
-					return this.Connections.Values.ToArray().Any(c => {
-
-						NetworkEndPoint currentEndpoint = GetEndpoint(c);
-
-						return currentEndpoint.EndPoint.Equals(endpoint.EndPoint) && currentEndpoint.IPMode.Equals(endpoint.IPMode);
-					});
-				}
-			}
-
 			return this.PeerConnected(GetEndpointIp(endpoint));
 		}
 

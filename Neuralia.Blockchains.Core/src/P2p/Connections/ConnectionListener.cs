@@ -101,7 +101,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		protected virtual ITcpServer CreateTcpServer(IPMode ipMode) {
 			IPAddress address = IPAddress.Any;
 			
-			if(ipMode.HasFlag(IPMode.IPv6) && TcpConnection.IPv6Supported) {
+			if(ipMode.HasFlag(IPMode.IPv6) && TcpConnection.IPv6Supported && !GlobalSettings.ApplicationSettings.ForceIpv4Socket) {
 				address = IPAddress.IPv6Any;
 			}
 			

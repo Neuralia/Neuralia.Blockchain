@@ -179,8 +179,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				} else if(bcex is ReportableException rex) {
 					// this is an important message we must report to the user
 					this.PostSystemEventImmediate(SystemEventGenerator.RaiseAlert(rex), new CorrelationContext()).WaitAndUnwrapException();
-				}
+				} 
 			}
+			else if(e.Exception is OutOfMemoryException oex) {
+				// this is an important message we must report to the user
+				try {
+					this.Log.Fatal(oex, oex.Message);
+				} catch {
+					
+				}
+
+				this.UrgentShutdown();
+			} 
 		}
 
 		public async Task<bool> CheckAvailableMemory() {
@@ -199,50 +209,59 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			//TODO: what else. should we stop the chain?
 			this.PostSystemEventImmediate(SystemEventGenerator.RequestShutdown()).WaitAndUnwrapException();
 
-			if(this.urgentShutdownTimer == null) {
-				
-				// try to clear some memory
-				
-				try {
-					this.ChainComponentProvider.ChainDataWriteProviderBase.ClearBlocksCache();
-				} catch {
-					// do nothing
-				}
-				
-				try {
-					this.ChainComponentProvider.WalletProviderBase.ClearSynthesizedBlocksCache();
-				} catch {
-					// do nothing
-				}
-				try {
-					this.ChainComponentProvider.ChainMiningProviderBase.ClearElectionBlockCache();
-				} catch {
-					// do nothing
-				}
+			try {
+				if(this.urgentShutdownTimer == null) {
 
-				//TODO: what else can we clear here?
-				
-				// this below might be a bad idea
-				// try {
-				// 	this.ChainComponentProvider.ChainNetworkingProviderBase.UrgentClearConnections();
-				// } catch {
-				// 	// do nothing
-				// }
-				
-				GC.Collect(2, GCCollectionMode.Forced, true, true);
-				
-				// start a timer so we can force a shutdown if it takes too long
-				Repeater.Repeat(() => {
-					this.urgentShutdownTimer = new Timer(state => {
+					// try to clear some memory
 
-						Environment.Exit(1);
+					try {
+						this.ChainComponentProvider.ChainDataWriteProviderBase.ClearBlocksCache();
+					} catch {
+						// do nothing
+					}
 
-					}, this, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
-				});
+					try {
+						this.ChainComponentProvider.WalletProviderBase.ClearSynthesizedBlocksCache();
+					} catch {
+						// do nothing
+					}
+
+					try {
+						this.ChainComponentProvider.ChainMiningProviderBase.ClearElectionBlockCache();
+					} catch {
+						// do nothing
+					}
+
+					//TODO: what else can we clear here?
+
+					// this below might be a bad idea
+					// try {
+					// 	this.ChainComponentProvider.ChainNetworkingProviderBase.UrgentClearConnections();
+					// } catch {
+					// 	// do nothing
+					// }
+
+					GC.Collect(2, GCCollectionMode.Forced, true, true);
+
+					// start a timer so we can force a shutdown if it takes too long
+					Repeater.Repeat(() => {
+						this.urgentShutdownTimer = new Timer(state => {
+
+							Environment.Exit(1);
+
+						}, this, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+					});
+				}
+			} catch {
+				
 			}
 
-			// we really want to shutdown early
-			this.RequestShutdown().WaitAndUnwrapException();
+			try {
+				// we really want to shutdown early
+				this.RequestShutdown().WaitAndUnwrapException();
+			} catch {
+				Environment.Exit(1);
+			}
 		}
 
 		public event Func<LockContext, Task> BlockchainSynced;

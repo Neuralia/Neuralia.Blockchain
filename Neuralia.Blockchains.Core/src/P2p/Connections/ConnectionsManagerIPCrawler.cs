@@ -2,10 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
-using System.Text;
 using System.Threading.Tasks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Exceptions;
@@ -26,7 +23,7 @@ using Neuralia.Blockchains.Tools.Data.Arrays;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Blockchains.Tools.Threading;
-using RestSharp;
+
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
 
@@ -129,7 +126,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				, GlobalSettings.ApplicationSettings.LocalNodesDiscoveryPorts
 				, GlobalSettings.ApplicationSettings.LocalNodesDiscoveryTimeout
 				, Convert.ToInt32(GlobalSettings.ApplicationSettings.LocalNodesDiscoveryMode)
-				, GlobalSettings.ApplicationSettings.MaxLatency);
+				, GlobalSettings.ApplicationSettings.MaxPeerLatency);
 		}
 
 		private void HandleNewConnection(PeerConnection connection) {

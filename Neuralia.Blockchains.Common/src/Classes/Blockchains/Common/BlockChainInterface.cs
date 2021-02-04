@@ -87,6 +87,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<int> QueryDigestHeight();
 		
 		TaskResult<long> QueryLowestAccountBlockSyncHeight();
+		TaskResult<bool> ResetWalletIndex();
 
 		TaskResult<bool> SetPuzzleAnswers(List<int> answers);
 
@@ -607,6 +608,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			}, lockContext);
 		}
 
+		public TaskResult<bool> ResetWalletIndex() {
+			LockContext lockContext = null;
+
+			return this.RunTaskMethodAsync(lc => {
+				return CentralCoordinator.ChainComponentProvider.WalletProviderBase.ResetWalletIndex(lc);
+			}, lockContext);
+			
+		}
 		public TaskResult<bool> SetPuzzleAnswers(List<int> answers) {
 			LockContext lockContext = null;
 
