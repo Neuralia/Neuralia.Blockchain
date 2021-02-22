@@ -23,22 +23,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		}
 
-		/// <summary>
-		///     Insert the new empty wallet
-		/// </summary>
-		/// <param name="wallet"></param>
-		protected Task InsertNewDbData(WalletAccountKeyLog keyLog, LockContext lockContext) {
-
-			return this.RunDbOperation((dbdal, lc) => {
-				dbdal.Insert(keyLog, c => c.Id);
-
-				return Task.CompletedTask;
-			}, lockContext);
-
-		}
-
 		protected override Task CreateDbFile(IWalletDBDAL dbdal, LockContext lockContext) {
 			dbdal.CreateDbFile<WalletAccountKeyLog, ObjectId>(i => i.Id);
+			
+			dbdal.CreateDbFile<WalletAccountKeyLogMetadata, int>(i => i.Id);
 
 			return Task.CompletedTask;
 		}
@@ -62,6 +50,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 				}
 			}
 		}
+
+		public async Task<WalletAccountKeyLogMetadata> GetKeyLogMetadata(LockContext lockContext) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return await RunQueryDbOperation((dbdal, lc) => {
+					if(dbdal.CollectionExists<WalletAccountKeyLogMetadata>()) {
+						return Task.FromResult(dbdal.GetSingle<WalletAccountKeyLogMetadata>());
+					}
+
+					return Task.FromResult((WalletAccountKeyLogMetadata) default);
+				}, lockContext).ConfigureAwait(false);
+			}
+		}
+
+		public async Task<bool> UpdateKeyLogMetadata(WalletAccountKeyLogMetadata keyLogMetadata, LockContext lockContext) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return await RunDbOperation((dbdal, lc) => {
+
+					if(!dbdal.CollectionExists<WalletAccountKeyLogMetadata>()) {
+						dbdal.CreateDbFile<WalletAccountKeyLogMetadata, int>(i => i.Id);
+					}
+
+					if(!dbdal.Any<WalletAccountKeyLogMetadata>()) {
+
+						dbdal.Insert(keyLogMetadata, k => k.Id);
+					} else {
+						dbdal.Update(keyLogMetadata);
+					}
+
+					return Task.FromResult(true);
+				}, lockContext).ConfigureAwait(false);
+			}
+		}
+		
 		public async Task InsertKeyLogEntry(WalletAccountKeyLog walletAccountKeyLog, LockContext lockContext) {
 			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
 				await this.RunDbOperation((dbdal, lc) => {

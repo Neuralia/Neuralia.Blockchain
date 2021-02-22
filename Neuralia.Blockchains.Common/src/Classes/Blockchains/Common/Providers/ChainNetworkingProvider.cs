@@ -124,7 +124,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		Task<(bool success, CheckAppointmentRequestConfirmedResult result)> PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext, bool enableBackup = true);
 		Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext, bool enableBackup = true);
-		Task<(bool success, CheckAppointmentContextResult2 result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true);
+		Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true);
 		Task<(bool success, string triggerKey)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext, bool enableBackup = true);
 
 		Task<(bool success, CheckAppointmentsResult result)> QueryAvailableAppointments(LockContext lockContext);
@@ -746,13 +746,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (sent, null);
 		}
 
-		public async Task<(bool success, CheckAppointmentContextResult2 result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true) {
+		public async Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true) {
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
 			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
 			bool sent = false;
-			CheckAppointmentContextResult2 result = null;
+			CheckAppointmentContextResult result = null;
 
 			if(useWeb) {
 				try {
@@ -765,16 +765,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					parameters.Add("appointment", appointment.Ticks);
 
 					string url = chainConfiguration.WebAppointmentsRegistrationUrl;
-					string action = "appointments/check-appointment-context2";
+					string action = "appointments/check-appointment-context";
 
-					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentContextResult2>();
+					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentContextResult>();
 					restParameterSet.parameters = parameters;
 
 					restParameterSet.transform = webResult => {
 						var serializerSettings = new JsonSerializerOptions();
 						serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 
-						return JsonSerializer.Deserialize<CheckAppointmentContextResult2>(webResult, serializerSettings);
+						return JsonSerializer.Deserialize<CheckAppointmentContextResult>(webResult, serializerSettings);
 					};
 
 					(sent, result) = await restUtility.PerformSecurePost(url, action, restParameterSet).ConfigureAwait(false);
@@ -820,7 +820,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					parameters.Add("appointment", appointment.Ticks);
 
 					string url = chainConfiguration.WebAppointmentsRegistrationUrl;
-					string action = "appointments/check-appointment-trigger2";
+					string action = "appointments/check-appointment-trigger";
 
 					var restParameterSet = new RestUtility.RestParameterSet<string>();
 					restParameterSet.parameters = parameters;
@@ -863,27 +863,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
 					bool sent = false;
-					CheckAppointmentsResult result = null;
+					CheckAppointmentsResult2 result = null;
 
 					Dictionary<string, object> parameters = new Dictionary<string, object>();
 
 					string url = chainConfiguration.WebAppointmentsRegistrationUrl;
-					string action = "appointments/check-appointments";
+					string action = "appointments/check-appointments2";
 
-					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentsResult>();
+					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentsResult2>();
 					restParameterSet.parameters = parameters;
 
 					restParameterSet.transform = webResult => {
 						var serializerSettings = new JsonSerializerOptions();
 						serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 
-						return JsonSerializer.Deserialize<CheckAppointmentsResult>(webResult, serializerSettings);
+						return JsonSerializer.Deserialize<CheckAppointmentsResult2>(webResult, serializerSettings);
 					};
 
 					(sent, result) = await restUtility.PerformSecurePost(url, action, restParameterSet).ConfigureAwait(false);
 
 					if(sent && result != null) {
-						return (true, result);
+						return (true, new CheckAppointmentsResult(){Appointments = result.Appointments.Select(a => new DateTime(a, DateTimeKind.Utc)).ToArray()});
 					}
 				} catch(Exception ex) {
 					this.CentralCoordinator.Log.Error(ex, "Failed to register message through web");

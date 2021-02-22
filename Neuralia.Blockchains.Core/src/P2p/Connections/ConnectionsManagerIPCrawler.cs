@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Threading.Tasks;
+using MoreLinq.Extensions;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Exceptions;
 using Neuralia.Blockchains.Core.Logging;
@@ -68,7 +69,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private DateTime? nextSyncProxiesAction;
 		private DateTime? nextDiscoverLocalNodesAction;
 
-		public ConnectionsManagerIPCrawler(ServiceSet<R> serviceSet) : base(1000 * GlobalSettings.ApplicationSettings.IPCrawlerProcessLoopPeriod) {
+		public ConnectionsManagerIPCrawler(ServiceSet<R> serviceSet) : base(Convert.ToInt32(1000 * GlobalSettings.ApplicationSettings.IPCrawlerProcessLoopPeriod)) {
 			this.networkingService = (INetworkingService<R>) DIService.Instance.GetService<INetworkingService>();
 
 			this.clientWorkflowFactory = serviceSet.InstantiationService.GetClientWorkflowFactory(serviceSet);
@@ -126,7 +127,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				, GlobalSettings.ApplicationSettings.LocalNodesDiscoveryPorts
 				, GlobalSettings.ApplicationSettings.LocalNodesDiscoveryTimeout
 				, Convert.ToInt32(GlobalSettings.ApplicationSettings.LocalNodesDiscoveryMode)
-				, GlobalSettings.ApplicationSettings.MaxPeerLatency);
+				, GlobalSettings.ApplicationSettings.MaxPeerLatency
+				, GlobalSettings.ApplicationSettings.IPCrawlerPrintNConnections);
 		}
 
 		private void HandleNewConnection(PeerConnection connection) {
@@ -543,8 +545,25 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			var parameters = new Dictionary<string, object>();
 
 			using(IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator()) {
-				List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, true, true, false);
-				var nodeAddressInfoList = new NodeAddressInfoList(currentAvailableNodes);
+				List<NodeAddressInfo> currentAvailableNodes = this.connectionStore.GetAvailablePeerNodes(null, true, false, false); //ipv6 nodes might seem non-connectable to some ipv4 nodes
+				
+				currentAvailableNodes.Shuffle();
+				
+				int Score(NodeAddressInfo nai, Enums.PeerTypes targetType)
+				{
+					int score = 0;
+					if (nai.IsConnectable)
+						score += 5;
+					if (nai.IsPeerTypeKnown)
+					{
+						score += 5;
+						if (nai.PeerInfo.PeerType == targetType)
+							score += 5;
+					}
+					return score;
+				}
+				var nodeAddressInfoList = new NodeAddressInfoList(currentAvailableNodes.OrderByDescending(n => Score(n, Enums.PeerTypes.Mobile)).Take(1) //JD wants us to send a few mobile too
+					.Concat(currentAvailableNodes.OrderByDescending(n => Score(n, Enums.PeerTypes.FullNode)).Take(9)));
 
 				GlobalSettings.Instance.NodeInfo.Dehydrate(dehydrator);
 				nodeAddressInfoList.Dehydrate(dehydrator);
@@ -563,7 +582,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				var infoList = new NodeAddressInfoList();
 				Guid ip = rehydrator.ReadGuid();
-				var ipAddress =IPUtils.GuidToIP(ip);
+				var ipAddress = IPUtils.GuidToIP(ip);
 				
 				this.connectionStore.AddPeerReportedPublicIp(ipAddress, ConnectionStore.PublicIpSource.Hub);
 				

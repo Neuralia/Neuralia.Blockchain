@@ -50,7 +50,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 
 		private bool localMode;
 
-		private ImmutableList<AccountId> publishedAccounts;
+		private ImmutableDictionary<AccountId, AccountId> publishedAccounts;
 
 		protected SnapshotCacheSet<ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> snapshotCacheSet;
 
@@ -266,14 +266,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 			this.snapshotCacheSet.Reset();
 		}
 
-		public void SetLocalAccounts(ImmutableList<AccountId> publishedAccounts, ImmutableList<AccountId> dispatchedAccounts) {
+		public void SetLocalAccounts(ImmutableDictionary<AccountId, AccountId> publishedAccounts, ImmutableList<AccountId> dispatchedAccounts) {
 			this.publishedAccounts = publishedAccounts;
 			this.dispatchedAccounts = dispatchedAccounts;
 		}
 
-		public void SetLocalAccounts(ImmutableList<AccountId> publishedAccounts) {
-			this.publishedAccounts = publishedAccounts;
-			this.dispatchedAccounts = null;
+		public void SetLocalAccounts(ImmutableDictionary<AccountId, AccountId> publishedAccounts) {
+			this.SetLocalAccounts(publishedAccounts, null);
 		}
 
 		public void ClearLocalAccounts() {
@@ -313,7 +312,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 		/// </summary>
 		/// <param name="transactions"></param>
 		/// <returns></returns>
-		public async Task<(List<ITransaction> impactingLocals, List<(ITransaction transaction, AccountId targetAccount)> impactingExternals, Dictionary<AccountId, List<TransactionId>> accountsTransactions)> GetImpactingTransactionsList(List<ITransaction> transactions, LockContext lockContext) {
+		public async Task<(List<ITransaction> impactingLocals, List<(ITransaction transaction, AccountId targetAccount)> impactingExternals, Dictionary<AccountId, List<TransactionId>> accountsTransactions)> GetImpactingTransactionsList(List<ITransaction> transactions ,InterpretationProvider.AccountCache accountCache, LockContext lockContext) {
 
 			await this.Initialize().ConfigureAwait(false);
 
@@ -358,7 +357,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 					foreach(AccountId account in trackedAccounts) {
 						// ok, this transaction impacts us. lets see if its send by us, or not
 
-						if(account == transaction.TransactionId.Account) {
+						AccountId presentationAccountId = null;
+						if(accountCache.publishedAccountsList.ContainsKey(account)) {
+							presentationAccountId = accountCache.publishedAccountsList[account];
+						}
+						if(account == transaction.TransactionId.Account || (presentationAccountId != null ? transaction.TransactionId.Account == presentationAccountId:false)) {
 							if(!impactingLocals.ContainsKey(transaction.TransactionId)) {
 								impactingLocals.Add(transaction.TransactionId, transaction);
 							}
@@ -400,7 +403,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 				}
 
 				// determine if it is a local account matching and if yes, if it is a dispatched one
-				isLocal = isDispatched || impactedSnapshots.standardAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false) || impactedSnapshots.jointAccounts.Any(a => this.publishedAccounts?.Contains(a) ?? false);
+				isLocal = isDispatched || impactedSnapshots.standardAccounts.Any(a => this.publishedAccounts?.ContainsKey(a) ?? false) || impactedSnapshots.jointAccounts.Any(a => this.publishedAccounts?.ContainsKey(a) ?? false);
 
 				if(isLocal) {
 
@@ -410,8 +413,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 						impactedLocalDispatchedAccounts.Add(accounthash);
 					}
 
-					List<AccountId> impactedLocalPublishedAccounts = impactedSnapshots.standardAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false).ToList();
-					impactedLocalPublishedAccounts.AddRange(impactedSnapshots.jointAccounts.Where(a => this.publishedAccounts?.Contains(a) ?? false));
+					List<AccountId> impactedLocalPublishedAccounts = impactedSnapshots.standardAccounts.Where(a => this.publishedAccounts?.ContainsKey(a) ?? false).ToList();
+					impactedLocalPublishedAccounts.AddRange(impactedSnapshots.jointAccounts.Where(a => this.publishedAccounts?.ContainsKey(a) ?? false));
 
 					// determine if it is our own transaction, or if it is foreign
 					bool isOwn = impactedLocalPublishedAccounts.Contains(transaction.TransactionId.Account) || impactedLocalDispatchedAccounts.Contains(transaction.TransactionId.Account);

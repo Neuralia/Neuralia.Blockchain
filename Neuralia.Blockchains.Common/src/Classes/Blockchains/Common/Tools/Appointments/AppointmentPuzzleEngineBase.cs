@@ -61,7 +61,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Appointme
 				libraryFiles.Add(await this.LoadLibrary(library).ConfigureAwait(false));
 			}
 			
-			return string.Format(frame, index, appointmentKeyHash, string.Join(" ", libraryFiles.Select(l => $"<script type=\"text/javascript\">{l}</script>")), localeTable, puzzleCode);
+			return string.Format(frame, appointmentKeyHash, index, string.Join(" ", libraryFiles.Select(l => $"<script type=\"text/javascript\">{l}</script>")), localeTable, puzzleCode);
 		}
 
 		protected virtual async Task<string> LoadFrame() {

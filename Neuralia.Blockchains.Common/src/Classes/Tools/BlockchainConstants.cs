@@ -8,7 +8,7 @@ namespace Neuralium.Blockchains.Neuralium.Classes.NeuraliumChain {
 		/// <summary>
 		/// the latest release, change every build
 		/// </summary>
-		public static SoftwareVersion ReleaseVersion { get; } = new SoftwareVersion(1,0,1,15, "MAINNET RELEASE");
+		public static SoftwareVersion ReleaseVersion { get; } = new SoftwareVersion(1,0,1,19, "MAINNET RELEASE");
 		
 		/// <summary>
 		/// the blockchain compatibility version for backwards compatibility. change rarely!

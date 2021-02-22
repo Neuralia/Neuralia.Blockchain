@@ -132,7 +132,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Arch
 				string backupManifestPath = this.GetManifestFilePath(selectedWorkingDirectory);
 				FileExtensions.WriteAllText(backupManifestPath, System.Text.Json.JsonSerializer.Serialize(manifest), this.FileSystem);
 
-				ZipFile.CreateFromDirectory(selectedWorkingDirectory, zipFile);
+				var folder = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+
+				try {
+					FileExtensions.EnsureDirectoryStructure(folder);
+					
+					// make sure to ignore the unwrapped folders
+					await FileExtensions.CloneDirectory(selectedWorkingDirectory, folder, true).ConfigureAwait(false);
+
+					ZipFile.CreateFromDirectory(folder, zipFile);
+				} finally {
+					await SecureWipe.WipeDirectory(folder, this.FileSystem).ConfigureAwait(false);
+				}
 				
 				this.FileSystem.DeleteFile(backupManifestPath);
 

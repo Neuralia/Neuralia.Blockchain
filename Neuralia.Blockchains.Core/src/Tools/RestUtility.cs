@@ -117,18 +117,20 @@ namespace Neuralia.Blockchains.Core.Tools {
 							if(manualResetEventSlim == null) {
 								manualResetEventSlim = new AsyncManualResetEventSlim();
 							}
-
-							manualResetEventSlim.Reset();
+							
 							// ok, lets wait until rate limiting is passed
-							await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+							if(await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false)) {
+								manualResetEventSlim.Reset();
+							}
 						} else {
 							if(manualResetEventSlim == null) {
 								manualResetEventSlim = new AsyncManualResetEventSlim();
 							}
 
-							manualResetEventSlim.Reset();
 							// ok, lets wait until rate limiting is passed
-							await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+							if(await manualResetEventSlim.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false)) {
+								manualResetEventSlim.Reset();
+							}
 							
 							if(webResult.ErrorException != null) {
 								throw webResult.ErrorException;
@@ -142,7 +144,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 					}
 
 					tries++;
-				} while(tries == limit);
+				} while(tries != limit);
 
 				throw new ApplicationException($"Failed rest call for {action}");
 			} finally {

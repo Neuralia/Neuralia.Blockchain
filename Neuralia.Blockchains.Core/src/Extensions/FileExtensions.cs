@@ -8,6 +8,8 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 	public static class FileExtensions {
 
+		public const string UNWRAPPED_FOLDER_NAME = "unwrapped";
+		
 		public static long FileSize(string filename, FileSystemWrapper fileSystem) {
 			return fileSystem.GetFileLength(filename);
 		}
@@ -238,6 +240,26 @@ namespace Neuralia.Blockchains.Core.Extensions {
 
 		public static string ReadAllText(string filename, FileSystemWrapper fileSystem) {
 			return fileSystem.ReadAllText(filename);
+		}
+
+		public static Task CloneDirectory(string source, string destination, bool ignoreUnwrapped = false) {
+			return CloneDirectory(new DirectoryInfo(source), new DirectoryInfo(destination), ignoreUnwrapped);
+		}
+
+		public static async Task CloneDirectory(DirectoryInfo source, DirectoryInfo destination, bool ignoreUnwrapped = false) {
+			foreach(DirectoryInfo dir in source.GetDirectories()) {
+				if(ignoreUnwrapped && string.Compare(dir.Name, UNWRAPPED_FOLDER_NAME, StringComparison.InvariantCultureIgnoreCase) == 0) {
+					// ignore unwrapped folders
+					return;
+				}
+				destination.CreateSubdirectory(dir.Name);
+
+				await CloneDirectory(dir, destination.CreateSubdirectory(dir.Name), ignoreUnwrapped).ConfigureAwait(false);
+			}
+
+			foreach(FileInfo file in source.GetFiles()) {
+				file.CopyTo(Path.Combine(destination.FullName, file.Name));
+			}
 		}
 
 		public static async Task CopyAsync(string source, string destination)

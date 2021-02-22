@@ -85,6 +85,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		private const string TAG = "ClientChainSyncWorkflow";
 		
 		private const string DOWNLOAD_TEMP_DIR_NAME = "files";
+		
+		private const string CLIENT_UUID_FILE_NAME = "client-uuid";
 
 		/// <summary>
 		///     the maximum size of slices sent to each peer
@@ -399,9 +401,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(usableBlocHeight == usablePublicBlockHeight) {
 					this.ChainStateProvider.LastSync = DateTimeEx.CurrentTime;
-					this.CentralCoordinator.Log.Information($"{TAG} Synchronization for '{BlockchainTypes.GetBlockchainTypeName(this.chainType)}' chain is completed.");
+					this.CentralCoordinator.Log.Debug($"{TAG} Synchronization for '{BlockchainTypes.GetBlockchainTypeName(this.chainType)}' chain is completed.");
 				} else {
-					this.CentralCoordinator.Log.Information($"{TAG} Synchronization for '{BlockchainTypes.GetBlockchainTypeName(this.chainType)}' end but we are not fully synced. We will try again.");
+					this.CentralCoordinator.Log.Debug($"{TAG} Synchronization for '{BlockchainTypes.GetBlockchainTypeName(this.chainType)}' end but we are not fully synced. We will try again.");
 
 				}
 
@@ -697,7 +699,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				else
 					this.CentralCoordinator.Log.Verbose($"{TAG} {nameof(FetchNewPeers)}: Not a single active connection found");
 
-				this.CentralCoordinator.Log.Information($"{TAG} Workflow to check for new Synchronization peers is completed. Added {validRepliesCount} new peers.");
+				this.CentralCoordinator.Log.Debug($"{TAG} Workflow to check for new Synchronization peers is completed. Added {validRepliesCount} new peers.");
 			} 
 			catch(Exception ex) {
 				if(ex is ThreadTimeoutException || ex is OperationCanceledException || ex is ObjectDisposedException) {
@@ -1440,7 +1442,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									parameters.processReturnMessage(message, connection.ClientUuid, nextBlockPeerSpecs);
 								}
 
-								parameters.writeDataSlice(message.Slices, message);
+								parameters.writeDataSlice(message.Slices, connection.ClientUuid, message);
 
 								// make this peer available again for another slice and wrap this slice up with it's hash. it is done
 								sliceEntry.SetCompleted(HashingUtils.GenerateBlockDataSliceHash(message.Slices.SlicesInfo.Select(s => s.Value.Data).ToList()));
@@ -1824,7 +1826,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			manifestSlice.Downloaded = true;
 
 			string dirName = this.GetDownloadTempDirName(path);
-
+			
 			foreach(KeyValuePair<FILE_KEY, SLICE_TYPE> fileSlice in sliceData.SlicesInfo) {
 
 				DataSliceInfo sliceInfo = manifestSlice.fileSlices[fileSlice.Key];
@@ -1955,66 +1957,160 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		///     a single actor, so ew check for consensus among all our replies
 		/// </summary>
 		/// <param name="potentialPublicBlockHeights"></param>
-		protected void UpdatePublicBlockHeight(List<long> potentialPublicBlockHeights) {
+		protected async Task UpdatePublicBlockHeight(List<long> potentialPublicBlockHeights) {
 
 			potentialPublicBlockHeights = potentialPublicBlockHeights.Where(v => v > 0).ToList();
 
 			if(!potentialPublicBlockHeights.Any()) {
 				return;
 			}
-
-			(long result, ConsensusUtilities.ConsensusType consensusType) = ConsensusUtilities.GetConsensus(potentialPublicBlockHeights);
-
+			
 			long publicBlockHeight = this.ChainStateProvider.PublicBlockHeight;
+			bool tieBreakDetermined = false;
 
-			if(consensusType == ConsensusUtilities.ConsensusType.Single) {
-				// we got a simple reply, we can't quite trust it. we only take it if its bigger than current. we may overwrite it when we get a proper consensus
-				if(result > publicBlockHeight) {
-					publicBlockHeight = result;
+			List<long> entries = potentialPublicBlockHeights.Where(e => e >= publicBlockHeight).ToList();
+
+			// if the next block is the next one, it is highly probably true and we can certainly try it without too much risk no matter what
+			if(entries.Any()) {
+				long reportedHeight = entries.Max();
+					
+				if(reportedHeight == publicBlockHeight || reportedHeight == (publicBlockHeight + 1)) {
+					// this is highly probable, we can accept this
+					publicBlockHeight = reportedHeight;
+					tieBreakDetermined = true;
 				}
-			} else if(consensusType == ConsensusUtilities.ConsensusType.Split) {
+			}
 
-				// in case of the split, we will be safe and take the highest height that is higher than our chain. we may overwrite it when we get a proper consensus
-				try {
-					List<long> entries = potentialPublicBlockHeights.Where(e => e >= publicBlockHeight).ToList();
+			if(!tieBreakDetermined) {
+				(long result, ConsensusUtilities.ConsensusType consensusType) = ConsensusUtilities.GetConsensus(potentialPublicBlockHeights);
 
-					if(entries.Any()) {
-						long reportedHeight = entries.Max();
+				async Task FetchWebPublicBlockId(Action<long> success) {
+					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.None);
+					var restParameterSet = new RestUtility.RestParameterSet<long>();
 
-						if(reportedHeight > publicBlockHeight) {
-							publicBlockHeight = reportedHeight;
+					restParameterSet.transform = webResult => {
+						if(long.TryParse(webResult, out long blockId)) {
+							return blockId;
+						}
+
+						return 0;
+					};
+
+					(bool sent, long webBlockId) = await restUtility.PerformSecureGet(this.ChainConfiguration.WebSyncUrl, $"sync/public-block-height", restParameterSet).ConfigureAwait(false);
+
+					if(sent) {
+						success(webBlockId);
+					}
+				}
+
+				if(consensusType == ConsensusUtilities.ConsensusType.Single) {
+
+					if(!tieBreakDetermined && this.ChainConfiguration.ChainSyncPublicBlockHeightTieBreaking.HasFlag(AppSettingsBase.ContactMethods.Web)) {
+						try {
+							await FetchWebPublicBlockId(blockId => {
+								publicBlockHeight = blockId;
+								tieBreakDetermined = true;
+							}).ConfigureAwait(false);
+						} catch {
+
 						}
 					}
-				} catch {
-					// we just let it go
-				}
-			} else {
-				if(consensusType == ConsensusUtilities.ConsensusType.Absolute) {
-					// this is easy, everybody agrees, let's take it
-					publicBlockHeight = result;
-				} else {
-					// ok, we got a split decision. we dont necessarily take the majority since we could be missing a new update.
-					// we will simply take the highest with more than 2 in agreement
-					List<(long Value, int Count)> groupings = ConsensusUtilities.GetConsensusGroupings(potentialPublicBlockHeights);
-					List<(long Value, int Count)> multipleGroupings = groupings.Where(c => c.Count > 1).ToList();
 
-					if(multipleGroupings.Any()) {
-						publicBlockHeight = multipleGroupings.Max(c => c.Value);
-					} else {
-						// finally, everyone disagrees. we will take the highest number for now...  we may overwrite it when we get a proper consensus
+					if(!tieBreakDetermined && this.ChainConfiguration.ChainSyncPublicBlockHeightTieBreaking.HasFlag(AppSettingsBase.ContactMethods.Gossip)) {
+						// we got a simple reply, we can't quite trust it. we only take it if its bigger than current. we may overwrite it when we get a proper consensus
+						if(result > publicBlockHeight) {
+							publicBlockHeight = result;
+							tieBreakDetermined = true;
+						}
+					}
+				} else if(consensusType == ConsensusUtilities.ConsensusType.Split) {
+
+					// its an even 50/50 split!
+					// maybe we can break it using web?
+					if(!tieBreakDetermined && this.ChainConfiguration.ChainSyncPublicBlockHeightTieBreaking.HasFlag(AppSettingsBase.ContactMethods.Web)) {
 						try {
-							long reportedHeight = 0;
-							List<long> potentials = potentialPublicBlockHeights.Where(e => e >= publicBlockHeight).ToList();
+							await FetchWebPublicBlockId(blockId => {
+								publicBlockHeight = blockId;
+								tieBreakDetermined = true;
+							}).ConfigureAwait(false);
+						} catch {
 
-							if(potentials.Any()) {
-								reportedHeight = potentials.Max();
-							}
+						}
+					}
 
-							if(reportedHeight > publicBlockHeight) {
-								publicBlockHeight = reportedHeight;
+					if(!tieBreakDetermined && this.ChainConfiguration.ChainSyncPublicBlockHeightTieBreaking.HasFlag(AppSettingsBase.ContactMethods.Gossip)) {
+						// in case of the split, we will be safe and take the highest height that is higher than our chain. we may overwrite it when we get a proper consensus
+						try {
+							if(entries.Any()) {
+								long reportedHeight = entries.Max();
+
+								if(reportedHeight > publicBlockHeight) {
+									publicBlockHeight = reportedHeight;
+									tieBreakDetermined = true;
+								}
 							}
 						} catch {
 							// we just let it go
+						}
+					}
+				} else {
+					if(consensusType == ConsensusUtilities.ConsensusType.Absolute) {
+						// this is easy, everybody agrees, let's take it
+						publicBlockHeight = result;
+					} else {
+
+						// ok, we have a problem, lets break this
+
+						// ok, we got a split decision. we dont necessarily take the majority since we could be missing a new update.
+						List<(long Value, int Count)> groupings = ConsensusUtilities.GetConsensusGroupings(potentialPublicBlockHeights);
+
+						// lets see if the highest one has more than one peer. if yes, we will take that
+						if(groupings.Any()) {
+							var safeset = groupings.Where(c => c.Count > 1);
+
+							if(safeset.Any()) {
+								long highestSafe = safeset.Max(c => c.Value);
+
+								if(highestSafe == groupings.Max(c => c.Value)) {
+									// yes! the highest with multiple peers was also the highet, we can safely take
+									publicBlockHeight = highestSafe;
+									tieBreakDetermined = true;
+								}
+							}
+						}
+
+						// ok, things did not go so well, let's break the tie with the means we can use
+						if(!tieBreakDetermined && this.ChainConfiguration.ChainSyncPublicBlockHeightTieBreaking.HasFlag(AppSettingsBase.ContactMethods.Web)) {
+
+							try {
+
+								await FetchWebPublicBlockId(blockId => {
+									publicBlockHeight = blockId;
+									tieBreakDetermined = true;
+								}).ConfigureAwait(false);
+							} catch {
+
+							}
+						}
+
+						if(!tieBreakDetermined && this.ChainConfiguration.ChainSyncPublicBlockHeightTieBreaking.HasFlag(AppSettingsBase.ContactMethods.Gossip)) {
+
+							// finally, everyone disagrees. we will take the highest number for now...  we may overwrite it when we get a proper consensus
+							try {
+								long reportedHeight = 0;
+								List<long> potentials = potentialPublicBlockHeights.Where(e => e >= publicBlockHeight).ToList();
+
+								if(potentials.Any()) {
+									reportedHeight = potentials.Max();
+								}
+
+								if(reportedHeight > publicBlockHeight) {
+									publicBlockHeight = reportedHeight;
+								}
+							} catch {
+								// we just let it go
+							}
+
 						}
 					}
 				}
@@ -2228,7 +2324,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			public Func<ITargettedMessageSet<DATA_RESPONSE, IBlockchainEventsRehydrationFactory>, Dictionary<Guid, ENTRY_DETAILS>, List<PeerRequestInfo<KEY, DATA_REQUEST, DATA_RESPONSE>>, List<Guid>, ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>.ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY>, ResponseValidationResults> validSlicesFunc;
 
-			public Action<CHANNEL_INFO_SET_RESPONSE, DATA_RESPONSE> writeDataSlice;
+			public Action<CHANNEL_INFO_SET_RESPONSE, Guid, DATA_RESPONSE> writeDataSlice;
 		}
 
 		protected enum BlockFetchAttemptTypes : byte {

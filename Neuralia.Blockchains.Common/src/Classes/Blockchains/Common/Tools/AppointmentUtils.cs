@@ -514,11 +514,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 		public static SafeArrayHandle Decrypt(SafeArrayHandle encrypted, SafeArrayHandle password, SafeArrayHandle salt) {
 
-			TypeSerializer.Deserialize(password.Span.Slice(0, sizeof(int)), out int iterations);
-
-			using XchachaEncryptor xchacha = new XchachaEncryptor();
-
-			return xchacha.Decrypt(encrypted, password, salt, GetIterations(iterations, 2000, 10_000));
+			return CryptoUtil.Decrypt(encrypted, password, salt);
 		}
 
 		public static SafeArrayHandle PrepareValidatorMessageLogics(DateTime appointment, SafeArrayHandle message, SafeArrayHandle stride, SafeArrayHandle validatorSecretKey, Func<XchachaEncryptor, SafeArrayHandle, SafeArrayHandle, SafeArrayHandle, int, SafeArrayHandle> action) {
@@ -774,16 +770,189 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		}
 
 		public static DateTime ComputeDispatchDelay(DateTime appointment, int validatorWindow) {
-			return appointment.AddMinutes(GlobalRandom.GetNext(10, Math.Max(validatorWindow - 30, 30)));
+			return appointment.AddMinutes(GlobalRandom.GetNext(10, Math.Max((validatorWindow - 30)+1, 30+1)));
 		}
 
-		public static bool AppointmentVerificationExpired(DateTime? appointmentVerificationTime) {
-			return appointmentVerificationTime.HasValue && appointmentVerificationTime.Value.AddDays(2) < DateTimeEx.CurrentTime;
+		public static bool AppointmentWorkflowExpired(IWalletAccount account) {
+			
+			if(AppointmentExpired(account)) {
+				return true;
+			}
+			
+			// we sent a request, and never received a response
+			if(AppointmentRequestExpired(account)) {
+				return true;
+			}
+			// context received but puzzle never completed in time.
+			if(AppointmentPuzzleWindowExpired(account)) {
+				return true;
+			}
+			
+			// puzzle completed, but we never received any verification results
+			if(AppointmentPuzzleVerificationWindowExpired(account)) {
+				return true;
+			}
+			
+			if(AppointmentConfirmationCodeWindowExpired(account)) {
+				return true;
+			}
+			
+			return false;
+		}
+
+		/// <summary>
+		/// check if an expiration is seriously reset
+		/// </summary>
+		/// <param name="account"></param>
+		/// <returns></returns>
+		public static bool AppointmentExpired(IWalletAccount account) {
+			return account.AccountAppointment == null || account.AccountAppointment.AppointmentStatus == Enums.AppointmentStatus.None || (account.AccountAppointment.AppointmentStatus != Enums.AppointmentStatus.AppointmentRequested && !account.AccountAppointment.AppointmentTime.HasValue);
+		}
+
+		/// <summary>
+		/// lets determine if a requested appointment has expired
+		/// </summary>
+		/// <param name="account"></param>
+		/// <returns></returns>
+		public static bool AppointmentRequestExpired(IWalletAccount account) {
+			if(AppointmentExpired(account)) {
+				return true;
+			}
+			
+			if(account.AccountAppointment.AppointmentStatus <= Enums.AppointmentStatus.AppointmentRequested) {
+				var requestTimeStamp = account.AccountAppointment.AppointmentRequestTimeStamp;
+				
+				if(!requestTimeStamp.HasValue || (requestTimeStamp.Value.AddDays(1) < DateTimeEx.CurrentTime)) {
+					return true;
+				}
+			}
+
+			return false;
 		}
 		
-		public static bool AppointmentVerificationExpired(WalletAccount.AccountAppointmentDetails accountAppointment) {
-			return AppointmentVerificationExpired(accountAppointment.AppointmentVerificationTime) && (!accountAppointment.AppointmentConfirmationCode.HasValue || !accountAppointment.AppointmentConfirmationCodeExpiration.HasValue || accountAppointment.AppointmentConfirmationCodeExpiration.Value < DateTimeEx.CurrentTime);
+		/// <summary>
+		/// lets determine if the puzzle window has expired and not completed
+		/// </summary>
+		/// <param name="account"></param>
+		/// <returns></returns>
+		public static bool AppointmentPuzzleWindowExpired(IWalletAccount account) {
+			if(AppointmentExpired(account)) {
+				return true;
+			}
+
+			var status = account.AccountAppointment.AppointmentStatus;
+			if(status == Enums.AppointmentStatus.AppointmentSet || status == Enums.AppointmentStatus.AppointmentContextCached) {
+				
+				var requestTimeStamp = account.AccountAppointment.AppointmentTime;
+				if(!requestTimeStamp.HasValue || requestTimeStamp.Value.AddHours(1) < DateTimeEx.CurrentTime) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// verify if the completed puzzle verification window during an appointment has expired rendering the appointment void
+		/// </summary>
+		/// <param name="account"></param>
+		/// <returns></returns>
+		public static bool AppointmentPuzzleVerificationWindowExpired(IWalletAccount account) {
+			if(AppointmentExpired(account)) {
+				return true;
+			}
+			
+			if(account.AccountAppointment.AppointmentStatus >= Enums.AppointmentStatus.AppointmentPuzzleCompleted) {
+				var verificationTime = account.AccountAppointment.AppointmentVerificationTime;
+				if(!verificationTime.HasValue || verificationTime.Value.AddDays(2) < DateTimeEx.CurrentTime) {
+					return true;
+				}
+			}
+
+			return false;
 		}
 		
+		public static bool AppointmentConfirmationCodeWindowExpired(IWalletAccount account) {
+			if(AppointmentExpired(account)) {
+				return true;
+			}
+
+			if(account.AccountAppointment.AppointmentStatus >= Enums.AppointmentStatus.AppointmentCompleted) {
+				
+				var confirmationCode = account.AccountAppointment.AppointmentConfirmationCode;
+				var confirmationCodeExpiration = account.AccountAppointment.AppointmentConfirmationCodeExpiration;
+				if(!confirmationCode.HasValue || !confirmationCodeExpiration.HasValue || confirmationCodeExpiration.Value < DateTimeEx.CurrentTime) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// Determine if the appointment verification has completely expired 
+		/// </summary>
+		/// <param name="account"></param>
+		/// <returns></returns>
+		public static bool AppointmentVerificationExpired(IWalletAccount account) {
+	
+			if(account.VerificationLevel == Enums.AccountVerificationTypes.Appointment) {
+
+				if(account.VerificationExpirationDate.HasValue) {
+					return account.VerificationExpirationDate.Value < DateTimeEx.CurrentTime;
+				}
+			}
+			
+			return true;
+		}
+
+		public static DateTime? AppointmentVerificationExpiringDate(IWalletAccount account) {
+			if(!account.VerificationExpirationDate.HasValue) {
+				return null;
+			}
+			
+			return account.VerificationExpirationDate.Value - TimeSpan.FromDays(7);
+		}
+
+		/// <summary>
+		/// determine if the appointment verification is soon to expire
+		/// </summary>
+		/// <param name="account"></param>
+		/// <returns></returns>
+		public static bool AppointmentVerificationExpiring(IWalletAccount account) {
+
+			if(AppointmentVerificationExpired(account)) {
+				return true;
+			}
+			if(!account.VerificationExpirationDate.HasValue) {
+				return true;
+			}
+
+			if(account.VerificationLevel == Enums.AccountVerificationTypes.Appointment) {
+				return AppointmentVerificationExpiringDate(account) < DateTimeEx.CurrentTime;
+			}
+
+			return false;
+		}
+
+		public static bool ResetAppointment(IWalletAccount account) {
+
+			if(account == null) {
+				return false;
+			}
+
+			bool expired = AppointmentVerificationExpired(account);
+			
+			account.AccountAppointment = null;
+			
+			if(expired) {
+				account.VerificationLevel = Enums.AccountVerificationTypes.None;
+				account.VerificationExpirationDate = null;
+				account.VerificationDate = null;
+				account.VerificationData = null;
+			}
+			
+			return true;
+		}
 	}
 }

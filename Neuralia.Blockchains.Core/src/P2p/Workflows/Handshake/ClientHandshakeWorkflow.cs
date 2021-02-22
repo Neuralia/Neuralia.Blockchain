@@ -383,7 +383,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				this.networkingService.ConnectionStore.AddPeerReportedPublicIp(IPUtils.GuidToIP(serverHandshake.PerceivedIP), ConnectionStore.PublicIpSource.Hub);
 
 				// lets send the server our list of nodeAddressInfo IPs
-				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(NodeInfo.Hub, this.networkingService.SupportedChains, NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), false, 20));
+				clientConfirm.Message.SetNodes(this.networkingService.ConnectionStore.GetPeerNodeList(NodeInfo.Hub, this.networkingService.SupportedChains, NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default, new[] {peerConnectionn.NodeAddressInfo}.ToList(), true, 20));
 			}
 
 			// generate a random nonce and send it to the server

@@ -47,6 +47,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 		}
 
 		private const string BACKUP_PATH_NAME = "backup";
+		/// <summary>
+		/// any folder with this name is completely ignored
+		/// </summary>
+		public const string UNWRAPPED_FOLDER_NAME = FileExtensions.UNWRAPPED_FOLDER_NAME;
+		
 		private readonly object cleanLocker = new object();
 
 		private const uint HRFileLocked = 0x80070020;
@@ -864,15 +869,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			});
 		}
 
-		private async Task ImportFilesystems() {
+		private Task ImportFilesystems() {
 			if(!this.IsInTransaction) {
-				return;
+				return Task.CompletedTask;
 			}
 
 			// copy directory structure
 			DirectoryEntry directoryInfo = this.physicalFileSystem.GetDirectoryEntryUnconditional(this.walletsPath);
 
-			await RepeatAsync(async () => {
+			return RepeatAsync(async () => {
 
                 fileStatuses.Clear();
 
@@ -885,12 +890,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 				if(!activeFileSystem.AllFiles().Any()) {
 					throw new ApplicationException("Failed to read wallet files from disk");
 				}
-			}).ConfigureAwait(false);
-
+			});
 		}
 
 		private async Task CloneDirectory(DirectoryEntry directory) {
 
+			// always exclude the unwrapped folder
+			if(string.Equals(UNWRAPPED_FOLDER_NAME, directory.Name, StringComparison.CurrentCultureIgnoreCase)) {
+				return;
+			}
+			
 			// skip any exclusions
 			//TODO: make this stronger with regexes
 			if(this.exclusions?.Any(e => string.Equals(e.name, directory.Name, StringComparison.CurrentCultureIgnoreCase)) ?? false) {

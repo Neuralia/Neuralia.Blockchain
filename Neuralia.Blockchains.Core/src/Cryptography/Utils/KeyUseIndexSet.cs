@@ -294,5 +294,57 @@ namespace Neuralia.Blockchains.Core.Cryptography.Utils {
 		public void IncrementKeyUseIndex() {
 			this.KeyUseIndex += 1;
 		}
+		
+		public static bool IsSequenceHigher(KeyUseIndexSet a, KeyUseIndexSet b) {
+			
+			return a.KeyUseSequenceId > b.KeyUseSequenceId && !(a.KeyUseSequenceId == (b.KeyUseSequenceId-1) && a.KeyUseIndex == 0);
+		}
+
+		
+		public static bool IsSameSequenceId(KeyUseIndexSet a, KeyUseIndexSet b) {
+			
+			return a.KeyUseSequenceId == b.KeyUseSequenceId;
+		}
+		
+		public static bool IsPreviousSequenceId(KeyUseIndexSet a, KeyUseIndexSet b) {
+			
+			return a.KeyUseSequenceId == (b.KeyUseSequenceId-1);
+		}
+		
+		/// <summary>
+		/// determine if the key can be forwarded to the next
+		/// </summary>
+		/// <param name="a"></param>
+		/// <param name="b"></param>
+		/// <returns></returns>
+		public static bool CanBeForwarded(KeyUseIndexSet a, KeyUseIndexSet b) {
+
+			return IsSameSequenceId(a, b) && a.KeyUseIndex < b.KeyUseIndex;
+		}
+		
+		public static bool Forward(KeyUseIndexSet a, KeyUseIndexSet b) {
+			
+			if(!CanBeForwarded(a, b)) {
+				return false;
+			}
+
+			a.KeyUseIndex = b.KeyUseIndex;
+
+			return true;
+		}
+		
+		public static bool IsPreviousKey(KeyUseIndexSet a, KeyUseIndexSet b) {
+
+			if(IsSameSequenceId(a, b) && a.KeyUseIndex == (b.KeyUseIndex - 1)) {
+				return true;
+			}
+
+			// check if its a key change
+			if(IsPreviousSequenceId(a, b) && b.KeyUseIndex == 0) {
+				return true;
+			}
+			
+			return false;
+		}
 	}
 }

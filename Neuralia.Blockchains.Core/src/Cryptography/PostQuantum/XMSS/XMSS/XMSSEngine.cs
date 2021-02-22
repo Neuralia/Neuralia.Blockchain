@@ -359,7 +359,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.XMSS.XMSS {
 			}
 
 			if(right == null) {
-				throw new Exception("Rigth byte array should not be null");
+				throw new Exception("Right byte array should not be null");
 			}
 
 			if(adrs == null) {

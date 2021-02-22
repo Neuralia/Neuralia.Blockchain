@@ -47,6 +47,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		
 		DateTime? VerificationExpirationDate { get; set; }
 		
+		//ushort AppliedFixes { get; set; }
+		
 		string FriendlyName { get; set; }
 
 		/// <summary>
@@ -143,7 +145,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public IEncryptorParameters SnapshotFileEncryptionParameters { get; set; }
 
 		public string AccountCode { get; set; }
-
+		
 		/// <summary>
 		///     This is our permanent public account ID. we get it once our presentation ID is confirmed
 		/// </summary>
@@ -177,6 +179,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		public DateTime? VerificationDate { get; set; }
 		public DateTime? VerificationExpirationDate { get; set; }
 		
+		// /// <summary>
+		// /// any fixes that have been applied or not yet
+		// /// </summary>
+		// public ushort AppliedFixes { get; set; }
+
 		public Enums.AccountTypes WalletAccountType { get; set; } = Enums.AccountTypes.User;
 		
 		/// <summary>
@@ -495,6 +502,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			private DateTime? appointmentRequestTimeStamp;
 			private DateTime? appointmentConfirmationCodeExpiration;
 			private DateTime? lastAppointmentOperationTimeout;
+			private DateTime? appointmentPreparationWindowStart;
+			private DateTime? appointmentPreparationWindowEnd;
+			
 
 			/// <summary>
 			/// the actual appointment date/time
@@ -519,6 +529,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 				get => this.appointmentContextTime?.ToUniversalTime();
 				set => this.appointmentContextTime = value;
 			}
+			
+			public DateTime? AppointmentPreparationWindowStart {
+				get => this.appointmentPreparationWindowStart?.ToUniversalTime();
+				set => this.appointmentPreparationWindowStart = value;
+			}
+			
+			public DateTime? AppointmentPreparationWindowEnd {
+				get => this.appointmentPreparationWindowEnd?.ToUniversalTime();
+				set => this.appointmentPreparationWindowEnd = value;
+			}
+			
+			
 
 			/// <summary>
 			/// when can we expect the verifications to be fully completed
@@ -528,6 +550,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 				set => this.appointmentVerificationTime = value;
 			}
 
+			public int Preparation  { get; set; }
+			public int Finalization  { get; set; }
+			
 			/// <summary>
 			/// in which region did we request the appointment
 			/// </summary>

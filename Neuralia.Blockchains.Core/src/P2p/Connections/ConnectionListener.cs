@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public void Start() {
 			
-			this.StartServer(GlobalSettings.ApplicationSettings.IPProtocol);
+			this.StartServer(GlobalSettings.ApplicationSettings.IPProtocolServer);
 		}
 
 		private void StartServer(IPMode ipMode) {
@@ -99,13 +99,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		protected virtual ITcpServer CreateTcpServer(IPMode ipMode) {
-			IPAddress address = IPAddress.Any;
-			
-			if(ipMode.HasFlag(IPMode.IPv6) && TcpConnection.IPv6Supported && !GlobalSettings.ApplicationSettings.ForceIpv4Socket) {
-				address = IPAddress.IPv6Any;
-			}
-			
-			return new TcpServer(new NetworkEndPoint(address, this.port, ipMode), this.TriggerExceptionOccured);
+
+			return new TcpServer(ipMode, this.port, this.TriggerExceptionOccured);
 		}
 
 		public event TcpConnection.ExceptionOccured ExceptionOccured;

@@ -1,52 +1,46 @@
+using System.Collections.Generic;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.PrimariesBallotingMethods;
+using Neuralia.Blockchains.Core.Cryptography.Trees;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Core.Serialization;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpValidation.V1 {
-	public class MinerResponse : IMinerResponse {
+	public class MinerResponse : Versionable, IMinerResponse {
 
-		public byte Version => 1;
-
-		public long? SecondTierAnswer { get; set; }
-		public long? DigestTierAnswer { get; set; }
-		public long? FirstTierAnswer  { get; set; }
-
+		public List<IValidatorOperationResponse> Operations { get; } = new List<IValidatorOperationResponse>();
 		public AccountId AccountId { get; set; } = new AccountId();
 		public int ResponseCode { get; set; }
 		public ResponseType Response { get; set; } = ResponseType.Invalid;
+		public SoftwareVersion Compatibility { get; } = new SoftwareVersion(0,0,0,1);
 
-		public void Rehydrate(IDataRehydrator rehydrator) {
+		public override void Rehydrate(IDataRehydrator rehydrator) {
 
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
-			int version = rehydrator.ReadByte();
+			base.Rehydrate(rehydrator);
+			
 			this.Response = rehydrator.ReadByteEnum<ResponseType>();
 			this.AccountId.Rehydrate(rehydrator);
 
 			this.ResponseCode = rehydrator.ReadInt();
 			
-			this.SecondTierAnswer = null;
-			bool isAnswerSet = rehydrator.ReadBool();
+			this.Compatibility.Rehydrate(rehydrator);
 
-			if(isAnswerSet) {
-				tool.Rehydrate(rehydrator);
-				this.SecondTierAnswer = tool.Value;
-			}
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 
-			this.DigestTierAnswer = null;
-			isAnswerSet           = rehydrator.ReadBool();
+			this.Operations.Clear();
+			tool.Rehydrate(rehydrator);
+			int count = tool.Value;
 
-			if(isAnswerSet) {
-				tool.Rehydrate(rehydrator);
-				this.DigestTierAnswer = tool.Value;
-			}
-			
-			this.FirstTierAnswer = null;
-			isAnswerSet = rehydrator.ReadBool();
+			for(int i = 0; i < count; i++) {
 
-			if(isAnswerSet) {
-				tool.Rehydrate(rehydrator);
-				this.FirstTierAnswer = tool.Value;
+				IValidatorOperationResponse operation = ValidatorOperationRehydrator.RehydrateResponse(rehydrator);
+				
+				operation.Rehydrate(rehydrator);
+
+				this.Operations.Add(operation);
 			}
 		}
 
@@ -54,37 +48,34 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpVal
 
 			using IDataDehydrator dehydrator = DataSerializationFactory.CreateDehydrator();
 
-			dehydrator.Write(this.Version);
+			this.Dehydrate(dehydrator);
+
+			return dehydrator.ToArray();
+		}
+
+		public override void Dehydrate(IDataDehydrator dehydrator) {
+			base.Dehydrate(dehydrator);
+			
 			dehydrator.Write((byte) this.Response);
 
 			this.AccountId.Dehydrate(dehydrator);
 
 			dehydrator.Write(this.ResponseCode);
 			
-			AdaptiveLong1_9 tool = new AdaptiveLong1_9();
+			this.Compatibility.Dehydrate(dehydrator);
 			
-			dehydrator.Write(this.SecondTierAnswer != null);
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 
-			if(this.SecondTierAnswer != null) {
-				tool.Value = this.SecondTierAnswer.Value;
-				tool.Dehydrate(dehydrator);
+			tool.Value = this.Operations.Count;
+			tool.Dehydrate(dehydrator);
+
+			foreach(var operation in this.Operations) {
+				operation.Dehydrate(dehydrator);
 			}
-			
-			dehydrator.Write(this.DigestTierAnswer != null);
-
-			if(this.DigestTierAnswer != null) {
-				tool.Value = this.DigestTierAnswer.Value;
-				tool.Dehydrate(dehydrator);
-			}
-
-			dehydrator.Write(this.FirstTierAnswer != null);
-
-			if(this.FirstTierAnswer != null) {
-				tool.Value = this.FirstTierAnswer.Value;
-				tool.Dehydrate(dehydrator);
-			}
-
-			return dehydrator.ToArray();
+		}
+		
+		protected override ComponentVersion SetIdentity() {
+			return (1,0);
 		}
 	}
 }

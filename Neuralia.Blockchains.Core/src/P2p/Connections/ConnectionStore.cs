@@ -1514,20 +1514,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				ipList.AddRange(new[] {IPAddress.Parse("0.0.0.0"), IPAddress.Parse("127.0.0.1"), IPAddress.Parse("::1"), IPAddress.Parse("::")});
 
 				if(!GlobalSettings.ApplicationSettings.UndocumentedDebugConfigurations.LocalhostOnly && this.GetIsNetworkAvailable) {
-					if(GlobalSettings.ApplicationSettings.UseStunServer) {
-						// try {
-						// 	// a STUN server is the only way to get our address. otherwise, we will have to ask peers to tell us...
-						// 	STUNClient stunClient = new STUNClient();
-						// 	STUNClient.QueryResult result = stunClient.QueryAddressAsync().WaitAndUnwrapException();
-						//
-						// 	if(result.SuccessResults != null) {
-						// 		this.AddPeerReportedPublicIp(result.SuccessResults.PublicEndPoint.Address, ConnectionStore.PublicIpSource.STUN);
-						// 	}
-						// } catch(Exception ex) {
-						//
-						// }
-						throw new NotImplementedException();
-					}
 
 					try {
 						// now add all our DNS entries

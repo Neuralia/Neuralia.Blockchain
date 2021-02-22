@@ -35,6 +35,7 @@ using Neuralia.Blockchains.Core.DataAccess.Interfaces.MessageRegistry;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.P2p.Connections;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Workflows.Base;
 using Neuralia.Blockchains.Tools;
@@ -46,6 +47,7 @@ using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx.Synchronous;
 using RestSharp;
 using Serilog;
+using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain.ChainSync {
 	public abstract partial class ClientChainSyncWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY, FINISH_SYNC, REQUEST_BLOCK, REQUEST_DIGEST, SEND_BLOCK, SEND_DIGEST, REQUEST_BLOCK_INFO, SEND_BLOCK_INFO, REQUEST_DIGEST_FILE, SEND_DIGEST_FILE, REQUEST_DIGEST_INFO, SEND_DIGEST_INFO, REQUEST_BLOCK_SLICE_HASHES, SEND_BLOCK_SLICE_HASHES> : ClientChainWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IClientChainSyncWorkflow
@@ -86,7 +88,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		private readonly WrapperConcurrentQueue<BlockId> downloadedBlockIdsHistory = new WrapperConcurrentQueue<BlockId>();
 
 		private readonly ConcurrentDictionary<BlockId, bool> downloadQueue = new ConcurrentDictionary<BlockId, bool>();
-
+		
+		
 		private BlockId currentBlockDownloadId = 0;
 
 		private long? downloadBlockHeight;
@@ -142,7 +145,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				var result = await DownloadBlockWeb(singleEntryContext.details.Id, singleEntryContext, lockContext).ConfigureAwait(false);
 				
-				this.UpdatePublicBlockHeight(new []{(long)result.publicChainBlockHeight}.ToList());
+				await this.UpdatePublicBlockHeight(new []{(long)result.publicChainBlockHeight}.ToList()).ConfigureAwait(false);
 				
 				return (ResultsState.OK);
 			}
@@ -205,7 +208,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					// while we are here, lets update the chain block height with the news. its always important to do so
 					try {
 
-						this.UpdatePublicBlockHeight(results.Values.Select(r => r.publicChainBlockHeight.Value).ToList());
+						await this.UpdatePublicBlockHeight(results.Values.Select(r => r.publicChainBlockHeight.Value).ToList()).ConfigureAwait(false);
 					} catch(Exception ex) {
 						this.CentralCoordinator.Log.Error(ex, "Failed to update public block height");
 					}
@@ -467,7 +470,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					if(connections.HasSyncingConnections || useWeb) {
 
 						// now, Sync the block, if any peers are willing
-						this.UpdatePublicBlockHeight(connections.GetAllConnections().Select(c => c.ReportedPublicBlockHeight).ToList());
+						await this.UpdatePublicBlockHeight(connections.GetAllConnections().Select(c => c.ReportedPublicBlockHeight).ToList()).ConfigureAwait(false);
 
 						this.CheckShouldStopThrow();
 
@@ -563,15 +566,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			// launch the various tasks
 
-			AsyncManualResetEventSlim downloadResetEvent = null;
-			AsyncManualResetEventSlim insertResetEvent = null;
-			AsyncManualResetEventSlim interpretResetEvent = null;
+			ManualResetEventSlim downloadResetEvent = null;
+			ManualResetEventSlim insertResetEvent = null;
+			ManualResetEventSlim interpretResetEvent = null;
 
 			try {
 
-				downloadResetEvent = new AsyncManualResetEventSlim(false);
-				insertResetEvent = new AsyncManualResetEventSlim(false);
-				interpretResetEvent = new AsyncManualResetEventSlim(false);
+				downloadResetEvent = new ManualResetEventSlim(false);
+				insertResetEvent = new ManualResetEventSlim(false);
+				interpretResetEvent = new ManualResetEventSlim(false);
 
 				RunningWrapper running1 = running;
 
@@ -610,7 +613,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 
 							if(sleepTime != 0) {
-								await downloadResetEvent.WaitAsync(TimeSpan.FromMilliseconds(sleepTime), CancelTokenSource.Token).ConfigureAwait(false);
+								downloadResetEvent.Wait(TimeSpan.FromMilliseconds(sleepTime), CancelTokenSource.Token);
 							}
 						} catch(Exception ex) {
 							this.CentralCoordinator.Log.Debug(ex, "Failed to download block while syncing");
@@ -639,7 +642,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 
 							if(!await this.InsertNextBlock(connections, lc).ConfigureAwait(false)) {
-								if(await insertResetEvent.WaitAsync(TimeSpan.FromSeconds(2), CancelTokenSource.Token).ConfigureAwait(false) || insertResetEvent.IsSet) {
+								if(insertResetEvent.Wait(TimeSpan.FromSeconds(2), CancelTokenSource.Token) || insertResetEvent.IsSet) {
 									insertResetEvent.Reset();
 								}
 							} else {
@@ -680,7 +683,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								// we can stop syncing!
 								return true;
 							} else {
-								if(await interpretResetEvent.WaitAsync(TimeSpan.FromSeconds(2), CancelTokenSource.Token).ConfigureAwait(false) || interpretResetEvent.IsSet) {
+								if(interpretResetEvent.Wait(TimeSpan.FromSeconds(2), CancelTokenSource.Token) || interpretResetEvent.IsSet) {
 									interpretResetEvent.Reset();
 								}
 							}
@@ -980,6 +983,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				IDehydratedBlock dehydratedBlock = null;
 				BlockFilesetSyncManifest syncingManifest = null;
 
+				Guid[] clientUuids = Array.Empty<Guid>();
+				
 				bool isGossipCached = await this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetUnvalidatedBlockGossipMessageCached(nextBlockId).ConfigureAwait(false);
 
 				ValidationResult results = new ValidationResult(ValidationResult.ValidationResults.Invalid);
@@ -1015,6 +1020,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									
 								} else {
 									dataChannels = this.LoadBlockSyncManifestChannels(syncingManifest);
+									clientUuids = this.LoadBlockSyncManifestClientUuids(syncingManifest);
 									dehydratedBlock.Rehydrate(dataChannels);
 								}
 
@@ -1083,6 +1089,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					bool valid = await this.InsertBlockIntoChain(dehydratedBlock, 1, lockContext).ConfigureAwait(false);
 
 					if(valid) {
+						
+						if(clientUuids?.Any()??false) {
+
+							var chainStateProvider = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase;
+
+							if(dehydratedBlock.BlockId!= 1 && chainStateProvider.DiskBlockHeight == chainStateProvider.PublicBlockHeight) {
+								// ok, here we are fully synced and up to date. thank you to our peers
+								var networkingService = this.CentralCoordinator.BlockchainServiceSet.NetworkingService;
+								foreach (var activeConnection in connections.GetAllConnections()
+									.Where(c => clientUuids.Contains(c.PeerConnection.ClientUuid)))
+								{
+									networkingService.IPCrawler.HandleSyncComplete(activeConnection.PeerConnection.NodeAddressInfo, DateTimeEx.CurrentTime);
+								}
+							}
+						}
+						
 						return true;
 					} else {
 						throw new WorkflowException($"failed to insert block into chain for block id {dehydratedBlock.BlockId}.");
@@ -1199,7 +1221,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// while we are here, lets update the chain block height with the news. its always important to do so
 				try {
 
-					this.UpdatePublicBlockHeight(nextBlockPeerDetails.results.Values.Select(r => r.publicChainBlockHeight.Value).ToList());
+					await this.UpdatePublicBlockHeight(nextBlockPeerDetails.results.Values.Select(r => r.publicChainBlockHeight.Value).ToList()).ConfigureAwait(false);
 				} catch(Exception ex) {
 					this.CentralCoordinator.Log.Error(ex, "Failed to update public block height");
 				}
@@ -1380,7 +1402,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				}
 
 				if(!success) {
-					this.CentralCoordinator.Log.Error("Failed to fetch block data. we tried all the attempts we could and it still failed. this is critical. we may try again.");
+					this.CentralCoordinator.Log.Debug("Failed to fetch block data. we tried all the attempts we could and it still failed. this is critical. we may try again.");
 
 					// well, thats not great, we have to try again if we can
 					singleEntryContext.blockFetchAttempt += 1;
@@ -1953,9 +1975,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return ResponseValidationResults.Valid;
 			};
 
-			parameters.writeDataSlice = (slice, response) => {
+			parameters.writeDataSlice = (slice, clientUuid, response) => {
 
-				this.WriteBlockSyncSlice(parameters.singleEntryContext.syncManifest, slice);
+				this.WriteBlockSyncSlice(parameters.singleEntryContext.syncManifest,clientUuid, slice);
 			};
 
 			parameters.updateSyncManifest = () => {
@@ -2019,6 +2041,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				bool performWalletSync = ((dehydratedBlock.BlockId.Value % WALLET_SYNC_STEP) == 0) || (dehydratedBlock.BlockId.Value == this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.PublicBlockHeight);
 
 				valid = await this.centralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertBlock(dehydratedBlock.RehydratedBlock, dehydratedBlock, performWalletSync, lockContext, true).ConfigureAwait(false);
+				
 			} catch(Exception ex) {
 				this.CentralCoordinator.Log.Error(ex, "Failed to insert block into the local blockchain. we may try again...");
 
@@ -2097,6 +2120,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			return channelsEntries.ConvertAll((band, entry) => this.LoadSyncManifestFile<BlockChannelUtils.BlockChannelTypes, BlockFilesetSyncManifest, BlockFilesetSyncManifest.BlockSyncingDataSlice>(filesetSyncManifest, band, path));
 		}
+
+		public Guid[] LoadBlockSyncManifestClientUuids(BlockFilesetSyncManifest filesetSyncManifest) {
+			
+			string path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSyncManifestFileName(filesetSyncManifest.Key);
+			string dirName = this.GetDownloadTempDirName(path);
+
+			string clientUuidFilePath = Path.Combine(dirName, CLIENT_UUID_FILE_NAME);
+
+			if(!this.CentralCoordinator.FileSystem.FileExists(clientUuidFilePath)) {
+				return Array.Empty<Guid>();
+			}
+
+			try {
+				var json = FileExtensions.ReadAllText(clientUuidFilePath, this.CentralCoordinator.FileSystem);
+
+				return System.Text.Json.JsonSerializer.Deserialize<Guid[]>(json);
+			} catch {
+			}
+			return Array.Empty<Guid>();
+		}
 		
 		public void CreateBlockSyncManifest(BlockFilesetSyncManifest filesetSyncManifest) {
 
@@ -2118,7 +2161,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.UpdateSyncManifest<BlockChannelUtils.BlockChannelTypes, BlockFilesetSyncManifest, BlockFilesetSyncManifest.BlockSyncingDataSlice>(filesetSyncManifest, path);
 		}
 
-		public void WriteBlockSyncSlice(BlockFilesetSyncManifest filesetSyncManifest, BlockChannelsInfoSet<DataSlice> sliceData) {
+		public void WriteBlockSyncSlice(BlockFilesetSyncManifest filesetSyncManifest, Guid clientUuid, BlockChannelsInfoSet<DataSlice> sliceData) {
 
 			ChainDataProvider.BlockFilesetSyncManifestStatuses status = this.GetBlockSyncManifestStatus(filesetSyncManifest.Key);
 
@@ -2131,8 +2174,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// already done
 				throw new ApplicationException();
 			}
-
+			
+			
 			string path = this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.GetBlockSyncManifestFileName(filesetSyncManifest.Key);
+			string dirName = this.GetDownloadTempDirName(path);
+
+			if(!filesetSyncManifest.ClientUuids.Contains(clientUuid)) {
+				filesetSyncManifest.ClientUuids.Add(clientUuid);
+
+				string clientUuidFilePath = Path.Combine(dirName, CLIENT_UUID_FILE_NAME);
+				
+				FileExtensions.WriteAllText(clientUuidFilePath, System.Text.Json.JsonSerializer.Serialize(filesetSyncManifest.ClientUuids.ToArray()), this.CentralCoordinator.FileSystem);
+			}
 
 			this.WriteSyncSlice<BlockChannelsInfoSet<DataSlice>, BlockChannelUtils.BlockChannelTypes, BlockFilesetSyncManifest, DataSlice, BlockFilesetSyncManifest.BlockSyncingDataSlice>(filesetSyncManifest, sliceData, path);
 		}

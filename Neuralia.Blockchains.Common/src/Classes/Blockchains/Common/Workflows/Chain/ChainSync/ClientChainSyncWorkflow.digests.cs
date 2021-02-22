@@ -485,7 +485,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return ResponseValidationResults.Valid;
 			};
 
-			parameters.writeDataSlice = (slice, response) => {
+			parameters.writeDataSlice = (slice, clientUuid, response) => {
 
 				this.WriteDigestSyncSlice(parameters.singleEntryContext.syncManifest, slice);
 			};
@@ -613,7 +613,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return ResponseValidationResults.Valid;
 			};
 
-			parameters.writeDataSlice = (slice, response) => {
+			parameters.writeDataSlice = (slice, clientUuid, response) => {
 
 				this.WriteDigestFileSyncSlice(parameters.singleEntryContext.syncManifest, slice);
 			};

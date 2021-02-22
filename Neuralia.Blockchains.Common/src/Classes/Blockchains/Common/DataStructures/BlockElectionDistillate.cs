@@ -29,6 +29,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public string DehydratedElectionContext;
 		public long electionBockId;
+		public long MaturityBlockId;
+		public long PublicationBlockId;
 
 		public bool HasActiveElection => this.ElectionContext != null || !string.IsNullOrWhiteSpace(this.DehydratedElectionContext);
 
@@ -98,6 +100,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 
 		public readonly List<string> SelectedTransactionIds = new List<string>();
 		public long BlockId;
+		public long MaturityBlockId;
+		public long PublicationBlockId;
 		public long? digestAnswer;
 
 		public ElectionModes ElectionMode;
@@ -105,7 +109,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 		public ComponentVersion<BlockType> MatureBlockType;
 		public ComponentVersion MatureElectionContextVersion;
 		public int MaturityBlockHash;
-		public long MaturityBlockId;
+		
 
 		public Enums.MiningTiers MiningTier = Enums.MiningTiers.ThirdTier;
 

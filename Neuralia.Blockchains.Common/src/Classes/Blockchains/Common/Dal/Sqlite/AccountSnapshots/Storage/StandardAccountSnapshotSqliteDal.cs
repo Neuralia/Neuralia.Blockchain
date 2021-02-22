@@ -42,21 +42,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			List<long> longAccountIds = accountIds.Where(a => a.IsStandard).Select(a => a.ToLongRepresentation()).ToList();
 
-			return this.QueryAllAsync(db => {
+			return this.QueryAllAsync((db, lc) => {
 
 				return db.StandardAccountSnapshots.Where(s => longAccountIds.Contains(s.AccountId)).ToListAsync();
 			}, accountIds);
 
 		}
 
-		public Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, STANDARD_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
-
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
+		public Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation, STANDARD_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(operation, lockContext, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
 		}
 
-		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, STANDARD_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
-
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
+		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation, STANDARD_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(operation, lockContext, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
 		}
 
 		public Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<AccountId, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
@@ -81,15 +81,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		}
 		
 		public Task InsertNewStandardAccount(AccountId accountId, List<(byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId)> keys, long inceptionBlockId, bool verified) {
-
-			return this.PerformOperationAsync(db => {
+			LockContext lockContext = null;
+			return this.PerformOperationAsync((db, lc) => {
 				STANDARD_ACCOUNT_SNAPSHOT accountEntry = this.PrepareNewStandardAccount(accountId,keys, inceptionBlockId, verified);
 				
 				db.StandardAccountSnapshots.Add(accountEntry);
 
 				return db.SaveChangesAsync();
 
-			}, this.GetKeyGroup(accountId));
+			}, lockContext, this.GetKeyGroup(accountId));
 		}
 	}
 }

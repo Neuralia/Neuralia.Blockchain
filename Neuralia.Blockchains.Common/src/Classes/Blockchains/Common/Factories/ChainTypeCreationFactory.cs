@@ -30,6 +30,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		WalletKeyHistory CreateNewWalletKeyHistory();
 
 		WalletAccountKeyLog CreateNewWalletAccountKeyLog();
+		WalletAccountKeyLogMetadata CreateNewWalletAccountKeyLogMetadata();
 		IWalletGenerationCache CreateNewWalletAccountGenerationCache();
 		IWalletTransactionHistory CreateNewWalletAccountTransactionHistory();
 		IWalletElectionsHistory CreateNewWalletElectionsHistoryEntry();
@@ -135,6 +136,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Factories {
 		public abstract WalletKeyHistory CreateNewWalletKeyHistory();
 
 		public abstract WalletAccountKeyLog CreateNewWalletAccountKeyLog();
+		public abstract WalletAccountKeyLogMetadata CreateNewWalletAccountKeyLogMetadata();
 		public abstract WalletAccountChainState CreateNewWalletAccountChainState();
 		public abstract IWalletAccountChainStateKey CreateNewWalletAccountChainStateKey();
 		public abstract IWalletGenerationCache CreateNewWalletAccountGenerationCache();

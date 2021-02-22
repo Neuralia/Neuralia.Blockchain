@@ -128,7 +128,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Bloc
 
 			actions.Add(() => chainStateProvider.LastBlockTimestamp = this.LastBlockTimestamp);
 			actions.Add(() => chainStateProvider.LastBlockLifespan = this.LastBlockLifespan);
-			actions.Add(() => chainStateProvider.LastBlockHash = this.LastBlockHash.ToExactByteArrayCopy());
+			actions.Add(() => {
+
+				if(this.LastBlockHash.IsZero) {
+					chainStateProvider.LastBlockHash = null;
+				} else {
+					chainStateProvider.LastBlockHash = this.LastBlockHash.ToExactByteArrayCopy();
+				}
+			});
 			actions.Add(() => chainStateProvider.BlockInterpretationStatus = (ChainStateEntryFields.BlockInterpretationStatuses) this.BlockInsertionStatus);
 
 			actions.Add(() => ((IChainDataWriteProvider) this.centralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase).TruncateBlockFileSizes(this.DiskBlockHeight, this.FileSizes));

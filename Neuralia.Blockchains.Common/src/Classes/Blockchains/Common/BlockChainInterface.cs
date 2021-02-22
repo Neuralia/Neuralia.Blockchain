@@ -21,6 +21,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Appointments;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Keys;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creation.Transactions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks.Base;
@@ -32,6 +33,7 @@ using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
 using Neuralia.Blockchains.Core.Compression;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.Cryptography.Utils;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Logging;
@@ -40,6 +42,7 @@ using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Messages.RoutingHeaders;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Base;
@@ -101,6 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<bool> IsWalletLoaded();
 		TaskResult<ChainStatusAPI> QueryChainStatus();
 		TaskResult<WalletInfoAPI> QueryWalletInfo();
+		TaskResult<byte[]> GenerateSecureHash(byte[] parameter);
 
 		TaskResult<bool> IsBlockchainSynced();
 		TaskResult<bool> IsWalletSynced();
@@ -421,8 +425,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 						this.CentralCoordinator.Log.Error(ex, "Failed to check for system events");
 					}
 					
-					this.pollerResetEvent.Reset();
-					await pollerResetEvent.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+					if(await pollerResetEvent.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false)) {
+						this.pollerResetEvent.Reset();
+					}
 				}
 
 				return true;
@@ -452,6 +457,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public virtual TaskResult<string> Test(string data) {
 
 			return this.RunTaskMethodAsync(async lc => {
+				
 				
 				// do nothing
 				return "";
@@ -572,7 +578,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			return this.RunTaskMethodAsync(lc => {
 
-				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(accountCode, message, lc);
+				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessage(message, accountCode, lc);
 			}, lockContext);
 		}
 
@@ -709,6 +715,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 
 			return this.RunTaskMethodAsync(lc => {
 				return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.APIQueryWalletInfoAPI(lc);
+			}, lockContext);
+		}
+
+		public TaskResult<byte[]> GenerateSecureHash(byte[] parameter)
+        {
+			LockContext lockContext = null;
+
+			return this.RunTaskMethodAsync(lc => {
+				return this.centralCoordinator.ChainComponentProvider.WalletProviderBase.APIGenerateSecureHash(parameter, lc);
 			}, lockContext);
 		}
 

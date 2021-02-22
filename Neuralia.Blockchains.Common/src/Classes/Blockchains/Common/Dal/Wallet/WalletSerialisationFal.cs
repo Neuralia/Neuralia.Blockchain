@@ -42,6 +42,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		string GetWalletKeysFilePath(string accountCode, string name);
 		string GetWalletKeyLogPath(string accountCode);
 		string GetWalletChainStatePath(string accountCode);
+		string GetWalletCachePath();
+		string GetWalletUnwrappedCachePath();
+		string GetWalletKeysCachePath();
+		
 		Task<bool> RescueFromNarballStructure();
 		
 		/// <summary>
@@ -127,6 +131,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		public const string BACKUP_FOLDER_PATH = "backups";
 
 		public const string WALLET_FILE_NAME = "wallet.neuralia";
+		
+		public const string WALLET_CACHE_FOLDER_NAME = "cache";
+		
+		
+		public const string WALLET_KEYS_CACHE_FOLDER_NAME = "keys";
 
 		public const string STORAGE_FOLDER_NAME = "system";
 
@@ -207,6 +216,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 			return Path.Combine(this.GetWalletFolderPath(), WALLET_FILE_NAME);
 		}
 
+		public string GetWalletCachePath() {
+			return Path.Combine(this.GetWalletFolderPath(), WALLET_CACHE_FOLDER_NAME);
+		}
+		
+		public string GetWalletUnwrappedCachePath() {
+			return Path.Combine(this.GetWalletCachePath(), WalletSerializationTransactionalLayer.UNWRAPPED_FOLDER_NAME);
+		}
+		
+		public string GetWalletKeysCachePath() {
+			return Path.Combine(this.GetWalletUnwrappedCachePath(), WALLET_KEYS_CACHE_FOLDER_NAME);
+		}
+		
 		public virtual string GetWalletCryptoFilePath() {
 			return Path.Combine(this.GetWalletFolderPath(), WALLET_CRYPTO_FILE_NAME);
 		}

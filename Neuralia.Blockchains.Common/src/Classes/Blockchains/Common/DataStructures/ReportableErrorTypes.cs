@@ -8,6 +8,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 	public class ReportableErrorTypes : NamedUShortConstantSet<ReportableErrorType> {
 		
 		public readonly ReportableErrorType BLOCKCHAIN_TRANSACTION_NOT_IN_KEYLOG;
+		public readonly ReportableErrorType BLOCKCHAIN_TRANSACTION_KEY_DIFFERENT;
 		public readonly ReportableErrorType BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER;
 		public readonly ReportableErrorType BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_HIGHER;
 		public readonly ReportableErrorType BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER_THAN_DETECTED;
@@ -23,6 +24,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures 
 			this.CreateBaseConstant(ref this.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER, nameof(this.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER));
 			this.CreateBaseConstant(ref this.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_HIGHER, nameof(this.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_HIGHER));
 			this.CreateBaseConstant(ref this.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER_THAN_DETECTED, nameof(this.BLOCKCHAIN_TRANSACTION_KEY_SEQUENCE_LOWER_THAN_DETECTED));
+			this.CreateBaseConstant(ref this.BLOCKCHAIN_TRANSACTION_KEY_DIFFERENT, nameof(this.BLOCKCHAIN_TRANSACTION_KEY_DIFFERENT));
+
+			
 		}
 
 		public static ReportableErrorTypes Instance { get; } = new ReportableErrorTypes();

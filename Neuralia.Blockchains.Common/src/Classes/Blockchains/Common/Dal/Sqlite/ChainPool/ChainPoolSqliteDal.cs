@@ -15,6 +15,7 @@ using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Locking;
 using Serilog;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.ChainPool {
@@ -40,7 +41,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 			this.PrepareTransactionEntry(entry, signedTransactionEnvelope, chainInception);
 
-			return await this.PerformOperationAsync(async db => {
+			LockContext lockContext = null;
+			return await this.PerformOperationAsync(async (db, lc) => {
 
 				if(!await db.PublicTransactions.AnyAsync(t => t.TransactionId == entry.TransactionId).ConfigureAwait(false)) {
 					db.PublicTransactions.Add(entry);
@@ -52,14 +54,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 				return false;
 
-			}).ConfigureAwait(false);
+			}, lockContext).ConfigureAwait(false);
 		}
 
 		public async Task RemoveTransactionEntry(TransactionId transactionId) {
 
 			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
-			await this.PerformOperationAsync(async db => {
+			await this.PerformOperationAsync(async (db, lc) => {
 				string transactionString = transactionId.ToCompactString();
 				CHAIN_POOL_PUBLIC_TRANSACTIONS transactionEntry = await db.PublicTransactions.SingleOrDefaultAsync(t => t.TransactionId == transactionString).ConfigureAwait(false);
 
@@ -74,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		public async Task<List<TransactionId>> GetTransactions() {
 			await this.ClearExpiredTransactions().ConfigureAwait(false);
 
-			return await this.PerformOperationAsync(async db => {
+			return await this.PerformOperationAsync(async (db, lc) => {
 
 				return (await db.PublicTransactions.Select(t => t.TransactionId).ToListAsync().ConfigureAwait(false)).Select(TransactionId.FromCompactString).ToList();
 			}).ConfigureAwait(false);
@@ -82,7 +84,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		public async Task ClearExpiredTransactions() {
 			try {
-				await this.PerformOperationAsync(db => {
+				await this.PerformOperationAsync((db, lc) => {
 					DateTime time = DateTimeEx.CurrentTime;
 					db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => t.Expiration < time));
 
@@ -95,7 +97,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		}
 
 		public Task ClearTransactions() {
-			return this.PerformOperationAsync(db => {
+			return this.PerformOperationAsync((db, lc) => {
 
 				db.PublicTransactions.RemoveRange(db.PublicTransactions);
 
@@ -106,7 +108,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 		public async Task ClearTransactions(List<TransactionId> transactionIds) {
 			List<string> stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
 
-			await this.PerformOperationAsync(db => {
+			await this.PerformOperationAsync((db, lc) => {
 				db.PublicTransactions.RemoveRange(db.PublicTransactions.Where(t => stringTransactionIds.Contains(t.TransactionId)));
 
 				return db.SaveChangesAsync();
@@ -122,7 +124,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 			if(transactionIds.Any()) {
 				List<string> stringTransactionIds = transactionIds.Select(t => t.ToCompactString()).ToList();
 
-				await this.PerformOperationAsync(db => {
+				await this.PerformOperationAsync((db, lc) => {
 
 					foreach(CHAIN_POOL_PUBLIC_TRANSACTIONS transaction in db.PublicTransactions.Where(t => stringTransactionIds.Contains(t.TransactionId))) {
 						db.PublicTransactions.Remove(transaction);

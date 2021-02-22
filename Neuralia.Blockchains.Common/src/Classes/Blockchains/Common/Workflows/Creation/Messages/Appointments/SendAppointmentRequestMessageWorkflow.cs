@@ -75,13 +75,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			if(accountStatus == Enums.PublicationStatus.Dispatched) {
 				throw new EventGenerationException("The account is dispatched and cannot send an appointment request.");
 			}
-			
+
+			if(!AppointmentUtils.AppointmentVerificationExpiring(account)) {
+				throw new EventGenerationException($"The account verification is not yet expiring. The renewal window will begin at {AppointmentUtils.AppointmentVerificationExpiringDate(account)}.");
+			}
+
 			if(this.PreDispatch == false && account.AccountAppointment != null) {
-				if(AppointmentUtils.AppointmentVerificationExpired(account.AccountAppointment)) {
+				
+				if(AppointmentUtils.AppointmentWorkflowExpired(account)) {
 					
 					// in these cases, we allow a reset.
-					account.AccountAppointment = null;
-					this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.OperatingMode = Enums.OperationStatus.None;
+
+					await CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.ClearAppointment(lockContext).ConfigureAwait(false);
+					
 				} else {
 					throw new EventGenerationException("The account is in the process of an appointment and cannot send an appointment request.");
 				}
@@ -118,7 +124,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		{
 			await base.ExceptionOccured(ex).ConfigureAwait(false);
 
-			this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentRequestFailed, this.correlationContext);
+			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(async (provider, token, lc) => {
+
+				var account  = await provider.GetActiveAccount(lc).ConfigureAwait(false);
+
+				AppointmentUtils.ResetAppointment(account);
+				this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.OperatingMode = Enums.OperationStatus.None;
+				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentRequestFailed, this.correlationContext);
+
+			}, null, this.Timeout).ConfigureAwait(false);
 		}
 	}
 }

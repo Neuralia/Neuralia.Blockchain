@@ -212,8 +212,9 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 					//TODO: what shouldwe do here?
 				}
 
-				await autoResetEvent.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-				this.autoResetEvent.Reset();
+				if(await autoResetEvent.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false)) {
+					this.autoResetEvent.Reset();
+				}
 			}
 		}
 

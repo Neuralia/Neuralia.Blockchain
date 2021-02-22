@@ -32,22 +32,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		protected AccreditationCertificateSnapshotSqliteDal(int groupSize, string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(groupSize, folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateAccreditationCertificateSnapshotContext<ACCREDITATION_CERTIFICATE_CONTEXT>, serializationType) {
 		}
 
-		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificate(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> operation, int certificateId) {
+		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificate(Func<ACCREDITATION_CERTIFICATE_CONTEXT, LockContext, Task<ACCREDITATION_CERTIFICATE_SNAPSHOT>> operation, int certificateId) {
 
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(certificateId));
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(operation, lockContext, this.GetKeyGroup(certificateId));
 		}
 
-		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificates(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>>> operation) {
+		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificates(Func<ACCREDITATION_CERTIFICATE_CONTEXT, LockContext, Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>>> operation) {
+
 			return this.QueryAllAsync(operation);
 		}
 
-		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificates(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>>> operation, List<int> certificateIds) {
+		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificates(Func<ACCREDITATION_CERTIFICATE_CONTEXT, LockContext, Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>>> operation, List<int> certificateIds) {
 			return this.QueryAllAsync(operation, certificateIds.Select(e => (long)e).ToList());
 		}
 
-		public Task UpdateSnapshotDigestFromDigest(Func<ACCREDITATION_CERTIFICATE_CONTEXT, Task> operation, ACCREDITATION_CERTIFICATE_SNAPSHOT accountSnapshotEntry) {
+		public Task UpdateSnapshotDigestFromDigest(Func<ACCREDITATION_CERTIFICATE_CONTEXT, LockContext, Task> operation, ACCREDITATION_CERTIFICATE_SNAPSHOT accountSnapshotEntry) {
 
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.CertificateId));
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(operation, lockContext, this.GetKeyGroup(accountSnapshotEntry.CertificateId));
 		}
 
 		public Task<List<(ACCREDITATION_CERTIFICATE_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<ACCREDITATION_CERTIFICATE_CONTEXT, LockContext, Task>>> actions) {

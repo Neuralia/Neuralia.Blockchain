@@ -59,6 +59,37 @@ namespace Neuralia.Blockchains.Core.Network {
 			socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 		}
 
+		public static Socket CreateServerSocket(IPMode ipMode, Action<Socket> initialize) {
+
+			Socket listener = null;
+			if(ipMode.HasFlag(IPMode.IPv6)) {
+				if(!TcpConnection.IPv6Supported) {
+					throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
+				}
+				listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+				bool hasIpv4 = ipMode.HasFlag(IPMode.IPv4);
+				listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, hasIpv4);
+
+				if(hasIpv4) {
+					listener.DualMode = true;
+				}
+			} else {
+				listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			}
+
+			initialize(listener);
+			
+			// seems to be needed in case the listener is not completely disposed yet (on linux and MacOs)
+			//https://github.com/dotnet/corefx/issues/24562
+			//TODO: this is a bug fix, and maybe in the future we may not need the below anymore.
+			if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
+				listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+				listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
+			}
+
+			return listener;
+		}
+
 		/// <summary>
 		/// Attempt to parallel shoot either a single socket for ipv6, or the 2 types for ipv4 and return the first that connects, clean up the rest
 		/// </summary>
@@ -69,10 +100,40 @@ namespace Neuralia.Blockchains.Core.Network {
 		/// <returns></returns>
 		/// <exception cref="P2pException"></exception>
 		public static async Task<(Socket socket, bool success)> ConnectSocket(NetworkEndPoint endpoint, Action<Socket> setParameters, int timeout = 5, Func<Socket, IPEndPoint, Task> connectCallback = null) {
+			
+			void ClearSocket(Socket s) {
+				try {
+					s?.Shutdown(SocketShutdown.Both);
+				} catch {
+				}
 
+				try {
+					s?.Dispose();
+				} catch {
+				}
+			}
+			
+			void Clear(Task<Socket> t) {
+				if(t.IsCompleted && t.Result != null) {
+					ClearSocket(t.Result);
+				}
+			}
+
+
+			bool ipv6Supported = TcpConnection.IPv6Supported && GlobalSettings.ApplicationSettings.IPProtocolClient.HasFlag(IPMode.IPv6);
 			bool ipv4 = NodeAddressInfo.IsAddressIpV4Analog(endpoint);
-			bool doubleConnections = GlobalSettings.ApplicationSettings.EnableDoubleSocketConnections;
+			bool doubleConnections = GlobalSettings.ApplicationSettings.EnableDoubleSocketConnections && ipv6Supported && ipv4;
 
+			if(!ipv4 && !ipv6Supported) {
+				NLog.Default.Debug("IPv6 not supported!");
+
+				return default;
+			}
+			else if(ipv4 && !GlobalSettings.ApplicationSettings.IPProtocolClient.HasFlag(IPMode.IPv4)) {
+				NLog.Default.Debug("IPv4 not supported!");
+
+				return default;
+			}
 			(Socket socket, IPEndPoint adjustedEndpoint) PrepareSocket(bool second = false) {
 
 				try {
@@ -87,12 +148,8 @@ namespace Neuralia.Blockchains.Core.Network {
 							adjustedEndpoint = new IPEndPoint(NodeAddressInfo.GetAddressIpV4(endpoint), endpoint.EndPoint.Port);
 						}
 					} else {
-						if(ipv4 && !Socket.OSSupportsIPv6) {
-							return default;
-						}
-
-						if(!Socket.OSSupportsIPv6) {
-							NLog.Default.Debug("IPV6 not supported!");
+						if(!ipv6Supported) {
+							NLog.Default.Debug("IPv6 not supported!");
 
 							return default;
 						}
@@ -119,9 +176,8 @@ namespace Neuralia.Blockchains.Core.Network {
 				};
 			}
 
-			using AsyncManualResetEventSlim manualResetEventSlim = new AsyncManualResetEventSlim();
-
-			//
+			ClosureWrapper<AsyncManualResetEventSlim> manualResetEventSlim = new ClosureWrapper<AsyncManualResetEventSlim>();
+			
 			Task<Socket> task1 = Task.Run(async () => {
 				Socket socket = null;
 				IPEndPoint adjustedEndpoint = null;
@@ -129,55 +185,62 @@ namespace Neuralia.Blockchains.Core.Network {
 
 				try {
 					(socket, adjustedEndpoint) = PrepareSocket(false);
-					var connect = Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, adjustedEndpoint, null);
-					bool success = await connect.HandleTimeout(TimeSpan.FromSeconds((ipv4 || !doubleConnections) ? graceTimeout : timeout)).ConfigureAwait(false);
-
-					if(success || !ipv4 || !doubleConnections) {
-						results.Value = true;
+					
+					if(socket == null) {
+						return default;
 					}
+					
+					var connect = connectCallback(socket, adjustedEndpoint);
+					bool success = await connect.HandleTimeout(TimeSpan.FromSeconds(doubleConnections ? graceTimeout : timeout)).ConfigureAwait(false);
 
-					manualResetEventSlim.Set();
+					if(success || !doubleConnections) {
+						results.Value = true;
 
-					if(results.Value) {
+						if(!(success && socket.Connected)) {
+							ClearSocket(socket);
+							socket = null;
+						}
+					}
+					
+					manualResetEventSlim.Value?.Set();
+
+					if(results.Value || socket == null) {
 						return socket;
 					}
 
 					success = await connect.HandleTimeout(TimeSpan.FromSeconds(Math.Max(timeout - graceTimeout, 1))).ConfigureAwait(false);
 
-					if(success) {
+					if(success && socket.Connected) {
 						return socket;
 					}
 				} catch {
 				}
 
-				try {
-					socket?.Shutdown(SocketShutdown.Both);
-				} catch {
-				}
+				ClearSocket(socket);
 
-				try {
-					socket?.Dispose();
-				} catch {
-				}
-
-				return (Socket) null;
+				return default;
 			});
 
-			if(!ipv4 || !doubleConnections) {
+			if(!ipv4 || !doubleConnections || !TcpConnection.IPv6Supported) {
 				var result = await task1.ConfigureAwait(false);
 
 				return (result, result != null);
 			} else {
-				await manualResetEventSlim.WaitAsync().ConfigureAwait(false);
+				using(manualResetEventSlim.Value = new AsyncManualResetEventSlim()){
+				
+					await manualResetEventSlim.Value.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+				}
 
 				if(results.Value) {
 					var result = await task1.ConfigureAwait(false);
-
+					if(!(result != null && result.Connected)) {
+						ClearSocket(result);
+						result = null;
+					}
 					return (result, result != null);
 				}
 
 				// ok, lets double shoot!
-
 				var task2 = Task.Run(async () => {
 					
 					Socket socket = null;
@@ -185,54 +248,49 @@ namespace Neuralia.Blockchains.Core.Network {
 
 					try {
 						(socket, adjustedEndpoint) = PrepareSocket(true);
+
+						if(socket == null) {
+							return default;
+						}
 						var connect = connectCallback(socket, adjustedEndpoint);
 						bool success = await connect.HandleTimeout(TimeSpan.FromSeconds(timeout)).ConfigureAwait(false);
 
-						if(success) {
+						if(success && socket.Connected) {
 							return socket;
 						}
 					} catch {
 					}
 
-					try {
-						socket?.Shutdown(SocketShutdown.Both);
-					} catch {
-					}
+					ClearSocket(socket);
 
-					try {
-						socket?.Dispose();
-					} catch {
-					}
-
-					return (Socket) null;
+					return default;
 				});
 
 				Task<Socket> resultTask = await Task.WhenAny(task1, task2).ConfigureAwait(false);
 
 				Task<Socket> otherTask = resultTask == task1 ? task2 : task1;
+				
+				if(resultTask.Result != null && resultTask.Result.Connected) {
+					
+					if(otherTask.IsCompleted) {
+						Clear(otherTask);
+					} else {
+						var final = otherTask.ContinueWith(t => {
+							Clear(t);
+						});
+					}
 
-				if(resultTask.Result != null) {
-
-					var final = otherTask.ContinueWith(t => {
-						if(t.Result != null) {
-							try {
-								t.Result.Shutdown(SocketShutdown.Both);
-							} catch {
-							}
-
-							try {
-								t.Result.Dispose();
-							} catch {
-							}
-						}
-					});
-
-					return (resultTask.Result, resultTask.Result != null);
+					return (resultTask.Result, true);
+				} else {
+					Clear(resultTask);
 				}
-
+				
 				var lastSocket = await otherTask.ConfigureAwait(false);
 
-				return (lastSocket, lastSocket != null);
+				if(lastSocket != null && lastSocket.Connected) {
+					return (lastSocket, true);
+				}
+				Clear(otherTask);
 			}
 
 			return default;

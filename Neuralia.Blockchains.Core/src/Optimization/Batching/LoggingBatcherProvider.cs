@@ -11,6 +11,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		void Error(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default);
 		void Information(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default);
 		void Warning(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default);
+		void Debug(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default);
 		void Verbose(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default);
 		void Verbose(Exception ex, string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default);
 	}
@@ -102,7 +103,23 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 			entry.LoggerType = loggertype;
 			this.Entries.Add(entry);
 		}
-		
+
+		public void Debug(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
+			if(string.IsNullOrWhiteSpace(message)) {
+				return;
+			}
+			if(!this.IsRunning) {
+				NLog.GetLogger(loggertype).Debug(message);
+
+				return;
+			}
+			var entry = this.GetEntry();
+			entry.LogEntryType = LogEntry.LogTypes.Debug;
+			entry.Message = message;
+			entry.LoggerType = loggertype;
+			this.Entries.Add(entry);
+		}
+
 		public void Verbose(string message, NLog.LoggerTypes loggertype = NLog.LoggerTypes.Default) {
 			if(string.IsNullOrWhiteSpace(message)) {
 				return;
@@ -139,7 +156,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		public class LogEntry : BatchingEntry {
 
 			public enum LogTypes {
-				Information,Verbose,Warning,Error
+				Information,Verbose,Warning,Error, Debug
 			}
 
 			public LogTypes LogEntryType { get; set; }
@@ -171,6 +188,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				logger.Information(message);
 			} else if(entry.LogEntryType == LogEntry.LogTypes.Warning) {
 				logger.Warning(message);
+			} else if(entry.LogEntryType == LogEntry.LogTypes.Debug) {
+				logger.Debug(message);
 			} else if(entry.LogEntryType == LogEntry.LogTypes.Verbose) {
 				if(entry.Exception == null) {
 					logger.Verbose(message);

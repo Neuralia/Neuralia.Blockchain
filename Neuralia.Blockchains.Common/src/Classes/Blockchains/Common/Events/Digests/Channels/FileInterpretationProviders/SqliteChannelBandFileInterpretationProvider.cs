@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 			//Func<CARD_TYPE, object[]>
 			//			
-			return this.ChannelBandSqliteProviderDal.PerformOperation(db => {
+			return this.ChannelBandSqliteProviderDal.PerformOperation((db, lc) => {
 
 				return db.ChannelBandCards.Single(d => d.Id.Equals(value));
 			});
@@ -60,12 +60,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public List<CARD_TYPE> QueryCards() {
 
-			return this.ChannelBandSqliteProviderDal.PerformOperation(db => db.ChannelBandCards.ToList());
+			return this.ChannelBandSqliteProviderDal.PerformOperation((db, lc) => db.ChannelBandCards.ToList());
 		}
 
 		public CARD_TYPE QueryCard(QUERY_KEY key, Func<CARD_TYPE, bool> selector) {
 
-			return this.ChannelBandSqliteProviderDal.PerformOperation(db => {
+			return this.ChannelBandSqliteProviderDal.PerformOperation((db, lc) => {
 
 				if(this.keyDeclaration != null) {
 

@@ -412,7 +412,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 		protected virtual NodeAddressInfoList GetSharedPeerNodeList(NodeInfo otherPeer, NodeSelectionHeuristicTools.NodeSelectionHeuristics heuristic = NodeSelectionHeuristicTools.NodeSelectionHeuristics.Default) {
 
-			return this.networkingService.ConnectionStore.GetPeerNodeList(otherPeer, otherPeer.GetSupportedBlockchains(), heuristic, new[] {this.ClientConnection.NodeAddressInfo}.ToList(), false, 20);
+			return this.networkingService.ConnectionStore.GetPeerNodeList(otherPeer, otherPeer.GetSupportedBlockchains(), heuristic, new[] {this.ClientConnection.NodeAddressInfo}.ToList(), true, 20);
 		}
 
 		protected virtual async Task AddValidConnection() {

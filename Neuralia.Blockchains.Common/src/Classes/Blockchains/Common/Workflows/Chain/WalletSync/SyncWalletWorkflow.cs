@@ -197,9 +197,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			} catch(Exception ex) {
 				this.CentralCoordinator.Log.Error(ex, "Wallet sync failed");
 
-				//In mobile, no need to resync every blocks when it fails. We only need to resume at the last block that worked.
+				//In mobile, no need to resync every blocks when it fails. We only need to resume at the last block that we are sure worked.
 				if(GlobalSettings.ApplicationSettings.SynclessMode && ex is WalletSyncException walletSyncException) {
-					currentBlockHeight = walletSyncException.BlockId - 1;
+					previousSyncedBlockHeightEntry = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountPreviousBlockSyncHeight(lockContext).ConfigureAwait(false);
+
+					if (!previousSyncedBlockHeightEntry.HasValue || previousSyncedBlockHeightEntry.Value == 0)
+					{
+						currentBlockHeight = walletSyncException.BlockId - 1;
+
+						if (currentBlockHeight == -1)
+						{
+							// genesis will be at 0
+							currentBlockHeight = 0;
+						}
+					}
+					else
+					{
+						currentBlockHeight = previousSyncedBlockHeightEntry.Value;
+					}
 				}
 
 				throw;

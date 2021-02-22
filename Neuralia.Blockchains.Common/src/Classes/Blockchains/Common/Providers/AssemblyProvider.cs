@@ -838,20 +838,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				using var generatedHash = BlockchainHashingUtils.GenerateEnvelopedTransactionHash(transactionEnvelope, transaction);
 				transactionEnvelope.Hash.Entry = generatedHash.Entry;
 
-				async Task SignTransaction(IWalletKey key) {
+				async Task SignTransaction() {
 					// hash the finalized transaction
 
 					this.CentralCoordinator.Log.Verbose("Singing transaction...");
 
-					SafeArrayHandle signature = null;
+					SafeArrayHandle signature = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignTransaction(transactionEnvelope.Hash, keyName, lockContext, allowPassKeyLimit).ConfigureAwait(false);
 
-					if(key is IXmssWalletKey xmssWalletKey) {
-						signature = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignTransactionXmss(transactionEnvelope.Hash, xmssWalletKey, lockContext, allowPassKeyLimit).ConfigureAwait(false);
-					} else {
-						signature = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignTransaction(transactionEnvelope.Hash, key, lockContext, allowPassKeyLimit).ConfigureAwait(false);
-					}
 
 					this.CentralCoordinator.Log.Verbose("Transaction successfully signed.");
+
+					using IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
 					Task SetSignature(IAccountSignatureBase sig) {
 						if(sig is IPublishedAccountSignature publishedAccountSignature) {
@@ -943,9 +940,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				if(transactionEnvelope.Signature is PresentationEnvelopeSignature) {
 					// for the presentation, nothing so sign
-					using IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
-					await SignTransaction(key).ConfigureAwait(false);
+					await SignTransaction().ConfigureAwait(false);
+
+					using IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
 					// increment the key use index
 					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalChainStateKeyHeight(key, lockContext).ConfigureAwait(false);
@@ -958,9 +956,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					// we do nothing for now
 				}
 				else {
-					using IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
+					await SignTransaction().ConfigureAwait(false);
 
-					await SignTransaction(key).ConfigureAwait(false);
+					using IXmssWalletKey key = await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.LoadKey<IXmssWalletKey>(keyName, lockContext).ConfigureAwait(false);
 
 					// increment the key use index
 					await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.UpdateLocalChainStateKeyHeight(key, lockContext).ConfigureAwait(false);
@@ -1001,7 +999,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					messageEnvelope.Signature.AccountSignature.PublicKey = KeyFactory.ConvertKey(key);
 
 					// and sign the whole thing with our key
-					messageEnvelope.Signature.AccountSignature.Autograph.Entry = (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessageXmss(messageEnvelope.Hash, key, lockContext).ConfigureAwait(false)).Entry;
+					messageEnvelope.Signature.AccountSignature.Autograph.Entry = (await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SignMessage(messageEnvelope.Hash, key, lockContext).ConfigureAwait(false)).Entry;
 					
 					this.CentralCoordinator.Log.Verbose("Message successfully signed.");
 				}

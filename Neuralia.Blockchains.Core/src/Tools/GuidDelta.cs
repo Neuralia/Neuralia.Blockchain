@@ -40,7 +40,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 				}
 
 				if(deltaVal > 0) {
-					delta = (sbyte)((operation?1:-1)*GlobalRandom.GetNext(0, deltaVal));
+					delta = (sbyte)((operation?1:-1)*GlobalRandom.GetNext(0, deltaVal+1));
 				}
 				
 				source[i] = (byte)(bytes[i] - delta);

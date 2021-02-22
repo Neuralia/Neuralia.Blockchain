@@ -19,6 +19,7 @@ using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.Base;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
+using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
@@ -58,12 +59,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		private DateTime? nextExpiredTransactionCheck;
 		private DateTime? nextWalletSynchCheck;
 		private ISyncWalletWorkflow synchWalletWorkflow;
+		private INetworkingService networkingService;
 
 		public GossipManager(CENTRAL_COORDINATOR CentralCoordinator) : base(CentralCoordinator, 1, 500) {
 			this.timeService = CentralCoordinator.BlockchainServiceSet.BlockchainTimeService;
 			this.guidService = CentralCoordinator.BlockchainServiceSet.BlockchainGuidService;
-
+			this.networkingService = CentralCoordinator.BlockchainServiceSet.NetworkingService;
 			this.ColoredRoutedTaskReceiver = new ColoredRoutedTaskReceiver(this.HandleMessages);
+			
 		}
 
 		protected new CENTRAL_COORDINATOR CentralCoordinator => base.CentralCoordinator;
@@ -92,7 +95,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="gossipMessageTask"></param>
 		/// <exception cref="ApplicationException"></exception>
 		protected virtual async Task HandleGossipMessageReceived(GossipMessageReceivedTask gossipMessageTask) {
-
+			
 			LockContext lockContext = null;
 
 			if((gossipMessageTask == null) || !(gossipMessageTask.gossipMessageSet is IBlockchainGossipMessageSet blockchainGossipMessageSet)) {
@@ -139,9 +142,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 						return true;
 					}
 					
-					IPMarshall.Instance.Quarantine(accountId.ToLongRepresentation(), IPMarshall.QuarantineReason.GossipRateLimit, DateTimeEx.CurrentTime.AddDays(3), $"Too many gossip from {accountId}", 5, TimeSpan.FromMinutes(1));
+					IPMarshall.Instance.Quarantine(accountId, IPMarshall.QuarantineReason.GossipRateLimit, DateTimeEx.CurrentTime.AddDays(3), $"Too many gossip from {accountId}", 5, TimeSpan.FromMinutes(1));
 							
-					if (IPMarshall.Instance.IsQuarantined(accountId.ToLongRepresentation()))
+					if (IPMarshall.Instance.IsQuarantined(accountId))
 					{
 						this.CentralCoordinator.Log.Verbose($"Gossip message rate limited for account {accountId}");
 
@@ -285,10 +288,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 									IBlockEnvelope blockEnvelope = (IBlockEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
 
-									this.CentralCoordinator.Log.Verbose($"Inserting block {blockEnvelope.BlockId} received by gossip message.");
+									this.CentralCoordinator.Log.Information($"Inserting block {blockEnvelope.BlockId} received by gossip message.");
 									await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.InsertInterpretBlock(blockEnvelope.Contents.RehydratedBlock, blockEnvelope.Contents, true, lc).ConfigureAwait(false);
-
+									
 									blockInserted = true;
+									if (blockEnvelope.BlockId == this.CentralCoordinator.ChainComponentProvider
+										.ChainStateProviderBase.PublicBlockHeight)
+									{
+										//pad the head of this peer, we like it
+										this.networkingService.IPCrawler.HandleSyncComplete(connection.NodeAddressInfo, gossipMessageTask.gossipMessageSet.ReceivedTime);
+									}
 								} else if(blockchainGossipMessageSet.BaseMessage.WorkflowType == GossipWorkflowIDs.MESSAGE_RECEIVED) {
 									IMessageEnvelope messageEnvelope2 = (IMessageEnvelope) blockchainGossipMessageSet.BaseMessage.BaseEnvelope;
 									
@@ -298,7 +307,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 								}
 
 								// ok , we are done. good job :)
-								this.CentralCoordinator.Log.Verbose($"Gossip message received by peer {connection.ScopedAdjustedIp} was valid and was processed properly.");
+								this.CentralCoordinator.Log.Information($"Gossip message received by peer {connection.ScopedAdjustedIp} was valid and was processed properly.");
 							} catch(Exception ex) {
 
 								this.CentralCoordinator.Log.Error(ex, "Failed to process gossip message that was found as valid.");

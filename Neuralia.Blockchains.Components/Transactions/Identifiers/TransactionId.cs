@@ -10,6 +10,7 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Components.Transactions.Identifiers {

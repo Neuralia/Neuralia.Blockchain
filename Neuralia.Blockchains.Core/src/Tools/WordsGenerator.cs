@@ -11,7 +11,7 @@ namespace Neuralia.Blockchains.Core.Tools {
 
 			for(int i = 0; i < numWords; i++) {
 				// Make a word.
-				int wordLength = GlobalRandom.GetNext(wordLengthsMin, wordLengthsMax);
+				int wordLength = GlobalRandom.GetNext(wordLengthsMin, wordLengthsMax+1);
 
 				using var buffer = ByteArray.Create(wordLength);
 				buffer.FillSafeRandom();

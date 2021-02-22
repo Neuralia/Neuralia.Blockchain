@@ -428,7 +428,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 											this.nextBlockchainSyncCheck = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
 										} else {
 											// we never synced, we need to check more often to be ready to do so
-											this.nextBlockchainSyncCheck = DateTimeEx.CurrentTime.AddSeconds(5);
+											this.nextBlockchainSyncCheck = DateTimeEx.CurrentTime.AddSeconds(20);
 										}
 
 										this.chainSyncWorkflow = null;

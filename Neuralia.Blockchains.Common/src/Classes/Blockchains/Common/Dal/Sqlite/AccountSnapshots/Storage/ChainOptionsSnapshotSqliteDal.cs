@@ -30,15 +30,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		protected ChainOptionsSnapshotSqliteDal(string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateChainOptionsSnapshotContext<ACCOUNT_SNAPSHOT_CONTEXT>, serializationType) {
 		}
 
-		public void EnsureEntryCreated(Action<ACCOUNT_SNAPSHOT_CONTEXT> operation) {
+		public void EnsureEntryCreated(Action<ACCOUNT_SNAPSHOT_CONTEXT, LockContext> operation) {
 			this.PerformOperation(operation);
 		}
 
-		public Task<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshot(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task<CHAIN_OPTIONS_SNAPSHOT>> operation) {
+		public Task<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshot(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task<CHAIN_OPTIONS_SNAPSHOT>> operation) {
 			return this.PerformOperationAsync(operation);
 		}
 
-		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation) {
+		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation) {
 
 			return this.PerformOperationAsync(operation);
 		}
@@ -51,16 +51,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			LockContext lockContext = null;
 
-			List<Func<ACCOUNT_SNAPSHOT_CONTEXT, Task>> wrappedOperations = actions.SelectMany(e => e.Value).Select(o => {
+			List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>> wrappedOperations = actions.SelectMany(e => e.Value).Select(o => {
 
-				Task Func(ACCOUNT_SNAPSHOT_CONTEXT db) {
-					return o(db, lockContext);
+				Task Func(ACCOUNT_SNAPSHOT_CONTEXT db, LockContext lc) {
+					return o(db, lc);
 				}
 
-				return (Func<ACCOUNT_SNAPSHOT_CONTEXT, Task>) Func;
+				return (Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>) Func;
 			}).ToList();
 
-			await this.PerformContextOperationsAsync(trx.db, wrappedOperations).ConfigureAwait(false);
+			await this.PerformContextOperationsAsync(trx.db, wrappedOperations, lockContext).ConfigureAwait(false);
 
 			return result;
 		}

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.FileInterpretationProviders.Sqlite {
 
@@ -12,8 +13,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 		where KEY : struct {
 		Action<ModelBuilder> ModelBuilder { get; set; }
 
-		void PerformOperation(Action<IChannelBandSqliteProviderContext<ENTRY, KEY>> process);
-		T PerformOperation<T>(Func<IChannelBandSqliteProviderContext<ENTRY, KEY>, T> process);
+		void PerformOperation(Action<IChannelBandSqliteProviderContext<ENTRY, KEY>, LockContext> process, LockContext lockContext = null);
+		T PerformOperation<T>(Func<IChannelBandSqliteProviderContext<ENTRY, KEY>, LockContext, T> process, LockContext lockContext = null);
 	}
 
 	public class ChannelBandSqliteProviderDal<ENTRY, KEY> : SqliteDal<ChannelBandSqliteProviderContext<ENTRY, KEY>>, IChannelBandSqliteProviderDal<ENTRY, KEY>
@@ -26,18 +27,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.
 
 		public Action<ModelBuilder> ModelBuilder { get; set; }
 
-		public void PerformOperation(Action<IChannelBandSqliteProviderContext<ENTRY, KEY>> process) {
+		public void PerformOperation(Action<IChannelBandSqliteProviderContext<ENTRY, KEY>, LockContext> process, LockContext lockContext = null) {
 
-			base.PerformOperation(process);
+			base.PerformOperation(process, lockContext);
 		}
 
-		public T PerformOperation<T>(Func<IChannelBandSqliteProviderContext<ENTRY, KEY>, T> process) {
+		public T PerformOperation<T>(Func<IChannelBandSqliteProviderContext<ENTRY, KEY>, LockContext, T> process, LockContext lockContext = null) {
 
-			return base.PerformOperation(process);
+			return base.PerformOperation(process, lockContext);
 		}
 
-		protected override void PerformCustomMappings(ChannelBandSqliteProviderContext<ENTRY, KEY> db) {
-			base.PerformCustomMappings(db);
+		protected override void PerformCustomMappings(ChannelBandSqliteProviderContext<ENTRY, KEY> db, LockContext lockContext) {
+			base.PerformCustomMappings(db, lockContext);
 
 			db.ModelBuilders.Add(modelBuilder => {
 				if(this.ModelBuilder != null) {

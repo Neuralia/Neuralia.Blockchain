@@ -32,26 +32,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 		protected AccountKeysSnapshotSqliteDal(int groupSize, string folderPath, ServiceSet serviceSet, SoftwareVersion softwareVersion, IChainDalCreationFactory chainDalCreationFactory, AppSettingsBase.SerializationTypes serializationType) : base(groupSize, folderPath, serviceSet, softwareVersion, chainDalCreationFactory.CreateStandardAccountKeysSnapshotContext<ACCOUNT_SNAPSHOT_CONTEXT>, serializationType) {
 		}
 
-		public Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>> LoadAccountKeys(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>>> operation, List<(long accountId, byte ordinal)> keyIds) {
+		public Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>> LoadAccountKeys(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>>> operation, List<(long accountId, byte ordinal)> keyIds) {
 
 			List<AccountId> accountIds = keyIds.Select(a => AccountId.FromLongRepresentation(a.accountId)).ToList();
-
-			return this.QueryAllAsync(operation, accountIds);
+			LockContext lockContext = null;
+			return this.QueryAllAsync(operation, accountIds, lockContext);
 
 		}
 
-		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, STANDARD_ACCOUNT_KEYS_SNAPSHOT accountSnapshotEntry) {
-
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
+		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation, STANDARD_ACCOUNT_KEYS_SNAPSHOT accountSnapshotEntry) {
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(operation, lockContext, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
 		}
 
 		public Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<AccountId, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
-			return this.PerformProcessingSetHoldTransactions(actions);
+			LockContext lockContext = null;
+			return this.PerformProcessingSetHoldTransactions(actions, lockContext);
 		}
 
 		public Task InsertNewAccountKey(AccountId accountId, byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId, long inceptionBlockId) {
-
-			return this.PerformOperationAsync(db => {
+			LockContext lockContext = null;
+			return this.PerformOperationAsync((db, lc) => {
 				STANDARD_ACCOUNT_KEYS_SNAPSHOT accountKey = new STANDARD_ACCOUNT_KEYS_SNAPSHOT();
 
 				accountKey.CompositeKey = this.GetCardUtils().GenerateCompositeKey(accountId, ordinal);
@@ -71,15 +72,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 				return db.SaveChangesAsync();
 
-			}, this.GetKeyGroup(accountId));
+			}, lockContext, this.GetKeyGroup(accountId));
 
 		}
 
 		public Task InsertUpdateAccountKey(AccountId accountId, byte ordinal, SafeArrayHandle key, TransactionId declarationTransactionId, long inceptionBlockId) {
 
 			long accountIdLong = accountId.ToLongRepresentation();
-
-			return this.PerformOperationAsync(async db => {
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(async (db, lc) => {
 				STANDARD_ACCOUNT_KEYS_SNAPSHOT accountKey = db.StandardAccountKeysSnapshots.SingleOrDefault(e => (e.OrdinalId == ordinal) && (e.AccountId == accountIdLong));
 
 				if(accountKey == null) {
@@ -98,7 +99,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 				accountKey.DeclarationBlockId = inceptionBlockId;
 
 				await db.SaveChangesAsync().ConfigureAwait(false);
-			}, this.GetKeyGroup(accountId));
+			}, lockContext, this.GetKeyGroup(accountId));
 
 		}
 

@@ -16,16 +16,12 @@ namespace Neuralia.Blockchains.Core.Tools {
 		public ITimeService TimeService => this.GetService<ITimeService>();
 		public IGuidService GuidService => this.GetService<IGuidService>();
 		public IGlobalsService GlobalsService => this.GetService<IGlobalsService>();
-
 		public IHttpService HttpService => this.GetService<IHttpService>();
 		public IFileFetchService FileFetchService => this.GetService<IFileFetchService>();
-
 		public IDataAccessService DataAccessService => this.GetService<IDataAccessService>();
-
 		public IInstantiationService InstantiationService => this.GetService<IInstantiationService>();
-
 		public IPortMappingService PortMappingService => this.GetService<IPortMappingService>();
-		
+		public INetworkingService NetworkingService => this.GetService<INetworkingService>();
 		public T GetService<T>()
 			where T : class {
 			return DIService.Instance.GetService<T>(this.chainType);

@@ -11,18 +11,18 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TargetFrameworks>netstandard2.1;net5.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
-    <VersionPrefix>1.0.1.15</VersionPrefix>
+    <VersionPrefix>1.0.1.19</VersionPrefix>
 </PropertyGroup>
   <ItemGroup>
 
 
-    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.1.15" />
+    <PackageReference Include="Neuralia.Blockchains.Tools" Version="1.0.1.19" />
     <PackageReference Include="Neuralia.BouncyCastle" Version="1.0.0" />
     <PackageReference Include="Neuralia.Open.Nat" Version="1.0.0" />
 
 
     <PackageReference Include="LiteDB" Version="5.0.10" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="5.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="5.0.3" />
     <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="1.4.0" />
    <PackageReference Include="morelinq" Version="3.3.2" />
 
@@ -34,6 +34,7 @@
     <PackageReference Include="RT.Comb" Version="2.5.0" />
     <PackageReference Include="Serilog" Version="2.10.0" />
     <PackageReference Include="Zio" Version="0.11.0" />
+    
   </ItemGroup>
 
 

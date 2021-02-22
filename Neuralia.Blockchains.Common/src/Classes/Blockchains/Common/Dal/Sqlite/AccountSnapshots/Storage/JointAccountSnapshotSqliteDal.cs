@@ -39,20 +39,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 			List<long> longAccountIds = accountIds.Where(a => a.AccountType == Enums.AccountTypes.Joint).Select(a => a.ToLongRepresentation()).ToList();
 
-			return this.QueryAllAsync(db => {
+			return this.QueryAllAsync((db, lc) => {
 
 				return db.JointAccountSnapshots.Where(s => longAccountIds.Contains(s.AccountId)).ToListAsync();
 			}, accountIds);
 		}
 
-		public Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, JOINT_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
+		public Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation, JOINT_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
 
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(operation, lockContext, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
 		}
 
-		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, JOINT_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
+		public Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation, JOINT_ACCOUNT_SNAPSHOT accountSnapshotEntry) {
 
-			return this.PerformOperationAsync(operation, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
+			LockContext lockContext = null;
+			return this.PerformOperationAsync(operation, lockContext, this.GetKeyGroup(accountSnapshotEntry.AccountId.ToAccountId()));
 		}
 
 		public Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<AccountId, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions) {
@@ -61,7 +63,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 
 		public Task InsertNewJointAccount(AccountId accountId, long inceptionBlockId, bool Verified) {
 
-			return this.PerformOperation(db => {
+			LockContext lockContext = null;
+			return this.PerformOperation((db, lc) => {
 				JOINT_ACCOUNT_SNAPSHOT accountEntry = new JOINT_ACCOUNT_SNAPSHOT();
 
 				accountEntry.AccountId = accountId.ToLongRepresentation();
@@ -71,7 +74,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Acco
 				db.JointAccountSnapshots.Add(accountEntry);
 
 				return db.SaveChangesAsync();
-			}, this.GetKeyGroup(accountId));
+			}, lockContext, this.GetKeyGroup(accountId));
 
 		}
 	}

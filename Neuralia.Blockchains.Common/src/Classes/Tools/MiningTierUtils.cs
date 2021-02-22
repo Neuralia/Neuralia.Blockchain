@@ -48,6 +48,14 @@ namespace Neuralia.Blockchains.Common.Classes.Tools {
 			return IsFirstTier(miningTier) || IsSecondTier(miningTier);
 		}
 
+		public static bool IsServerTier(Enums.MiningTiers miningTier) {
+			return IsFirstOrSecondTier(miningTier);
+		}
+		
+		public static bool IsUserTier(Enums.MiningTiers miningTier) {
+			return !IsServerTier(miningTier);
+		}
+		
 		public static bool IsFourthTier(Enums.MiningTiers miningTier) {
 			return miningTier == Enums.MiningTiers.FourthTier;
 		}

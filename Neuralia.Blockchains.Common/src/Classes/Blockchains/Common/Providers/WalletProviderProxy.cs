@@ -17,6 +17,7 @@ using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Digests.Channels.Specialization.Cards;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Envelopes;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Transactions;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers.WalletProviderComponents;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account;
@@ -65,7 +66,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public Task AddTransactionSuccessActions(List<Func<LockContext, Task>> transactionalSuccessActions, LockContext lockContext);
 	}
 
-	public interface IWalletProviderProxy : IWalletProvider, IWalletProviderProxyTransactions, IDisposableExtended {
+	public interface IWalletProviderUtilities : IWalletProviderKeysComponentUtility, IWalletProviderAccountsComponentUtility{
+	
+	}
+	
+	public interface IWalletProviderReads : IWalletProviderKeysComponentReadonly, IWalletProviderAccountsComponentReadonly{
+	
+	}
+	
+	public interface IWalletProviderWrites : IWalletProviderKeysComponentWrite, IWalletProviderAccountsComponentWrite{
+	
+	}
+	
+	public interface IWalletProviderProxy : IWalletProvider, IWalletProviderReads, IWalletProviderWrites, IWalletProviderUtilities, IWalletProviderProxyTransactions, IDisposableExtended  {
 		Task<bool?> SyncedNoWait(LockContext lockContext);
 	}
 
@@ -138,6 +151,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task RemovePIDLock() {
 			return this.walletProvider.RemovePIDLock();
+		}
+
+		public string GetWalletKeysCachePath() {
+			return this.walletProvider.GetWalletKeysCachePath();
 		}
 
 		public Task<long?> LowestAccountBlockSyncHeight(LockContext lockContext) {
@@ -268,6 +285,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleKeyedRead((p, lc) => p.APIQueryWalletInfoAPI(lc), lockContext);
 		}
 
+		public Task<byte[]> APIGenerateSecureHash(byte[] parameter, LockContext lockContext)
+        {
+			return this.ScheduleKeyedRead((p, lc) => p.APIGenerateSecureHash(parameter, lc), lockContext);
+		}
+
 		public Task<List<WalletAccountAPI>> APIQueryWalletAccounts(LockContext lockContext) {
 			return this.ScheduleKeyedRead((p, lc) => p.APIQueryWalletAccounts(lc), lockContext);
 		}
@@ -321,7 +343,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task GenerateXmssKeyIndexNodeCache(string accountCode, byte ordinal, long index, LockContext lockContext = null) {
-			return this.ScheduleTransaction((p, ct, lc) => p.GenerateXmssKeyIndexNodeCache(accountCode, ordinal, index, lc), lockContext, 60 * 5, lc => {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.GenerateXmssKeyIndexNodeCache(accountCode, ordinal, index, lc), lockContext, 60 * 5, lc => {
 				// load wallet & key
 				return this.walletProvider.EnsureWalletFileIsPresent(lc);
 
@@ -329,39 +351,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task<IXmssWalletKey> CreateXmssKey(string name, float warningLevel, float changeLevel, Func<int, Task> progressCallback = null, int? seedSize =  null, XMSSNodeCache.XMSSCacheModes cacheMode = XMSSNodeCache.XMSSCacheModes.Automatic, byte cacheLevels = XMSSNodeCache.LEVELS_TO_CACHE_ABSOLUTELY, byte noncesExponent = XMSSEngine.DEFAULT_NONCES_EXPONENT, bool? enableCache = null, Action<XMSSProvider> prepare = null) {
-			return this.walletProvider.CreateXmssKey(name, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateXmssKey(name, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
 		}
 
 		public Task<IXmssWalletKey> CreateXmssKey(string name, byte treeHeight, int hashBits, WalletProvider.HashTypes HashType, int backupHashBits, WalletProvider.HashTypes backupHashType, float warningLevel, float changeLevel, Func<int, Task> progressCallback = null, int? seedSize =  null, XMSSNodeCache.XMSSCacheModes cacheMode = XMSSNodeCache.XMSSCacheModes.Automatic, byte cacheLevels = XMSSNodeCache.LEVELS_TO_CACHE_ABSOLUTELY, byte noncesExponent = XMSSEngine.DEFAULT_NONCES_EXPONENT, bool? enableCache = null, Action<XMSSProvider> prepare = null) {
-			return this.walletProvider.CreateXmssKey(name, treeHeight, hashBits, HashType, backupHashBits, backupHashType, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateXmssKey(name, treeHeight, hashBits, HashType, backupHashBits, backupHashType, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
 		}
 
 		public Task<IXmssWalletKey> CreateXmssKey(string name, Func<int, Task> progressCallback = null, XMSSNodeCache.XMSSCacheModes cacheMode = XMSSNodeCache.XMSSCacheModes.Automatic, byte cacheLevels = XMSSNodeCache.LEVELS_TO_CACHE_ABSOLUTELY, bool? enableCache = null, Action<XMSSProvider> prepare = null) {
-			return this.walletProvider.CreateXmssKey(name, progressCallback, cacheMode, cacheLevels, enableCache, prepare);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateXmssKey(name, progressCallback, cacheMode, cacheLevels, enableCache, prepare);
 		}
 
 		public Task<IXmssWalletKey> CreateXmssKey(string name, byte treeHeight, Enums.KeyHashType hashbits, Enums.KeyHashType backupHashbits, float warningLevel, float changeLevel, Func<int, Task> progressCallback = null, int? seedSize =  null, XMSSNodeCache.XMSSCacheModes cacheMode = XMSSNodeCache.XMSSCacheModes.Automatic, byte cacheLevels = XMSSNodeCache.LEVELS_TO_CACHE_ABSOLUTELY, byte noncesExponent = XMSSEngine.DEFAULT_NONCES_EXPONENT, bool? enableCache = null, Action<XMSSProvider> prepare = null) {
-			return this.walletProvider.CreateXmssKey(name, treeHeight, hashbits, backupHashbits, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateXmssKey(name, treeHeight, hashbits, backupHashbits, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
 		}
 
 		public Task<IXmssMTWalletKey> CreateXmssmtKey(string name, Func<int, int, int, long, long, long, int, int, Task> progressCallback = null, int? seedSize = null, XMSSNodeCache.XMSSCacheModes cacheMode = XMSSNodeCache.XMSSCacheModes.Automatic, byte cacheLevels = XMSSNodeCache.LEVELS_TO_CACHE_ABSOLUTELY, byte noncesExponent = XMSSEngine.DEFAULT_NONCES_EXPONENT, bool? enableCache = null, Action<XMSSMTProvider> prepare = null) {
-			return this.walletProvider.CreateXmssmtKey(name, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateXmssmtKey(name, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
 		}
 
 		public Task<IXmssMTWalletKey> CreateXmssmtKey(string name, float warningLevel, float changeLevel, Func<int, int, int, long, long, long, int, int, Task> progressCallback = null, int? seedSize =  null, XMSSNodeCache.XMSSCacheModes cacheMode = XMSSNodeCache.XMSSCacheModes.Automatic, byte cacheLevels = XMSSNodeCache.LEVELS_TO_CACHE_ABSOLUTELY, byte noncesExponent = XMSSEngine.DEFAULT_NONCES_EXPONENT, bool? enableCache = null, Action<XMSSMTProvider> prepare = null) {
-			return this.walletProvider.CreateXmssmtKey(name, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateXmssmtKey(name, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
 		}
 
 		public Task<IXmssMTWalletKey> CreateXmssmtKey(string name, byte treeHeight, byte treeLayers, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType, float warningLevel, float changeLevel, Func<int, int, int, long, long, long, int, int, Task> progressCallback = null, int? seedSize =  null, XMSSNodeCache.XMSSCacheModes cacheMode = XMSSNodeCache.XMSSCacheModes.Automatic, byte cacheLevels = XMSSNodeCache.LEVELS_TO_CACHE_ABSOLUTELY, byte noncesExponent = XMSSEngine.DEFAULT_NONCES_EXPONENT, bool? enableCache = null, Action<XMSSMTProvider> prepare = null) {
-			return this.walletProvider.CreateXmssmtKey(name, treeHeight, treeLayers, hashType, backupHashType, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateXmssmtKey(name, treeHeight, treeLayers, hashType, backupHashType, warningLevel, changeLevel, progressCallback, seedSize, cacheMode, cacheLevels, noncesExponent, enableCache, prepare);
 		}
 
 		public Task<INTRUPrimeWalletKey> CreateNTRUPrimeKey(string name, NTRUPrimeUtils.NTRUPrimeKeyStrengthTypes strength) {
-			return this.walletProvider.CreateNTRUPrimeKey(name, strength);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateNTRUPrimeKey(name, strength);
 		}
 		
 		public Task<SafeArrayHandle> CreateNTRUPrimeAppointmentRequestKey(LockContext lockContext) {
-			return this.ScheduleKeyedWrite((p, lc) => p.CreateNTRUPrimeAppointmentRequestKey(lc), lockContext);
+			return this.ScheduleKeyedWrite((p, lc) => p.WalletProviderKeysComponentBase.CreateNTRUPrimeAppointmentRequestKey(lc), lockContext);
 		}
 
 		public Task<IWalletStandardAccountSnapshot> CreateNewWalletStandardAccountSnapshot(IWalletAccount account, LockContext lockContext) {
@@ -401,7 +423,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task Initialize(LockContext lockContext) {
-			return this.ScheduleWrite((t, lc) => this.walletProvider.Initialize(lc), lockContext);
+			return this.walletProvider.Initialize(lockContext);
 		}
 
 		public Task ChangeAccountsCorrelation(ImmutableList<AccountId> enableAccounts, ImmutableList<AccountId> disableAccounts, LockContext lockContext) {
@@ -579,19 +601,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}, lockContext);
 		}
 
+
 		public IWalletKey CreateBasicKey(string name, CryptographicKeyType keyType) {
-			return this.walletProvider.CreateBasicKey(name, keyType);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateBasicKey(name, keyType);
 		}
 
 		public T CreateBasicKey<T>(string name, CryptographicKeyType keyType)
 			where T : IWalletKey {
-			return this.walletProvider.CreateBasicKey<T>(name, keyType);
+			return this.walletProvider.WalletProviderKeysComponentBase.CreateBasicKey<T>(name, keyType);
 		}
 
 		public void HashKey(IWalletKey key) {
-			this.walletProvider.HashKey(key);
+			this.walletProvider.WalletProviderKeysComponentBase.HashKey(key);
 		}
-
+		
 		public Task SetChainStateHeight(string accountCode, long blockId, LockContext lockContext) {
 			return this.ScheduleKeyedWrite((prov, lc) => {
 				return this.walletProvider.SetChainStateHeight(accountCode, blockId, lc);
@@ -612,7 +635,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task<IdKeyUseIndexSet> GetChainStateLastSyncedKeyHeight(IWalletKey key, LockContext lockContext) {
 			return this.ScheduleKeyedRead((prov, lc) => {
-				return this.walletProvider.GetChainStateLastSyncedKeyHeight(key, lc);
+				return this.walletProvider.WalletProviderKeysComponentBase.GetChainStateLastSyncedKeyHeight(key, lc);
 			}, lockContext);
 		}
 
@@ -630,7 +653,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task UpdateLocalChainStateKeyHeight(IWalletKey key, LockContext lockContext) {
 			return this.ScheduleKeyedWrite((prov, lc) => {
-				return this.walletProvider.UpdateLocalChainStateKeyHeight(key, lc);
+				return this.walletProvider.WalletProviderKeysComponentBase.UpdateLocalChainStateKeyHeight(key, lc);
 			}, lockContext);
 		}
 
@@ -1046,23 +1069,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task<SafeArrayHandle> PerformCryptographicSignature(string accountCode, string keyName, SafeArrayHandle message, LockContext lockContext, bool allowPassKeyLimit = false) {
-			return this.ScheduleWrite((t, lc) => this.walletProvider.PerformCryptographicSignature(accountCode, keyName, message, lc, allowPassKeyLimit), lockContext);
+			return this.ScheduleWrite((t, lc) => this.walletProvider.WalletProviderKeysComponentBase.PerformCryptographicSignature(accountCode, keyName, message, lc, allowPassKeyLimit), lockContext);
 		}
 
 		public Task<SafeArrayHandle> PerformCryptographicSignature(IWalletKey key, SafeArrayHandle message, LockContext lockContext, bool allowPassKeyLimit = false) {
-			return this.ScheduleWrite((t, lc) => this.walletProvider.PerformCryptographicSignature(key, message, lc, allowPassKeyLimit), lockContext);
+			return this.ScheduleWrite((t, lc) => this.walletProvider.WalletProviderKeysComponentBase.PerformCryptographicSignature(key, message, lc, allowPassKeyLimit), lockContext);
 		}
-
+		
 		public Task<(SafeArrayHandle signature, SafeArrayHandle nextPrivateKey)> PerformXmssmtCryptographicSignature(IXmssMTWalletKey xmssMTWalletKey, SafeArrayHandle message, LockContext lockContext, bool allowPassKeyLimit = false) {
-			return this.walletProvider.PerformXmssmtCryptographicSignature(xmssMTWalletKey, message, lockContext, allowPassKeyLimit);
+			return this.walletProvider.WalletProviderKeysComponentBase.PerformXmssmtCryptographicSignature(xmssMTWalletKey, message, lockContext, allowPassKeyLimit);
 		}
 
 		public Task<(SafeArrayHandle signature, SafeArrayHandle nextPrivateKey)> PerformXmssCryptographicSignature(IXmssWalletKey keyxmssWalletKey, SafeArrayHandle message, LockContext lockContext, bool allowPassKeyLimit = false, bool buildOptimizedSignature = false, XMSSSignaturePathCache xmssSignaturePathCache = null, SafeArrayHandle extraNodeCache = null, Action<XMSSProvider> callback = null, Func<int, int ,int, Task> progressCallback = null) {
-			return this.walletProvider.PerformXmssCryptographicSignature(keyxmssWalletKey, message, lockContext, allowPassKeyLimit, buildOptimizedSignature, xmssSignaturePathCache, extraNodeCache, callback, progressCallback);
-
+			return this.walletProvider.WalletProviderKeysComponentBase.PerformXmssCryptographicSignature(keyxmssWalletKey, message, lockContext, allowPassKeyLimit, buildOptimizedSignature, xmssSignaturePathCache, extraNodeCache, callback, progressCallback);
 		}
 		
-
 		public Task<IWalletStandardAccountSnapshot> GetStandardAccountSnapshot(AccountId accountId, LockContext lockContext) {
 			return this.ScheduleWrite((p, lc) => p.GetStandardAccountSnapshot(accountId, lc), lockContext);
 		}
@@ -1095,8 +1116,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}, lockContext);
 		}
 
-		public Task<SafeArrayHandle> SignTransaction(SafeArrayHandle transactionHash, string keyName, LockContext lockContext, bool allowPassKeyLimit = false) {
-			return this.ScheduleTransaction((p, ct, lc) => p.SignTransaction(transactionHash, keyName, lc, allowPassKeyLimit), lockContext, 20, lc => {
+		public Task<SafeArrayHandle> SignEvent(SafeArrayHandle eventHash, string keyName, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignEvent(eventHash, keyName, lc, allowPassKeyLimit), lockContext, 20, lc => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 
@@ -1104,46 +1125,124 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public Task<SafeArrayHandle> SignTransactionXmss(SafeArrayHandle transactionHash, IXmssWalletKey key, LockContext lockContext, bool allowPassKeyLimit = false) {
-			return this.ScheduleTransaction((p, ct, lc) => p.SignTransactionXmss(transactionHash, key, lc, allowPassKeyLimit), lockContext, 20, lc => {
+		public Task<SafeArrayHandle> SignEvent(SafeArrayHandle eventHash, IWalletKey key, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignEvent(eventHash, key, lc, allowPassKeyLimit), lockContext, 20, lc => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 
-				return this.walletProvider.EnsureWalletKeyIsReady(key.AccountCode, key.Name, lc);
+				return Task.CompletedTask;
+			});
+		}
+
+		public Task<SafeArrayHandle> SignTransaction(SafeArrayHandle transactionHash, string accountCode, string keyName, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignTransaction(transactionHash, accountCode, keyName, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
+			});
+		}
+
+		public Task<SafeArrayHandle> SignTransaction(SafeArrayHandle transactionHash, string keyName, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignTransaction(transactionHash, keyName, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
+			});
+		}
+		
+		public Task<SafeArrayHandle> SignTransaction(SafeArrayHandle transactionHash, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignTransaction(transactionHash, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
 			});
 		}
 
 		public Task<SafeArrayHandle> SignTransaction(SafeArrayHandle transactionHash, IWalletKey key, LockContext lockContext, bool allowPassKeyLimit = false) {
-			return this.ScheduleTransaction((p, ct, lc) => p.SignTransaction(transactionHash, key, lc, allowPassKeyLimit), lockContext, 20, lc => {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignTransaction(transactionHash, key, lc, allowPassKeyLimit), lockContext, 20, lc => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 
-				return this.walletProvider.EnsureWalletKeyIsReady(key.AccountCode, key.Name, lc);
-
+				return Task.CompletedTask;
 			});
 		}
 
-		public Task<SafeArrayHandle> SignMessageXmss(string accountCode, SafeArrayHandle message, LockContext lockContext) {
-
-			return this.ScheduleTransaction((p, ct, lc) => p.SignMessageXmss(accountCode, message, lc), lockContext, 20, lc => {
+		public Task<SafeArrayHandle> SignMessage(SafeArrayHandle message, string accountCode, string keyName, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignMessage(message, accountCode, keyName, lc, allowPassKeyLimit), lockContext, 20, lc => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 
-				return this.walletProvider.EnsureWalletKeyIsReady(accountCode, GlobalsService.MESSAGE_KEY_NAME, lc);
+				return Task.CompletedTask;
 			});
 		}
 
-		public Task<SafeArrayHandle> SignMessageXmss(SafeArrayHandle messageHash, IXmssWalletKey key, LockContext lockContext) {
-			return this.ScheduleTransaction((p, ct, lc) => p.SignMessageXmss(messageHash, key, lc), lockContext, 20, lc => {
+		public Task<SafeArrayHandle> SignMessage(SafeArrayHandle transactionHash, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignMessage(transactionHash, lc, allowPassKeyLimit), lockContext, 20, lc => {
 				// load wallet & key
 				this.walletProvider.EnsureWalletIsLoaded();
 
-				return this.walletProvider.EnsureWalletKeyIsReady(key.AccountCode, key.Name, lc);
+				return Task.CompletedTask;
+			});
+		}
 
+		public Task<SafeArrayHandle> SignMessage(SafeArrayHandle message, IWalletKey key, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignMessage(message, key, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
+			});
+		}
+
+		public Task<SafeArrayHandle> SignEvent(SafeArrayHandle eventHash, string accountCode, string keyName, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignMessage(eventHash, accountCode, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
 			});
 		}
 		
+		public Task<SafeArrayHandle> SignMessage(SafeArrayHandle message, string accountCode, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignMessage(message, accountCode, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
 
+				return Task.CompletedTask;
+			});
+		}
+		
+		public Task<SafeArrayHandle> SignValidatorMessage(SafeArrayHandle message, IWalletKey key, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignValidatorMessage(message, key, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
+			});
+		}
+		
+		public Task<SafeArrayHandle> SignValidatorMessage(SafeArrayHandle message, string accountCode, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignValidatorMessage(message, accountCode, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
+			});
+		}
+
+
+		public Task<SafeArrayHandle> SignValidatorMessage(SafeArrayHandle message, LockContext lockContext, bool allowPassKeyLimit = false) {
+			return this.ScheduleTransaction((p, ct, lc) => ((IWalletProviderInternal)p).WalletProviderKeysComponentBase.SignValidatorMessage(message, lc, allowPassKeyLimit), lockContext, 20, lc => {
+				// load wallet & key
+				this.walletProvider.EnsureWalletIsLoaded();
+
+				return Task.CompletedTask;
+			});
+		}
+		
 		public Task EnsureWalletKeyIsReady(string accountCode, string keyname, LockContext lockContext) {
 			return this.ScheduleKeyedRead((t, lc) => {
 
@@ -1161,7 +1260,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task<bool> LoadWallet(CorrelationContext correlationContext, LockContext lockContext, string passphrase = null) {
 
-			return this.ScheduleKeyedWrite((t, lc) => this.walletProvider.LoadWallet(correlationContext, lc, passphrase), lockContext, async lc => {
+			return this.ScheduleTransaction((p, ct, lc) => {
+
+				return this.walletProvider.LoadWallet(correlationContext, lc, passphrase);
+			}, lockContext, 60, async lc => {
 				// load wallet & key
 				await this.walletProvider.EnsureWalletFileIsPresent(lc).ConfigureAwait(false);
 				await this.walletProvider.EnsureWalletPassphrase(lc, passphrase).ConfigureAwait(false);
@@ -1169,7 +1271,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}, lc => {
 				// we failed
 				return this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext);
-
 			});
 		}
 

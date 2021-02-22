@@ -254,10 +254,7 @@ namespace Neuralia.Blockchains.Core.Services {
 				if(this.Started != null) {
 					this.Started();
 				}
-			} else {
-
-				NLog.Default.Information("Peer to peer network disabled");
-			}
+			} 
 		}
 
 		public Task Stop() {

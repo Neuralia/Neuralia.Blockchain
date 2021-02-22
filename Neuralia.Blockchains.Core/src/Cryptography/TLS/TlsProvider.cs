@@ -98,7 +98,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.TLS {
 			X509Certificate2 MyRootCAcert = this.GenerateCACertificate("CN=Neuralium", ref myCAprivateKey);
 
 			//generate cert based on the CA cert privateKey
-			X509Certificate2 MyCert = this.GenerateSelfSignedCertificate("CN=127.0.01", "CN=Neuralium", myCAprivateKey);
+			X509Certificate2 MyCert = this.GenerateSelfSignedCertificate("CN=127.0.0.1", "CN=Neuralium", myCAprivateKey);
 
 			return (MyRootCAcert, MyCert);
 		}

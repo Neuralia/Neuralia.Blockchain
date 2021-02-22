@@ -1,13 +1,33 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Compression;
+using Neuralia.Blockchains.Tools.Data;
+using Neuralia.Blockchains.Tools.Data.Arrays;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Appointments {
 	public static class AppointmentPuzzleEngineFactory {
+		public const int LATEST_ENGINE = 1;
+		public const string TEST_PUZZLE = "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";
 		public static AppointmentPuzzleEngineBase CreateEngine(int version) {
 
 			if(version == 1) {
 				return new AppointmentPuzzleEngine1();
 			}
 			throw new NotImplementedException();
+		}
+
+		public static Task<string> GenerateTestPuzzle() {
+
+			using var compressed = SafeArrayHandle.FromBase64(TEST_PUZZLE);
+
+			BrotliCompression compression = new BrotliCompression();
+			using var bytes = compression.Decompress(compressed);
+			string puzzle = Encoding.UTF8.GetString(bytes.ToExactByteArray());
+			
+			string successMessage = "test";
+			return CreateEngine(LATEST_ENGINE).PackagePuzzle(1, 1, $"{{\"message\":\"{successMessage}!\"}}", puzzle, new List<string>());
 		}
 	}
 }

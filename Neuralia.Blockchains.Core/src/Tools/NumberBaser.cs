@@ -1,6 +1,7 @@
 using System;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Tools.Data.Arrays;
+using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Core.Tools {

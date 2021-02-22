@@ -18,10 +18,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		where ACCOUNT_ATTRIBUTE_SNAPSHOT : class, IAccountAttributeEntry, new()
 		where ACCOUNT_MEMBERS_SNAPSHOT : class, IJointMemberAccountEntry, new() {
 
-		Task Clear();
+		Task Clear(LockContext lockContext = null);
 		Task<List<ACCOUNT_SNAPSHOT>> LoadAccounts(List<AccountId> accountIds);
-		Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, ACCOUNT_SNAPSHOT accountSnapshotEntry);
-		Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, Task> operation, ACCOUNT_SNAPSHOT accountSnapshotEntry);
+		Task UpdateSnapshotEntry(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation, ACCOUNT_SNAPSHOT accountSnapshotEntry);
+		Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task> operation, ACCOUNT_SNAPSHOT accountSnapshotEntry);
 
 		Task<List<(ACCOUNT_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<AccountId, List<Func<ACCOUNT_SNAPSHOT_CONTEXT, LockContext, Task>>> actions);
 	}

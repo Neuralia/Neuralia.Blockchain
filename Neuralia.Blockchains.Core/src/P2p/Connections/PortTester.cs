@@ -11,6 +11,7 @@ using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol;
 using Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.REST;
+using Neuralia.Blockchains.Core.Network.Protocols;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
@@ -100,25 +101,17 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					if(callback) {
 						// gotta start a server
 						if(!serverRunning) {
-							var address = IPAddress.Any;
 
-							if(Socket.OSSupportsIPv6 && GlobalSettings.ApplicationSettings.IPProtocol.HasFlag(IPMode.IPv6)) {
-								ipMode = IPMode.IPv6;
-								address = IPAddress.IPv6Any;
-							} else {
-								ipMode = IPMode.IPv4;
-								address = IPAddress.Any;
-							}
 							
 							if(testPort == TcpTestPorts.P2p) {
-								tcpServer = new TcpServer(new NetworkEndPoint(address, GlobalSettings.ApplicationSettings.Port, ipMode), (e,c) => {
+								tcpServer = new TcpServer(ipMode, GlobalSettings.ApplicationSettings.Port, (e,c) => {
 								});
 								
 								tcpServer.Start();
 							}
 							else if(testPort == TcpTestPorts.Validator) {
 								
-								validationServer = new TcpValidatorServer(3, new NetworkEndPoint(address, GlobalSettings.ApplicationSettings.ValidatorPort, ipMode));
+								validationServer = new TcpValidatorServer(3, ipMode, GlobalSettings.ApplicationSettings.ValidatorPort);
 								validationServer.Initialize();
 
 								validationServer.Start();
@@ -234,81 +227,73 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						
 					});
 				} else {
-					if(NodeAddressInfo.IsAddressIpV4Analog(endpoint.Address)) {
-						socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-					} else {
-						if(!Socket.OSSupportsIPv6) {
-							throw new ApplicationException();
+
+					//TODO: this can be made more efficient by releasing the thread but keeping the timeout.
+
+					bool success = false;
+
+					(socket, success) = await SocketExtensions.ConnectSocket(new NetworkEndPoint(endpoint), s => {
+
+						s.InitializeSocketParametersFast(BYTES_PER_REQUESTER);
+					}, 3).ConfigureAwait(false);
+
+					if(!success) {
+						return TcpTestResult.Failed;
+					}
+					TcpTestResult connectionResult = (byte) TcpTestResult.Failed;
+
+					try {
+						if(!socket.Connected) {
+							return connectionResult;
 						}
 
-						socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-						socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+						connectionResult = TcpTestResult.Connected;
+						TcpTestParameter pingBytes = TcpTestParameter.Success;
+
+						byte[] bytes = new byte[callback ? BYTES_PER_REQUESTER : 1];
+
+						if(callback) {
+							pingBytes |= TcpTestParameter.RequestCallback;
+
+							if(ipMode.HasFlag(IPMode.IPv6)) {
+								pingBytes |= TcpTestParameter.Ipv6;
+							}
+
+							bytes = new byte[BYTES_PER_REQUESTER];
+
+
+							if(testPort == TcpTestPorts.P2p) {
+								port = GlobalSettings.ApplicationSettings.Port;
+							} else if(testPort == TcpTestPorts.Validator) {
+								port = GlobalSettings.ApplicationSettings.ValidatorPort;
+							}
+
+							TypeSerializer.Serialize(port, bytes.AsSpan(1, 4));
+						}
+
+						if(testPort == TcpTestPorts.Validator) {
+							pingBytes |= TcpTestParameter.IsValidator;
+						}
+
+						bytes[0] = (byte) pingBytes;
+
+						int sent = socket.Send(bytes);
+
+						if(socket.Connected && (sent <= 5)) {
+
+							byte[] rbytes = new byte[1];
+							int received = socket.Receive(rbytes);
+
+							if(received == 1) {
+								return (TcpTestResult) rbytes[0];
+							}
+						}
+					} catch(Exception ex) {
+
 					}
 
-					socket.InitializeSocketParametersFast(BYTES_PER_REQUESTER);
-
-					socket.ReceiveTimeout = (int) timeout.TotalMilliseconds;
-
-					task = Task.Factory.FromAsync(socket.BeginConnect(endpoint, null, null), result => {
-
-						TcpTestResult connectionResult = (byte) TcpTestResult.Failed;
-
-						try {
-							if(!socket.Connected) {
-								return connectionResult;
-							}
-
-							connectionResult = TcpTestResult.Connected;
-							TcpTestParameter pingBytes = TcpTestParameter.Success;
-
-							byte[] bytes = new byte[callback ? BYTES_PER_REQUESTER : 1];
-
-							if(callback) {
-								pingBytes |= TcpTestParameter.RequestCallback;
-
-								if(ipMode.HasFlag(IPMode.IPv6)) {
-									pingBytes |= TcpTestParameter.Ipv6;
-								}
-
-								bytes = new byte[BYTES_PER_REQUESTER];
-
-
-								if(testPort == TcpTestPorts.P2p) {
-									port = GlobalSettings.ApplicationSettings.Port;
-								} else if(testPort == TcpTestPorts.Validator) {
-									port = GlobalSettings.ApplicationSettings.ValidatorPort;
-								}
-
-								TypeSerializer.Serialize(port, bytes.AsSpan(1, 4));
-							}
-
-							if(testPort == TcpTestPorts.Validator) {
-								pingBytes |= TcpTestParameter.IsValidator;
-							}
-
-							bytes[0] = (byte) pingBytes;
-
-							int sent = socket.Send(bytes);
-
-							if(socket.Connected && (sent <= 5)) {
-
-								byte[] rbytes = new byte[1];
-								int received = socket.Receive(rbytes);
-
-								if(received == 1) {
-									return (TcpTestResult) rbytes[0];
-								}
-							}
-						} catch(Exception ex) {
-
-						}
-
-						return connectionResult;
-					}, TaskCreationOptions.None);
+					return connectionResult;
 				}
-
-				return (await task.HandleTimeout(timeout).ConfigureAwait(false)).result;
-
 			} catch(Exception ex) {
 				// do nothing, we got our answer
 

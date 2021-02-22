@@ -110,10 +110,10 @@ namespace Neuralia.Blockchains.Core.Network {
 						this.restValidatorServer = null;
 					}
 
-					var ipMode = IPMode.IPv4;
+					var ipMode = GlobalSettings.ApplicationSettings.IPProtocolServer;
 					var address = IPAddress.Any;
 
-					if(Socket.OSSupportsIPv6 && !GlobalSettings.ApplicationSettings.ForceIpv4Socket) {
+					if(TcpConnection.IPv6Supported && ipMode.HasFlag(IPMode.IPv6)) {
 						ipMode = IPMode.Both;
 						address = IPAddress.IPv6Any;
 					} else {

@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		
 		public Task InsertAppointmentContextGossipMessage(Guid messageUuid, DateTime appointment, int start, int end) {
 
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				using(await locker.LockAsync().ConfigureAwait(false)) {
 					
@@ -76,7 +76,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		
 		public async Task<IAppointmentContextGossipMessage> GetAppointmentContext(int requesterIndex, DateTime appointment) {
 
-			return (await this.PerformOperationAsync(db => {
+			return (await this.PerformOperationAsync((db, lc) => {
 				
 					       return db.AppointmentContexts.SingleOrDefaultAsync(m => m.Appointment == appointment && m.Start >= requesterIndex && m.End <= requesterIndex);
 				       }).ConfigureAwait(false));
@@ -84,7 +84,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		
 		public Task InsertAppointmentTriggerGossipMessage(Guid messageUuid, DateTime appointment) {
 
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				using(await locker.LockAsync().ConfigureAwait(false)) {
 					
@@ -113,7 +113,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		
 		public async Task<IAppointmentTriggerGossipMessage> GetAppointmentTrigger(DateTime appointment) {
 
-			return (await this.PerformOperationAsync(db => {
+			return (await this.PerformOperationAsync((db, lc) => {
 				
 		       return db.AppointmentTriggers.SingleOrDefaultAsync(e => e.Appointment == appointment);
 	       }).ConfigureAwait(false));
@@ -122,7 +122,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		
 		public Task InsertAppointmentRequestConfirmationMessage(List<Guid> requesterIds, Guid messageUuid, DateTime appointment) {
 
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				using(await locker.LockAsync().ConfigureAwait(false)) {
 					
@@ -167,7 +167,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		
 		public async Task<IAppointmentResponseEntry> GetAppointmentRequestConfirmation(Guid requesterId, DateTime? appointment) {
 
-			return (await this.PerformOperationAsync(db => {
+			return (await this.PerformOperationAsync((db, lc) => {
 
 		       if(appointment.HasValue) {
 			       return db.AppointmentResponseEntries.SingleOrDefaultAsync(a => a.RequesterId == requesterId && a.Appointment == appointment);
@@ -179,7 +179,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		
 		public Task InsertAppointmentVerificationConfirmationMessage(List<Guid> requesterIds, Guid messageUuid, DateTime appointment) {
 
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				using(await locker.LockAsync().ConfigureAwait(false)) {
 					
@@ -223,21 +223,21 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		}
 		
 		public async Task<IAppointmentVerificationConfirmationEntry> GetAppointmentVerificationConfirmations(Guid requesterId, DateTime appointment) {
-			return (await this.PerformOperationAsync(db => {
+			return (await this.PerformOperationAsync((db, lc) => {
 				
 				       return db.AppointmentVerificationConfirmationEntries.SingleOrDefaultAsync(a => a.RequesterId == requesterId && a.Appointment == appointment);
 			       }).ConfigureAwait(false));
 		}
 
 		public async Task<IAppointmentValidatorSession> GetAppointmentValidatorSession(DateTime appointment) {
-			return await this.PerformOperationAsync(db => {
+			return await this.PerformOperationAsync((db, lc) => {
 				
 				return db.AppointmentValidatorSessions.SingleOrDefaultAsync(a => a.Appointment == appointment);
 			}).ConfigureAwait(false);
 		}
 
 		public Task<DateTime?> GetInRangeAppointments() {
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				DateTime min = DateTimeEx.CurrentTime+AppointmentsValidatorProvider.AppointmentWindowHead;
 				DateTime max = DateTimeEx.CurrentTime+AppointmentsValidatorProvider.AppointmentWindowTail;
@@ -247,14 +247,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		}
 
 		public async Task<List<(DateTime appointment, TimeSpan window, int requesterCount)>> GetAppointments() {
-			return (await this.PerformOperationAsync(db => {
+			return (await this.PerformOperationAsync((db, lc) => {
 
 				return db.AppointmentValidatorSessions.Select(e => new {e.Appointment, e.Window, e.RequesterCount}).ToListAsync();
 			}).ConfigureAwait(false)).Select(e => (e.Appointment, TimeSpan.FromSeconds(e.Window), e.RequesterCount)).ToList();
 		}
 		
 		public Task InsertAppointmentValidatorSession(IAppointmentValidatorSession appointmentValidatorSession) {
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				if(!await db.AppointmentValidatorSessions.AnyAsync(a => a.Appointment == appointmentValidatorSession.Appointment).ConfigureAwait(false)) {
 
@@ -266,7 +266,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		}
 
 		public Task UpdateAppointmentValidatorSession(IAppointmentValidatorSession appointmentValidatorSession) {
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				var entry = await db.AppointmentValidatorSessions.SingleOrDefaultAsync(a => a.Id == ((AppointmentValidatorSessionSqlite)appointmentValidatorSession).Id).ConfigureAwait(false);
 
@@ -280,7 +280,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		public async Task<List<Guid>> ClearExpired() {
 			try {
 				
-				return await this.PerformOperationAsync(async db => {
+				return await this.PerformOperationAsync(async (db, lc) => {
 					List<Guid> clearedMessageids = new List<Guid>();
 					DateTime time = DateTimeEx.CurrentTime+AppointmentsValidatorProvider.AppointmentWindowTail;
 
@@ -344,14 +344,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		}
 
 		public async Task<IAppointmentRequesterResult> GetAppointmentRequesterResult(DateTime appointment, int index) {
-			return await this.PerformOperationAsync(db => {
+			return await this.PerformOperationAsync((db, lc) => {
 				
 				return db.AppointmentRequesterResults.SingleOrDefaultAsync(a => a.Appointment == appointment && a.Index == index);
 			}).ConfigureAwait(false);
 		}
 
 		public Task InsertAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult) {
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				if(!await db.AppointmentRequesterResults.AnyAsync(a => a.Appointment == appointmentRequesterResult.Appointment && a.Index == appointmentRequesterResult.Index).ConfigureAwait(false)) {
 
@@ -363,7 +363,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		}
 
 		public Task UpdateAppointmentRequesterResult(IAppointmentRequesterResult appointmentRequesterResult) {
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				var entry = await db.AppointmentRequesterResults.SingleOrDefaultAsync(a => a.Id == ((AppointmentRequesterResultSqlite)appointmentRequesterResult).Id).ConfigureAwait(false);
 
@@ -389,27 +389,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 		public Task<List<DateTime>> GetReadyAppointmentSessions() {
 			DateTime time = DateTimeEx.CurrentTime;
 
-			return this.PerformOperationAsync(db => {
+			return this.PerformOperationAsync((db, lc) => {
 				return db.AppointmentValidatorSessions.Where(s => s.Dispatch < time).Select(e => e.Appointment).Distinct().ToListAsync();
 			});
 		}
 				        
 
 		public async Task<List<IAppointmentRequesterResult>> GetReadyAppointmentRequesterResult(DateTime appointment, int skip, int take) {
-			return (await this.PerformOperationAsync(async db => { 
+			return (await this.PerformOperationAsync(async (db, lc) => { 
 					       return await db.AppointmentRequesterResults.Where(a => a.Sent == false && a.Appointment == appointment && a.TriggerCompleted.HasValue && a.PuzzleCompleted.HasValue && (this.enablePuzzleTHS?a.THSCompleted.HasValue:true)).OrderBy(e => e.Id).Skip(skip).Take(take).ToListAsync().ConfigureAwait(false);
 					       
 			}).ConfigureAwait(false)).Cast<IAppointmentRequesterResult>().ToList();
 		}
 
 		public Task<int> GetReadyAppointmentRequesterResultCount(DateTime appointment) {
-			return  this.PerformOperationAsync(db => { 
+			return  this.PerformOperationAsync((db, lc) => { 
 		       return db.AppointmentRequesterResults.CountAsync(a => a.Sent == false && a.Appointment == appointment && a.TriggerCompleted.HasValue && a.PuzzleCompleted.HasValue && (this.enablePuzzleTHS?a.THSCompleted.HasValue:true));
 			});
 		}
 
 		public Task ClearReadyAppointmentRequesterResult(List<int> ids) {
-			return this.PerformOperationAsync(async db => {
+			return this.PerformOperationAsync(async (db, lc) => {
 
 				foreach(var id in ids) {
 					

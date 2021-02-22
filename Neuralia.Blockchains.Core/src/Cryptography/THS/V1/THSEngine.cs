@@ -363,8 +363,9 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 				long[] currentNonces = new long[this.threadCount];
 				while(true) {
 					
-					resetEvent.Reset();
-					await resetEvent.WaitAsync(TimeSpan.FromSeconds(Math.Max(estimatedIterationTime>>1, 3)), tokenSource.Token).ConfigureAwait(false);
+					if(await resetEvent.WaitAsync(TimeSpan.FromSeconds(Math.Max(estimatedIterationTime >> 1, 3)), tokenSource.Token).ConfigureAwait(false)) {
+						resetEvent.Reset();
+					}
 
 					if(tasks.Any(t => t.IsFaulted)) {
 						tokenSource.Cancel();

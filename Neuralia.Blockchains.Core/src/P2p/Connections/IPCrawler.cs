@@ -51,6 +51,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		void HandleLogout(NodeAddressInfo node, DateTime timestamp);
 		void HandleTimeout(NodeAddressInfo node, DateTime timestamp);
 		void HandleInputSliceSync(NodeAddressInfo node, DateTime timestamp);
+		void HandleSyncComplete(NodeAddressInfo node, DateTime timestamp);
 		void HandleSyncError(NodeAddressInfo node, DateTime timestamp);
 		void HandleInput(NodeAddressInfo node, DateTime timestamp, uint nBytes, double latency);
 		void HandleOutput(NodeAddressInfo node, DateTime timestamp, uint nBytes, double latency);
@@ -72,6 +73,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private readonly double peerIPsRequestPeriod;
 		private readonly double peerReconnectionPeriod;
 		private readonly double dynamicBlacklistPeriod;
+		private readonly double ipCrawlerPrintNConnectionsPeriod;
 		private readonly int maxConnectionRequestPerCrawl;
 		private readonly double maxLatency;
 		private readonly int localNodesMode;
@@ -87,6 +89,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		private DateTime lastHubIpsRequested;
 		private DateTime lastHubIpsReceived;
 		private DateTime lastDiscoverLocalNodesAction;
+		private DateTime lastIPCrawlerPrintNConnectionsPeriod;
 		
 		private readonly ConnectionsDict connections = new();
 		private readonly ConnectionsDict nonConnectableConnections = new();
@@ -105,7 +108,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public IPCrawler(int averagePeerCount, int maxPeerCount, int maxMobilePeerCount, int maxNonConnectablePeerCount = -1, List<NodeAddressInfo> localNodes = null
 			, double hubIPsRequestPeriod = 1800.0, double peerIPsRequestPeriod = 600.0
 			, double peerReconnectionPeriod = 60.0, double dynamicBlacklistPeriod = 24 * 60 * 60, int maxConnectionRequestPerCrawl = 20
-			, List<int> LocalNodesDiscoveryPorts = null, double localNodesDiscoveryTimeout = 0.1, int localNodesMode = 0, double maxLatency = 2.0) {
+			, List<int> LocalNodesDiscoveryPorts = null, double localNodesDiscoveryTimeout = 0.1, int localNodesMode = 0, double maxLatency = 2.0, double ipCrawlerPrintNConnectionsPeriod = 0.0) {
 			
 			this.connections.maxConnectedReference = this.connections.maxConnected = maxPeerCount;
 			this.averagePeerCount = averagePeerCount;
@@ -120,13 +123,14 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					if (!this.localConnections.store.TryAdd(node, new ConnectionMetrics()))
 						throw new ApplicationException($"Fatal: could not add {node} to local connections");
 				}
-			this.lastDiscoverLocalNodesAction = this.lastHubIpsReceived = this.lastHubIpsRequested = DateTimeEx.MinValue;
+			this.lastIPCrawlerPrintNConnectionsPeriod = this.lastDiscoverLocalNodesAction = this.lastHubIpsReceived = this.lastHubIpsRequested = DateTimeEx.MinValue;
 			this.peerIPsRequestPeriod = peerIPsRequestPeriod;
 			this.hubIPsRequestPeriod = hubIPsRequestPeriod;
 			this.peerReconnectionPeriod = peerReconnectionPeriod;
 			this.dynamicBlacklistPeriod = dynamicBlacklistPeriod;
 			this.maxConnectionRequestPerCrawl = maxConnectionRequestPerCrawl;
 			this.maxLatency = maxLatency;
+			this.ipCrawlerPrintNConnectionsPeriod = ipCrawlerPrintNConnectionsPeriod;
 		}
 
 		public List<NodeAddressInfo> LocalNodes => this.localConnections.store.Keys.ToList();
@@ -738,6 +742,18 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 		}
+		
+		public void HandleSyncComplete(NodeAddressInfo node, DateTime timestamp)
+		{
+			ConnectionMetrics metric = this.GocConnectionMetrics(node);
+			NLog.IPCrawler.Verbose($"{TAG} HandleSyncComplete received, {node} is being rewarded generously!");
+			lock (metric)
+			{
+				metric.AddEvent(new ConnectionEvent(ConnectionEvent.Type.SyncComplete, timestamp, 0));
+			}
+
+		}
+		
 		public void HandleInput(NodeAddressInfo node, DateTime timestamp, uint nBytes, double latency) {
 			ConnectionMetrics metric = this.GocConnectionMetrics(node);
 			lock (metric)
@@ -794,7 +810,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		
-		public async Task Crawl(IConnectionsProvider provider, DateTime now) {
+		public Task Crawl(IConnectionsProvider provider, DateTime now) {
 
 			var connectedConnectableNodes = connections.ConnectedNodes(true);
 			var connectedNonConnectableNodes = nonConnectableConnections.ConnectedNodes(true);
@@ -807,6 +823,27 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			int nConnectable = connectedConnectableNodes.Count;
 			int nNonConnectable = connectedNonConnectableNodes.Count;
 			
+			connections.UpdateMetrics(provider);
+			mobileConnections.UpdateMetrics(provider);
+			nonConnectableConnections.UpdateMetrics(provider);
+			
+			List<KeyValuePair<NodeAddressInfo, ConnectionMetrics>> connectionCandidates = connections.store.Where(pair =>
+			{
+				lock (pair.Value)
+				{
+					return (pair.Value.Status != ConnectionMetrics.ConnectionStatus.Connected) &&
+					       (pair.Value.Status != ConnectionMetrics.ConnectionStatus.Pending) &&
+					       (pair.Value.NextConnectionAttempt < now) &&
+					       !IPMarshall.Instance.IsQuarantined(pair.Key.Address);
+				}
+			}).OrderByDescending(pair =>
+			{
+				lock (pair.Value)
+				{
+					return pair.Value.LastMetric; //we just updated all metrics a few lines above
+				}
+			}).ToList();
+			
 			if (this.dynamicBlacklist.Count > 0)
 			{
 				foreach (var node in dynamicBlacklist)
@@ -814,7 +851,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				dynamicBlacklist.Clear();
 			}
 			
-			if(now > lastHubIpsRequested.AddSeconds(hubIPsRequestPeriod)) {
+			if(nConnectable < 3 
+			   && connectionCandidates.Count < 10 
+			   && now > lastHubIpsRequested.AddSeconds(hubIPsRequestPeriod)) {
 				provider.RequestHubIPs();
 				lastHubIpsRequested = now;
 			}
@@ -908,10 +947,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				provider.RequestConnect(node);
 			}
 			
-			connections.UpdateMetrics(provider);
-			mobileConnections.UpdateMetrics(provider);
-			nonConnectableConnections.UpdateMetrics(provider);
-			
+
 
 
 			
@@ -965,22 +1001,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			}
 
 
-			List<KeyValuePair<NodeAddressInfo, ConnectionMetrics>> connectionCandidates = connections.store.Where(pair =>
-			{
-				lock (pair.Value)
-				{
-					return (pair.Value.Status != ConnectionMetrics.ConnectionStatus.Connected) &&
-					       (pair.Value.Status != ConnectionMetrics.ConnectionStatus.Pending) &&
-					       (pair.Value.NextConnectionAttempt < now) &&
-					       !IPMarshall.Instance.IsQuarantined(pair.Key.Address);
-				}
-			}).OrderByDescending(pair =>
-			{
-				lock (pair.Value)
-				{
-					return pair.Value.LastMetric; //we just updated all metrics a few lines above
-				}
-			}).ToList();
 
 
 			double avg = 0;
@@ -1007,17 +1027,28 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 			}
 
+			string message0;
 			lock (this.countsLock)
 			{
-				NLog.IPCrawler.Information($"{TAG} {nConnectable} connectable peer(s) ({avg:0.00} in avg)" 
-				+ $" with average latency {SumOfConnectedPeerLatencies()/nConnectable:0.000} s,"
-				+ $" we have {connectionCandidates.Count} potential other connectable peers ready"
-				+ $" to connect to and {connections.store.Count - connections.nConnected - connectionCandidates.Count} peers in timeout.");
+				message0 = $"{TAG} {nConnectable} connectable peer(s) ({avg:0.00} in avg)"
+				               + $" with average latency {SumOfConnectedPeerLatencies() / nConnectable:0.000} s,"
+				               + $" we have {connectionCandidates.Count} potential other connectable peers ready"
+				               + $" to connect to and {connections.store.Count - connections.nConnected - connectionCandidates.Count} peers in timeout.";
+				
 			}
 			
-			NLog.IPCrawler.Information($"{TAG} we have {connectedMobileNodes.Count} mobile and {nNonConnectable} non-connectable peers connected");
+			NLog.IPCrawler.Information(message0);
+			var message1 = $"{TAG} we have {connectedMobileNodes.Count} mobile and {nNonConnectable} non-connectable peers connected";
+			NLog.IPCrawler.Information(message1);
 
-
+			if (ipCrawlerPrintNConnectionsPeriod > 0 && now > lastIPCrawlerPrintNConnectionsPeriod.AddSeconds(ipCrawlerPrintNConnectionsPeriod))
+			{
+				NLog.Default.Information(message0);
+				NLog.Default.Information(message1);
+				lastIPCrawlerPrintNConnectionsPeriod = now;
+			}
+			
+			return Task.CompletedTask;
 		}
 	}
 
@@ -1030,6 +1061,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			Timeout,
 			SyncError,
 			InputSliceSync,
+			SyncComplete,
 			Login,
 			Logout
 		}
@@ -1288,6 +1320,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			        + (1.0   * this.stats[NameOf(ConnectionEvent.Type.Output)]) 
 			        + (10.0  * this.stats[NameOf(ConnectionEvent.Type.Login)]))
 					+ (50.0) * this.stats[NameOf(ConnectionEvent.Type.InputSliceSync)]
+					+ (500.0) * this.stats[NameOf(ConnectionEvent.Type.SyncComplete)] //this peer is up-to-date with the public BlockHeight, it has a lot of value
 			        - (50.0) * this.stats[NameOf(ConnectionEvent.Type.SyncError)]
 			        - (100.0 * this.stats[NameOf(ConnectionEvent.Type.Logout)]) 
 			        - (100.0 * this.stats[NameOf(ConnectionEvent.Type.Timeout)]);

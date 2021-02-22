@@ -41,5 +41,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public DateTime? AppointmentConfirmationIdExpiration { get; set; }
 		public int? AppointmentWindow { get; set; }
 		public int Region { get; set; }
+		public DateTime? AppointmentPreparationWindowStart { get; set; }
+		public DateTime? AppointmentPreparationWindowEnd { get; set; }
 	}
 }

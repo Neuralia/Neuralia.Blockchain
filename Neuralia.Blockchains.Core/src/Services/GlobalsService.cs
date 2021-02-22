@@ -52,7 +52,7 @@ namespace Neuralia.Blockchains.Core.Services {
 we have to remove this code!!
 #endif
 		
-#if(COLORADO_EXCLUSION)
+#if COLORADO_EXCLUSION
 		public const long TESTING_APPOINTMENT_CODE = 260379949425144945L;
 #endif
 		/// <summary>

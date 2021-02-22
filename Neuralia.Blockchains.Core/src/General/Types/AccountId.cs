@@ -20,7 +20,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 	[JsonConverter(typeof(AccountIdJsonConverter))]
 	public class AccountId : IBinarySerializable, ITreeHashable, IComparable<AccountId> {
 
-		private const long SEQUENCE_MASK = 0xFFFFFFFFFFFFFFL; // the maximum amount of accounts we support by type
+		public const long SEQUENCE_MASK = 0xFFFFFFFFFFFFFFL; // the maximum amount of accounts we support by type
 		
 		public const string REGEX = @"^[{]?(?:(?:USER|SERVER|MODERATOR|JOINT)\:|(?:USR|SVR|JT|MOD)\:|[USJM*][:]?)(?:[0-9A-Z][-]?)+[}]?$";
 		public const string GROUPED_REGEX = @"(?<prefix>^[{]?)(?<type>(?:(?:USER|SERVER|MODERATOR|JOINT)\:|(?:USR|SVR|JT|MOD)\:|[USJM*][:]?))(?<code>(?:[0-9A-Z][-]?)+)(?<suffix>[}]?$)";

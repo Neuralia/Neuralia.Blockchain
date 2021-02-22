@@ -39,7 +39,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol {
 
 		protected readonly bool isServer;
 
-		private readonly AsyncManualResetEventSlim resetEvent = new AsyncManualResetEventSlim(false);
+		private readonly ManualResetEventSlim resetEvent = new ManualResetEventSlim(false);
 		protected readonly AsyncLock sendBytesLocker = new AsyncLock();
 
 		public bool HasConnected { get; private set; }

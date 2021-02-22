@@ -16,6 +16,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 		public int Attempts { get; set; } = 1;
 		public string Id { get; set; }
+
+		public readonly HashSet<Guid> ClientUuids = new HashSet<Guid>();
 		public Dictionary<FILE_KEY, DataSlice> Files { get; } = new Dictionary<FILE_KEY, DataSlice>();
 		public List<DATA_SLICE> Slices { get; } = new List<DATA_SLICE>();
 

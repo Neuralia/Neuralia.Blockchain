@@ -13,6 +13,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		Task RemoveTransaction(TransactionId transactionId, LockContext lockContext);
 		Task UpdateTransactionStatus(TransactionId transactionId, WalletTransactionHistory.TransactionStatuses status, LockContext lockContext);
 		Task<IWalletTransactionHistory> GetTransactionBase(TransactionId transactionId, LockContext lockContext);
+		Task<bool> GetTransactionExists(TransactionId transactionId, LockContext lockContext);
 	}
 
 	public abstract class WalletTransactionHistoryFileInfo<T> : TypedEntryWalletFileInfo<T>, IWalletTransactionHistoryFileInfo
@@ -65,6 +66,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 
 		public async Task<IWalletTransactionHistory> GetTransactionBase(TransactionId transactionId, LockContext lockContext) {
 			return await this.GetTransaction(transactionId, lockContext).ConfigureAwait(false);
+		}
+
+		public async Task<bool> GetTransactionExists(TransactionId transactionId, LockContext lockContext) {
+			using(LockHandle handle = await this.locker.LockAsync(lockContext).ConfigureAwait(false)) {
+				return await this.RunQueryDbOperation((dbdal, lc) => {
+					if(dbdal.CollectionExists<T>()) {
+						return Task.FromResult(dbdal.Any<T>(k => k.TransactionId == transactionId.ToString()));
+					}
+
+					return Task.FromResult(false);
+				}, handle).ConfigureAwait(false);
+			}
 		}
 
 		/// <summary>

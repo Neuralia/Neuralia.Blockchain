@@ -30,15 +30,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 		public static Enums.MiningTiers GetMiningTier(AccountId accountId, BlockChainConfigurations configuration, int digestId) {
 
 			if(accountId == null) {
-				return Enums.MiningTiers.Other;
+				return Enums.MiningTiers.Unknown;
 			}
-			
+
 			// if they force a tier, then we attempt to use it (first and second tier are special, so we ignore the explicit set)
-			if(configuration.MiningTier.HasValue && (configuration.MiningTier.Value != Enums.MiningTiers.FirstTier) && (configuration.MiningTier.Value != Enums.MiningTiers.SecondTier)) {
+			if(configuration.MiningTier.HasValue && MiningTierUtils.IsUserTier(configuration.MiningTier.Value) && accountId.IsUser) {
 				return configuration.MiningTier.Value;
 			}
 
-			Enums.MiningTiers determinedMiningTier = Enums.MiningTiers.ThirdTier;
+			if(accountId.IsUser) {
+				//TODO: this could also be 4th tier in the future
+				return Enums.MiningTiers.ThirdTier;
+			}
+			
+			Enums.MiningTiers determinedMiningTier = Enums.MiningTiers.FirstTier;
 
 			NodeShareType nodeShareType = configuration.NodeShareType();
 
@@ -47,8 +52,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 				// first tier is for full sharers only
 				determinedMiningTier = Enums.MiningTiers.FirstTier;
 			} else if(!nodeShareType.Shares) {
-				// if they dont share anything, its third tier
-				determinedMiningTier = Enums.MiningTiers.ThirdTier;
+				// if they dont share anything, its third tier, but server dont support 3rd tier
+				determinedMiningTier = Enums.MiningTiers.Unknown;
 			} else {
 				// anything in between is second tier
 				determinedMiningTier = Enums.MiningTiers.SecondTier;
@@ -60,17 +65,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 					// leave whatever we already have, we can not fullfill the request
 				} else {
 					// ok, lets override it.
-					determinedMiningTier = configuration.MiningTier.Value;
+					determinedMiningTier = Enums.MiningTiers.FirstTier;
+				}
+				
+				if((configuration.MiningTier.Value == Enums.MiningTiers.SecondTier) && (determinedMiningTier != Enums.MiningTiers.SecondTier)) {
+					// leave whatever we already have, we can not fullfill the request
+				} else {
+					// ok, lets override it.
+					determinedMiningTier = Enums.MiningTiers.SecondTier;
 				}
 			}
 
 			if((determinedMiningTier == Enums.MiningTiers.SecondTier) && (digestId == 0)) {
 				determinedMiningTier = Enums.MiningTiers.FirstTier;
-			}
-
-			// finally, if its not a server account, it can not be first or second tier no matter what
-			if(accountId != null &&MiningTierUtils.IsFirstOrSecondTier(determinedMiningTier) && !accountId.IsServer) {
-				determinedMiningTier = Enums.MiningTiers.ThirdTier;
 			}
 			
 			return determinedMiningTier;

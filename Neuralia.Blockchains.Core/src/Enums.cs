@@ -4,7 +4,7 @@ namespace Neuralia.Blockchains.Core {
 	public static class Enums {
 		
 		/// <summary>
-		///   Describes how memory used by Time Hard Signature is handled. 
+		///   Enum class Describing how memory used by Time Hard Signature is handled. 
 		/// </summary>
 		public enum THSMemoryTypes {
 			/// <summary>
@@ -16,7 +16,7 @@ namespace Neuralia.Blockchains.Core {
 			/// </summary>
 			HDD = 2,
 			/// <summary>
-			/// Write data to database or if not possible write to hard disk.
+			/// Use a double buffering hard disk for memory.
 			/// </summary>
 			HDD_DB = 3
 		}
@@ -38,6 +38,7 @@ namespace Neuralia.Blockchains.Core {
 			Email = 4,
 			Gate = 5,
 			KYC = 100,
+			Expiring = byte.MaxValue-2,
 			Expired = byte.MaxValue-1,
 			Unknown = byte.MaxValue
 		}
@@ -132,12 +133,11 @@ namespace Neuralia.Blockchains.Core {
 		/// 
 		/// </summary>
 		public enum MiningTiers : byte {
-
+			Unknown = 0,
 			FirstTier = 1,
 			SecondTier = 2,
 			ThirdTier = 3,
 			FourthTier = 4,
-			Other = byte.MaxValue
 		}
 
 		/// <summary>

@@ -97,6 +97,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshotEntry, new() {
 	}
 
+	public static class InterpretationProvider{
+		public class AccountCache {
+			public ImmutableDictionary<AccountId, IWalletAccount> combinedAccounts;
+			public ImmutableList<AccountId> combinedAccountsList;
+			public ImmutableDictionary<AccountId, IWalletAccount> dispatchedAccounts;
+			public ImmutableList<AccountId> dispatchedAccountsList;
+			public ImmutableDictionary<AccountId, IWalletAccount> publishedAccounts;
+
+			/// <summary>
+			/// key is published account Id, value is presentation Id
+			/// </summary>
+			public ImmutableDictionary<AccountId, AccountId> publishedAccountsList;
+		}
+	}
 	/// <summary>
 	///     A special service to handle validate and accepted transactions into our chain. Here, we process the contents of the
 	///     chain
@@ -183,12 +197,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		public async Task InterpretNewBlockLocalWallet(SynthesizedBlock synthesizedBlock, long lastSyncedBlockId, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
+		public Task InterpretNewBlockLocalWallet(SynthesizedBlock synthesizedBlock, long lastSyncedBlockId, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
 			if(synthesizedBlock.BlockId == 1) {
-				await this.InterpretGenesisBlockLocalWallet(synthesizedBlock, taskRoutingContext, lockContext).ConfigureAwait(false);
+				return this.InterpretGenesisBlockLocalWallet(synthesizedBlock, taskRoutingContext, lockContext);
 			} else {
-				await this.InterpretBlockLocalWallet(synthesizedBlock, lastSyncedBlockId, taskRoutingContext, lockContext).ConfigureAwait(false);
+				return this.InterpretBlockLocalWallet(synthesizedBlock, lastSyncedBlockId, taskRoutingContext, lockContext);
 			}
 		}
 
@@ -199,7 +213,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <returns></returns>
 		public async Task<SynthesizedBlock> SynthesizeBlock(IBlock block, LockContext lockContext) {
 
-			AccountCache accountCache = await this.GetAccountCache(lockContext).ConfigureAwait(false);
+			InterpretationProvider.AccountCache accountCache = await this.GetAccountCache(lockContext).ConfigureAwait(false);
 
 			// get the transactions that concern us
 			Dictionary<TransactionId, ITransaction> blockConfirmedTransactions = block.GetAllConfirmedTransactions();
@@ -262,7 +276,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			Dictionary<AccountId, (List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, SynthesizedBlock.SynthesizedBlockAccountSet scopedSynthesizedBlock)> walletActionSets = new Dictionary<AccountId, (List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, SynthesizedBlock.SynthesizedBlockAccountSet scopedSynthesizedBlock)>();
 			List<Func<LockContext, Task>> serializationActions = new List<Func<LockContext, Task>>();
 
-			AccountCache accountCache = null;
+			InterpretationProvider.AccountCache accountCache = null;
 
 			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleRead(async (provider, lc) => {
 				accountCache = await this.GetIncompleteAccountCache(provider, synthesizedBlock.BlockId, lastSyncedBlockId, WalletAccountChainState.BlockSyncStatuses.WalletImmediateImpactPerformed, lc).ConfigureAwait(false);
@@ -582,7 +596,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return account.ContainsKey(accountId) ? account[accountId] : null;
 		}
 
-		protected virtual async Task<SynthesizedBlock> SynthesizeBlock(IBlock block, AccountCache accountCache, Dictionary<TransactionId, ITransaction> blockConfirmedTransactions, LockContext lockContext) {
+		protected virtual async Task<SynthesizedBlock> SynthesizeBlock(IBlock block, InterpretationProvider.AccountCache accountCache, Dictionary<TransactionId, ITransaction> blockConfirmedTransactions, LockContext lockContext) {
 			SynthesizedBlock synthesizedBlock = this.CreateSynthesizedBlock();
 
 			synthesizedBlock.BlockId = block.BlockId.Value;
@@ -598,7 +612,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			List<(ITransaction transaction, AccountId targetAccount)> confirmedExternalsTransactions = null;
 			Dictionary<AccountId, List<TransactionId>> accountsTransactions = null;
 
-			(confirmedLocalTransactions, confirmedExternalsTransactions, accountsTransactions) = await localTransactionInterpretationProcessor.GetImpactingTransactionsList(blockConfirmedTransactions.Values.ToList(), lockContext).ConfigureAwait(false);
+			(confirmedLocalTransactions, confirmedExternalsTransactions, accountsTransactions) = await localTransactionInterpretationProcessor.GetImpactingTransactionsList(blockConfirmedTransactions.Values.ToList(), accountCache, lockContext).ConfigureAwait(false);
 
 			foreach(AccountId account in accountCache.combinedAccountsList) {
 
@@ -645,7 +659,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return synthesizedBlock;
 		}
 
-		protected virtual SynthesizedBlock.SynthesizedElectionResult SynthesizeElectionResult(SynthesizedBlock synthesizedBlock, IFinalElectionResults result, IBlock block, AccountCache accountCache, Dictionary<TransactionId, ITransaction> blockConfirmedTransactions) {
+		protected virtual SynthesizedBlock.SynthesizedElectionResult SynthesizeElectionResult(SynthesizedBlock synthesizedBlock, IFinalElectionResults result, IBlock block, InterpretationProvider.AccountCache accountCache, Dictionary<TransactionId, ITransaction> blockConfirmedTransactions) {
 
 			SynthesizedBlock.SynthesizedElectionResult synthesizedElectionResult = synthesizedBlock.CreateSynthesizedElectionResult();
 
@@ -668,7 +682,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockSyncHeight"></param>
 		/// <param name="flagFilter"></param>
 		/// <returns></returns>
-		protected async Task<AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
+		protected async Task<InterpretationProvider.AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
 
 			List<IWalletAccount> accountsList = await this.GetIncompleteAccountList(walletProvider, blockSyncHeight, previousSyncedBlockId, flagFilter, lockContext).ConfigureAwait(false);
 
@@ -681,7 +695,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockSyncHeight"></param>
 		/// <param name="flagFilter"></param>
 		/// <returns></returns>
-		protected async Task<AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses flagFilter, IWalletAccount filterAccount, LockContext lockContext) {
+		protected async Task<InterpretationProvider.AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, long previousSyncedBlockId, WalletAccountChainState.BlockSyncStatuses flagFilter, IWalletAccount filterAccount, LockContext lockContext) {
 
 			List<IWalletAccount> accounts = await this.GetIncompleteAccountList(walletProvider, blockSyncHeight, previousSyncedBlockId, flagFilter, lockContext).ConfigureAwait(false);
 			List<IWalletAccount> accountsList = accounts.Where(a => a.AccountCode == filterAccount.AccountCode).ToList();
@@ -695,7 +709,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="blockSyncHeight"></param>
 		/// <param name="flagFilter"></param>
 		/// <returns></returns>
-		protected async Task<AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, List<IWalletAccount> accountsList, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
+		protected async Task<InterpretationProvider.AccountCache> GetIncompleteAccountCache(IWalletProvider walletProvider, long blockSyncHeight, List<IWalletAccount> accountsList, WalletAccountChainState.BlockSyncStatuses flagFilter, LockContext lockContext) {
 
 			List<IWalletAccount> tempList = new List<IWalletAccount>();
 
@@ -726,7 +740,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     this method will return our local accounts in different forms and combinations
 		/// </summary>
 		/// <returns></returns>
-		protected async Task<AccountCache> GetAccountCache(LockContext lockContext, long? blockSyncHeight = null, long? latestSyncedBlockId = null) {
+		protected async Task<InterpretationProvider.AccountCache> GetAccountCache(LockContext lockContext, long? blockSyncHeight = null, long? latestSyncedBlockId = null) {
 			if ((blockSyncHeight.HasValue && !latestSyncedBlockId.HasValue)
 				|| (!blockSyncHeight.HasValue && latestSyncedBlockId.HasValue))
 				throw new ArgumentException($"Both optional parameters ({nameof(blockSyncHeight)} and {nameof(latestSyncedBlockId)}) must have a value if they are used. One cannot be null if the other is not.");
@@ -762,8 +776,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return changed;
 		}
 
-		protected AccountCache PrepareAccountCache(List<IWalletAccount> accountsList, LockContext lockContext) {
-			AccountCache accountCache = new AccountCache();
+		protected InterpretationProvider.AccountCache PrepareAccountCache(List<IWalletAccount> accountsList, LockContext lockContext) {
+			InterpretationProvider.AccountCache accountCache = new InterpretationProvider.AccountCache();
 			accountCache.publishedAccounts = accountsList.Where(a => a.Status == Enums.PublicationStatus.Published).ToImmutableDictionary(a => a.PublicAccountId, a => a);
 			accountCache.dispatchedAccounts = accountsList.Where(a => a.Status == Enums.PublicationStatus.Dispatched).ToImmutableDictionary(a => a.PresentationId, a => a);
 
@@ -775,10 +789,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			accountCache.combinedAccounts = combinedTemp.ToImmutableDictionary(e => e.Key, e => e.Value);
 
-			accountCache.publishedAccountsList = accountCache.publishedAccounts.Keys.ToImmutableList();
+			accountCache.publishedAccountsList = accountCache.publishedAccounts.ToImmutableDictionary(a => a.Key, a => a.Value.PresentationId);
 			accountCache.dispatchedAccountsList = accountCache.dispatchedAccounts.Keys.ToImmutableList();
 
-			List<AccountId> combinedAccountsList = accountCache.publishedAccountsList.ToList();
+			List<AccountId> combinedAccountsList = accountCache.publishedAccountsList.Keys.ToList();
+			combinedAccountsList.AddRange(accountCache.publishedAccountsList.Values);
 			combinedAccountsList.AddRange(accountCache.dispatchedAccountsList);
 			accountCache.combinedAccountsList = combinedAccountsList.ToImmutableList();
 
@@ -912,7 +927,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 
 			List<IWalletAccount> incompleteAccounts;
-			List<(AccountCache accountCache, IWalletAccount account)> incompleteAccountCaches = new List<(AccountCache accountCache, IWalletAccount account)>();
+			List<(InterpretationProvider.AccountCache accountCache, IWalletAccount account)> incompleteAccountCaches = new List<(InterpretationProvider.AccountCache accountCache, IWalletAccount account)>();
 
 			await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleWrite(async (prov, lc) => {
 
@@ -925,7 +940,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				incompleteAccounts = await this.GetIncompleteAccountList(provider, synthesizedBlock.BlockId, lastSyncedBlockId, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted, lc).ConfigureAwait(false);
 
 				foreach(IWalletAccount account in incompleteAccounts) {
-					AccountCache accountCache = await this.GetIncompleteAccountCache(provider, synthesizedBlock.BlockId, lastSyncedBlockId, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted, account, lc).ConfigureAwait(false);
+					InterpretationProvider.AccountCache accountCache = await this.GetIncompleteAccountCache(provider, synthesizedBlock.BlockId, lastSyncedBlockId, WalletAccountChainState.BlockSyncStatuses.InterpretationCompleted, account, lc).ConfigureAwait(false);
 
 					if(!accountCache.combinedAccountsList.Any()) {
 						continue;
@@ -940,9 +955,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// lets perform interpretation before we create a transaction
 			List<Func<LockContext, Task>> accountActions = new List<Func<LockContext, Task>>();
 
-			Dictionary<AccountId, (ISnapshotHistoryStackSet snapshots, IWalletAccount account, AccountCache accountCache, Dictionary<AccountId, List<Func<LockContext, Task>>> changedLocalAccounts)> modificationHistoryStacks = new Dictionary<AccountId, (ISnapshotHistoryStackSet snapshots, IWalletAccount account, AccountCache accountCache, Dictionary<AccountId, List<Func<LockContext, Task>>> changedLocalAccounts)>();
+			Dictionary<AccountId, (ISnapshotHistoryStackSet snapshots, IWalletAccount account, InterpretationProvider.AccountCache accountCache, Dictionary<AccountId, List<Func<LockContext, Task>>> changedLocalAccounts)> modificationHistoryStacks = new Dictionary<AccountId, (ISnapshotHistoryStackSet snapshots, IWalletAccount account, InterpretationProvider.AccountCache accountCache, Dictionary<AccountId, List<Func<LockContext, Task>>> changedLocalAccounts)>();
 
-			foreach((AccountCache accountCache, IWalletAccount account) in incompleteAccountCaches) {
+			foreach((InterpretationProvider.AccountCache accountCache, IWalletAccount account) in incompleteAccountCaches) {
 
 				ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_SNAPSHOT, JOINT_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> localTransactionInterpretationProcessor = await this.CreateLocalTransactionInterpretationProcessor(accountCache.combinedAccounts.Values.ToList(), lockContext).ConfigureAwait(false);
 				AccountId currentAccountId = account.GetAccountId();
@@ -956,7 +971,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					localTransactionInterpretationProcessor.IsAnyAccountTracked = async accountIds => accountIds.Contains(currentAccountId);
 					localTransactionInterpretationProcessor.GetTrackedAccounts = async accountIds => new[] {currentAccountId}.ToList();
 
-					ImmutableList<AccountId> publishedAccountsList = accountCache.publishedAccountsList.Where(a => a == currentAccountId).ToImmutableList();
+					ImmutableDictionary<AccountId, AccountId> publishedAccountsList = accountCache.publishedAccountsList.Where(a => a.Key == currentAccountId).ToImmutableDictionary();
 					ImmutableList<AccountId> dispatchedAccountsList = accountCache.dispatchedAccountsList.Where(a => a == currentAccountId).ToImmutableList();
 
 					Dictionary<AccountId, List<Func<Task>>> changedLocalAccounts = new Dictionary<AccountId, List<Func<Task>>>();
@@ -967,8 +982,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					await localTransactionInterpretationProcessor.InterpretTransactions(indexedTransactions, synthesizedBlock.BlockId, lockContext).ConfigureAwait(false);
 
 					// now just the published accounts
-					localTransactionInterpretationProcessor.IsAnyAccountTracked = async accountIds => publishedAccountsList.Any(accountIds.Contains);
-					localTransactionInterpretationProcessor.GetTrackedAccounts = async accountIds => publishedAccountsList.Where(accountIds.Contains).ToList();
+					localTransactionInterpretationProcessor.IsAnyAccountTracked = async accountIds => publishedAccountsList.Keys.Any(accountIds.Contains);
+					localTransactionInterpretationProcessor.GetTrackedAccounts = async accountIds => publishedAccountsList.Keys.Where(accountIds.Contains).ToList();
 					localTransactionInterpretationProcessor.SetLocalAccounts(publishedAccountsList);
 
 					List<ITransaction> confirmedRegularTransactions = synthesizedBlock.ConfirmedTransactions.Values.Where(t => !(t is IIndexedTransaction)).ToList();
@@ -1107,7 +1122,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		protected void HandleConfirmedIndexedTransaction(BlockId blockId, byte moderatorKeyOrdinal, IIndexedTransaction transaction, int indexedTransactionIndex, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, List<Func<LockContext, Task>> serializationActions, LockContext lockContext) {
+		protected void HandleConfirmedIndexedTransaction(BlockId blockId, byte moderatorKeyOrdinal, IIndexedTransaction transaction, int indexedTransactionIndex, InterpretationProvider.AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, List<Func<LockContext, Task>> serializationActions, LockContext lockContext) {
 
 			IWalletAccount publishedAccount = this.IsLocalAccount(accountCache.publishedAccounts, transaction.TransactionId.Account);
 			IWalletAccount dispatchedAccount = this.IsLocalAccount(accountCache.dispatchedAccounts, transaction.TransactionId.Account);
@@ -1156,7 +1171,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		private void HandleModerationIndexedLocalImpactTransaction(BlockId blockId, byte moderatorKeyOrdinal, IModerationIndexedTransaction moderationIndexedTransaction, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, List<Func<LockContext, Task>> serializationActions, LockContext lockContext) {
+		private void HandleModerationIndexedLocalImpactTransaction(BlockId blockId, byte moderatorKeyOrdinal, IModerationIndexedTransaction moderationIndexedTransaction, InterpretationProvider.AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, List<Func<LockContext, Task>> serializationActions, LockContext lockContext) {
 
 			if(moderationIndexedTransaction is IAccountResetTransaction accountResetTransaction) {
 
@@ -1175,7 +1190,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		protected async Task HandleConfirmedTransaction(BlockId blockId, byte moderatorKeyOrdinal, ITransaction transaction, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
+		protected async Task HandleConfirmedTransaction(BlockId blockId, byte moderatorKeyOrdinal, ITransaction transaction, InterpretationProvider.AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 
 			IWalletAccount dispatchedAccount = this.IsLocalAccount(accountCache.dispatchedAccounts, transaction.TransactionId.Account);
 
@@ -1212,7 +1227,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		private async Task HandleModerationLocalImpactTransaction(BlockId blockId, IModerationTransaction moderationTransaction, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
+		private async Task HandleModerationLocalImpactTransaction(BlockId blockId, IModerationTransaction moderationTransaction, InterpretationProvider.AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 
 			if(moderationTransaction is IAccountResetWarningTransaction accountResetWarningTransaction) {
 				if(accountCache.publishedAccounts.ContainsKey(accountResetWarningTransaction.Account)) {
@@ -1227,7 +1242,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// check if it concerns us
 				ImmutableList<AccountId> resetAccounts = reclaimAccountsTransaction.Accounts.Select(a => a.Account).ToImmutableList();
 
-				ImmutableList<AccountId> ourResetAccounts = accountCache.publishedAccountsList.Where(a => resetAccounts.Contains(a)).ToImmutableList();
+				ImmutableList<AccountId> ourResetAccounts = accountCache.publishedAccountsList.Keys.Where(a => resetAccounts.Contains(a)).ToImmutableList();
 
 				if(ourResetAccounts.Any()) {
 
@@ -1240,8 +1255,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				// check if it concerns us
 
-				ImmutableList<AccountId> ourEnableAccounts = accountCache.publishedAccountsList.Where(a => assignAccountCorrelationsTransaction.EnableAccounts.Contains(a)).ToImmutableList();
-				ImmutableList<AccountId> ourDisableAccounts = accountCache.publishedAccountsList.Where(a => assignAccountCorrelationsTransaction.DisableAccounts.Contains(a)).ToImmutableList();
+				ImmutableList<AccountId> ourEnableAccounts = accountCache.publishedAccountsList.Keys.Where(a => assignAccountCorrelationsTransaction.EnableAccounts.Contains(a)).ToImmutableList();
+				ImmutableList<AccountId> ourDisableAccounts = accountCache.publishedAccountsList.Keys.Where(a => assignAccountCorrelationsTransaction.DisableAccounts.Contains(a)).ToImmutableList();
 
 				if(ourEnableAccounts.Any() || ourDisableAccounts.Any()) {
 
@@ -1251,7 +1266,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
-		protected void HandleRejectedTransaction(BlockId blockId, RejectedTransaction trx, AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
+		protected void HandleRejectedTransaction(BlockId blockId, RejectedTransaction trx, InterpretationProvider.AccountCache accountCache, List<Func<LockContext, Task<List<Func<LockContext, Task>>>>> walletActions, LockContext lockContext) {
 
 			IWalletAccount publishedAccount = this.IsLocalAccount(accountCache.publishedAccounts, trx.TransactionId.Account);
 			IWalletAccount dispatchedAccount = this.IsLocalAccount(accountCache.dispatchedAccounts, trx.TransactionId.Account);
@@ -1300,16 +1315,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		protected abstract ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_SNAPSHOT, STANDARD_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_SNAPSHOT, JOINT_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> CreateInterpretationProcessor();
 
 		protected abstract ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER, ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_SNAPSHOT, STANDARD_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_SNAPSHOT, JOINT_WALLET_ACCOUNT_ATTRIBUTE_SNAPSHOT, JOINT_WALLET_ACCOUNT_MEMBERS_SNAPSHOT, STANDARD_ACCOUNT_KEY_SNAPSHOT, ACCREDITATION_CERTIFICATE_SNAPSHOT, ACCREDITATION_CERTIFICATE_ACCOUNT_SNAPSHOT, CHAIN_OPTIONS_SNAPSHOT> CreateWalletInterpretationProcessor();
-
-		public class AccountCache {
-			public ImmutableDictionary<AccountId, IWalletAccount> combinedAccounts;
-			public ImmutableList<AccountId> combinedAccountsList;
-			public ImmutableDictionary<AccountId, IWalletAccount> dispatchedAccounts;
-			public ImmutableList<AccountId> dispatchedAccountsList;
-			public ImmutableDictionary<AccountId, IWalletAccount> publishedAccounts;
-
-			public ImmutableList<AccountId> publishedAccountsList;
-		}
+		
 		#region Special Processing
 
 			protected virtual async Task ProcessConfirmedIndexedTransactions(IBlock block, List<IIndexedTransaction> confirmedIndexedTransactions) {
@@ -1419,7 +1425,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				
 				// reset all these if set, we are done
 				account.SMSDetails = null;
-				account.AccountAppointment = null;
+				AppointmentUtils.ResetAppointment(account);
 
 				List<Func<LockContext, Task>> successCalls = new List<Func<LockContext, Task>>();
 
@@ -1500,7 +1506,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				
 				// reset all these if set, we are done
 				account.SMSDetails = null;
-				account.AccountAppointment = null;
+				AppointmentUtils.ResetAppointment(account);
 
 				//TODO: presentation
 				List<Func<LockContext, Task>> successCalls = new List<Func<LockContext, Task>>();

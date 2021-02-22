@@ -125,7 +125,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.LoggingProvider = loggingProvider;
 
 			this.Providers.Add(this.WalletProvider);
-			this.Providers.Add(((IWalletProviderProxyInternal) this.WalletProvider).UnderlyingWalletProvider);
 			this.Providers.Add(this.AssemblyProvider);
 			this.Providers.Add(this.ChainFactoryProvider);
 			this.Providers.Add(this.BlockchainProvider);

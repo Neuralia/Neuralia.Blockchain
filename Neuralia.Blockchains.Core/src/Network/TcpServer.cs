@@ -66,6 +66,20 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private readonly ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters;
 
+		public TcpServer(IPMode ipMode, int port, TcpConnection.ExceptionOccured exceptionCallback, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) : this(CreateNetworkEndPoint(ipMode, port), exceptionCallback, protocolMessageFilters) {
+
+		}
+		
+		public static NetworkEndPoint CreateNetworkEndPoint(IPMode ipMode, int port) {
+			IPAddress address = IPAddress.Any;
+			
+			if(ipMode.HasFlag(IPMode.IPv6) && TcpConnection.IPv6Supported) {
+				address = IPAddress.IPv6Any;
+			}
+			
+			return new NetworkEndPoint(address, port, ipMode);
+		}
+
 		public TcpServer(NetworkEndPoint endPoint, TcpConnection.ExceptionOccured exceptionCallback, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) {
 			this.exceptionCallback = exceptionCallback;
 			this.EndPoint = endPoint.EndPoint;
@@ -75,37 +89,10 @@ namespace Neuralia.Blockchains.Core.Network {
 			} else {
 				this.protocolMessageFilters = protocolMessageFilters;
 			}
-			
-			if(!Socket.OSSupportsIPv6 && endPoint.IPMode.HasFlag(IPMode.IPv6)) {
-				throw new P2pException("IPV6 not supported!", P2pException.Direction.Receive, P2pException.Severity.Casual);
-			}
-			
-			if(TcpConnection.IPv6Supported && !GlobalSettings.ApplicationSettings.ForceIpv4Socket) {
-				this.listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
 
-				if(endPoint.IPMode.HasFlag(IPMode.IPv4)) {
-					this.IPMode = IPMode.Both;
-					this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-					this.listener.DualMode = true;
-					
-				} else {
-					this.IPMode = IPMode.IPv6;
-					this.listener.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
-				}
-			} else {
-				this.IPMode = IPMode.IPv4;
-				this.listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-			}
+			this.IPMode = endPoint.IPMode;
 
-			this.listener.InitializeSocketParameters();
-
-			// seems to be needed in case the listener is not completely disposed yet (on linux and MacOs)
-			//https://github.com/dotnet/corefx/issues/24562
-			//TODO: this is a bug fix, and maybe in the future we may not need the below anymore.
-			if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
-				this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-				this.listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
-			}
+			this.listener = SocketExtensions.CreateServerSocket(this.IPMode, s => s.InitializeSocketParameters());
 		}
 
 		/// <summary>

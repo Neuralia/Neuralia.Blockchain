@@ -1,18 +1,18 @@
+using System.Collections.Generic;
 using Neuralia.Blockchains.Core.General.Types;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpValidation {
-	public interface IMinerResponse {
+	public interface IMinerResponse : IVersionable {
 
-		long?           SecondTierAnswer { get; set; }
-		long?    DigestTierAnswer { get; set; }
-		long?    FirstTierAnswer  { get; set; }
+		public List<IValidatorOperationResponse> Operations { get; }
 		
-		AccountId       AccountId        { get; set; }
-		int       ResponseCode        { get; set; }
-		ResponseType    Response         { get; set; }
-		void            Rehydrate(IDataRehydrator rehydrator);
+		AccountId AccountId { get; set; }
+		int ResponseCode { get; set; }
+		ResponseType Response { get; set; }
+		SoftwareVersion Compatibility { get; } 
 		SafeArrayHandle Dehydrate();
 	}
 }

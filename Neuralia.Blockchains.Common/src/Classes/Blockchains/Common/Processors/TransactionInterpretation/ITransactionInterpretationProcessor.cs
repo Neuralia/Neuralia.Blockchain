@@ -19,13 +19,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Tran
 	public interface ITransactionInterpretationProcessor {
 
 		void EnableLocalMode(bool value);
-		void SetLocalAccounts(ImmutableList<AccountId> publishedAccounts, ImmutableList<AccountId> dispatchedAccounts);
-		void SetLocalAccounts(ImmutableList<AccountId> publishedAccounts);
+		void SetLocalAccounts(ImmutableDictionary<AccountId, AccountId> publishedAccounts, ImmutableList<AccountId> dispatchedAccounts);
+		void SetLocalAccounts(ImmutableDictionary<AccountId, AccountId> publishedAccounts);
 		void ClearLocalAccounts();
 		void Reset();
 		Task Initialize();
 
-		Task<(List<ITransaction> impactingLocals, List<(ITransaction transaction, AccountId targetAccount)> impactingExternals, Dictionary<AccountId, List<TransactionId>> accountsTransactions)> GetImpactingTransactionsList(List<ITransaction> transactions, LockContext lockContext);
+		Task<(List<ITransaction> impactingLocals, List<(ITransaction transaction, AccountId targetAccount)> impactingExternals, Dictionary<AccountId, List<TransactionId>> accountsTransactions)> GetImpactingTransactionsList(List<ITransaction> transactions, InterpretationProvider.AccountCache accountCache, LockContext lockContext);
 	}
 
 	public interface ITransactionInterpretationProcessor<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ITransactionInterpretationProcessor

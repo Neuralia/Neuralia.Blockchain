@@ -1156,7 +1156,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return null;
 			}
 
-			this.CentralCoordinator.Log.Debug("Key dictionary was enabled.");
+			this.CentralCoordinator.Log.Verbose("Key dictionary was enabled.");
 
 			bool usesEmbededKey = false;
 
@@ -1308,13 +1308,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			LockContext lockContext = null;
 
 			// make sure we always run this check atomically, while we are 100% that an insert/interpret is not happening at the same time (chain sync vs gossip insert competition)
-			BlockValidationResult results = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation(async lc => {
+			BlockValidationResult results = await this.CentralCoordinator.ChainComponentProvider.BlockchainProviderBase.PerformAtomicChainHeightOperation(lc => {
 
 				long diskBlockHeight = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
 
 				if((diskBlockHeight + 1) == block.BlockId.Value) {
 					// ok, its the last block, we just use the previous hash
-					return null;
+					return Task.FromResult((BlockValidationResult)null);
 				}
 
 				if(diskBlockHeight >= block.BlockId.Value) {
@@ -1322,18 +1322,26 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 					// its a previous block that we already have, we can still validate it. let's load the hash from disk.
 
-					return null;
+					return Task.FromResult((BlockValidationResult)null);
 				}
 
-				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.CantValidate, BlockValidationErrorCodes.Instance.LAST_BLOCK_HEIGHT_INVALID);
+				return Task.FromResult(this.CreateBlockValidationResult(ValidationResult.ValidationResults.CantValidate, BlockValidationErrorCodes.Instance.LAST_BLOCK_HEIGHT_INVALID));
 			}, lockContext).ConfigureAwait(false);
 
 			if(results != null) {
 				return results;
 			}
 
+			bool previousBlock = false;
 			if(loadBlockId.HasValue) {
-				usablePreviousBlockHash = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockHash(loadBlockId.Value);
+				long blockId = loadBlockId.Value;
+
+				if(blockId == block.BlockId) {
+					// well, we are ahead of ourselves, let's make sure to get the previous one
+					previousBlock = true;
+					blockId -= 1;
+				}
+				usablePreviousBlockHash = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlockHash(blockId);
 			}
 
 			bool hashValid = hash.Equals(BlockchainHashingUtils.GenerateBlockHash(block, usablePreviousBlockHash));
@@ -1362,11 +1370,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 
 			// make sure that the key is at least higher than the expect key
 			if(block.BlockId > 2 && blockSignatureSignature.KeyUseIndex < entry.keyIndex) {
-				return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.INVALID_KEY_SEQUENCE);
+				// sometimes the block is already inserted and our keyIndex is ahead by one. let's check if it is the case
+				if(previousBlock && KeyUseIndexSet.IsPreviousKey(blockSignatureSignature.KeyUseIndex, entry.keyIndex)){
+					// let it pass, its the same block we already have and our key index is ahead by 1.
+				} else {
+					return this.CreateBlockValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.INVALID_KEY_SEQUENCE);
+				}
 			}
 
+			BlockVerificationModes blockVerificationMode = BlockVerificationModes.CurrentBlock;
+			
+			if(previousBlock) {
+				blockVerificationMode = BlockVerificationModes.PreviousBlock;
+			}
+			
 			// thats it :)
-			return await this.ValidateBlockSignature(hash, block, entry.key).ConfigureAwait(false);
+			return await this.ValidateBlockSignature(hash, block, entry.key, blockVerificationMode).ConfigureAwait(false);
 
 		}
 
@@ -2224,7 +2243,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
-		protected virtual async Task<ValidationResult> ValidateBlockSignature(SafeArrayHandle hash, IBlock block, ICryptographicKey key) {
+		protected virtual async Task<ValidationResult> ValidateBlockSignature(SafeArrayHandle hash, IBlock block, ICryptographicKey key, BlockVerificationModes isBlockVerification = BlockVerificationModes.None) {
 			// ok, now lets confirm the signature. make sure the hash is authentic and not tempered with
 
 			if(block.SignatureSet.BlockSignature.IsHashPublished && !this.CentralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SkipPeriodicBlockHashVerification) {
@@ -2243,7 +2262,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 				return await VerifyXmssmtSignature(hash, block.SignatureSet.BlockSignature.Autograph, xmssmtCryptographicKey).ConfigureAwait(false);
 			} else if(key is IXmssCryptographicKey xmssCryptographicKey) {
 
-				return await VerifyXmssSignature(hash, block.SignatureSet.BlockSignature.Autograph, xmssCryptographicKey, true).ConfigureAwait(false);
+				return await VerifyXmssSignature(hash, block.SignatureSet.BlockSignature.Autograph, xmssCryptographicKey, isBlockVerification).ConfigureAwait(false);
 			} else if(key is ITripleXmssCryptographicKey tripleXmssCryptographicKey) {
 				return await VerifyTripleXmssSignature(hash, block.SignatureSet.BlockSignature.Autograph, tripleXmssCryptographicKey).ConfigureAwait(false);
 			}
@@ -2251,24 +2270,39 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 			return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.INVALID_BLOCK_KEY_CORRELATION_TYPE);
 		}
 
-		protected async Task<ValidationResult> VerifyXmssSignature(SafeArrayHandle hash, SafeArrayHandle autograph, IXmssCryptographicKey xmssCryptographicKey, bool isBlockVerification = false) {
+		protected enum BlockVerificationModes {
+			None, CurrentBlock, PreviousBlock
+		}
+		protected async Task<ValidationResult> VerifyXmssSignature(SafeArrayHandle hash, SafeArrayHandle autograph, IXmssCryptographicKey xmssCryptographicKey, BlockVerificationModes isBlockVerification = BlockVerificationModes.None) {
 			using XMSSProvider provider = new XMSSProvider(xmssCryptographicKey.HashType, xmssCryptographicKey.BackupHashType, xmssCryptographicKey.TreeHeight, GlobalSettings.ApplicationSettings.XmssThreadMode, xmssCryptographicKey.NoncesExponent);
 
 			provider.Initialize();
 
 			XMSSSignaturePathCache cache = null;
+			SafeArrayHandle lastBlockXmssKeySignaturePathCache = null;
+			if(isBlockVerification == BlockVerificationModes.CurrentBlock) {
+				lastBlockXmssKeySignaturePathCache = SafeArrayHandle.CreateClone(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockXmssKeySignaturePathCache);
+			}
+			else if(isBlockVerification == BlockVerificationModes.PreviousBlock) {
+				// in very rare cases, we may need the previous block, so lets take it from cache if we can (can happen if sync inserted a block before we got the gossip and still need to validate the gossip message)
+				lastBlockXmssKeySignaturePathCache = await CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadPreviousBlockXmssKeySignaturePathCache().ConfigureAwait(false);
+			}
 
-			if(isBlockVerification) {
-				SafeArrayHandle lastBlockXmssKeySignaturePathCache = SafeArrayHandle.CreateClone(this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockXmssKeySignaturePathCache);
+			if(lastBlockXmssKeySignaturePathCache != null) {
+				using(lastBlockXmssKeySignaturePathCache) {
+					if(!lastBlockXmssKeySignaturePathCache.IsZero) {
+						cache = new XMSSSignaturePathCache();
 
-				if(lastBlockXmssKeySignaturePathCache != null && !lastBlockXmssKeySignaturePathCache.IsZero) {
-					cache = new XMSSSignaturePathCache();
-
-					cache.Load(lastBlockXmssKeySignaturePathCache.Entry);
+						cache.Load(lastBlockXmssKeySignaturePathCache.Entry);
+					}
 				}
 			}
 
-			bool result = await provider.Verify(hash, autograph, xmssCryptographicKey.PublicKey, cache).ConfigureAwait(false);
+			bool result = false;
+
+			using(cache) {
+				result = await provider.Verify(hash, autograph, xmssCryptographicKey.PublicKey, cache).ConfigureAwait(false);
+			}
 
 			if(result == false) {
 				return this.CreateValidationResult(ValidationResult.ValidationResults.Invalid, BlockValidationErrorCodes.Instance.SIGNATURE_VERIFICATION_FAILED);

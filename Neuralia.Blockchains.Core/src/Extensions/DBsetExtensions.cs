@@ -184,7 +184,7 @@ namespace Neuralia.Blockchains.Core.Extensions.DbSet {
 
 			return deleteIds;
 		}
-		
+
 		public static async Task UpdateOrAddAsync<T>(this DbSet<T> dbSet, Expression<Func<T, bool>> predicate, Action<T, bool> operation)
 			where T : class, new() {
 

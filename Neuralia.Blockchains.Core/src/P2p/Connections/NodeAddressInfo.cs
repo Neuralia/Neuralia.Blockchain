@@ -22,7 +22,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public NodeAddressInfo(string ip, int port, NodeInfo peerType, bool locked = false) {
 			this.Ip = ip;
-			this.Port = port == 0 ? null : (int?) port;
+			this.Port = port == 0 ? null : (int?) Math.Min(port, ushort.MaxValue);
 			this.PeerInfo = peerType;
 			this.Locked = locked;
 
@@ -32,6 +32,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public NodeAddressInfo(string ip, int? port, NodeInfo peerType, bool locked = false) {
 			this.Ip = ip;
 			this.Port = port;
+			if(this.Port.HasValue) {
+				this.Port = Math.Min(this.Port.Value, ushort.MaxValue);
+			}
 			this.PeerInfo = peerType;
 			this.Locked = locked;
 
@@ -49,7 +52,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public NodeAddressInfo(IPAddress ip, int port, NodeInfo peerType, bool locked = false) {
 			this.Address = ip;
-			this.Port = port == 0 ? null : (int?) port;
+			this.Port = port == 0 ? null : (int?) Math.Min(port, ushort.MaxValue);
 			this.PeerInfo = peerType;
 			this.Locked = locked;
 
@@ -59,6 +62,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public NodeAddressInfo(IPAddress ip, int? port, NodeInfo peerType, bool locked = false) {
 			this.Address = ip;
 			this.Port = port;
+			if(this.Port.HasValue) {
+				this.Port = Math.Min(this.Port.Value, ushort.MaxValue);
+			}
 			this.PeerInfo = peerType;
 			this.Locked = locked;
 
@@ -178,6 +184,15 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public void Rehydrate(IDataRehydrator rehydrator) {
 			this.Ip = IPUtils.GuidToIPstring(rehydrator.ReadGuid());
 			this.Port = rehydrator.ReadNullableInt();
+
+			if(this.Port.HasValue) {
+				this.Port = Math.Min(this.Port.Value, ushort.MaxValue);
+
+				if(this.Port == ushort.MaxValue) {
+					// set it to default port
+					this.Port = null;
+				}
+			}
 			this.PeerInfo.Rehydrate(rehydrator);
 			this.IsConnectable = rehydrator.ReadBool();
 

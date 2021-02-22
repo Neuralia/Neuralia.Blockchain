@@ -159,6 +159,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<List<(AccountId accountId, SafeArrayHandle key, byte treeheight, Enums.KeyHashType hashType, Enums.KeyHashType backupHashType)>> LoadKeyDictionary(List<(AccountId accountId, byte ordinal)> accountIdKeys, LockContext lockContext);
 
 		Task<THSState> LoadCachedTHSState(string key);
+
+		Task<SafeArrayHandle> LoadPreviousBlockXmssKeySignaturePathCache();
+		Task<SafeArrayHandle> LoadGlobalWalletKeyIndexCacheFile(Guid fileName);
 	}
 
 	public interface IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainDataProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataLoadProvider
@@ -900,6 +903,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return Compressors.DigestCompressor.Decompress(this.LoadDigestHeaderArchiveData(digestId));
 		}
 
+		public Task<SafeArrayHandle> LoadPreviousBlockXmssKeySignaturePathCache() {
+
+			string file = this.GetLastBlockXmssKeySignaturePathCachePath();
+
+			if(!this.CentralCoordinator.FileSystem.FileExists(file)) {
+				return Task.FromResult((SafeArrayHandle)null);
+			}
+			
+			return Task.FromResult(SafeArrayHandle.WrapAndOwn(this.CentralCoordinator.FileSystem.ReadAllBytes(file)));
+		}
+
+		public Task<SafeArrayHandle> LoadGlobalWalletKeyIndexCacheFile(Guid fileName) {
+			
+			FileExtensions.EnsureDirectoryStructure(GetWalletKeyIndexCachePath(), this.centralCoordinator.FileSystem);
+
+			string file = this.GetLocalWalletKeyIndexCacheFileName(fileName);
+			if(this.CentralCoordinator.FileSystem.FileExists(file)) {
+				return FileExtensions.ReadAllBytesFastAsync(file, CentralCoordinator.FileSystem);
+			}
+
+			return Task.FromResult((SafeArrayHandle)null);
+		}
+		
+			
 	#region Message Cache
 
 		public Task<bool> CheckRegistryMessageInCache(long messagexxHash, bool validated) {

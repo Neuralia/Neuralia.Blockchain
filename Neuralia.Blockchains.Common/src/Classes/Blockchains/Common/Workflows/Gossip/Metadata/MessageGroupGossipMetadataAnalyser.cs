@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Gossi
 				long currentBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.BlockHeight;
 				int blockGossipCacheProximityLevel = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.BlockGossipCacheProximityLevel;
 
-				bool accept = (blockGossipMessageMetadataDetails.BlockId > currentBlockHeight) && (blockGossipMessageMetadataDetails.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel));
+				bool accept = (blockGossipMessageMetadataDetails.BlockId > (currentBlockHeight-1)) && (blockGossipMessageMetadataDetails.BlockId <= (currentBlockHeight + blockGossipCacheProximityLevel));
 
 				if(accept) {
 					// ok, here we decide to accept the block. because we dont want the sync to ALSO download the block, we will give it some time to complete by gossip.

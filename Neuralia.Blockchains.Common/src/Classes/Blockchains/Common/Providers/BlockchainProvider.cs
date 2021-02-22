@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -37,6 +38,7 @@ using Neuralia.Blockchains.Common.Classes.Services;
 using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Components.Transactions.Identifiers;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Cryptography.Encryption.Asymetrical;
 using Neuralia.Blockchains.Core.Cryptography.Keys;
@@ -126,6 +128,24 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected CENTRAL_COORDINATOR CentralCoordinator { get; }
 
+		private readonly WrapperConcurrentQueue<IBlock> queuedElectionBlocks = new WrapperConcurrentQueue<IBlock>();
+		
+		public override async Task Initialize(LockContext lockContext) {
+			await base.Initialize(lockContext).ConfigureAwait(false);
+
+			// make sure to process any queued blocks to process in election
+			this.CentralCoordinator.WalletSynced += async lc => {
+				
+				try {
+					while(this.queuedElectionBlocks.TryDequeue(out var block)){
+						await this.PerformElection(block, lc).ConfigureAwait(false);
+					}
+				} catch(Exception ex){
+					this.CentralCoordinator.Log.Error(ex, "Failed to process elections");
+				}
+			};
+		}
+		
 		/// <summary>
 		///     allows to lock a block for a download operation.
 		/// </summary>
@@ -412,6 +432,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 							SafeArrayHandle lastBlockXmssKeySignaturePathCache = await this.UpdateModeratorKeyDelta(block).ConfigureAwait(false);
 							
 							if(lastBlockXmssKeySignaturePathCache != null && ! lastBlockXmssKeySignaturePathCache.IsZero) {
+								// in case we sometimes need it, we cache the previous signature path
+								await CentralCoordinator.ChainComponentProvider.ChainDataWriteProviderBase.CachePreviousBlockXmssKeySignaturePathCache().ConfigureAwait(false);
+								
 								actions.Add(prov => prov.SetLastBlockXmssKeySignaturePathCacheField(lastBlockXmssKeySignaturePathCache.ToExactByteArrayCopy()));
 							}
 
@@ -585,19 +608,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				// now, alert the world of this new block newly interpreted!
 				this.CentralCoordinator.PostSystemEvent(SystemEventGenerator.BlockInterpreted(block.BlockId.Value, block.FullTimestamp, block.Hash.Entry.ToBase58(), chainStateProvider.PublicBlockHeight, block.Lifespan));
 
+				// perform election only if we are up to date
 				if(syncWallet) {
 					try {
 						if(this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.MiningEnabled) {
-							async Task Catcher(LockContext lc) {
-								// meanwhile, see if we need to mine
-								try {
-									await this.PerformElection(block, lc).ConfigureAwait(false);
-								} finally {
-									this.CentralCoordinator.WalletSynced -= Catcher;
-								}
-							}
-
-							this.CentralCoordinator.WalletSynced += Catcher;
+							
+							this.queuedElectionBlocks.Enqueue(block);
 						}
 
 						await this.CentralCoordinator.RequestWalletSync(block, true, allowWalletSyncGrowth).ConfigureAwait(false);
@@ -653,24 +669,25 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="async"></param>
 		/// <returns></returns>
 		public virtual async Task PerformElection(IBlock block, LockContext lockContext) {
-			ClosureWrapper<bool> elected = false;
 
+			if(block == null) {
+				return;
+			}
 			try {
 				if(this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.MiningEnabled) {
 					// ok, we are mining, lets check this block
 
-					if(this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections) {
+					if(GlobalSettings.ApplicationSettings.MobileMode || this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.HasPeerConnections) {
 						await this.CentralCoordinator.ChainComponentProvider.ChainMiningProviderBase.PerformElection(block, messages => {
-							
-							elected = true;
+
 							return this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.DispatchElectionMessages(messages, lockContext);
 						}, lockContext).ConfigureAwait(false);
 					} else {
-						this.CentralCoordinator.Log.Error("Mining is enabled but we are not connected to any peers. Elections cancelled.");
+						this.CentralCoordinator.Log.Error($"Mining is enabled but we are not connected to any peers. Elections cancelled for blockId {block.BlockId}.");
 					}
 				}
 			} catch(Exception ex) {
-				this.CentralCoordinator.Log.Fatal(ex, "Failed to perform mining election.");
+				this.CentralCoordinator.Log.Error(ex, $"Failed to perform mining election for blockId {block.BlockId}.");
 			}
 		}
 
@@ -1041,5 +1058,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	#endregion
 
+		
 	}
 }

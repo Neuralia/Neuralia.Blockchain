@@ -17,9 +17,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		where ACCOUNT_KEYS_SNAPSHOT_CONTEXT : IAccountKeysSnapshotContext<STANDARD_ACCOUNT_KEYS_SNAPSHOT>
 		where STANDARD_ACCOUNT_KEYS_SNAPSHOT : class, IAccountKeysSnapshotEntry, new() {
 
-		Task Clear();
-		Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>> LoadAccountKeys(Func<ACCOUNT_KEYS_SNAPSHOT_CONTEXT, Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>>> operation, List<(long accountId, byte ordinal)> accountIds);
-		Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_KEYS_SNAPSHOT_CONTEXT, Task> operation, STANDARD_ACCOUNT_KEYS_SNAPSHOT accountSnapshotEntry);
+		Task Clear(LockContext lockContext = null);
+		Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>> LoadAccountKeys(Func<ACCOUNT_KEYS_SNAPSHOT_CONTEXT, LockContext, Task<List<STANDARD_ACCOUNT_KEYS_SNAPSHOT>>> operation, List<(long accountId, byte ordinal)> accountIds);
+		Task UpdateSnapshotDigestFromDigest(Func<ACCOUNT_KEYS_SNAPSHOT_CONTEXT, LockContext, Task> operation, STANDARD_ACCOUNT_KEYS_SNAPSHOT accountSnapshotEntry);
 
 		Task<List<(ACCOUNT_KEYS_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<AccountId, List<Func<ACCOUNT_KEYS_SNAPSHOT_CONTEXT, LockContext, Task>>> actions);
 	}

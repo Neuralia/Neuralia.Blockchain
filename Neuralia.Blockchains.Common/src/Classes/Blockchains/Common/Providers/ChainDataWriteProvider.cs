@@ -45,7 +45,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		Task CacheUnvalidatedBlockGossipMessage(IBlockEnvelope unvalidatedBlockEnvelope, long xxHash);
 		Task ClearCachedUnvalidatedBlockGossipMessage(long blockId);
-
+		Task WriteGlobalWalletKeyIndexCacheFile(Guid fileName, SafeArrayHandle bytes);
 		void TruncateBlockFileSizes(long blockId, Dictionary<string, long> fileSizes);
 
 		void EnsureKeyDictionaryIndex();
@@ -53,6 +53,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task RunTransactionalActions(List<Func<LockContext, Task>> serializationActions, SerializationTransactionProcessor serializationTransactionProcessor);
 		Task SaveCachedTHSState(THSState state, string key);
 		void ClearCachedTHSState(string key);
+		Task CachePreviousBlockXmssKeySignaturePathCache();
 	}
 
 	public interface IChainDataWriteProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IChainDataLoadProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>, IChainDataWriteProvider
@@ -306,6 +307,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			}
 		}
 
+		public Task CachePreviousBlockXmssKeySignaturePathCache() {
+
+			var bytes = this.CentralCoordinator.ChainComponentProvider.ChainStateProviderBase.LastBlockXmssKeySignaturePathCache;
+
+			if(bytes != null) {
+				FileExtensions.EnsureDirectoryStructure(this.GetGeneralCachePath(), this.CentralCoordinator.FileSystem);
+				
+				this.CentralCoordinator.FileSystem.WriteAllBytes(this.GetLastBlockXmssKeySignaturePathCachePath(), bytes);
+			}
+			
+			return Task.CompletedTask;
+		}
 	#region imports from Serialization Service
 
 		public async Task SaveAccountKeyIndex(AccountId accountId, SafeArrayHandle key, byte treeHeight, Enums.KeyHashType hashType, Enums.KeyHashType backupBitSize, byte ordinal, LockContext lockContext = null) {
@@ -401,6 +414,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					}
 				}
 			}
+		}
+
+		public Task WriteGlobalWalletKeyIndexCacheFile(Guid fileName, SafeArrayHandle bytes) {
+
+			FileExtensions.EnsureDirectoryStructure(GetWalletKeyIndexCachePath(), this.centralCoordinator.FileSystem);
+
+			string file = this.GetLocalWalletKeyIndexCacheFileName(fileName);
+
+			return FileExtensions.WriteAllBytesAsync(file, bytes.Span, CentralCoordinator.FileSystem);
 		}
 
 	#endregion

@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading;
 using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
 
@@ -33,14 +34,15 @@ namespace Neuralia.Blockchains.Core.Network {
 			GossipRateLimit,
 			CantValidateGossip,
 			GossipEmbeddedKeyValid,
-			LatencyTooHigh
+			LatencyTooHigh,
+			TooManySyncRequests
 		}
 
 		public const string TAG = "[" + nameof(IPMarshall) + "]";
 		
-		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsWatchlist = new();
-		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsGreylist = new();
-		private readonly ConcurrentDictionary<long, QuarantinedInfo> accountsBlacklist = new();
+		private readonly ConcurrentDictionary<AccountId, QuarantinedInfo> accountsWatchlist = new();
+		private readonly ConcurrentDictionary<AccountId, QuarantinedInfo> accountsGreylist = new();
+		private readonly ConcurrentDictionary<AccountId, QuarantinedInfo> accountsBlacklist = new();
 		
 		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> watchlist = new();
 		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> greylist = new();
@@ -395,23 +397,22 @@ namespace Neuralia.Blockchains.Core.Network {
 		public bool IsQuarantined(IPAddress ip, out DateTime expiry) {
 			return this.IsQuarantined(ip, out expiry, out _);
 		}
-		
 
-		
-		public bool IsQuarantined(long ip, out DateTime expiry, out QuarantineReason reason)
+		public bool IsQuarantined(AccountId accountId, out DateTime expiry, out QuarantineReason reason)
 		{
-			bool result = IsQuarantined(ip, this.accountsWatchlist, this.accountsBlacklist, out var expiry_, out var reason_);
+			bool result = IsQuarantined(accountId, this.accountsWatchlist, this.accountsBlacklist, out var expiry_, out var reason_);
 
 			expiry = expiry_;
 			reason = reason_;
 			return result;
 		}
-		public bool IsQuarantined(long ip) {
-			return this.IsQuarantined(ip, out _, out _);
+		
+		public bool IsQuarantined(AccountId accountId) {
+			return this.IsQuarantined(accountId, out _, out _);
 		}
-
-		public bool IsQuarantined(long ip, out DateTime expiry) {
-			return this.IsQuarantined(ip, out expiry, out _);
+		
+		public bool IsQuarantined(AccountId accountId, out DateTime expiry) {
+			return this.IsQuarantined(accountId, out expiry, out _);
 		}
 		
 		private void Quarantine<ID_TYPE>(ID_TYPE ip, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> watchlist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> greylist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> blacklist, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
@@ -483,17 +484,19 @@ namespace Neuralia.Blockchains.Core.Network {
 		public void Quarantine(IPAddress ip, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
 			if(this.IsWhiteList(ip, out AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType)) {
 
-				NLog.LoggingBatcher.Error($"{TAG} Trying to Quarantine whitelisted node {ip}, aborting");
+				NLog.LoggingBatcher.Debug($"{TAG} Trying to Quarantine whitelisted node {ip}, ignoring");
 
 				return;
 			}
 
 			this.Quarantine(ip, this.watchlist, this.greylist, this.blacklist, reason, expiry, details, graceStrikes, graceObservationPeriod);
 		}
-		public void Quarantine(long id, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
+		
+		public void Quarantine(AccountId accountId, QuarantineReason reason, DateTime expiry, string details = "", double graceStrikes = 0.0, TimeSpan graceObservationPeriod = default) {
 
-			this.Quarantine(id, this.accountsWatchlist, this.accountsGreylist, this.accountsBlacklist, reason, expiry, details, graceStrikes, graceObservationPeriod);
+			this.Quarantine(accountId, this.accountsWatchlist, this.accountsGreylist, this.accountsBlacklist, reason, expiry, details, graceStrikes, graceObservationPeriod);
 		}
+
 		private void LogQuarantine<ID_TYPE>(ID_TYPE ip, QuarantinedInfo info, string details) {
 			string reason = $"{info.Reason}";
 

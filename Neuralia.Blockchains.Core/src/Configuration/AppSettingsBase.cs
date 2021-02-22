@@ -228,7 +228,9 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			/// <summary>
 			/// Allows to bind from another computer (make sure your rpc port is enabled by your firewall)
 			/// </summary>
-			Any
+			Any,
+			
+			Custom
 		}
 
 		/// <summary>
@@ -267,14 +269,24 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			CGroup
 		}
 
+		public enum KeyLogModes {
+			/// <summary>
+			/// Key log will not be used. this is a dangerous mode to use
+			/// </summary>
+			Disabled,
+			/// <summary>
+			/// In this mode, key logs are used and will automatically adjust keys as long as it is safe to do so. Reasonable security.
+			/// </summary>
+			Adaptable,
+			/// <summary>
+			/// In this mode, keys are strictly checked for valid heights and any discrepancy is blocked and alerted. Bets security mode.
+			/// </summary>
+			Strict
+		}
+		
 		/// <summary>
-		/// How much CPU to dedicate to XMSS operations.
-		/// </summary>
-		public Enums.ThreadMode XmssThreadMode { get; set; } = Enums.ThreadMode.Half;
-
-		/// <summary>
-		///     How we handle the transaction pool. Metadata is only the
-		///     transaction id connection. full, we also save the full envelope.
+		/// How we handle the transaction pool. Metadata is only the
+		/// transaction id connection. full, we also save the full envelope.
 		/// </summary>
 		public enum TransactionPoolHandling {
 			Disabled,
@@ -285,7 +297,7 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		}
 
 		/// <summary>
-		/// Describes how handle wallet transaction deletion.
+		/// Describes how to handle wallet transaction deletion.
 		/// </summary>
 		public enum WalletTransactionDeletionModes {
 			/// <summary>
@@ -297,26 +309,33 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			/// </summary>
 			Fast
 		}
+		
+		/// <summary>
+		/// How much CPU to dedicate to XMSS operations.
+		/// </summary>
+		public Enums.ThreadMode XmssThreadMode { get; set; } = Enums.ThreadMode.Half;
+
+
 
 		/// <summary>
-		/// When performing a THS, do we use ram, or hard disk (slower)
+		///  Configures the type of memory to be used when performing a Time Hard Signature (THS).
 		/// </summary>
 		public Enums.THSMemoryTypes THSMemoryType { get; set; } = Enums.THSMemoryTypes.RAM;
 
 		/// <summary>
-		/// How many thraeds to use for the THS, remember you will need ram to match the thread count
+		/// Configures how many threads to use when performing the Time Hard Signature (THS). Remember you will need RAM to match the thread count.
 		/// </summary>
 		public int THSThreadCount { get; set; } = 1;
 		
 		/// <summary>
-		/// Which protocol should we try to use
+		/// Configures which Internet Protocol to use for server networking.
 		/// </summary>
-		public IPMode IPProtocol { get; set; } = IPMode.Both;
-
+		public IPMode IPProtocolServer { get; set; } = IPMode.Both;
+		
 		/// <summary>
-		/// If connecting to server as ipv4, we can use an ipv6 socket that can do ipv4, or **force** an ipv4 socket. 
+		/// Configures which Internet Protocol to use for client connections.
 		/// </summary>
-		public bool ForceIpv4Socket { get; set; }
+		public IPMode IPProtocolClient { get; set; } = IPMode.Both;
 
 		/// <summary>
 		/// if true, two socket connections will be attempted
@@ -325,31 +344,32 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		
 
 		/// <summary>
-		///  What type of tcp socket to use
+		///   Configures what type of TCP socket to use.
 		/// </summary>
 		public SocketTypes SocketType { get; set; } = SocketTypes.Duplex;
 
 		/// <summary>
-		///  If true, we will use faster but larger memory buffers from the array pool. if false, we will use the regular exact
-		///  sized buffer. slower but less ram
+		///  Configures weather to use Array Pools.
 		/// </summary>
+		/// <remarks> If true, we will use faster but larger memory buffers from the array pool. If false, we will use the regular exact
+		///     sized buffer. This is slower but uses less ram.</remarks>
 		public bool UseArrayPools { get; set; } = true;
 
-		public string SystemFilesPath { get; set; }
+		public string SystemFilesPath { get; set; } = "";
 
 		/// <summary>
-		///  Turn on special behaviors for mobiles.
+		///  Configures weather special behaviors for mobiles is enabled.
 		/// </summary>
 		public bool MobileMode { get; set; } = false;
 
 		/// <summary>
-		/// Turn on special behaviors for syncless.
+		///   Configures weather special behaviors for syncless is enabled.
 		/// </summary>
 		public bool SynclessMode { get; set; } = false;
 		
 
 		/// <summary>
-		/// Which port are we arunning the server.
+		/// Configures the port on which the server is running.
 		/// </summary>
 		public int Port { get; set; } = GlobalsService.DEFAULT_PORT;
 		
@@ -366,12 +386,12 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public int ValidatorHttpPort { get; set; } = GlobalsService.DEFAULT_VALIDATOR_HTTP_PORT;
 		
 		/// <summary>
-		/// The port used to communicate with the node via RPC calls (used by CLI and Wallet)
+		/// Configures the port used to communicate with the node via RPC calls (used by CLI and Wallet)
 		/// </summary>
 		public int RpcPort { get; set; } = GlobalsService.DEFAULT_RPC_PORT;
 
 		/// <summary>
-		/// if true, the HTTP backup protocol will be started and used (using port defined by *ValidatorHttpPort*)
+		/// If true, the HTTP backup protocol will be started and used (using port defined by *ValidatorHttpPort*)
 		/// </summary>
 		public bool EnableAppointmentValidatorBackupProtocol { get; set; } = true;
 
@@ -459,9 +479,10 @@ namespace Neuralia.Blockchains.Core.Configuration {
 		public List<NLog.LoggerTypes> EnabledLoggers { get; set; } = new List<NLog.LoggerTypes>{NLog.LoggerTypes.Standard}; 
 		
 		/// <summary>
-		/// How does it serialize?  if main, it will have its full blockchain files, and database. if feeder, it simply
-		/// observes the files and databases that are updated by a master
+		///     Configures what type of serialization to use.
 		/// </summary>
+		/// <remarks>If Main is set, it will have its full blockchain files, and database. If feeder, it simply
+		///     observes the files and databases that are updated by a master</remarks>
 		public SerializationTypes SerializationType { get; set; } = SerializationTypes.Main;
 
 		/// <summary>
@@ -506,16 +527,16 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// </summary>
 		public string HubsWebAddress { get; set; } = "https://web-hubs.neuralium.com";
 #endif
-		
+
 		/// <summary>
 		/// If set, it will use this IP instead of the one associated with *PortTestDns*'s url
 		/// </summary>
-		public string PortTestIpOverride { get; set; }
+		public string PortTestIpOverride { get; set; } = "";
 
 		/// <summary>
 		///  The maximum amount of IPs to keep in our cache
 		/// </summary>
-		public int MaximumIpCacheCount { get; set; } = 1000;
+		public int MaximumIpCacheCount { get; set; } = 5000;
 
 		/// <summary>
 		/// IPCrawler's maximum number of simultaneous connections to fully-connectable peers
@@ -545,12 +566,12 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <summary>
 		/// IPCrawler will contact the hups for new ips every *HubIPsRequestPeriod* seconds
 		/// </summary>
-		public double HubIPsRequestPeriod { get; set; } = 1800;
+		public double HubIPsRequestPeriod { get; set; } = 10*60;
 		
 		/// <summary>
 		/// IPCrawler will ask its peers for their list of ips every *PeerIPsRequestPeriod* seconds
 		/// </summary>
-		public double PeerIPsRequestPeriod { get; set; } = 600;
+		public double PeerIPsRequestPeriod { get; set; } = 10*60;
 		
 		/// <summary>
 		///  IPCrawler wait at least *PeerReconnectionPeriod* before requesting connection to a given peer again after a failed request
@@ -570,7 +591,12 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <summary>
 		/// Wait time to loop the process in seconds (FIXME too functionaly similar to *IPCrawlerCrawlPeriod*)
 		/// </summary>
-		public int IPCrawlerProcessLoopPeriod { get; set; } = 10;
+		public double IPCrawlerProcessLoopPeriod { get; set; } = 10.0;
+		
+		/// <summary>
+		/// Prints the current number of connections to the Default logger every X second 
+		/// </summary>
+		public double IPCrawlerPrintNConnections { get; set; } = 0.0;
 		
 		/// <summary>
 		/// Maximum round trip latency tolerated with a connected peer (in seconds).
@@ -578,7 +604,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public double MaxPeerLatency { get; set; } = 2.0;
 		
 		/// <summary>
-		/// How do we delete the files when doing wallet transactions? safe is slower but clears data much better. TODO: improve me
+		///   Gets or sets the mode of how to delete the files when doing wallet transctions.
 		/// </summary>
 		public WalletTransactionDeletionModes WalletTransactionDeletionMode { get; set; } = WalletTransactionDeletionModes.Fast;
 
@@ -588,9 +614,9 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public ProxySettings ProxySettings { get; set; } = null;
 
 		/// <summary>
-		/// How do we handle the transaction pool? by default, we store only metadata if we are
-		/// mining. TODO: improve me
+		/// Configures the way to handle the transaction pool. TODO: improve me
 		/// </summary>
+		/// <remarks>By default, store only metadata during mining. See: <see cref="TransactionPoolHandling.MiningMetadata"/>.</remarks>
 		public TransactionPoolHandling TransactionPoolHandlingMode { get; set; } = TransactionPoolHandling.MiningMetadata;
 
 		/// <summary>
@@ -598,13 +624,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// them.
 		/// </summary>
 		public UndocumentedDebugConfigurations UndocumentedDebugConfigurations { get; set; } = new UndocumentedDebugConfigurations();
-
-		/// <summary>
-		/// A STUN server (Session Traversal Utilities for NAT) helps to discover your actual public IP.
-		/// (From https://en.wikipedia.org/wiki/STUN: The protocol requires assistance from a third-party network server (STUN server) located on the opposing (public) side of the NAT, usually the public Internet.)
-		/// </summary>
-		public bool UseStunServer { get; set; } = false;
-
+		
 		//TODO: set to proper value
 		/// <summary>
 		/// The amount of time in seconds before we attempt to sync blockchain again
@@ -617,7 +637,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public int WalletSyncDelay { get; set; } = 60;
 
 		/// <summary>
-		///     do we delete blocks saved after X many days? its not very nice, so by default, we store them all. //TODO unused
+		/// Do we delete blocks saved after X many days? its not very nice, so by default, we store them all. //TODO unused
 		/// </summary>
 		public int? DeleteBlocksAfterDays { get; set; } = null;
 
@@ -639,12 +659,22 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// Do we allow the Rpc to listen only to localhost, or any address
 		/// </summary>
 		public RpcBindModes RpcBindMode { get; set; } = RpcBindModes.Localhost;
+		
+		/// <summary>
+		/// if RpcBindMode is Custom, set any address pattern to listen to here
+		/// </summary>
+		public string RpcBindingAddress { get; set; }
 
 		/// <summary>
 		/// The TLS certificate to use. can be a path too, otherwise app root.  if null, a dynamic certificate will be
 		/// generated.
 		/// </summary>
 		public string TlsCertificate { get; set; } = "neuralium.com.rpc.crt";
+		
+		/// <summary>
+		/// the strength og the TLS certificate if it is auto generated
+		/// </summary>
+		public int TlsCertificateStrength { get; set; } = 2048;
 
 		/// <summary>
 		/// Should we use memory limits
@@ -680,11 +710,12 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <summary>
 		///  This class represents a basic p2p network node.
 		/// </summary>
-		public class Node {
+		public class Node
+		{
 			/// <summary>
 			/// Configures the IP of the node.
 			/// </summary>
-			public string Ip { get; set; }
+			public string Ip { get; set; } = "";
 		}
 
 		/// <summary>
@@ -704,11 +735,11 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public class WhitelistedNode : Node {
 
 			/// <summary>
-			/// Describes the the way be which we accept other p2p white listed nodes when they are contacting the node.
+			/// Describes the way by which to accept other p2p white listed nodes when they are contacting the node.
 			/// </summary>
 			public enum AcceptanceTypes {
 				/// <summary>
-				/// The white listed node is only accepted if there is still room in the allowed peer list
+				/// The white listed node is only accepted if there is still room in the allowed peer list.
 				/// </summary>
 				WithRemainingSlots,
 
@@ -724,7 +755,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 			public AcceptanceTypes AcceptanceType { get; set; } = AcceptanceTypes.WithRemainingSlots;
 
 			/// <summary>
-			/// Configures whether we use a CIDR ip address range 
+			/// Configures weather the node matches whitelisted Classless inter-domain routing (CIDR) with this IP. 
 			/// </summary>
 			public bool CIDR { get; set; } = false;
 		}
@@ -740,7 +771,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 	}
 
 	/// <summary>
-	/// This class takes care of configurations related with the Blockchain
+	/// This class represents the configuration of single Blockchain.
 	/// </summary>
 	public abstract class ChainConfigurations {
 
@@ -755,21 +786,21 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		}
 
 		/// <summary>
-		/// 
+		/// Describes the type of hash to be used by the blockchain.
 		/// </summary>
 		public enum HashTypes {
 			/// <summary>
-			///  Using Sha2 hashing
+			///  Using Sha2 hashing.
 			/// </summary>
 			Sha2,
 			/// <summary>
-			/// Using Sha3 hashing
+			/// Using Sha3 hashing.
 			/// </summary>
 			Sha3
 		}
 		
 		/// <summary>
-		/// 
+		/// Describes how to keep mining statistics for the blockchain.
 		/// </summary>
 		[Flags]
 		public enum MiningStatisticsModes {
@@ -781,7 +812,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		}
 
 		/// <summary>
-		///     how long to store a passphrase before it is forgotten. null or -1 is infinite.
+		/// how long to store a passphrase before it is forgotten. null or -1 is infinite.
 		/// </summary>
 		public int? PassphraseTimeout { get; set; } = null;
 
@@ -801,7 +832,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool EnableAutomaticRetry{ get; set; } = true;
 		
 		/// <summary>
-		///     Configures the way serialization will be performed.
+		/// Configures the way serialization will be performed.
 		/// </summary>
 		/// <remarks><para>If master is set the full blockchain files, and database will be serialized.</para>
 		/// If feeder is set simply observes the files and databases that are updated by a master</remarks>
@@ -809,12 +840,12 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public AppSettingsBase.SerializationTypes SerializationType { get; set; } = AppSettingsBase.SerializationTypes.Main;
 
 		/// <summary>
-		///     The http url of the mining registration API
+		/// The http url of the mining registration API
 		/// </summary>
 #if TESTNET
 		
 		/// <summary>
-		///     The http url of the hash server
+		/// The http url of the hash server
 		/// </summary>
 		public string HashUrl { get; set; } = "https://test-hash.neuralium.com";
 		public string WebElectionsRegistrationUrl { get; set; } = "https://test-election-registration.neuralium.com";
@@ -864,68 +895,68 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// This allows to set which IP protocol the mining server will use to be verified
 		/// </summary>
 		public IPMode ServerMiningVerificationIpProtocol { get; set; } = IPMode.IPv4;
-		
-		/// <summary>
-		/// here you can force your IP on which you want to be contacted by the validation service
-		/// </summary>
-		public string ServerMiningVerificationStaticIp { get; set; }
 
 		/// <summary>
-		/// if true, we will contact the web transaction pools to get the webreg ones
+		/// Here you can force your IP on which you want to be contacted by the validation service
+		/// </summary>
+		public string ServerMiningVerificationStaticIp { get; set; } = "";
+
+		/// <summary>
+		/// If true, we will contact the web transaction pools to get the webreg ones
 		/// </summary>
 		public bool UseWebTransactionPool  { get; set; } = true;
 		
 		/// <summary>
-		///     Configures weather If true, during the wallet sync, the public block height will be updated, causing a creaping sync target. at false,
-		///     it will sync with the height it had when it started,
-		///     even if it changes along the way.
+		/// Configures weather If true, during the wallet sync, the public block height will be updated, causing a creaping sync target. at false,
+		/// it will sync with the height it had when it started,
+		/// even if it changes along the way.
 		/// </summary>
 		public bool AllowWalletSyncDynamicGrowth { get; set; } = false;
 
 		/// <summary>
-		///     How do we want to capture the passphrases.
+		/// How do we want to capture the passphrases.
 		/// </summary>
 		public AppSettingsBase.PassphraseQueryMethod PassphraseCaptureMethod { get; set; } = AppSettingsBase.PassphraseQueryMethod.Event;
 
 		/// <summary>
-		///     if true, mining can be enabled even chain is not synced. mining wlil start when fully synced
+		/// if true, mining can be enabled even chain is not synced. mining wlil start when fully synced
 		/// </summary>
 		public bool EnableMiningPreload { get; set; } = false;
 
 		/// <summary>
-		///     if true, the wallet will be loaded at chain start automatically. Otherwise, only on demand if transactions are
-		///     created.
+		/// if true, the wallet will be loaded at chain start automatically. Otherwise, only on demand if transactions are
+		/// created.
 		/// </summary>
 		public bool LoadWalletOnStart { get; set; } = false;
 
 		/// <summary>
-		///     if true, we will create a new wallet if it is missing. otherwise, we will continue without a wallet
+		/// if true, we will create a new wallet if it is missing. otherwise, we will continue without a wallet
 		/// </summary>
 		public bool CreateMissingWallet { get; set; } = false;
 
 		/// <summary>
-		/// if we auto create wallet, what type of account to create
+		/// If we auto create wallet, what type of account to create
 		/// </summary>
 		public Enums.AccountTypes AccountType { get; set; } = Enums.AccountTypes.User;
 		
 		/// <summary>
-		///     Should we encrypt the wallet keys when creating a new wallet
+		/// Should we encrypt the wallet keys when creating a new wallet
 		/// </summary>
 		public bool EncryptWallet { get; set; } = false;
 	
 		/// <summary>
-		/// Gets to sets a value indicator weather the wallet should be compressed upon creation.
+		/// Configures weather the wallet should be compressed upon creation.
 		/// </summary>
 		/// <value>Default value is true.</value>
 		public bool CompressWallet { get; set; } = true;
 
 		/// <summary>
-		///     Should we encrypt the wallet keys when creating a new wallet
+		/// Should we encrypt the wallet keys when creating a new wallet
 		/// </summary>
 		public bool EncryptWalletKeys { get; set; } = false;
 
 		/// <summary>
-		///     Should each key have its own passphrase, or share the same
+		/// Should each key have its own passphrase, or share the same
 		/// </summary>
 		/*!
 		 @see EncryptWalletKeysSeparate
@@ -933,66 +964,67 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool EncryptWalletKeysSeparate { get; set; } = false;
 
 		/// <summary>
-		///     if enabled, the noe will use the mining pool facilities to check if correctly registered for mining
+		/// if enabled, the noe will use the mining pool facilities to check if correctly registered for mining
 		/// </summary>
 		public bool EnableMiningStatusChecks { get; set; } = true;
 
 		/// <summary>
-		///     The minimum amount of peers required to sync. 1 peer is VERY risky. 2 is a bit better but not by much. A proper
-		///     minimum is 3 peers.
+		/// The minimum amount of peers required to sync. 1 peer is VERY risky. 2 is a bit better but not by much. A proper
+		/// minimum is 3 peers.
 		/// </summary>
-
-		//TODO: should this be 3 for prod??
-		public int MinimumSyncPeerCount { get; set; } = 1;
-
-		public int MinimumDispatchPeerCount { get; set; } = 1;
+		public int MinimumSyncPeerCount { get; set; } = 3;
 
 		/// <summary>
-		///     How we determine the max size of a block group file. <br/> <br/> <br/>
-		///		If we have a block count mode, then its the maximum number of blocks.<br/>
-		///     If we are in file size mode, then its the maximum number of bytes.<br/>
+		/// The minimum amount of peers required to dispatch your newly created account.
+		/// </summary>
+		public int MinimumDispatchPeerCount { get; set; } = 3;
+
+		/// <summary>
+		/// How we determine the max size of a block group file.
+		/// If we have a block count mode, then its the maximum number of blocks.
+		/// If we are in file size mode, then its the maximum number of bytes.
 		/// </summary>
 		public int? BlockFileGroupSize { get; set; } = null;
 
 		/// <summary>
-		///     At which interval will we insert a new L1 entry.
+		/// At which interval will we insert a new L1 entry.
 		/// </summary>
 		public int BlockCacheL1Interval { get; set; } = 100;
 
 		/// <summary>
-		///     At which interval will we insert a new L2 entry.A higher number takes less space, but will require reading more
-		///     data from disk. It's a balancing act.
+		/// At which interval will we insert a new L2 entry.A higher number takes less space, but will require reading more
+		/// data from disk. It's a balancing act.
 		/// </summary>
 		public int BlockCacheL2Interval { get; set; } = 10;
 
 		/// <summary>
-		///     How are we determining the max size of a block group file?
+		/// How are we determining the max size of a block group file?
 		///		If we have a block count mode, then its the maximum number of blocks.
-		///     If we are in file size mode, then its the maximum number of bytes.
+		/// If we are in file size mode, then its the maximum number of bytes.
 		/// </summary>
 		public int? MessageFileGroupSize { get; set; } = null;
 
 		public AppSettingsBase.MessageSavingModes MessageSavingMode { get; set; } = AppSettingsBase.MessageSavingModes.Disabled;
 
 		/// <summary>
-		///     Should we publish our key indices inside transactions for key logging? (recommended)
+		/// Should we publish our key indices inside transactions for key logging? (recommended)
 		/// </summary>
 		public bool PublishKeyUseIndices { get; set; } = true;
 		
 		/// <summary>
-		///     Should we publish the limit at which a previous key index will not be usable? (highly recommended)
+		/// Should we publish the limit at which a previous key index will not be usable? (highly recommended)
 		/// </summary>
 		public bool PublishKeyUseLocks { get; set; } = true;
 		
 
 		/// <summary>
-		///     The keylog is an important security feature. If necessary, it can be disabled, but it is not advised AT ALL.
+		/// The keylog is an important security feature. If necessary, it can be disabled, but it is not advised AT ALL.
 		///		This is part of the wallet block sync, and keylog will be disabled if wallet block sync is disabled also.
 		/// </summary>
-		public bool UseKeyLog { get; set; } = true;
+		public AppSettingsBase.KeyLogModes KeyLogMode { get; set; } = AppSettingsBase.KeyLogModes.Adaptable;
 
 		/// <summary>
-		///     Do we want to disable the block sync with other peers?
+		/// Do we want to disable the block sync with other peers?
 		/// </summary>
 		public bool DisableSync { get; set; } = false;
 		
@@ -1035,40 +1067,43 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public MiningStatisticsModes MiningStatistics { get; set; } = MiningStatisticsModes.Both;
 		
 		/// <summary>
-		///     do we want to disable the wallet block sync?
+		/// do we want to disable the wallet block sync?
 		/// </summary>
 		public bool DisableWalletSync { get; set; } = false;
 
-		public KeySecurityConfigurations KeySecurityConfigurations { get; set; } = new KeySecurityConfigurations();
+		/// <summary>
+		/// Configures the configuration of the key security for the blockchain.
+		/// </summary>
+		public KeySecurityConfigurations KeySecurityConfigurations { get; set; } = new ();
 
 		public AppSettingsBase.SnapshotIndexTypes AccountSnapshotTrackingMethod { get; set; } = AppSettingsBase.SnapshotIndexTypes.None;
 
 		/// <summary>
-		///     Which accounts snapshots do we wish to track?
+		/// Which accounts snapshots do we wish to track?
 		/// </summary>
 		public List<string> TrackedSnapshotAccountsList { get; set; } = new List<string>();
 
 		/// <summary>
-		///     how do we save the events on chain
+		/// how do we save the events on chain
 		/// </summary>
 		public AppSettingsBase.BlockSavingModes BlockSavingMode { get; set; } = AppSettingsBase.BlockSavingModes.BlockOnly;
 
 		/// <summary>
-		///     should we use a Key dictionary index? takes more disk space, but makes verification much faster
-		///     by keeping fast access to the General and Message keys
+		/// should we use a Key dictionary index? takes more disk space, but makes verification much faster
+		/// by keeping fast access to the General and Message keys
 		/// </summary>
 		public bool EnableKeyDictionaryIndex { get; set; } = true;
 
 		public KeyDictionaryTypes EnabledKeyDictionaryTypes { get; set; } = KeyDictionaryTypes.All;
 
 		/// <summary>
-		///     How many parallel workflow threads can we have at a maximum in this chain
+		/// How many parallel workflow threads can we have at a maximum in this chain
 		/// </summary>
 		public int? MaxWorkflowParallelCount { get; set; } = null;
 
 		/// <summary>
-		///     If we receive a gossip block message and it is a blockID with this distance from our blockheight, then we cache it
-		///     to reuse later.
+		/// If we receive a gossip block message and it is a blockID with this distance from our blockheight, then we cache it
+		/// to reuse later.
 		/// </summary>
 		public int BlockGossipCacheProximityLevel { get; set; } = 1000;
 
@@ -1078,24 +1113,24 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool SkipDigestHashVerification { get; set; } = false;
 
 		/// <summary>
-		/// 
+		/// Skip hash verification for the genesis block (Block 1). TODO: more details
 		/// </summary>
 		public bool SkipGenesisHashVerification { get; set; } = true;
 
 		/// <summary>
-		/// 
+		/// Skip periodic hash verification for any block. TODO: more details
 		/// </summary>
 		public bool SkipPeriodicBlockHashVerification { get; set; } = true;
 
 		/// <summary>
-		///     Use the rest webapi to register for mining. its simpler and faster, so its preferable to use. it is also required
-		///     if the peer can not open it's default port through the firewall
+		/// Use the rest webapi to register for mining. its simpler and faster, so its preferable to use. it is also required
+		/// if the peer can not open it's default port through the firewall
 		/// </summary>
 		public AppSettingsBase.ContactMethods ElectionsRegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 
 		/// <summary>
-		///     Use the rest webapi to register transactions & messages. its simpler, faster and bypasses p2p transaction limits, so
-		///     its preferable to use.
+		/// Use the rest webapi to register transactions & messages. its simpler, faster and bypasses p2p transaction limits, so
+		/// its preferable to use.
 		/// </summary>
 		public AppSettingsBase.ContactMethods RegistrationMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 		
@@ -1105,43 +1140,51 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <value>return the Contact method do use for blockchain syncing. <br>
 		///Default value: <see cref="AppSettingsBase.ContactMethods.Gossip"/>. Also <seealso cref="AppSettingsBase.ContactMethods"/>
 		/// </value>
-		public AppSettingsBase.ContactMethods ChainSyncMethod { get; set; } = AppSettingsBase.ContactMethods.Gossip;
+		public AppSettingsBase.ContactMethods ChainSyncMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 		
-
 		/// <summary>
-		///     force a specific mining tier (if possible)
+		/// during chain sync, if we are unsure which public block Id to use, how do we break the tie?
+		/// </summary>
+		public AppSettingsBase.ContactMethods ChainSyncPublicBlockHeightTieBreaking { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
+		
+		/// <summary>
+		/// force a specific mining tier (if possible)
 		/// </summary>
 		public Enums.MiningTiers? MiningTier { get; set; } = null;
 
 		/// <summary>
-		///     Time in minutes to store a wallet passphrase in memory before wiping it out
+		/// Time in minutes to store a wallet passphrase in memory before wiping it out
 		/// </summary>
 		public int? DefaultWalletPassphraseTimeout { get; set; } = null;
 
 		/// <summary>
-		///     Time in minutes to store a key's passphrase in memory before wiping it out
+		/// Time in minutes to store a key's passphrase in memory before wiping it out
 		/// </summary>
 		public int? DefaultKeyPassphraseTimeout { get; set; } = null;
 
 		/// <summary>
-		///     what kind of strength do we want for our xmss main key
+		/// what kind of strength do we want for our xmss main key
 		/// </summary>
 		public byte TransactionXmssKeyHeight { get; set; } = 11;
 
 		/// <summary>
-		///     Percentage level where we warn of a key change comming
+		/// Percentage level (between 0 and 1.0, 1.0 being 100%) where we warn of a key change coming
 		/// </summary>
 		public float TransactionXmssKeyWarningLevel { get; set; } = 0.7F;
 
 		/// <summary>
-		///     Percentage level where we must begin the key change process
+		/// Percentage level (between 0 and 1.0, 1.0 being 100%) where we must begin the key change process
 		/// </summary>
 		public float TransactionXmssKeyChangeLevel { get; set; } = 0.9F;
 
 		/// <summary>
-		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// The main hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes TransactionXmssKeyHashType { get; set; } = HashTypes.Sha3;
+		
+		/// <summary>
+		/// the backup hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// </summary>
 		public HashTypes TransactionXmssKeyBackupHashType { get; set; } = HashTypes.Sha2;
 
 		/// <summary>
@@ -1150,22 +1193,22 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public int? TransactionXmssKeySeedSize { get; set; } = 1500;
 
 		/// <summary>
-		///     what kind of strength do we want for our xmss main key
+		/// what kind of strength do we want for our xmss main key
 		/// </summary>
 		public byte MessageXmssKeyHeight { get; set; } = 13;
 
 		/// <summary>
-		///     Percentage level where we warn of a key change comming
+		/// Percentage level where we warn of a key change comming
 		/// </summary>
 		public float MessageXmssKeyWarningLevel { get; set; } = 0.7F;
 
 		/// <summary>
-		///     Percentage level where we must begin the key change process
+		/// Percentage level where we must begin the key change process
 		/// </summary>
 		public float MessageXmssKeyChangeLevel { get; set; } = 0.9F;
 
 		/// <summary>
-		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes MessageXmssKeyHashType { get; set; } = HashTypes.Sha2;
 		public HashTypes MessageXmssKeyBackupHashType { get; set; } = HashTypes.Sha3;
@@ -1176,27 +1219,27 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public int? MessageXmssKeySeedSize { get; set; } = 1000;
 		
 		/// <summary>
-		///     what kind of strength do we want for our xmss main key
+		/// what kind of strength do we want for our xmss main key
 		/// </summary>
 		public byte ChangeXmssKeyHeight { get; set; } = 9;
 
 		/// <summary>
-		///     Percentage level where we warn of a key change comming
+		/// Percentage level where we warn of a key change comming
 		/// </summary>
 		public float ChangeXmssKeyWarningLevel { get; set; } = 0.7F;
 
 		/// <summary>
-		///     Percentage level where we must begin the key change process
+		/// Percentage level where we must begin the key change process
 		/// </summary>
 		public float ChangeXmssKeyChangeLevel { get; set; } = 0.9F;
 
 		/// <summary>
-		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// The hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes ChangeXmssKeyHashType { get; set; } = HashTypes.Sha2;
 		
 		/// <summary>
-		/// 
+		/// The backup hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes ChangeXmssKeyBackupHashType { get; set; } = HashTypes.Sha3;
 		
@@ -1206,22 +1249,22 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public int? ChangeXmssKeySeedSize { get; set; } = 2000;
 		
 		/// <summary>
-		///     what kind of strength do we want for our xmss^MT super key
+		/// what kind of strength do we want for our xmss^MT super key
 		/// </summary>
 		public byte SuperXmssKeyHeight { get; set; } = 9;
 		
 		/// <summary>
-		///     Percentage level where we warn of a key Super comming
+		/// Percentage level where we warn of a key Super comming
 		/// </summary>
 		public float SuperXmssKeyWarningLevel { get; set; } = 0.7F;
 
 		/// <summary>
-		///     Percentage level where we must begin the key Super process
+		/// Percentage level where we must begin the key Super process
 		/// </summary>
 		public float SuperXmssKeyChangeLevel { get; set; } = 0.9F;
 
 		/// <summary>
-		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes SuperXmssKeyHashType { get; set; } = HashTypes.Sha3;
 		public HashTypes SuperXmssKeyBackupHashType { get; set; } = HashTypes.Sha2;
@@ -1232,27 +1275,27 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public int? SuperXmssKeySeedSize { get; set; } = 3000;
 		
 		/// <summary>
-		///     what kind of strength do we want for our xmss main key
+		/// what kind of strength do we want for our xmss main key
 		/// </summary>
 		public byte ValidatorSignatureXmssKeyHeight { get; set; } = 13;
 
 		/// <summary>
-		///     Percentage level where we warn of a key change comming
+		/// Percentage level where we warn of a key change comming
 		/// </summary>
 		public float ValidatorSignatureXmssKeyWarningLevel { get; set; } = 0.7F;
 
 		/// <summary>
-		///     Percentage level where we must begin the key change process
+		/// Percentage level where we must begin the key change process
 		/// </summary>
 		public float ValidatorSignatureXmssKeyChangeLevel { get; set; } = 0.9F;
 
 		/// <summary>
-		///     the hashing algorithm to use for the keys. Sha3 is currently slower than sha2
+		/// The hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes ValidatorSignatureXmssKeyHashType { get; set; } = HashTypes.Sha3;
 		
 		/// <summary>
-		/// 
+		/// The backup hashing algorithm to use for the keys. Sha3 is currently slower than sha2
 		/// </summary>
 		public HashTypes ValidatorSignatureXmssKeyBackupHashType { get; set; } = HashTypes.Sha2;
 		
@@ -1262,40 +1305,26 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public int? ValidatorSignatureXmssKeySeedSize { get; set; } = 2000;
 		
 		/// <summary>
-		///     if true, we will allow gossip presentations even if not allowed otherwise
+		/// if true, we will allow gossip presentations even if not allowed otherwise
 		/// </summary>
 		public bool AllowGossipPresentations { get; set; } = false;
 	}
 
 	/// <summary>
-	/// This class contains the configurations possible 
+	/// This class contains configurations related to key security.
 	/// </summary>
 	public class KeySecurityConfigurations {
+		
 
 		/// <summary>
-		///     If enabled, the chain will ensure to keep track of keys height in the chainstate relative to the transactions
-		///     confirmed in blocks. This will ensure that copied
-		///     wallets will not reuse a key height if it was already used once.
-		/// </summary>
-		public bool EnableKeyHeightChecks { get; set; } = true;
-
-		/// <summary>
-		///     Enable key height checking for the general key
+		/// Enable key height checking for the general key
 		/// </summary>
 		public bool CheckTransactionKeyHeight { get; set; } = true;
 
 		/// <summary>
-		///     Enable key height checking for the backup key
+		/// Enable key height checking for the backup key
 		/// </summary>
 		public bool CheckSuperKeyHeight { get; set; } = false;
-
-		/// <summary>
-		/// if EnableKeyHeightChecks is enabled in KeyLog, a bad index will raise a stop warning. If this option is set to true, the index issue will be ignored and the key index will fast forward.
-		/// </summary>
-		public bool EnableKeyHeightIndexFastForwards { get; set; } = true;
-		
-		
-		public bool EnableKeyLogFastForwards { get; set; } = true;
 	}
 	
 	/// <summary>
@@ -1303,7 +1332,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 	/// </summary>
 	public class UndocumentedDebugConfigurations {
 		/// <summary>
-		///     should we disable the mining registration process?
+		/// should we disable the mining registration process?
 		/// </summary>
 		public bool DisableMiningRegistration { get; set; } = false;
 		
@@ -1321,7 +1350,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public bool AllowLocalhost { get; set; } = false;
 
 		/// <summary>
-		///     a debug option to skip if a peer is a hub.. useful to test the hubs, but otherwise not healthy for peers
+		/// a debug option to skip if a peer is a hub.. useful to test the hubs, but otherwise not healthy for peers
 		/// </summary>
 		public bool SkipHubCheck { get; set; } = false;
 

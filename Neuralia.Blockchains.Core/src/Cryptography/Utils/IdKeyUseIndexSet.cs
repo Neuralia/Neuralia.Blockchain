@@ -166,7 +166,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Utils {
 				return false;
 			}
 
-			return (c1.KeyUseSequenceId == c2.keyUseSequenceId) && (c1.KeyUseIndex == c2.keyUseIndex) && (c1.Ordinal == c2.ordinal);
+			return (c1.KeyUseSequenceId == c2.keyUseSequenceId) && (c1.KeyUseIndex == c2.keyUseIndex) && IsSameKey(c1, c2);
 		}
 
 		public static bool operator !=(IdKeyUseIndexSet c1, (int keyUseSequenceId, int keyUseIndexx, byte ordinal) c2) {
@@ -178,7 +178,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Utils {
 				return false;
 			}
 
-			return (c1.KeyUseSequenceId == c2.keyUseSequenceId) && (c1.KeyUseIndex == c2.keyUseIndex) && (c1.Ordinal == c2.ordinal);
+			return (c1.KeyUseSequenceId == c2.keyUseSequenceId) && (c1.KeyUseIndex == c2.keyUseIndex) && IsSameKey(c1, c2);
 		}
 
 		public static bool operator !=(IdKeyUseIndexSet c1, (long keyUseSequenceId, long keyUseIndex, byte ordinal) c2) {
@@ -204,7 +204,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Utils {
 
 		public static bool operator <(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
 
-			if(a.Ordinal != b.Ordinal) {
+			if(!IsSameKey(a, b)) {
 				throw new InvalidOperationException("Different ordinal ids");
 			}
 
@@ -233,7 +233,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Utils {
 		}
 
 		public static bool operator >(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
-			if(a.Ordinal != b.Ordinal) {
+			if(!IsSameKey(a, b)) {
 				throw new InvalidOperationException("Different ordinal ids");
 			}
 
@@ -260,6 +260,63 @@ namespace Neuralia.Blockchains.Core.Cryptography.Utils {
 		public static bool operator >=(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
 			return (a == b) || (a > b);
 		}
+
+		public static bool IsSameKey(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
+			return a.Ordinal == b.Ordinal;
+		}
+		
+		public static bool IsSequenceHigher(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
+			
+			if(!IsSameKey(a, b)) {
+				return false;
+			}
+
+			return KeyUseIndexSet.IsSequenceHigher(a, b);
+		}
+		
+
+		public static bool IsSameSequenceId(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
+			
+			if(!IsSameKey(a, b)) {
+				return false;
+			}
+
+			return KeyUseIndexSet.IsSameSequenceId(a, b);
+		}
+		
+		/// <summary>
+		/// determine if the key can be forwarded to the next
+		/// </summary>
+		/// <param name="a"></param>
+		/// <param name="b"></param>
+		/// <returns></returns>
+		public static bool CanBeForwarded(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
+			
+			if(!IsSameKey(a, b)) {
+				return false;
+			}
+			
+			return KeyUseIndexSet.CanBeForwarded(a, b);
+		}
+		
+		public static bool Forward(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
+			
+			if(!CanBeForwarded(a, b)) {
+				return false;
+			}
+
+			return KeyUseIndexSet.Forward(a, b);
+		}
+		
+		public static bool IsPreviousKey(IdKeyUseIndexSet a, IdKeyUseIndexSet b) {
+			
+			if(!IsSameKey(a, b)) {
+				return false;
+			}
+
+			return KeyUseIndexSet.IsPreviousKey(a, b);
+		}
+
 	}
 
 }

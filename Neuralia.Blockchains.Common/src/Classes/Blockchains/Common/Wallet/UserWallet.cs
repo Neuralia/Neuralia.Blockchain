@@ -24,6 +24,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 		int NetworkId { get; set; }
 		ushort ChainId { get; set; }
 
+		/// <summary>
+		/// a code that can be used to perform unique shuffles on wallet identity
+		/// </summary>
+		Guid Code1 { get; set; }
+		
+		/// <summary>
+		/// a code that can be used to perform unique shuffles on wallet identity
+		/// </summary
+		Guid Code2 { get; set; }
+		
 		Dictionary<string, IWalletAccount> Accounts { get; set; }
 
 		void InitializeNewDefaultAccount(BlockchainServiceSet serviceSet, Enums.AccountTypes accountType, IChainTypeCreationFactory typeCreationFactory);
@@ -66,6 +76,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet {
 		public int Revision { get; set; } = 0;
 		public int NetworkId { get; set; }
 		public ushort ChainId { get; set; }
+		public Guid Code1 { get; set; }
+		public Guid Code2 { get; set; }
 
 		public Dictionary<string, IWalletAccount> Accounts { get; set; } = new Dictionary<string, IWalletAccount>();
 

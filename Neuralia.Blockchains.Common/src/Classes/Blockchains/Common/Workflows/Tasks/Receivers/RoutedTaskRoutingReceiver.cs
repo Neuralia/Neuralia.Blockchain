@@ -402,13 +402,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Tasks
 		}
 
 		public async Task Wait(TimeSpan timeout) {
-			if(timeout == TimeSpan.MaxValue) {
-				await resetEvent.WaitAsync().ConfigureAwait(false);
-			} else {
-				await resetEvent.WaitAsync(timeout).ConfigureAwait(false);
+			if(await resetEvent.WaitAsync(timeout).ConfigureAwait(false)) {
+				this.resetEvent.Reset();
 			}
-
-			this.resetEvent.Reset();
 		}
 
 		public override void ReceiveTask(IRoutedTask task) {

@@ -19,6 +19,7 @@ using Neuralia.Blockchains.Components.Blocks;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Logging;
+using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Connections;
 using Neuralia.Blockchains.Core.P2p.Messages.MessageSets;
 using Neuralia.Blockchains.Core.P2p.Workflows.Base;
@@ -203,8 +204,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				// ok, we just received a trigger, lets examine it
 				BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> serverHandshake = (BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY>) chainSyncMessageFactory.CreateSyncWorkflowTriggerServerReplySet(this.triggerMessage.Header);
-				this.CentralCoordinator.Log.Information($"Received a syncing request from peer {this.PeerConnection.ScopedAdjustedIp}.", this.CorrelationId);
 
+				double graceStrikes = 3;
+				double period = 20;
+				IPMarshall.Instance.Quarantine(this.PeerConnection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.TooManySyncRequests, DateTimeEx.CurrentTime.AddDays(1), $"More than {graceStrikes} sync requests from {this.PeerConnection.NodeAddressInfo} in less than {period} s", graceStrikes, TimeSpan.FromSeconds(period));
+
+				if (IPMarshall.Instance.IsQuarantined(this.PeerConnection.NodeAddressInfo.AdjustedAddress))
+				{
+					this.CentralCoordinator.Log.Information($"Syncing request from peer {this.PeerConnection.ScopedAdjustedIp} is refused, the peer is now quarantined, now disconnecting...", this.CorrelationId);
+					this.CentralCoordinator.BlockchainServiceSet.NetworkingService.ConnectionStore.RemoveConnection(this.PeerConnection);
+				}
+				
+				this.CentralCoordinator.Log.Debug($"Received a syncing request from peer {this.PeerConnection.ScopedAdjustedIp}.", this.CorrelationId);
+
+				
 				CHAIN_SYNC_TRIGGER trigger = this.triggerMessage.Message;
 
 				// if we are syncing or not synced yet, lets see if we are further ahead. if not, we must decline; we can't help
@@ -306,7 +319,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 
 							if(requestSet?.BaseMessage is REQUEST_BLOCK_INFO blockInfoRequestMessage) {
-								this.CentralCoordinator.Log.Verbose($"Sending block id {blockInfoRequestMessage.Id} info to peer {this.PeerConnection.ScopedAdjustedIp}.");
+								this.CentralCoordinator.Log.Debug($"Sending block id {blockInfoRequestMessage.Id} info to peer {this.PeerConnection.ScopedAdjustedIp}.");
 
 								// ok, now lets compare with ours, and find the ones that are different	
 
@@ -377,7 +390,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									}
 								}
 
-								this.CentralCoordinator.Log.Verbose($"Sending block id {blockRequestMessage.Id} to peer {this.PeerConnection.ScopedAdjustedIp}.");
+								this.CentralCoordinator.Log.Debug($"Sending block id {blockRequestMessage.Id} to peer {this.PeerConnection.ScopedAdjustedIp}.");
 
 								// ok, now lets compare with ours, and find the ones that are different	
 
@@ -591,7 +604,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				this.UnhookAllCacheEntries();
 
 				// thats it, we are done :)
-				this.CentralCoordinator.Log.Information($"Finished handling synchronization for peer {this.PeerConnection.ScopedAdjustedIp}.");
+				this.CentralCoordinator.Log.Debug($"Finished handling synchronization for peer {this.PeerConnection.ScopedAdjustedIp}.");
 
 			}
 		}

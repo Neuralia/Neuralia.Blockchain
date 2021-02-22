@@ -9,6 +9,7 @@ using Neuralia.Blockchains.Common.Classes.Tools;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.DataAccess.Sqlite;
 using Neuralia.Blockchains.Core.General.Versions;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.ChainState {
 
@@ -29,22 +30,22 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Chai
 
 		public Func<CHAIN_STATE_SNAPSHOT> CreateNewEntry { get; set; }
 
-		public void PerformOperation(Action<CHAIN_STATE_CONTEXT> process) {
+		public void PerformOperation(Action<CHAIN_STATE_CONTEXT, LockContext> process, LockContext lockContext) {
 
-			base.PerformOperation(process);
+			base.PerformOperation(process, lockContext);
 		}
 
-		public T PerformOperation<T>(Func<CHAIN_STATE_CONTEXT, T> process) {
+		public T PerformOperation<T>(Func<CHAIN_STATE_CONTEXT, LockContext, T> process, LockContext lockContext) {
 
-			return base.PerformOperation(process);
+			return base.PerformOperation(process, lockContext);
 		}
 
-		public Task PerformOperationAsync(Func<CHAIN_STATE_CONTEXT, Task> process) {
-			return base.PerformOperationAsync(process);
+		public Task PerformOperationAsync(Func<CHAIN_STATE_CONTEXT, LockContext, Task> process, LockContext lockContext) {
+			return base.PerformOperationAsync(process, lockContext);
 		}
 
-		public Task<T> PerformOperationAsync<T>(Func<CHAIN_STATE_CONTEXT, Task<T>> process) {
-			return base.PerformOperationAsync(process);
+		public Task<T> PerformOperationAsync<T>(Func<CHAIN_STATE_CONTEXT, LockContext, Task<T>> process, LockContext lockContext) {
+			return base.PerformOperationAsync(process, lockContext);
 		}
 
 		public async Task<CHAIN_STATE_SNAPSHOT> LoadFullState(CHAIN_STATE_CONTEXT db) {

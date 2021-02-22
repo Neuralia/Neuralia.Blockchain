@@ -663,18 +663,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				int interval = this.MaxBlockInterval;
 				maxBlockInterval = interval != 0 ? interval : (int) TimeSpan.FromMinutes(1).TotalSeconds;
 			} else {
-				maxBlockInterval = lifespan * 2; // we give it the chance of 2 blocks since we may get it through gossip
+				maxBlockInterval = lifespan; // we give it the chance of 2 blocks since we may get it through gossip
 			}
-
-			// make sure we really dont wait more thn x minutes
-			maxBlockInterval = Math.Min(maxBlockInterval, (int) TimeSpan.FromMinutes(3).TotalSeconds);
-
+			
 			// make sure we dont go faster than 15 seconds
 			maxBlockInterval = Math.Max(maxBlockInterval, 15);
 
 			// now lets do a play on time
-			DateTime syncDeadline = lastSync.AddSeconds(maxBlockInterval);
-			DateTime doubleSyncDeadline = lastSync.AddSeconds(maxBlockInterval * 2);
+			
+			DateTime doubleSyncDeadline = lastSync.AddSeconds(maxBlockInterval * 2.3);
 
 			DateTime now = DateTimeEx.CurrentTime;
 
@@ -682,6 +679,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return Enums.ChainSyncState.Desynchronized;
 			}
 
+			DateTime syncDeadline = lastSync.AddSeconds(maxBlockInterval * 1.3);
+			
 			if(now > syncDeadline) {
 				return Enums.ChainSyncState.LikelyDesynchronized;
 			}
@@ -816,7 +815,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			using(await this.asyncLocker.WriterLockAsync().ConfigureAwait(false)) {
 				await Repeater.RepeatAsync(() => {
-					return this.ChainStateDal.PerformOperationAsync(async db => {
+					
+					LockContext lockContext = null;
+					return this.ChainStateDal.PerformOperationAsync(async (db, lc) => {
 
 						if(this.chainStateEntry == null) {
 							this.chainStateEntry = (await ChainStateDal.LoadSimpleState(db).ConfigureAwait(false), false);
@@ -832,7 +833,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						}
 
 						await db.SaveChangesAsync().ConfigureAwait(false);
-					});
+					}, lockContext);
 				}).ConfigureAwait(false);
 			}
 		}
@@ -908,10 +909,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				await Repeater.RepeatAsync(() => {
-					return ChainStateDal.PerformOperationAsync(async db => {
+					LockContext lockContext = null;
+					return ChainStateDal.PerformOperationAsync(async (db, lc) => {
 
                         chainStateEntry = (await ChainStateDal.LoadSimpleState(db).ConfigureAwait(false), false);
-					});
+					}, lockContext);
 				}).ConfigureAwait(false);
 
 				if(this.chainStateEntry.HasValue && new SoftwareVersion(this.chainStateEntry.Value.entry.MinimumVersionAllowed) > new SoftwareVersion(BlockchainConstants.BlockchainCompatibilityVersion)) {
@@ -926,7 +928,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			using(await asyncLocker.WriterLockAsync().ConfigureAwait(false)) {
 
 				await Repeater.RepeatAsync(() => {
-					return ChainStateDal.PerformOperationAsync(async db => {
+					LockContext lockContext = null;
+					return ChainStateDal.PerformOperationAsync(async (db, lc) => {
 
                         // always refresh the entry from the database
                         chainStateEntry = (await ChainStateDal.LoadFullState(db).ConfigureAwait(false), true);
@@ -937,7 +940,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						action();
 
 						await db.SaveChangesAsync().ConfigureAwait(false);
-					});
+					}, lockContext);
 				}).ConfigureAwait(false);
 			}
 		}
@@ -958,10 +961,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 
 				await Repeater.RepeatAsync(() => {
-					return ChainStateDal.PerformOperationAsync(async db => {
+					LockContext lockContext = null;
+					return ChainStateDal.PerformOperationAsync(async (db, lc) => {
 
                         chainStateEntry = (await ChainStateDal.LoadFullState(db).ConfigureAwait(false), true);
-					});
+					}, lockContext);
 				}).ConfigureAwait(false);
 
 				return function(this.chainStateEntry?.entry);

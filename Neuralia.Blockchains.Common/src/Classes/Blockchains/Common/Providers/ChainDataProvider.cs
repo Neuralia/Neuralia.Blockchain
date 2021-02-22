@@ -60,7 +60,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public const string GOSSIP_CACHE_FOLDER_NAME = "gossip";
 		public const string SYNC_CACHE_FOLDER_NAME = "sync";
 		public const string THS_CACHE_FOLDER_NAME = "ths";
-
+		public const string LAST_BLOCK_XMSS_KEY_SIGNATURE_PATH = "lastBlockXmssKeySignaturePath";
+		public const string KEY_INDICIES_PATH = "keyIndicies";
+		
 		public const string BLOCKS_CONFIG_FILE_NAME = "config";
 		public const string MESSAGES_CONFIG_FILE_NAME = "config";
 		private const string BLOCK_SYNC_MANIFEST_FILE = "block-sync-manifest.json";
@@ -238,6 +240,18 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public string GetTHSCachePath() {
 			return Path.Combine(this.GetGeneralCachePath(), THS_CACHE_FOLDER_NAME);
+		}
+		
+		public string GetLastBlockXmssKeySignaturePathCachePath() {
+			return Path.Combine(this.GetGeneralCachePath(), LAST_BLOCK_XMSS_KEY_SIGNATURE_PATH);
+		}
+		
+		public virtual string GetWalletKeyIndexCachePath() {
+			return Path.Combine(this.GetGeneralCachePath(), KEY_INDICIES_PATH);
+		}
+		
+		public virtual string GetLocalWalletKeyIndexCacheFileName(Guid filename) {
+			return Path.Combine(this.GetWalletKeyIndexCachePath(), filename.ToString());
 		}
 		
 		public string GetBlocksFolderPath() {

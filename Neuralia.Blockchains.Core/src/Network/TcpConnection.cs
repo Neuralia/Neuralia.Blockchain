@@ -47,7 +47,8 @@ namespace Neuralia.Blockchains.Core.Network {
 		event Action<Guid> ConnectedUuidProvided;
 
 		void Close();
-		Task Connect(SafeArrayHandle bytes, int timeout = 5000);
+		Task Connect(SafeArrayHandle bytes);
+		Task Connect(SafeArrayHandle bytes, TcpConnection.SocketParameterTypes socketParameterType, int socketBuffer = 0);
 		bool SendMessage(long hash);
 		void SendBytes(SafeArrayHandle bytes);
 		void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback);
@@ -62,13 +63,18 @@ namespace Neuralia.Blockchains.Core.Network {
 	}
 
 	public static class TcpConnection {
+
+		public enum SocketParameterTypes {
+			Sturdy, Fast
+		}
+
 		private static bool? ipv6Supported;
 
 		public static bool IPv6Supported {
 			get {
 				if(!ipv6Supported.HasValue) {
 					ipv6Supported = false;
-					if(GlobalSettings.ApplicationSettings.IPProtocol.HasFlag(IPMode.IPv6)) {
+					if(GlobalSettings.ApplicationSettings.IPProtocolServer.HasFlag(IPMode.IPv6) || GlobalSettings.ApplicationSettings.IPProtocolClient.HasFlag(IPMode.IPv6)) {
 						ipv6Supported = Socket.OSSupportsIPv6;
 					}
 				}
@@ -457,7 +463,11 @@ namespace Neuralia.Blockchains.Core.Network {
 			GC.SuppressFinalize(this);
 		}
 
-		public async Task Connect(SafeArrayHandle bytes, int timeout = 5000) {
+		public Task Connect(SafeArrayHandle bytes) {
+			return Connect(bytes, TcpConnection.SocketParameterTypes.Sturdy);
+		}
+
+		public async Task Connect(SafeArrayHandle bytes, TcpConnection.SocketParameterTypes socketParameterType, int socketBuffer = 0) {
 			if(this.IsDisposed || this.IsDisposing) {
 				throw new SocketException((int) SocketError.Shutdown);
 			}
@@ -472,8 +482,13 @@ namespace Neuralia.Blockchains.Core.Network {
 			try {
 				bool success = false;
 				(this.socket, success) = await SocketExtensions.ConnectSocket(this.EndPoint, s => {
-					
-					s.InitializeSocketParameters();
+
+					if(socketParameterType == TcpConnection.SocketParameterTypes.Sturdy) {
+						s.InitializeSocketParameters();
+					}
+					else if(socketParameterType == TcpConnection.SocketParameterTypes.Fast) {
+						s.InitializeSocketParametersFast(socketBuffer);
+					}
 				}, 5).ConfigureAwait(false);
 				
 				if(!success) {
@@ -512,7 +527,9 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.SendHandshakeVersion();
 
 			// now wait for the handshake to complete
-			await resetEvent.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+			if(await resetEvent.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false)) {
+				this.resetEvent.Reset();
+			}
 
 			this.Latency = (DateTime.Now - startHandshake).TotalSeconds;
 			
@@ -523,7 +540,7 @@ namespace Neuralia.Blockchains.Core.Network {
 				throw new TcpApplicationException("Timedout waiting for a proper connection handshake.");
 			}
 
-			this.resetEvent.Reset();
+			
 
 		}
 
@@ -1179,13 +1196,21 @@ namespace Neuralia.Blockchains.Core.Network {
 						this.socket?.Shutdown(SocketShutdown.Both);
 					} catch {
 						// do nothing, we tried
-					} finally {
-						Thread.Sleep(500);
+					}
+					
+					try {
+						Thread.Sleep(200);
 						this.socket?.Disconnect(false);
+					} catch {
+						// do nothing, we tried
 					}
 				}
 			} finally {
-				this.socket?.Dispose();
+				try {
+					this.socket?.Dispose();
+				} catch {
+					// do nothing, we tried
+				}
 			}
 		}
 

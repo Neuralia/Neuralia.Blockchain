@@ -14,11 +14,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Interfaces.
 		where CHAIN_OPTIONS_SNAPSHOT_CONTEXT : IChainOptionsSnapshotContext
 		where CHAIN_OPTIONS_SNAPSHOT : class, IChainOptionsSnapshotEntry, new() {
 
-		void EnsureEntryCreated(Action<CHAIN_OPTIONS_SNAPSHOT_CONTEXT> operation);
-		Task<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshot(Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, Task<CHAIN_OPTIONS_SNAPSHOT>> operation);
+		void EnsureEntryCreated(Action<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext> operation);
+		Task<CHAIN_OPTIONS_SNAPSHOT> LoadChainOptionsSnapshot(Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext, Task<CHAIN_OPTIONS_SNAPSHOT>> operation);
 
-		Task Clear();
-		Task UpdateSnapshotDigestFromDigest(Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, Task> operation);
+		Task Clear(LockContext lockContext = null);
+		Task UpdateSnapshotDigestFromDigest(Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext, Task> operation);
 
 		Task<List<(CHAIN_OPTIONS_SNAPSHOT_CONTEXT db, IDbContextTransaction transaction)>> PerformProcessingSet(Dictionary<long, List<Func<CHAIN_OPTIONS_SNAPSHOT_CONTEXT, LockContext, Task>>> actions);
 	}

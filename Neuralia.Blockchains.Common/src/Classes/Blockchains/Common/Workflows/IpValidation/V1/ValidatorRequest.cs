@@ -1,48 +1,63 @@
+using System.Collections.Generic;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.CandidatureMethods;
+using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Contexts.ElectoralSystem.PrimariesBallotingMethods;
 using Neuralia.Blockchains.Common.Classes.Blockchains.Common.Events.Blocks.Specialization.Elections.Results.Questions;
 using Neuralia.Blockchains.Core;
+using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Serialization;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.IpValidation.V1 {
 
-	public class ValidatorRequest : IValidatorRequest {
+	public class ValidatorRequest : Versionable, IValidatorRequest {
 
-		public IElectionBlockQuestion SecondTierQuestion { get; set; }
-		public IElectionDigestQuestion DigestQuestion { get; set; }
-		public IElectionBlockQuestion FirstTierQuestion { get; set; }
+		public List<IValidatorOperationRequest> Operations { get; } = new List<IValidatorOperationRequest>();
 
 		public SafeArrayHandle Secret { get; set; }
 
 		public BlockchainType Chain { get; set; }
 
-		public byte Version => 1;
+		public override void Dehydrate(IDataDehydrator dehydrator) {
+			base.Dehydrate(dehydrator);
 
-		public IValidatorRequest Rehydrate(IDataRehydrator rehydrator) {
+			dehydrator.WriteNonNullable(this.Secret);
+			dehydrator.Write(this.Chain.Value);
+			
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 
-			int version = rehydrator.ReadByte();
+			tool.Value = this.Operations.Count;
+			tool.Dehydrate(dehydrator);
+
+			foreach(var operation in this.Operations) {
+				operation.Dehydrate(dehydrator);
+			}
+		}
+
+		public override void Rehydrate(IDataRehydrator rehydrator) {
+			base.Rehydrate(rehydrator);
+			
 			this.Secret = (SafeArrayHandle)rehydrator.ReadNonNullableArray();
 			this.Chain = rehydrator.ReadUShort();
+			
+			AdaptiveInteger1_5 tool = new AdaptiveInteger1_5();
 
-			bool isQuestionSet = rehydrator.ReadBool();
+			this.Operations.Clear();
+			tool.Rehydrate(rehydrator);
+			int count = tool.Value;
 
-			if(isQuestionSet) {
-				this.SecondTierQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionBlockQuestion;
+			for(int i = 0; i < count; i++) {
+
+				IValidatorOperationRequest operation = ValidatorOperationRehydrator.RehydrateRequest(rehydrator);
+				
+				operation.Rehydrate(rehydrator);
+
+				this.Operations.Add(operation);
 			}
+		}
 
-			isQuestionSet = rehydrator.ReadBool();
-
-			if(isQuestionSet) {
-				this.DigestQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionDigestQuestion;
-			}
-
-			isQuestionSet = rehydrator.ReadBool();
-
-			if(isQuestionSet) {
-				this.FirstTierQuestion = ElectionQuestionRehydrator.Rehydrate(rehydrator) as IElectionBlockQuestion;
-			}
-
-			return this;
+		protected override ComponentVersion SetIdentity() {
+			return (1,0);
 		}
 	}
 }

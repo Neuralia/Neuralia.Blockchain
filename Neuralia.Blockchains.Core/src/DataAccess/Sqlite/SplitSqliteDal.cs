@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
@@ -33,18 +34,19 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			where T: class{
 			this.currentIndex = await this.SplitIndex.NextIndex().ConfigureAwait(false);
 
-			await this.PerformOperationAsync(async db => {
+			LockContext lockContext = null;
+			await this.PerformOperationAsync(async (db, lc) => {
 
 				getDbSet(db).Add(entry);
 
 				await db.SaveChangesAsync().ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, lockContext).ConfigureAwait(false);
 			
 			await this.SplitIndex.AddOne(this.currentIndex).ConfigureAwait(false);
 			this.currentIndex = 0;
 		}
 
-		public async Task InsertEntries<T>(List<T> entries, Func<DBCONTEXT, DbSet<T>> getDbSet) 
+		public async Task InsertEntries<T>(List<T> entries, Func<DBCONTEXT, DbSet<T>> getDbSet, LockContext lockContext = null) 
 			where T: class {
 
 			int total = entries.Count;
@@ -56,14 +58,14 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 				var currentEntrie = entries.Take(blockSize).ToList();
 				entries = entries.Skip(blockSize).ToList();
 				
-				await this.PerformOperationAsync(async db => {
+				await this.PerformOperationAsync(async (db, lc) => {
 
 					var dbSet = getDbSet(db);
 
 					dbSet.AddRange(currentEntrie);
 
 					await db.SaveChangesAsync().ConfigureAwait(false);
-				}).ConfigureAwait(false);
+				}, lockContext).ConfigureAwait(false);
 
 				await this.SplitIndex.AddMany(this.currentIndex, currentEntrie.Count).ConfigureAwait(false);
 				
@@ -73,13 +75,13 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			this.currentIndex = 0;
 		}
 
-		public async Task<List<T>> SelectAll<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet) where T: class {
+		public async Task<List<T>> SelectAll<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet, LockContext lockContext = null) where T: class {
 			var indices = await this.SplitIndex.GetAll().ConfigureAwait(false);
 
 			List<T> results = new List<T>();
 			foreach(var index in indices) {
 				this.currentIndex = index;
-				await this.PerformOperationAsync(async db => {
+				await this.PerformOperationAsync(async (db, lc) => {
 
 					var dbSet = getDbSet(db);
 
@@ -87,7 +89,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 					results.AddRange(entries);
 					
-				}).ConfigureAwait(false);
+				}, lockContext).ConfigureAwait(false);
 			}
 			
 			this.currentIndex = 0;
@@ -98,13 +100,13 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		private class Wrapper {
 			public int entry;
 		}
-		public async Task DeleteAll<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet) where T: class {
+		public async Task DeleteAll<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet, LockContext lockContext = null) where T: class {
 			var indices = await this.SplitIndex.GetAll().ConfigureAwait(false);
 
 			foreach(var index in indices) {
 				this.currentIndex = index;
 				Wrapper removed = new Wrapper();
-				await this.PerformOperationAsync(async db => {
+				await this.PerformOperationAsync(async (db, lc) => {
 
 					removed.entry = 0;
 					var dbSet = getDbSet(db);
@@ -119,7 +121,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 						await db.Vacuum().ConfigureAwait(false);
 					}
-				}).ConfigureAwait(false);
+				}, lockContext).ConfigureAwait(false);
 				
 				await this.SplitIndex.RemoveMany(this.currentIndex, removed.entry).ConfigureAwait(false);
 			}
@@ -127,13 +129,13 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			this.currentIndex = 0;
 		}
 		
-		public async Task<bool> Any<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet) where T: class {
+		public async Task<bool> Any<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet, LockContext lockContext = null) where T: class {
 			var indices = await this.SplitIndex.GetAll().ConfigureAwait(false);
 
 			foreach(var index in indices) {
 				this.currentIndex = index;
 				
-				bool any = await this.PerformOperationAsync(db => getDbSet(db).AnyAsync(predicate)).ConfigureAwait(false);
+				bool any = await this.PerformOperationAsync((db, lc) => getDbSet(db).AnyAsync(predicate), lockContext).ConfigureAwait(false);
 
 				this.currentIndex = 0;
 				
@@ -145,13 +147,13 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return false;
 		} 
 		
-		public async Task<T> SelectOne<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet) where T: class {
+		public async Task<T> SelectOne<T>(Expression<Func<T,bool>> predicate, Func<DBCONTEXT, DbSet<T>> getDbSet, LockContext lockContext = null) where T: class {
 			var indices = await this.SplitIndex.GetAll().ConfigureAwait(false);
 
 			foreach(var index in indices) {
 				this.currentIndex = index;
 				
-				T entry = await this.PerformOperationAsync( db => getDbSet(db).SingleOrDefaultAsync(predicate)).ConfigureAwait(false);
+				T entry = await this.PerformOperationAsync((db, lc) => getDbSet(db).SingleOrDefaultAsync(predicate), lockContext).ConfigureAwait(false);
 
 				this.currentIndex = 0;
 				
@@ -163,13 +165,13 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			return null;
 		} 
 		
-		public async Task UpdateOne<T>(Expression<Func<T,bool>> predicate, Action<T> update, Func<DBCONTEXT, DbSet<T>> getDbSet) where T: class {
+		public async Task UpdateOne<T>(Expression<Func<T,bool>> predicate, Action<T> update, Func<DBCONTEXT, DbSet<T>> getDbSet, LockContext lockContext = null) where T: class {
 			var indices = await this.SplitIndex.GetAll().ConfigureAwait(false);
 
 			foreach(var index in indices) {
 				this.currentIndex = index;
 				
-				bool updated = await this.PerformOperationAsync( async db => {
+				bool updated = await this.PerformOperationAsync( async (db, lc) => {
 
 					var entry = await getDbSet(db).SingleOrDefaultAsync(predicate).ConfigureAwait(false);
 					
@@ -181,7 +183,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 					}
 
 					return false;
-				}).ConfigureAwait(false);
+				}, lockContext).ConfigureAwait(false);
 
 				this.currentIndex = 0;
 
@@ -193,11 +195,11 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		
 		
 
-		protected override void InitContext(DBCONTEXT db) {
+		protected override void InitContext(DBCONTEXT db, LockContext lockContext = null) {
 			
 			db.SetIndex(this.currentIndex);
 			
-			base.InitContext(db);
+			base.InitContext(db, lockContext);
 		}
 
 		private SplitIndexSqliteDbContext splitIndex;

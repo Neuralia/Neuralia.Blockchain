@@ -8,6 +8,7 @@ using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.General.Versions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Tools;
+using Neuralia.Blockchains.Tools.Locking;
 
 namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 	public interface ISqliteDal<DBCONTEXT> : IExtendedEntityFrameworkDal<DBCONTEXT>
@@ -25,18 +26,19 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			this.folderPath = folderPath;
 		}
 
-		public async Task<(DBCONTEXT db, IDbContextTransaction transaction)> BeginHoldingTransaction() {
+		public async Task<(DBCONTEXT db, IDbContextTransaction transaction)> BeginHoldingTransaction(LockContext lockContext = null) {
 
-			DBCONTEXT db = this.CreateContext();
+			DBCONTEXT db = this.CreateContext(lockContext);
 
 			IDbContextTransaction transaction = await db.Database.BeginTransactionAsync().ConfigureAwait(false);
 
 			return (db, transaction);
 		}
 
-		public virtual Task Clear() {
+		public virtual Task Clear(LockContext lockContext = null) {
 
-			return this.PerformInnerContextOperationAsync(ctx => {
+
+			return this.PerformInnerContextOperationAsync((ctx, lc) => {
 
 				ctx.FolderPath = this.folderPath;
 				string path = this.GetDbPath(ctx);
@@ -46,14 +48,14 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 				}
 
 				return Task.CompletedTask;
-			});
+			}, lockContext);
 		}
 
 		protected virtual string GetDbPath(DBCONTEXT ctx) {
 			return ctx.GetDbPath();
 		}
 
-		protected virtual void EnsureDatabaseCreated(DBCONTEXT ctx) {
+		protected virtual void EnsureDatabaseCreated(DBCONTEXT ctx, LockContext lockContext = null) {
 
 			string path = this.GetDbPath(ctx);
 
@@ -70,8 +72,7 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 
 					// let's make sure the database exists and is created
 					ctx.EnsureCreated();
-
-					this.EnsureVersionCreated(ctx);
+					this.EnsureVersionCreated(ctx ,lockContext);
 
 					NLog.Default.Verbose("Sqlite database '{0}' structure creation completed.", path);
 				}
@@ -80,12 +81,12 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 			}
 		}
 
-		protected override void InitContext(DBCONTEXT db) {
+		protected override void InitContext(DBCONTEXT db, LockContext lockContext = null) {
 			db.FolderPath = this.folderPath;
 
-			base.InitContext(db);
+			base.InitContext(db, lockContext);
 
-			this.EnsureDatabaseCreated(db);
+			this.EnsureDatabaseCreated(db, lockContext);
 			
 			int cacheSize = 10000;
 			int pageSize = 4096;
@@ -104,13 +105,14 @@ namespace Neuralia.Blockchains.Core.DataAccess.Sqlite {
 		/// in this case its easy, to clear the database, we delete the file and recreate it
 		/// </summary>
 		protected override void ClearDb() {
-			this.PerformInnerContextOperation(ctx => {
+			LockContext lockContext = null;
+			this.PerformInnerContextOperation((ctx, lc) => {
 				string dbfile = ctx.GetDbPath();
 
 				if(File.Exists(dbfile)) {
 					File.Delete(dbfile);
 				}
-			});
+			}, lockContext);
 		}
 	}
 }

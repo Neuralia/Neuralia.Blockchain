@@ -116,11 +116,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 			}
 			
 			if(this.PreDispatch == false && account.AccountAppointment != null) {
-				if(AppointmentUtils.AppointmentVerificationExpired(account.AccountAppointment.AppointmentVerificationTime)) {
+				if(AppointmentUtils.AppointmentWorkflowExpired(account)) {
 					
 					// in these cases, we allow a reset.
-					account.AccountAppointment = null;
-					this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.OperatingMode = Enums.OperationStatus.None;
+					await CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.ClearAppointment(lockContext).ConfigureAwait(false);
 				} else {
 					throw new EventGenerationException("The account is in the process of an appointment and cannot send an appointment request.");
 				}
@@ -233,7 +232,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 		protected async Task PerformIdentitySignatureKeyGeneration(LockContext lockContext) {
 
 			IXmssWalletKey key = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CreateXmssKey("identify", AppointmentUtils.IdentityKeyHeight, AppointmentUtils.IdentityKeyHash, AppointmentUtils.IdentityBackupKeyHash, 0.8f, 0.9f, pct => {
-				this.CentralCoordinator.Log.Verbose($"Creating identifying key: {pct*100}%");
+				this.CentralCoordinator.Log.Verbose($"Creating identifying key: {pct}%");
 				
 				return Task.CompletedTask;
 				
@@ -315,7 +314,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Creat
 
 				var account  = await provider.GetActiveAccount(lc).ConfigureAwait(false);
 
-				account.AccountAppointment = null;
+				AppointmentUtils.ResetAppointment(account);
 				this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.OperatingMode = Enums.OperationStatus.None;
 				this.centralCoordinator.PostSystemEvent(BlockchainSystemEventTypes.Instance.AppointmentRequestFailed, this.correlationContext);
 

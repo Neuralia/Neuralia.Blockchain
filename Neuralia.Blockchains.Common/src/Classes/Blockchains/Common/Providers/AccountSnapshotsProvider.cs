@@ -194,7 +194,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificate(int certificateId, AccountId accountId, AccreditationCertificateType[] certificateTypes, Enums.CertificateApplicationTypes applicationType) {
 
-			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificate(async db => {
+			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificate(async (db, lc) => {
 
 				List<int> certificateTypeValues = certificateTypes.Select(c => (int) c.Value).ToList();
 
@@ -211,7 +211,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public Task<ACCREDITATION_CERTIFICATE_SNAPSHOT> GetAccreditationCertificate(int certificateId) {
-			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificate(db => {
+			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificate((db, lc) => {
 				return db.AccreditationCertificates.SingleOrDefaultAsync(c => c.CertificateId == certificateId);
 			}, certificateId);
 		}
@@ -222,7 +222,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificate(List<int> certificateIds, AccountId accountId, AccreditationCertificateType[] certificateTypes, Enums.CertificateApplicationTypes applicationType) {
 
-			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates(db => {
+			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates((db, lc) => {
 
 				List<int> certificateTypeValues = certificateTypes.Select(c => (int) c.Value).ToList();
 
@@ -244,7 +244,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public Task<List<ACCREDITATION_CERTIFICATE_SNAPSHOT>> GetAccreditationCertificates(AccountId accountId, AccreditationCertificateType[] certificateType, Enums.CertificateApplicationTypes applicationType) {
 
-			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates(db => {
+			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates((db, lc) => {
 				List<int> certificateTypeValues = certificateType.Select(c => (int) c.Value).ToList();
 
 				// the the account is valid in the certificate
@@ -263,7 +263,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			List<long> longAccountIds = accountIds.Select(a => a.ToLongRepresentation()).ToList();
 
-			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates(db => {
+			return this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates((db, lc) => {
 				List<int> certificateTypeValues = certificateType.Select(c => (int) c.Value).ToList();
 
 				return db.AccreditationCertificates.Where(c => (c.AssignedAccount != 0) && longAccountIds.Contains(c.AssignedAccount) && certificateTypeValues.Contains(c.CertificateType) && c.ApplicationType.HasFlag(applicationType)).ToListAsync();
@@ -444,7 +444,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public async Task<List<IAccountKeysSnapshot>> LoadStandardAccountKeysSnapshots(List<(long accountId, byte ordinal)> keys) {
 
-			return (await this.AccountKeysSnapshotDal.LoadAccountKeys(db => {
+			return (await this.AccountKeysSnapshotDal.LoadAccountKeys((db, lc) => {
 					       List<string> casted = keys.Select(s => s.accountId + s.ordinal.ToString()).ToList();
 
 					       return db.StandardAccountKeysSnapshots.Where(s => casted.Contains(s.CompositeKey)).ToListAsync();
@@ -453,13 +453,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public async Task<List<IAccreditationCertificateSnapshot>> LoadAccreditationCertificatesSnapshots(List<int> certificateIds) {
 
-			return (await this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates(db => {
+			return (await this.AccreditationCertificateAccountSnapshotsDal.GetAccreditationCertificates((db, lc) => {
 					       return db.AccreditationCertificates.Where(s => certificateIds.Contains(s.CertificateId)).ToListAsync();
 				       }, certificateIds).ConfigureAwait(false)).Cast<IAccreditationCertificateSnapshot>().ToList();
 		}
 
 		public async Task<IChainOptionsSnapshot> LoadChainOptionsSnapshot() {
-			return await this.ChainOptionsSnapshotDal.LoadChainOptionsSnapshot(db => {
+			return await this.ChainOptionsSnapshotDal.LoadChainOptionsSnapshot((db, lc) => {
 				return db.ChainOptionsSnapshots.Where(s => s.Id == 1).SingleOrDefaultAsync();
 			}).ConfigureAwait(false);
 		}
@@ -500,7 +500,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				accountSnapshotDigestChannelCard.ConvertToSnapshotEntry(entry, this.GetCardUtils());
 
-				await this.StandardAccountSnapshotsDal.UpdateSnapshotDigestFromDigest(async db => {
+				await this.StandardAccountSnapshotsDal.UpdateSnapshotDigestFromDigest(async (db, lc) => {
 
 					STANDARD_ACCOUNT_SNAPSHOT result = await db.StandardAccountSnapshots.SingleOrDefaultAsync(c => c.AccountId == entry.AccountId).ConfigureAwait(false);
 
@@ -518,7 +518,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				accountSnapshotDigestChannelCard.ConvertToSnapshotEntry(entry, this.GetCardUtils());
 
-				await this.JointAccountSnapshotsDal.UpdateSnapshotDigestFromDigest(async db => {
+				await this.JointAccountSnapshotsDal.UpdateSnapshotDigestFromDigest(async (db, lc) => {
 
 					JOINT_ACCOUNT_SNAPSHOT result = await db.JointAccountSnapshots.SingleOrDefaultAsync(c => c.AccountId == entry.AccountId).ConfigureAwait(false);
 
@@ -542,7 +542,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				entry.CompositeKey = this.GetCardUtils().GenerateCompositeKey(entry);
 			}
 
-			return this.AccountKeysSnapshotDal.UpdateSnapshotDigestFromDigest(async db => {
+			return this.AccountKeysSnapshotDal.UpdateSnapshotDigestFromDigest(async (db, lc) => {
 
 				STANDARD_ACCOUNT_KEY_SNAPSHOT result = await db.StandardAccountKeysSnapshots.SingleOrDefaultAsync(e => (e.AccountId == entry.AccountId) && (e.OrdinalId == entry.OrdinalId)).ConfigureAwait(false);
 
@@ -562,7 +562,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			accreditationCertificateDigestChannelCard.ConvertToSnapshotEntry(entry, this.GetCardUtils());
 
-			return this.AccreditationCertificateAccountSnapshotsDal.UpdateSnapshotDigestFromDigest(async db => {
+			return this.AccreditationCertificateAccountSnapshotsDal.UpdateSnapshotDigestFromDigest(async (db, lc) => {
 
 				ACCREDITATION_CERTIFICATE_SNAPSHOT result = await db.AccreditationCertificates.SingleOrDefaultAsync(c => c.CertificateId == entry.CertificateId).ConfigureAwait(false);
 
@@ -581,7 +581,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			chainOptionsDigestChannelCard.ConvertToSnapshotEntry(entry, this.GetCardUtils());
 
-			return this.ChainOptionsSnapshotDal.UpdateSnapshotDigestFromDigest(async db => {
+			return this.ChainOptionsSnapshotDal.UpdateSnapshotDigestFromDigest(async (db, lc) => {
 
 				CHAIN_OPTIONS_SNAPSHOT result = db.ChainOptionsSnapshots.SingleOrDefault(c => c.Id == entry.Id);
 
@@ -596,7 +596,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public void EnsureChainOptionsCreated() {
-			this.ChainOptionsSnapshotDal.EnsureEntryCreated(async db => {
+			this.ChainOptionsSnapshotDal.EnsureEntryCreated(async (db, lc) => {
 
 				CHAIN_OPTIONS_SNAPSHOT state = await db.ChainOptionsSnapshots.SingleOrDefaultAsync().ConfigureAwait(false);
 
@@ -745,7 +745,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// any account that is barebones, we delete to save space. 
 			bool isNullEntry = this.IsAccountEntryNull(accountSnapshotEntry);
 
-			return this.StandardAccountSnapshotsDal.UpdateSnapshotEntry(db => {
+			return this.StandardAccountSnapshotsDal.UpdateSnapshotEntry((db, lc) => {
 				STANDARD_ACCOUNT_SNAPSHOT dbEntry = db.StandardAccountSnapshots.SingleOrDefault(a => a.AccountId == accountSnapshotEntry.AccountId);
 
 				if(isNullEntry && (dbEntry != null)) {
@@ -768,7 +768,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			// any account that is barebones, we delete to save space. 
 			bool isNullEntry = this.IsAccountEntryNull(accountSnapshotEntry);
 
-			return this.JointAccountSnapshotsDal.UpdateSnapshotEntry(db => {
+			return this.JointAccountSnapshotsDal.UpdateSnapshotEntry((db, lc) => {
 				JOINT_ACCOUNT_SNAPSHOT dbEntry = db.JointAccountSnapshots.SingleOrDefault(a => a.AccountId == accountSnapshotEntry.AccountId);
 
 				if(isNullEntry && (dbEntry != null)) {
