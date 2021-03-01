@@ -360,22 +360,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				int retryAttempt = 1;
 				int connectionRetryAttempt = 1;
 
-				void Sleep(int milliseconds) {
-					DateTime timeout = DateTime.Now.AddMilliseconds(milliseconds);
-
-					while(DateTime.Now > timeout) {
-
-						Thread.Sleep(100);
-
-						this.CheckShouldStopThrow();
-					}
+				Task Sleep(int milliseconds) {
+					return Task.Delay(milliseconds, this.CancelToken);
 				}
 
-				bool useWeb = false;
-
-				if(allowWeb) {
-					useWeb = this.ChainConfiguration.ChainSyncMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
-				}
+				bool useWeb = allowWeb && this.ChainConfiguration.ChainSyncMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
 
 				while((retryAttempt <= maxRetryAttempts) && (connectionRetryAttempt <= maxRetryAttempts)) {
 					// we run two parallel threads. one is the workflow to get new peers in the sync, the other is the sync itself with the peers we have
@@ -413,9 +402,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							if(!useWeb) {
 								while(!connections.HasSyncingConnections && (this.newPeerTask != null) && !this.newPeerTask.IsCompleted) {
 
-									Thread.Sleep(50);
-
-									this.CheckShouldStopThrow();
+									await Sleep(500).ConfigureAwait(false);
 								}
 
 								if(!connections.HasSyncingConnections || (connections.SyncingConnectionsCount < this.MinimumSyncPeerCount)) {
@@ -428,7 +415,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 									}
 
 									// sleep a bit before we retry
-									Thread.Sleep(100);
+									await Sleep(3000).ConfigureAwait(false);
 									connectionRetryAttempt++;
 
 									continue;
@@ -439,7 +426,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						} else if(!useWeb && !connections.HasSyncingConnections && (connectionRetryAttempt <= maxRetryAttempts)) {
 
 							// sleep about 1 second
-							Sleep(1000);
+							await Sleep(1000).ConfigureAwait(false);
 
 							connectionRetryAttempt++;
 
@@ -454,7 +441,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						connectionRetryAttempt = 0;
 					} else if(!useWeb && !connections.HasSyncingConnections) {
 
-						Sleep(1000);
+						await Sleep(1000).ConfigureAwait(false);
 
 						connectionRetryAttempt++;
 
@@ -506,7 +493,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							retryAttempt++;
 
-							Thread.Sleep(TimeSpan.FromSeconds(3));
+							await Sleep((int)TimeSpan.FromSeconds(3).TotalMilliseconds).ConfigureAwait(false);
 						} catch(AttemptsOverflowException e) {
 							this.CentralCoordinator.Log.Verbose(e, "We have attempted to correct errors and have reached an overflow limit.");
 
@@ -530,7 +517,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						// well, we have no connections. if we have a fetching task going, then we just wait a bit
 						if(this.newPeerTask != null) {
 							this.CheckShouldStopThrow();
-							this.newPeerTask.WaitAndUnwrapException();
+							await this.newPeerTask.ConfigureAwait(false);
 						}
 					}
 
@@ -550,7 +537,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		///     3. interpret the blocks
 		/// </summary>
 		/// <param name="connections"></param>
-		private Task LaunchMainBlockSync(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connections, LockContext lockContext) {
+		private async Task LaunchMainBlockSync(ConnectionSet<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> connections, LockContext lockContext) {
 
 			this.UpdateSignificantActionTimestamp();
 
@@ -561,7 +548,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			this.updatePublicBlockHeightPerformed = false;
 
 			if(this.CheckShouldStop()) {
-				return Task.CompletedTask;
+				return;
 			}
 
 			// launch the various tasks
@@ -745,10 +732,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 							foreach(Task task in faultedTasks) {
 
-								if(task.Exception is AggregateException agex) {
-									exceptions.AddRange(agex.InnerExceptions.Where(e => !(e is OperationCanceledException)));
-								} else {
-									exceptions.Add(task.Exception);
+								if(task.Exception != null) {
+									exceptions.AddRange(task.Exception.InnerExceptions.Where(e => !(e is OperationCanceledException)));
 								}
 							}
 
@@ -757,7 +742,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 							}
 						}
 
-						return Task.CompletedTask;
+						return;
 					}
 
 					if(this.ShouldAct(ref this.nextGCCollect)) {
@@ -767,7 +752,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						this.nextGCCollect = DateTimeEx.CurrentTime.AddMinutes(1);
 					}
 
-					Thread.Sleep(1000);
+					await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 				}
 			} finally {
 				downloadResetEvent?.Dispose();
@@ -883,7 +868,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					if(this.downloadedBlockIdsHistory.Any()) {
 						if(this.downloadedBlockIdsHistory.Count > 5 && this.downloadedBlockIdsHistory.All(e => e.Entry == this.currentBlockDownloadId)) {
 							// this is bad, we repeated the same block request too many times.
-							Thread.Sleep(TimeSpan.FromSeconds(10));
+							await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
 							// lets stop the sync, something went wrong.
 							throw new WorkflowException($"We repeated the same block (id {this.currentBlockDownloadId}) request too many times (5)");
@@ -936,7 +921,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 						this.downloadQueue.RemoveSafe(this.currentBlockDownloadId);
 
 						return (nextBlockSpecsx, statex);
-					}, 3, connections, lockContext).ConfigureAwait(false);
+					}, 2, connections, lockContext).ConfigureAwait(false);
 
 					if(state != ResultsState.OK) {
 						throw new WorkflowException();
@@ -1693,6 +1678,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				return ResponseValidationResults.Valid;
 			};
+
 
 			infoParameters.selectUsefulConnections = connections => {
 

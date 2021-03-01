@@ -100,11 +100,11 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return this.Encrypt(plain, contextHandler);
 		}
 		
-		public SafeArrayHandle Encrypt(SafeArrayHandle plain, FileEncryptor.FileEncryptorContextHandler contextHandler) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle plain, FileEncryptor.FileEncryptorContextHandler contextHandler, int prefix = 0) {
 
 			var parameters = this.GetAeadParameters(contextHandler);
 			
-			return this.chachaCipher.Encrypt(plain, parameters.Nonce, parameters.Key);
+			return this.chachaCipher.Encrypt(plain, parameters.Nonce, parameters.Key, null, prefix);
 
 		}
 

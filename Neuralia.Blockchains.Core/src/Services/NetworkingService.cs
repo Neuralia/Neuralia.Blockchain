@@ -37,7 +37,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		IMainMessageFactory MessageFactoryBase { get; }
 
-		IConnectionsManager ConnectionsManagerBase { get; }
+		IConnectionsManagerIPCrawler ConnectionsManagerBase { get; }
 
 		int CurrentPeerCount { get; }
 		int LocalPort  { get; }
@@ -93,7 +93,7 @@ namespace Neuralia.Blockchains.Core.Services {
 
 		Dictionary<BlockchainType, R> ChainRehydrationFactories { get; }
 
-		IConnectionsManager<R> ConnectionsManager { get; }
+		IConnectionsManagerIPCrawler<R> ConnectionsManager { get; }
 
 		void RegisterValidationServer(BlockchainType blockchainType, List<(DateTime appointment, TimeSpan window, int requesterCount)> appointmentWindows, IAppointmentValidatorDelegate appointmentValidatorDelegate);
 		void UnregisterValidationServer(BlockchainType blockchainType);
@@ -641,9 +641,9 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// <summary>
 		///     the service that will manage connections to our peers
 		/// </summary>
-		public IConnectionsManager<R> ConnectionsManager { get; protected set; }
+		public IConnectionsManagerIPCrawler<R> ConnectionsManager { get; protected set; }
 
-		public IConnectionsManager ConnectionsManagerBase => this.ConnectionsManager;
+		public IConnectionsManagerIPCrawler ConnectionsManagerBase => this.ConnectionsManager;
 
 		/// <summary>
 		///     the service that will manage all netowrk messaging

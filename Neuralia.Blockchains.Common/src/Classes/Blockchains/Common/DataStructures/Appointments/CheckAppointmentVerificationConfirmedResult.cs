@@ -6,4 +6,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.
 		public int VerificationSpan { get; set; }
 		public byte[] ConfirmationCorrelationCode { get; set; }
 	}
+	
+	public class CheckAppointmentVerificationConfirmedResult2 {
+		public long Appointment { get; set; }
+		public int VerificationSpan { get; set; }
+		public byte[] ConfirmationCorrelationCode { get; set; }
+	}
 }

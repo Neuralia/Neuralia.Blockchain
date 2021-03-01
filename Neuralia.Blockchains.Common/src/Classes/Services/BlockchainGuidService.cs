@@ -42,15 +42,6 @@ namespace Neuralia.Blockchains.Common.Classes.Services {
 		}
 		
 		public TransactionId CreateTransactionId(AccountId accountId, long timestamp) {
-#if MAINNET_LAUNCH_CODE
-
-			// to accomodate mobiles that are not up to date yet
-			if(timestamp < 0) {
-				timestamp = Math.Abs(timestamp);
-			}
-#else
-we have to remove this code!!
-#endif	
 			return new TransactionId(accountId, timestamp, this.GetValidScope(timestamp));
 		}
 

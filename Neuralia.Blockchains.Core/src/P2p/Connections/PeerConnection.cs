@@ -87,13 +87,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public string Ip => this.NodeAddressInfo?.Ip;
 		public string AdjustedIp => this.NodeAddressInfo?.AdjustedIp;
-
-		/// <summary>
-		///     tells is if this connection is there but supports no chain at all
-		/// </summary>
-		/// <returns></returns>
-		public bool IsChainless => !this.ValidBlockchainVersions.Any();
-
+		
 		/// <summary>
 		///     if we have this IP whitelisted, then we dont remove it when culling connections
 		/// </summary>

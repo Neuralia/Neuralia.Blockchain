@@ -1,10 +1,10 @@
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 namespace Neuralia.Blockchains.Core.Collections
 {
-    public class FixedQueue<T> : Queue<T> {
+    public class FixedConcurrentQueue<T> : ConcurrentQueue<T> {
 
-        public FixedQueue(uint limit) {
+        public FixedConcurrentQueue(uint limit) {
             this.Limit = limit;
         }
 

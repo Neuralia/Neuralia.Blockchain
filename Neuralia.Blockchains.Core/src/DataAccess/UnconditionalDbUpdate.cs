@@ -15,7 +15,7 @@ namespace Neuralia.Blockchains.Core.DataAccess {
 		}
 
 		/// <summary>
-		///     run a DB operation where we dont really care about the errors we can git. shoot and forget
+		///     run a DB operations where we dont really care about the errors we can git. shoot and forget
 		/// </summary>
 		/// <param name="action"></param>
 		/// <param name="logError"></param>

@@ -123,7 +123,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		void AddAppointmentWindow(DateTime appointment, TimeSpan window, int requesterCount);
 
 		Task<(bool success, CheckAppointmentRequestConfirmedResult result)> PerformAppointmentRequestUpdateCheck(Guid requesterId, LockContext lockContext, bool enableBackup = true);
-		Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext, bool enableBackup = true);
+		Task<(bool success, CheckAppointmentVerificationConfirmedResult2 result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext, bool enableBackup = true);
 		Task<(bool success, CheckAppointmentContextResult result)> PerformAppointmentContextUpdateCheck(Guid requesterId, int requesterIndex, DateTime appointment, LockContext lockContext, bool enableBackup = true);
 		Task<(bool success, string triggerKey)> PerformAppointmentTriggerUpdateCheck(DateTime appointment, LockContext lockContext, bool enableBackup = true);
 
@@ -520,12 +520,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			parameters.Add("transactionEnvelope", bytes.Entry.ToBase64());
 			bytes.Return();
 
+			parameters.Add("transactionId", signedTransactionEnvelope.Contents.Uuid.ToGuid());
+			
+			bool ths = false;
+			if(signedTransactionEnvelope is ITHSEnvelope thsEnvelope) {
+				ths = thsEnvelope.THSEnvelopeSignatureBase.Solution.IsValid;
+			}
+			parameters.Add("ths", ths);
+
 			string url = chainConfiguration.WebTransactionRegistrationUrl;
-			string action = "transactions/register";
+			string action = "transactions/register-transaction";
 
 			if(signedTransactionEnvelope is IPresentationTransactionEnvelope) {
 				url = chainConfiguration.WebPresentationRegistrationUrl;
-				action = "presentation/register";
+				action = "presentation/register-presentation";
 			}
 
 			var restParameterSet = new RestUtility.RestParameterSet<QueryValidatorAppointmentSessionsResult>();
@@ -689,13 +697,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return (sent, null);
 		}
 
-		public async Task<(bool success, CheckAppointmentVerificationConfirmedResult result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext, bool enableBackup = true) {
+		public async Task<(bool success, CheckAppointmentVerificationConfirmedResult2 result)> PerformAppointmentCompletedUpdateCheck(Guid requesterId, Guid secretAppointmentId, LockContext lockContext, bool enableBackup = true) {
 			BlockChainConfigurations chainConfiguration = this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 
 			bool useWeb = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Web);
 			bool useGossip = chainConfiguration.RegistrationMethod.HasFlag(AppSettingsBase.ContactMethods.Gossip);
 			bool sent = false;
-			CheckAppointmentVerificationConfirmedResult result = null;
+			CheckAppointmentVerificationConfirmedResult2 result = null;
 
 			if(useWeb) {
 				try {
@@ -708,16 +716,16 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					parameters.Add("secretAppointmentId", secretAppointmentId);
 
 					string url = chainConfiguration.WebAppointmentsRegistrationUrl;
-					string action = "appointments/check-appointment-verification-confirmed";
+					string action = "appointments/check-appointment-verification-confirmed2";
 
-					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentVerificationConfirmedResult>();
+					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentVerificationConfirmedResult2>();
 					restParameterSet.parameters = parameters;
 
 					restParameterSet.transform = webResult => {
 						var serializerSettings = new JsonSerializerOptions();
 						serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 
-						return JsonSerializer.Deserialize<CheckAppointmentVerificationConfirmedResult>(webResult, serializerSettings);
+						return JsonSerializer.Deserialize<CheckAppointmentVerificationConfirmedResult2>(webResult, serializerSettings);
 					};
 
 					(sent, result) = await restUtility.PerformSecurePost(url, action, restParameterSet).ConfigureAwait(false);
@@ -863,27 +871,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					RestUtility restUtility = new RestUtility(GlobalSettings.ApplicationSettings, RestUtility.Modes.XwwwFormUrlencoded);
 
 					bool sent = false;
-					CheckAppointmentsResult2 result = null;
+					CheckAppointmentsResult result = null;
 
 					Dictionary<string, object> parameters = new Dictionary<string, object>();
 
 					string url = chainConfiguration.WebAppointmentsRegistrationUrl;
-					string action = "appointments/check-appointments2";
+					string action = "appointments/check-appointments";
 
-					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentsResult2>();
+					var restParameterSet = new RestUtility.RestParameterSet<CheckAppointmentsResult>();
 					restParameterSet.parameters = parameters;
 
 					restParameterSet.transform = webResult => {
 						var serializerSettings = new JsonSerializerOptions();
 						serializerSettings.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 
-						return JsonSerializer.Deserialize<CheckAppointmentsResult2>(webResult, serializerSettings);
+						return JsonSerializer.Deserialize<CheckAppointmentsResult>(webResult, serializerSettings);
 					};
 
 					(sent, result) = await restUtility.PerformSecurePost(url, action, restParameterSet).ConfigureAwait(false);
 
 					if(sent && result != null) {
-						return (true, new CheckAppointmentsResult(){Appointments = result.Appointments.Select(a => new DateTime(a, DateTimeKind.Utc)).ToArray()});
+						return (true, result);
 					}
 				} catch(Exception ex) {
 					this.CentralCoordinator.Log.Error(ex, "Failed to register message through web");

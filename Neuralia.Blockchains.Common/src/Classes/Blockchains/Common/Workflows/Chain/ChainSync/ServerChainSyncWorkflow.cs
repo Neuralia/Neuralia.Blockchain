@@ -101,7 +101,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		protected ChainConfigurations ChainConfiguration => this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration;
 		protected bool NetworkPaused => this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.IsPaused;
 
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			try {
 				this.CheckShouldStopThrow();
 
@@ -111,7 +111,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					//TODO: log peer for having attempted another workflow, could be a DDOS attempt
 					this.CentralCoordinator.Log.Warning($"A synchronization workflow already exists for peer {this.PeerConnection.ScopedAdjustedIp}");
 
-					return;
+					return false;
 				}
 
 				try {
@@ -121,6 +121,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				} finally {
 					this.CentralCoordinator.ShutdownRequested -= this.CentralCoordinatorOnShutdownRequested;
 				}
+				
+				return true;
 			} 
 			catch(OutOfMemoryException oex) {
 				// thats bad, lets clear everything
@@ -205,7 +207,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// ok, we just received a trigger, lets examine it
 				BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> serverHandshake = (BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY>) chainSyncMessageFactory.CreateSyncWorkflowTriggerServerReplySet(this.triggerMessage.Header);
 
-				double graceStrikes = 3;
+				double graceStrikes = 6;
 				double period = 20;
 				IPMarshall.Instance.Quarantine(this.PeerConnection.NodeAddressInfo.AdjustedAddress, IPMarshall.QuarantineReason.TooManySyncRequests, DateTimeEx.CurrentTime.AddDays(1), $"More than {graceStrikes} sync requests from {this.PeerConnection.NodeAddressInfo} in less than {period} s", graceStrikes, TimeSpan.FromSeconds(period));
 
@@ -213,6 +215,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				{
 					this.CentralCoordinator.Log.Information($"Syncing request from peer {this.PeerConnection.ScopedAdjustedIp} is refused, the peer is now quarantined, now disconnecting...", this.CorrelationId);
 					this.CentralCoordinator.BlockchainServiceSet.NetworkingService.ConnectionStore.RemoveConnection(this.PeerConnection);
+
+					return;
 				}
 				
 				this.CentralCoordinator.Log.Debug($"Received a syncing request from peer {this.PeerConnection.ScopedAdjustedIp}.", this.CorrelationId);

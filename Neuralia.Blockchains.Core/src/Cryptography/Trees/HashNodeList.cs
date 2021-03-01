@@ -98,7 +98,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Trees {
 				get {
 #if DEBUG
 					if(this.alreadyCalled) {
-						throw new InvalidOperationException("This operation was called twice, this is VERY inefficient!");
+						throw new InvalidOperationException("This operations was called twice, this is VERY inefficient!");
 					}
 
 					this.alreadyCalled = true;

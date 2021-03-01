@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			this.PeerUnique = true;
 		}
 
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			this.CheckShouldCancel();
 
 			// ok, we just received a trigger, lets examine it
@@ -39,10 +39,12 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			if(!await Send(serverPeerListReply).ConfigureAwait(false)) {
 				NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
 
-				return;
+				return false;
 			}
 
 			NLog.Default.Verbose($"We sent {serverPeerListReply.Message.nodes.Nodes.Count} other peers to peer {this.ClientConnection.ScopedAdjustedIp} request");
+			
+			return true;
 		}
 
 		protected override PeerListRequestMessageFactory<R> CreateMessageFactory() {

@@ -86,12 +86,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				var walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
 
 				SafeArrayHandle key = null;
-
-				var distilledAppointmentContext = await walletProvider.GetDistilledAppointmentContextFile().ConfigureAwait(false);
+				
 
 				IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
 				Guid appointmentId = account.AccountAppointment.AppointmentId.Value;
 				DateTime appointmentDate = account.AccountAppointment.AppointmentTime.Value;
+				
+				var distilledAppointmentContext = await walletProvider.GetDistilledAppointmentContextFile(lockContext).ConfigureAwait(false);
+
+				if(distilledAppointmentContext == null) {
+					await ((IAppointmentsProviderInternal<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>)CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase).CheckAppointmentContextUpdate(appointmentDate, lockContext, true).ConfigureAwait(false);
+				}
 
 				TimeSpan window = TimeSpan.FromSeconds(distilledAppointmentContext.Window);
 

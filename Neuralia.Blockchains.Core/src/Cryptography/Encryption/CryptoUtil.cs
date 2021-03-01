@@ -33,7 +33,17 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption {
 		}
 		
 		public static int GetIterations(int value, int min, int max) {
-			return Math.Min(Math.Max(Math.Abs(value) & 0xFFFF, min), max);
+
+			// build a mask
+			int highestbit = 0;
+			for(int i = 0; i < 32; i++) {
+				if((max & (1<< i)) != 0) {
+					highestbit = i;
+				}
+			}
+
+			int mask = (int)(((long)(1 << (highestbit+1))-1));
+			return Math.Min(Math.Max(Math.Abs(value) & mask, min), max);
 		}
 
 		public static (SafeArrayHandle password, SafeArrayHandle salt) GeneratePasswordSalt(SafeArrayHandle codeBuffer) {

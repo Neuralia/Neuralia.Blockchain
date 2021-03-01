@@ -216,6 +216,17 @@ namespace Neuralia.Blockchains.Core.Configuration {
 			/// </summary>
 			Secured
 		}
+		
+		public enum RpcSecurityModes {
+			/// <summary>
+			/// no security required
+			/// </summary>
+			None,
+			/// <summary>
+			/// Request a user and password
+			/// </summary>
+			Basic
+		}
 
 		/// <summary>
 		/// Configures the way one can communicate with the node from CLI or wallet
@@ -541,7 +552,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <summary>
 		/// IPCrawler's maximum number of simultaneous connections to fully-connectable peers
 		/// </summary>
-		public int MaxPeerCount { get; set; } = 10;
+		public int MaxPeerCount { get; set; } = 100;
 		
 		/// <summary>
 		/// IPCrawler's maximum number of simultaneous connections to non-connectable peers
@@ -563,6 +574,11 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// </summary>
 		public int MaxConnectionRequestPerCrawl { get; set; } = 20;
 		
+		/// <summary>
+		/// IPCrawler's maximum number of pending connection requests
+		/// </summary>
+		public int MaxPendingConnectionRequests { get; set; } = 100;
+
 		/// <summary>
 		/// IPCrawler will contact the hups for new ips every *HubIPsRequestPeriod* seconds
 		/// </summary>
@@ -591,7 +607,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <summary>
 		/// Wait time to loop the process in seconds (FIXME too functionaly similar to *IPCrawlerCrawlPeriod*)
 		/// </summary>
-		public double IPCrawlerProcessLoopPeriod { get; set; } = 10.0;
+		public double IPCrawlerProcessLoopPeriod { get; set; } = 1.0;
 		
 		/// <summary>
 		/// Prints the current number of connections to the Default logger every X second 
@@ -655,6 +671,16 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		public RpcTransports RpcTransport { get; set; } = RpcTransports.Unsecured;
 
 		/// <summary>
+		/// should security be set for the RpcProtocol
+		/// </summary>
+		public RpcSecurityModes RpcAuthentication { get; set; } = RpcSecurityModes.None;
+
+		/// <summary>
+		/// List of users and passwords for RPC authentication
+		/// </summary>
+		public BasicAuthenticationEntry[] RpcUserPasswords { get; set; } = Array.Empty<BasicAuthenticationEntry>();
+
+		/// <summary>
 		/// Configures the RPC bidning mode.
 		/// Do we allow the Rpc to listen only to localhost, or any address
 		/// </summary>
@@ -665,6 +691,7 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// </summary>
 		public string RpcBindingAddress { get; set; }
 
+		
 		/// <summary>
 		/// The TLS certificate to use. can be a path too, otherwise app root.  if null, a dynamic certificate will be
 		/// generated.
@@ -1138,13 +1165,16 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// Configures the blockchain sync method. 
 		/// </summary>
 		/// <value>return the Contact method do use for blockchain syncing. <br>
-		///Default value: <see cref="AppSettingsBase.ContactMethods.Gossip"/>. Also <seealso cref="AppSettingsBase.ContactMethods"/>
+		///Default value: <see cref="AppSettingsBase.ContactMethods.WebOrGossip"/>. Also <seealso cref="AppSettingsBase.ContactMethods"/>
 		/// </value>
 		public AppSettingsBase.ContactMethods ChainSyncMethod { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 		
 		/// <summary>
 		/// during chain sync, if we are unsure which public block Id to use, how do we break the tie?
 		/// </summary>
+		/// /// <value>return the the method to break the tie. <br>
+		///Default value: <see cref="AppSettingsBase.ContactMethods.WebOrGossip"/>. Also <seealso cref="AppSettingsBase.ContactMethods"/>
+		/// </value>
 		public AppSettingsBase.ContactMethods ChainSyncPublicBlockHeightTieBreaking { get; set; } = AppSettingsBase.ContactMethods.WebOrGossip;
 		
 		/// <summary>
@@ -1377,6 +1407,12 @@ public string PortTestDns { get; set; } = "test-port-test.neuralium.com";
 		/// <summary>
 		/// Configures the password to connect to the proxy.
 		/// </summary>
+		public string Password { get; set; }
+	}
+
+	public class BasicAuthenticationEntry {
+		public string User { get; set; }
+
 		public string Password { get; set; }
 	}
 }

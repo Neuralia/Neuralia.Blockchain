@@ -120,7 +120,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 					await this.CheckWalletSynchronizationStatus(lockContext).ConfigureAwait(false);
 
 				} catch(Exception ex) {
-					this.CentralCoordinator.Log.Error(ex, "Failed to a wallet sync check. will retry");
+					this.CentralCoordinator.Log.Error(ex, "Failed to perform a wallet sync check. will retry");
 				}
 			}
 
@@ -428,7 +428,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 											this.nextBlockchainSyncCheck = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.SyncDelay);
 										} else {
 											// we never synced, we need to check more often to be ready to do so
-											this.nextBlockchainSyncCheck = DateTimeEx.CurrentTime.AddSeconds(20);
+											this.nextBlockchainSyncCheck = DateTimeEx.CurrentTime.AddSeconds(40);
 										}
 
 										this.chainSyncWorkflow = null;

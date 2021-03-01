@@ -119,11 +119,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				return;
 			}
 
-			if(!this.centralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded || ! await centralCoordinator.ChainComponentProvider.WalletProviderBase.HasAccount(lockContext).ConfigureAwait(false)) {
+			var walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
+			if(walletProvider.IsWalletLoading || walletProvider.IsWalletCreating || !walletProvider.IsWalletLoaded || ! await walletProvider.HasAccount(lockContext).ConfigureAwait(false)) {
 				return;
 			}
 
-			long? lowestAccountBlockSyncHeight = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
+			long? lowestAccountBlockSyncHeight = await walletProvider.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
 
 			if(lowestAccountBlockSyncHeight == null) {
 				return;
@@ -133,7 +134,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 			long currentBlockHeight = startBlockHeight;
 			
-			long? previousSyncedBlockHeightEntry = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountPreviousBlockSyncHeight(lockContext).ConfigureAwait(false);
+			long? previousSyncedBlockHeightEntry = await walletProvider.LowestAccountPreviousBlockSyncHeight(lockContext).ConfigureAwait(false);
 
 			long previousSyncedBlockHeight = 0;
 			if(!previousSyncedBlockHeightEntry.HasValue || previousSyncedBlockHeightEntry.Value == 0) {
@@ -146,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			} else {
 				previousSyncedBlockHeight = previousSyncedBlockHeightEntry.Value;
 			}
-			List<IWalletAccount> syncableAccounts = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetWalletSyncableAccounts(null, currentBlockHeight, lockContext).ConfigureAwait(false);
+			List<IWalletAccount> syncableAccounts = await walletProvider.GetWalletSyncableAccounts(null, currentBlockHeight, lockContext).ConfigureAwait(false);
 
 			if(!syncableAccounts.Any()) {
 				// no syncing possible
@@ -167,7 +168,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(GlobalSettings.ApplicationSettings.SynclessMode) {
 					//In mobile, we don't want to sync every blocks, we target what is in the cache
-					BlockId highestCachedSynthesizedBlockId = this.centralCoordinator.ChainComponentProvider.WalletProviderBase.GetHighestCachedSynthesizedBlockId(lockContext);
+					BlockId highestCachedSynthesizedBlockId = walletProvider.GetHighestCachedSynthesizedBlockId(lockContext);
 
 					if(highestCachedSynthesizedBlockId == null) {
 						return;
@@ -181,7 +182,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				// now lets run then sequence
 				await this.RunWalletUpdateSequence(currentBlockHeight, previousSyncedBlockHeight, targetBlockHeight, taskRoutingContext, lockContext).ConfigureAwait(false);
 
-				lowestAccountBlockSyncHeight = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
+				lowestAccountBlockSyncHeight = await walletProvider.LowestAccountBlockSyncHeight(lockContext).ConfigureAwait(false);
 
 				if(lowestAccountBlockSyncHeight.HasValue) {
 					currentBlockHeight = lowestAccountBlockSyncHeight.Value;
@@ -191,7 +192,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					currentBlockHeight = this.centralCoordinator.ChainComponentProvider.ChainStateProviderBase.DiskBlockHeight;
 				}
 
-				await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
+				await walletProvider.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
 
 				this.CentralCoordinator.Log.Verbose("Wallet sync completed");
 			} catch(Exception ex) {
@@ -199,7 +200,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				//In mobile, no need to resync every blocks when it fails. We only need to resume at the last block that we are sure worked.
 				if(GlobalSettings.ApplicationSettings.SynclessMode && ex is WalletSyncException walletSyncException) {
-					previousSyncedBlockHeightEntry = await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.LowestAccountPreviousBlockSyncHeight(lockContext).ConfigureAwait(false);
+					previousSyncedBlockHeightEntry = await walletProvider.LowestAccountPreviousBlockSyncHeight(lockContext).ConfigureAwait(false);
 
 					if (!previousSyncedBlockHeightEntry.HasValue || previousSyncedBlockHeightEntry.Value == 0)
 					{
@@ -238,10 +239,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		/// <returns></returns>
 		private async Task RunWalletUpdateSequence(long currentBlockHeight, long previousSyncedBlockHeight, long targetBlockHeight, TaskRoutingContext taskRoutingContext, LockContext lockContext) {
 
+			var walletProvider = this.centralCoordinator.ChainComponentProvider.WalletProviderBase;
 			Func<long, LockContext, bool> isBlockAvailableCallback = null;
 
 			if(GlobalSettings.ApplicationSettings.SynclessMode) {
-				isBlockAvailableCallback = (blockId, lc) => this.centralCoordinator.ChainComponentProvider.WalletProviderBase.IsSynthesizedBlockCached(blockId, lc);
+				isBlockAvailableCallback = (blockId, lc) => walletProvider.IsSynthesizedBlockCached(blockId, lc);
 			} else {
 				isBlockAvailableCallback = (blockId, lc) => true;
 			}
@@ -291,7 +293,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 				if(closureState.currentPlan != null) {
 
 					// here we execute the plan and run the insertion transaction
-					await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.ScheduleTransaction(async (provider, token, lc) => {
+					await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
 					
 						// run transaction and insert blocks
 
@@ -327,7 +329,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 								}
 					
 							} catch(Exception ex) {
-								throw new WalletSyncException(planBlockId, $"Failed to sync block Id {planBlockId} during wallet sync.", ex);
+								if(CryptoKeysExceptionUtils.IsCryptoKeyException(ex) && ex is BlockchainEventException bex) {
+									throw;
+								} else {
+									throw new WalletSyncException(planBlockId, $"Failed to sync block Id {planBlockId} during wallet sync.", ex);
+								}
 							}
 						}
 					
@@ -339,7 +345,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 					closureState.loadedSynthesizedBlocks = null;
 				}
 
-				await this.centralCoordinator.ChainComponentProvider.WalletProviderBase.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
+				await walletProvider.CleanSynthesizedBlockCache(lockContext).ConfigureAwait(false);
 
 				// reset our total increment no matter what (sometimes the next plan fetch doesnt move, so this must be reset every time)
 				totalIncrement = 0;

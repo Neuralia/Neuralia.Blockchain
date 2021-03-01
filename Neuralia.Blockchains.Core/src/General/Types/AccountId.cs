@@ -49,8 +49,6 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		public static readonly string[] PRESENTATION_ACCOUNT_TOKENS = {DEFAULT_PRESENTATION_TOKEN.ToString(), ((byte) Enums.AccountTypes.Presentation).ToString()};
 		public static readonly string[] MODERATOR_ACCOUNT_TOKENS = {DEFAULT_MODERATOR_ACCOUNT_TOKEN.ToString(), "MOD", "MODERATOR", ((byte) Enums.AccountTypes.Moderator).ToString()};
 		
-		private readonly AdaptiveLong2_9 sequenceId = new AdaptiveLong2_9();
-
 		static AccountId() {
 
 		}
@@ -73,9 +71,10 @@ namespace Neuralia.Blockchains.Core.General.Types {
 		public AccountId() {
 		}
 
+		private long sequenceId;
 		public long SequenceId {
-			get => this.sequenceId.Value;
-			set => this.sequenceId.Value = value & SEQUENCE_MASK;
+			get => this.sequenceId;
+			set => this.sequenceId = value & SEQUENCE_MASK;
 		}
 
 		public Enums.AccountTypes AccountType { get; set; } = Enums.AccountTypes.Unknown;
@@ -165,7 +164,9 @@ namespace Neuralia.Blockchains.Core.General.Types {
 				dehydrator.Write((byte) this.AccountType);
 			}
 
-			this.sequenceId.Dehydrate(dehydrator);
+			AdaptiveLong2_9 tool = new AdaptiveLong2_9();
+			tool.Value = this.SequenceId;
+			tool.Dehydrate(dehydrator);
 
 		}
 
@@ -180,7 +181,9 @@ namespace Neuralia.Blockchains.Core.General.Types {
 				this.AccountType = rehydrator.ReadByteEnum<Enums.AccountTypes>();
 			}
 
-			this.sequenceId.Rehydrate(rehydrator);
+			AdaptiveLong2_9 tool = new AdaptiveLong2_9();
+			tool.Rehydrate(rehydrator);
+			this.SequenceId = tool.Value;
 		}
 
 		public int CompareTo(AccountId other) {
@@ -332,7 +335,7 @@ namespace Neuralia.Blockchains.Core.General.Types {
 
 			if(this.SequenceId != 0) {
 				// skip all high entries that are 0
-				string base32 = NumberBaser.ToBase32(this.SequenceId);
+				string base32 = NumberBaser.ToBase32(this.SequenceId, true);
 
 				char[] chars = base32.ToCharArray().ToArray();
 				char? divider = null;

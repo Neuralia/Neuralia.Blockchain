@@ -16,6 +16,7 @@ using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Services;
 using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Tools;
+using Neuralia.Blockchains.Tools.Cryptography.Encodings;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Locking;
 using Neuralia.Blockchains.Tools.Serialization;
@@ -25,7 +26,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Arch
 	public interface IWalletBackupProcessor {
 		
 		Task<WalletBackupProcessor.WalletBackupInfo> BackupWallet(WalletProvider.BackupTypes backupType, LockContext lockContext);
-		Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext);
+		Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext, bool legacyBase32);
 	}
 	
 	public class WalletBackupProcessor : IWalletBackupProcessor {
@@ -147,28 +148,37 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Arch
 				
 				this.FileSystem.DeleteFile(backupManifestPath);
 
-				using ChaCha20Poly1305EncryptorParameters encryptionParameters = ChaCha20Poly1305FileEncryptor.GenerateEncryptionParameters(EncryptorParameters.SymetricCiphers.XCHACHA_20_POLY_1305, null, 40);
-				
+				using ChaCha20Poly1305EncryptorParameters encryptionParameters = ChaCha20Poly1305FileEncryptor.GenerateEncryptionParameters(EncryptorParameters.SymetricCiphers.XCHACHA_20_POLY_1305, null, 16);
 				using ChaCha20Poly1305FileEncryptor encryptor = new ChaCha20Poly1305FileEncryptor(encryptionParameters);
 
-				string passphrase = WordsGenerator.GenerateRandomPhrase(4);
-				using (SafeArrayHandle passwordBytes = SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(passphrase.ToUpper(CultureInfo.InvariantCulture))))
-				{
-					using SafeArrayHandle fileBytes = FileExtensions.ReadAllBytes(zipFile, this.FileSystem);
-					using SafeArrayHandle encrypted = encryptor.Encrypt(fileBytes, passwordBytes);
-					FileExtensions.WriteAllBytes(resultsFile, encrypted, this.FileSystem);
-				}
+				using SafeArrayHandle passphrase = SafeArrayHandle.CreateSafeRandom(32);
+				
+				using SafeArrayHandle fileBytes = FileExtensions.ReadAllBytes(zipFile, this.FileSystem);
+				using SafeArrayHandle encrypted = encryptor.Encrypt(fileBytes, passphrase);
+				
+				var walletBackupInfo = new WalletBackupInfo();
+				walletBackupInfo.Path = resultsFile;
+				walletBackupInfo.Passphrase = passphrase.ToBase32();
+				walletBackupInfo.Salt = encryptionParameters.Salt.ToBase32();
+				walletBackupInfo.Nonce = encryptionParameters.Nonce.ToBase32();
+				walletBackupInfo.Iterations = encryptionParameters.Iterations;
+				
+				// now let's test it
 
+				try {
+					using var decrypted = this.Decrypt(encrypted, walletBackupInfo.Passphrase, walletBackupInfo.Salt, walletBackupInfo.Nonce, walletBackupInfo.Iterations, lockContext, false);
+				} catch(Exception ex) {
+					throw new ApplicationException("Failed to test encrypted backup", ex);
+				}
+				//////////////////
+				
+				FileExtensions.WriteAllBytes(resultsFile, encrypted, this.FileSystem);
+				
 				if(this.FileSystem.FileExists(zipFile)) {
 					await SecureWipe.WipeFile(zipFile, this.fileSystem).ConfigureAwait(false);
 				}
 
-				var walletBackupInfo = new WalletBackupInfo();
-				walletBackupInfo.Path = resultsFile;
-				walletBackupInfo.Passphrase = passphrase;
-				walletBackupInfo.Salt = encryptionParameters.Salt.ToBase32();
-				walletBackupInfo.Nonce = encryptionParameters.Nonce.ToBase32();
-				walletBackupInfo.Iterations = encryptionParameters.Iterations;
+				
 
 				if(finalAction != null) {
 					await finalAction().ConfigureAwait(false);
@@ -262,7 +272,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Arch
 		/// <param name="salt"></param>
 		/// <param name="iterations"></param>
 		/// <returns></returns>
-		public async Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations,LockContext lockContext) {
+		public async Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations,LockContext lockContext, bool legacyBase32) {
 
 			// first, let's get the required paths
 
@@ -277,28 +287,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Arch
 					await SecureWipe.WipeFile(zipFile, this.fileSystem).ConfigureAwait(false);
 				}
 
-				using var saltBytes = SafeArrayHandle.FromBase32(salt);
-				using var nonceBytes = SafeArrayHandle.FromBase32(nonce);
-				using ChaCha20Poly1305EncryptorParameters decryptionParameters = ChaCha20Poly1305FileEncryptor.GenerateEncryptionParameters( EncryptorParameters.SymetricCiphers.XCHACHA_20_POLY_1305, saltBytes, nonceBytes, iterations);
+				using SafeArrayHandle encrypted = FileExtensions.ReadAllBytes(backupsPath, this.FileSystem);
 
-				using ChaCha20Poly1305FileEncryptor decryptor = new ChaCha20Poly1305FileEncryptor(decryptionParameters);
-				
-				using (SafeArrayHandle passwordBytes = SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(passphrase.ToUpper(CultureInfo.InvariantCulture))))
+				var decrypted = this.Decrypt(encrypted, passphrase, salt, nonce, iterations, lockContext, legacyBase32);
+
+				FileExtensions.WriteAllBytes(zipFile, decrypted, this.FileSystem);
+
+				if (this.FileSystem.DirectoryExists(tempRestoredWalletFolder))
 				{
-					using SafeArrayHandle fileBytes = FileExtensions.ReadAllBytes(backupsPath, this.FileSystem);
-					using SafeArrayHandle decrypted = decryptor.Decrypt(fileBytes, passwordBytes);
-
-					FileExtensions.WriteAllBytes(zipFile, decrypted, this.FileSystem);
-
-					if (this.FileSystem.DirectoryExists(tempRestoredWalletFolder))
-					{
-						await SecureWipe.WipeDirectory(tempRestoredWalletFolder, this.fileSystem).ConfigureAwait(false);
-					}
-
-					FileExtensions.EnsureDirectoryStructure(tempRestoredWalletFolder, this.FileSystem);
-					ZipFile.ExtractToDirectory(zipFile, tempRestoredWalletFolder);
+					await SecureWipe.WipeDirectory(tempRestoredWalletFolder, this.fileSystem).ConfigureAwait(false);
 				}
 
+				FileExtensions.EnsureDirectoryStructure(tempRestoredWalletFolder, this.FileSystem);
+				ZipFile.ExtractToDirectory(zipFile, tempRestoredWalletFolder);
+				
 				string backupManifestPath = this.GetManifestFilePath(tempRestoredWalletFolder);
 
 				if(!this.FileSystem.FileExists(backupManifestPath)) {
@@ -365,6 +367,35 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Processors.Arch
 				if(this.FileSystem.DirectoryExists(tempRestoredWalletFolder)) {
 					await SecureWipe.WipeDirectory(tempRestoredWalletFolder, this.fileSystem).ConfigureAwait(false);
 				}
+			}
+		}
+
+		private SafeArrayHandle Decrypt(SafeArrayHandle encrypted, string passphrase, string salt, string nonce, int iterations,LockContext lockContext, bool legacyBase32) {
+			SafeArrayHandle saltBytes = null;
+			SafeArrayHandle nonceBytes = null;
+			if(legacyBase32) {
+				// here we use the OLD base32. it is obsolete. remove this code in the future
+				saltBytes = (SafeArrayHandle)Base32Old.Decode(salt);
+				nonceBytes = (SafeArrayHandle)Base32Old.Decode(nonce);
+			} else {
+				saltBytes = SafeArrayHandle.FromBase32(salt);
+				nonceBytes = SafeArrayHandle.FromBase32(nonce);
+			}
+
+			using ChaCha20Poly1305EncryptorParameters decryptionParameters = ChaCha20Poly1305FileEncryptor.GenerateEncryptionParameters( EncryptorParameters.SymetricCiphers.XCHACHA_20_POLY_1305, saltBytes, nonceBytes, iterations);
+
+			using ChaCha20Poly1305FileEncryptor decryptor = new ChaCha20Poly1305FileEncryptor(decryptionParameters);
+
+			SafeArrayHandle passwordBytes = null;
+			if(passphrase.Contains(' ')) {
+				// this is the old style
+				passwordBytes = SafeArrayHandle.WrapAndOwn(Encoding.UTF8.GetBytes(passphrase.ToUpper(CultureInfo.InvariantCulture)));
+			} else {
+				passwordBytes = SafeArrayHandle.FromBase32(passphrase);
+			}
+
+			using(passwordBytes) {
+				return decryptor.Decrypt(encrypted, passwordBytes);
 			}
 		}
 

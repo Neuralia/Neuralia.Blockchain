@@ -147,7 +147,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 		
 		/// <summary>
-		///     allows to lock a block for a download operation.
+		///     allows to lock a block for a download operations.
 		/// </summary>
 		/// <returns>true if lock was acquired, false if not.</returns>
 		public bool AttemptLockBlockDownload(BlockId blockId) {

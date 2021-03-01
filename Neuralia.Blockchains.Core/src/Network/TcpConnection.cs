@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Logging;
@@ -20,6 +21,7 @@ using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Extensions;
 using Neuralia.Blockchains.Tools.General.ExclusiveOptions;
 using Neuralia.Blockchains.Core.General.Types.Dynamic;
+using Neuralia.Blockchains.Core.Mathematics;
 using Neuralia.Blockchains.Tools.Serialization;
 using Neuralia.Blockchains.Tools.Threading;
 using Nito.AsyncEx;
@@ -32,7 +34,16 @@ namespace Neuralia.Blockchains.Core.Network {
 		IPMode IPMode { get; }
 		NetworkEndPoint EndPoint { get; }
 		ConnectionState State { get; }
-		double Latency { get; set; }
+		double Latency(TcpConnection.LatencyTypes latencyType);
+		double LatencyStd(TcpConnection.LatencyTypes latencyType);
+		double ConnectionLatency { get; }
+		double ConnectionLatencyStd { get; }
+		
+		double BlockSyncLatency { get; }
+		double BlockSyncLatencyStd { get; }
+
+		void AddLatency(DateTime start);
+		void AddBlockSyncLatency(DateTime start);
 		Guid ReportedUuid { get; }
 		Guid InternalUuid { get; }
 		bool IsConnectedUuidProvidedSet { get; }
@@ -68,6 +79,19 @@ namespace Neuralia.Blockchains.Core.Network {
 			Sturdy, Fast
 		}
 
+		public class LatencySet {
+			public readonly FixedConcurrentQueue<double> latencies = new (100);
+			public double latency = 0;
+			public double latencyStd = Double.MaxValue;
+			public double Latency => this.latency;
+			public double LatencyStd => this.latencyStd;
+		}
+
+		public enum LatencyTypes {
+			Connection, BlockSync
+		}
+
+		
 		private static bool? ipv6Supported;
 
 		public static bool IPv6Supported {
@@ -259,7 +283,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			this.tokenSource = new CancellationTokenSource();
 
-			AddConnectionState(this);
+			this.Initialize();
 		}
 
 		/// <summary>
@@ -284,7 +308,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 			this.State = ConnectionState.Connected;
 
-			AddConnectionState(this);
+			this.Initialize();
 		}
 
 		public TcpConnection(NetworkEndPoint remoteEndPoint, TcpConnection.ExceptionOccured exceptionCallback, bool isServer = false, ShortExclusiveOption<TcpConnection.ProtocolMessageTypes> protocolMessageFilters = null) : this(exceptionCallback, isServer, protocolMessageFilters) {
@@ -298,10 +322,18 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.EndPoint = remoteEndPoint;
 			this.RemoteEndPoint = remoteEndPoint.EndPoint;
 			this.IPMode = remoteEndPoint.IPMode;
-			
-			AddConnectionState(this);
+
+			this.Initialize();
 		}
 
+		private void Initialize() {
+			
+			AddConnectionState(this);
+			
+			this.LatencySets.TryAdd(TcpConnection.LatencyTypes.Connection, new TcpConnection.LatencySet());
+			this.LatencySets.TryAdd(TcpConnection.LatencyTypes.BlockSync, new TcpConnection.LatencySet());
+		}
+		
 		/// <summary>
 		///     a timestamp to know when we should check the connection for keepalive
 		/// </summary>
@@ -312,9 +344,54 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private bool IsDisposing { get; set; }
 
-		private double latency = Double.MaxValue;
-		public double Latency { get => latency; set => Interlocked.Exchange(ref latency, value);} 
+		public double ConnectionLatency => this.Latency(TcpConnection.LatencyTypes.Connection);
+		public double ConnectionLatencyStd => this.LatencyStd(TcpConnection.LatencyTypes.Connection);
 		
+		public double BlockSyncLatency => this.Latency(TcpConnection.LatencyTypes.BlockSync);
+		public double BlockSyncLatencyStd => this.LatencyStd(TcpConnection.LatencyTypes.BlockSync);
+		
+		public double Latency(TcpConnection.LatencyTypes latencyType) {
+			return this.LatencySets[latencyType].Latency;
+		}
+		public double LatencyStd(TcpConnection.LatencyTypes latencyType) {
+			return this.LatencySets[latencyType].LatencyStd;
+		}
+		
+		public ConcurrentDictionary<TcpConnection.LatencyTypes, TcpConnection.LatencySet> LatencySets { get; } = new ConcurrentDictionary<TcpConnection.LatencyTypes, TcpConnection.LatencySet>();
+		
+		public void AddBlockSyncLatency(DateTime start) {
+            AddLatencyEntry(start, LatencySets[TcpConnection.LatencyTypes.BlockSync]);
+		}
+		
+		public void AddLatency(DateTime start) {
+
+            AddLatencyEntry(start, LatencySets[TcpConnection.LatencyTypes.Connection]);
+		}
+
+		private static void AddLatencyEntry(DateTime start, TcpConnection.LatencySet latencySet) {
+			if(start == DateTimeEx.MinValue || start == DateTime.MinValue) {
+				return;
+			}
+			double value = (DateTimeEx.CurrentTime - start).TotalSeconds;
+
+			// only calculate latency if we have enough data points to make it meaningful
+			if (latencySet.latencies.Count >= 3)
+			{
+				var zScore = MathUtils.ZScore(latencySet.latencies.ToArray(), value, out var mean, out var std);
+				
+				if(zScore < 7)
+					latencySet.latencies.Enqueue(value);
+
+				latencySet.latency = mean;
+				latencySet.latencyStd = std;
+			}
+			else
+			{
+				latencySet.latencies.Enqueue(value);
+				latencySet.latency = latencySet.latencies.Min();
+			}
+		}
+
 		// A UUiD we set and use internally
 		public Guid InternalUuid { get; } = Guid.NewGuid();
 
@@ -402,7 +479,6 @@ namespace Neuralia.Blockchains.Core.Network {
 						// seems we are not connected after all
 						NLog.Connections.Verbose("Socket was disconnected ungracefully from the other side. Disconnecting.");
 						this.Close();
-						this.Latency = Double.MaxValue;
 						return false;
 					}
 				}
@@ -464,7 +540,7 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public Task Connect(SafeArrayHandle bytes) {
-			return Connect(bytes, TcpConnection.SocketParameterTypes.Sturdy);
+			return this.Connect(bytes, TcpConnection.SocketParameterTypes.Sturdy);
 		}
 
 		public async Task Connect(SafeArrayHandle bytes, TcpConnection.SocketParameterTypes socketParameterType, int socketBuffer = 0) {
@@ -522,16 +598,16 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.handshakeBytes.Entry = bytes.Entry;
 			this.handshakeStatus = HandshakeStatuses.VersionSentNoBytes;
 
-			var startHandshake = DateTime.Now;
+			var startHandshake = DateTimeEx.CurrentTime;
 			//Send handshake
 			this.SendHandshakeVersion();
 
 			// now wait for the handshake to complete
-			if(await resetEvent.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false)) {
+			if(await this.resetEvent.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false)) {
 				this.resetEvent.Reset();
 			}
 
-			this.Latency = (DateTime.Now - startHandshake).TotalSeconds;
+			this.AddLatency(startHandshake);
 			
 			if(this.handshakeStatus != HandshakeStatuses.Completed) {
 
@@ -584,11 +660,8 @@ namespace Neuralia.Blockchains.Core.Network {
 		}
 
 		public void StartWaitingForHandshake(TcpConnection.MessageBytesReceived handshakeCallback) {
-
-			var startHandshake = DateTime.Now;
 			
 			this.StartReceivingData(bytes => {
-				this.Latency = (DateTime.Now - startHandshake).TotalSeconds;
 				//Invoke
 				handshakeCallback(bytes);
 				
@@ -623,7 +696,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			this.dataReceptionTask = this.StartReceptionStream(this.tokenSource.Token, handshakeCallback).WithAllExceptions().ContinueWith(task => {
 				if(task.IsFaulted) {
 					// an exception occured. but alert only if we should, otherwise let the connection die silently.
-					NLog.Connections.Verbose($"[{nameof(TcpConnection)}] Error in {nameof(StartReceptionStream)}, task exception: '{task.Exception}'");
+					NLog.Connections.Verbose($"[{nameof(TcpConnection)}] Error in {nameof(this.StartReceptionStream)}, task exception: '{task.Exception}'");
 					if(this.alertExceptions) {
 						var exception = new P2pException("A serious exception occured while receiving data from the socket.", P2pException.Direction.Receive, P2pException.Severity.VerySerious, task.Exception);
 
@@ -977,7 +1050,7 @@ namespace Neuralia.Blockchains.Core.Network {
 
 												entry.SetMessageContent(bufferRehydrator);
 
-												await protocolFactory.HandleCompetedMessage(entry, callback, this).ConfigureAwait(false);
+												await this.protocolFactory.HandleCompetedMessage(entry, callback, this).ConfigureAwait(false);
 											}
 										}
 

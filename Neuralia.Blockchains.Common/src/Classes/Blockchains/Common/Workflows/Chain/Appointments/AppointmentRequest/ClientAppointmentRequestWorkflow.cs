@@ -50,7 +50,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 			this.appointment = appointment;
 		}
 
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			this.CheckShouldCancel();
 			
 			var messageFactory = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.GetAppointmentRequestMessageFactory();
@@ -82,7 +82,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 					if(!await SendMessage(peerConnection, appointmentRequestTrigger).ConfigureAwait(false)) {
 						this.CentralCoordinator.Log.Verbose($"Connection with peer  {peerConnection.ScopedAdjustedIp} was terminated");
 
-						return;
+						return false;
 					}
 
 					BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY> serverAppointmentRequest = (BlockchainTargettedMessageSet<SERVER_TRIGGER_REPLY>) await WaitSingleNetworkMessage<SERVER_TRIGGER_REPLY, TargettedMessageSet<SERVER_TRIGGER_REPLY, IBlockchainEventsRehydrationFactory>, IBlockchainEventsRehydrationFactory>().ConfigureAwait(false);
@@ -95,6 +95,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 					this.CentralCoordinator.Log.Verbose($"Failed to request appointment info for peer  {peerConnection.ScopedAdjustedIp}.");
 				}
 			}
+			return true;return true;
 		}
 	}
 }

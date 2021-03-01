@@ -49,7 +49,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			}
 		}
 		
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			try {
 				if(!await this.PerformConnection().ConfigureAwait(false)) {
 					throw new WorkflowException();
@@ -59,6 +59,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				throw;
 			}
+			return true;
 		}
 
 		private void CloseConnection() {
@@ -77,6 +78,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			NLog.Default.Verbose("Sending handshake response");
 
+			DateTime latencyStart = DateTimeEx.CurrentTime;
 			if(!await Send(serverHandshake).ConfigureAwait(false)) {
 				NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
 
@@ -85,6 +87,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 			TargettedMessageSet<ClientHandshakeConfirm<R>, R> responseNetworkMessageSet = await WaitSingleNetworkMessage<ClientHandshakeConfirm<R>, TargettedMessageSet<ClientHandshakeConfirm<R>, R>, R>().ConfigureAwait(false);
 
+			this.ClientConnection.connection.AddLatency(latencyStart);
+			
 			if(responseNetworkMessageSet.Message.Status != ServerHandshake<R>.HandshakeStatuses.Ok) {
 				NLog.Default.Verbose($"Client returned an error: {responseNetworkMessageSet.Message.Status}. Sending handshake negative response");
 
@@ -106,6 +110,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			this.PerformFinalValidation(serverConfirm);
 
 			if(serverConfirm.Message.Status == ServerHandshakeConfirm<R>.HandshakeConfirmationStatuses.Ok) {
+				
+				latencyStart = DateTimeEx.CurrentTime;
 				if(!await Send(serverConfirm).ConfigureAwait(false)) {
 					NLog.Default.Verbose($"Connection with peer  {this.ClientConnection.ScopedAdjustedIp} was terminated");
 
@@ -118,6 +124,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				// now we wait for the final confirmation
 				await WaitFinalClientReady().ConfigureAwait(false);
 
+				this.ClientConnection.connection.AddLatency(latencyStart);
+				
 				return true;
 
 				// done

@@ -36,7 +36,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			this.Priority = Workflow.Priority.High;
 		}
 
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			this.CheckShouldCancel();
 
 			// ok, we just received a trigger, lets examine it
@@ -65,12 +65,12 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 			} catch(Exception ex) {
 				NLog.Default.Verbose($"Connection with peer {this.ClientConnection.ScopedAdjustedIp} was terminated");
 
-				return;
+				return false;
 			}
 
 			//reply.BaseMessage.Dispose();
 			if(!reply.Message.messageApprovals.Any(a => a)) {
-				return;
+				return false;
 			}
 
 			TargettedMessageSet<ClientMessageGroupReply<R>, R> serverMessageGroupManifest = await WaitSingleNetworkMessage<ClientMessageGroupReply<R>, TargettedMessageSet<ClientMessageGroupReply<R>, R>, R>(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -83,6 +83,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.MessageGroupManifest {
 				this.networkingService.PostNetworkMessage(message, this.ClientConnection);
 				message.Dispose();
 			}
+			return true;
 		}
 
 		protected virtual async Task<(List<bool> messageReceived, int alreadyReceivedCount)> PrepareGossipMessageAcceptations() {

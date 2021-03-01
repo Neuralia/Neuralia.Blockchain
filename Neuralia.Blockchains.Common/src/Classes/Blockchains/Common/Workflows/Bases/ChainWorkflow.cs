@@ -104,7 +104,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 			return this.RoutedTaskReceiver.WaitSingleTask(task, timeout);
 		}
 
-		protected override sealed async Task PerformWork(LockContext lockContext) {
+		protected override sealed async Task<bool> PerformWork(LockContext lockContext) {
 			// here we delegate all the work to a task, so we can benefit from all it's strengths including stashing
 			if(!this.performWorkOverriden.HasValue) {
 				this.performWorkOverriden = this.IsOverride(nameof(PerformWork), new[] {typeof(IChainWorkflow), typeof(TaskRoutingContext), typeof(LockContext)});
@@ -117,7 +117,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Bases
 
 				await this.DispatchSelfTask(task, lockContext).ConfigureAwait(false);
 			}
-
+			return true;
 		}
 
 		protected override sealed async Task Initialize(LockContext lockContext) {

@@ -26,7 +26,7 @@ using Neuralia.Blockchains.Tools.Threading;
 using RestSharp;
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
-	public interface IConnectionsManager : ISimpleRoutedTaskHandler, IColoredRoutedTaskHandler, ILoopThread {
+	public interface IConnectionsManager : IConnectionsProvider, ISimpleRoutedTaskHandler, IColoredRoutedTaskHandler, ILoopThread {
 		IIPCrawler Crawler { get; }
 	}
 
@@ -761,6 +761,34 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		}
 
 		public IIPCrawler Crawler => null;
+		public async void RequestHubIPs()
+		{
+			await this.ContactHubs().ConfigureAwait(false);
+		}
+
+		public async void RequestPeerIPs(NodeAddressInfo _)
+		{
+			await this.RequestPeerLists().ConfigureAwait(false);
+		}
+
+		public async void RequestConnect(NodeAddressInfo node)
+		{
+			await this.CreateConnectionAttempt(node).ConfigureAwait(false);
+		}
+
+		public async void RequestDisconnect(NodeAddressInfo node)
+		{
+			await this.DisconnectPeers(this.connectionStore.AllConnectionsList.Where(p=> p.NodeAddressInfo.Equals(node))).ConfigureAwait(false);
+		}
+
+		public bool IsPublicAndConnectable()
+		{
+			if (this.connectionStore.PublicIpMode == IPMode.Unknown)
+				throw new Exception($"{nameof(IsPublicAndConnectable)} IPMode unknown!");
+			return this.connectionStore.IsConnectable;
+		}
+
+		public Dictionary<BlockchainType, ChainSettings> ChainSettings => this.networkingService.ChainSettings;
 	}
 
 	public static class ConnectionsManager {

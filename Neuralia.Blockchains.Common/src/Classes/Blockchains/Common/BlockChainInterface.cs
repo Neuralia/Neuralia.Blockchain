@@ -173,6 +173,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		Task DisableMining(LockContext lockContext);
 
 		TaskResult<bool> QueryBlockchainSynced();
+		TaskResult<bool> RequestSyncBlockchain();
 		TaskResult<ElectionContextAPI> QueryElectionContext(long blockId);
 		TaskResult<bool> QueryWalletSynced();
 
@@ -186,7 +187,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		TaskResult<object> BackupWallet();
 		TaskResult<IPMode> GetMiningRegistrationIpMode();
 		
-		TaskResult<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations);
+		TaskResult<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, bool legacyBase32);
 		TaskResult<bool> AttemptWalletRescue();
 			
 		TaskResult<bool> CreateNewStandardAccount(CorrelationContext correlationContext, string name, Enums.AccountTypes accountType, bool encryptKeys, bool encryptKeysIndividually, ImmutableDictionary<int, string> passphrases);
@@ -317,7 +318,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 				if(!this.centralCoordinator.IsCompleted && this.centralCoordinator.IsStarted) {
 					try {
 						try {
-							await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemovePIDLock().ConfigureAwait(false);
+							await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RemovePIDLock(lockContext).ConfigureAwait(false);
 						} catch {
 
 						}
@@ -457,7 +458,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 		public virtual TaskResult<string> Test(string data) {
 
 			return this.RunTaskMethodAsync(async lc => {
-				
+
+
+				var accc = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.GetActiveAccount(null).WaitAndUnwrapException();
+				accc.PublicAccountId = new AccountId("UEM");
+				accc.PresentationTransactionId = new TransactionId(accc.PublicAccountId, 0,0);
+				this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.SaveWallet(null).WaitAndUnwrapException();
+				//this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RestoreWalletFromBackup("/home/jdb/demo/backup.2021-24-2--17-08-42.neuralia", "CXN9CJPT9OSPCWEZB8MZD 5YTXFzK5HQ5KY24 RD672OCJSKR5TXH8 JR89W2CZ349WX28ELN", "HZL4PT2FV9CBTKYVKQ6ZYSRK8EZTP7ZTEXYKK4LGMJNR33T6LWCZJO7WEV4LDXM9", "BW4G2CKOFH4QPGGTX735CAC87MSNTQBLQ7YT4HN", 10000, null, false).WaitAndUnwrapException();
 				
 				// do nothing
 				return "";
@@ -1027,6 +1034,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 
+		public TaskResult<bool> RequestSyncBlockchain() {
+			return this.RunBlockchainTaskMethodAsync(async (service, taskRoutingContext, lc) => {
+
+				await service.SynchronizeBlockchain(true, lc).ConfigureAwait(false);
+
+				return true;
+			}, (results, taskRoutingContext) => {
+				if(results.Error) {
+					//TODO: what to do here?
+				}
+			});
+		}
+
 		public TaskResult<bool> QueryWalletSynced() {
 
 			return this.RunBlockchainTaskMethodAsync(async (service, taskRoutingContext, lc) => {
@@ -1060,9 +1080,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common {
 			});
 		}
 		
-		public TaskResult<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations) {
+		public TaskResult<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, bool legacyBase32) {
 			return this.RunTaskMethodAsync(async lc => {
-				return await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lc).ConfigureAwait(false);
+				return await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lc, legacyBase32).ConfigureAwait(false);
 			});
 		}
 		

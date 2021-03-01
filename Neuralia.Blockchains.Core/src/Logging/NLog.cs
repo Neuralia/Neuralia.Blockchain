@@ -15,9 +15,9 @@ namespace Neuralia.Blockchains.Core.Logging {
 			All, 
 			Standard, 
 			// Standard loggers: (if you add a standard logger, please remember to modify EnableLoggers() accordingly
-			Default, Connections, Messages,
+			Default, Messages,
 			// Opt-in loggers:
-			IPCrawler, UPnP
+			IPCrawler, Connections, UPnP
 		}
 		
 		public static readonly HashSet<LoggerTypes> EnabledLoggers = new HashSet<LoggerTypes>();
@@ -45,7 +45,6 @@ namespace Neuralia.Blockchains.Core.Logging {
 			if (appSettings.EnabledLoggers.Contains(LoggerTypes.Standard)) //default AppSetting
 			{
 				EnableLogger(LoggerTypes.Default);
-				EnableLogger(LoggerTypes.Connections);
 				EnableLogger(LoggerTypes.Messages);
 			}
 

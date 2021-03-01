@@ -86,7 +86,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			}
 		}
 
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			try {
 				if(!await this.PerformConnection().ConfigureAwait(false)) {
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.Unknown);
@@ -96,6 +96,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				throw;
 			}
+			return true;
 		}
 
 		private void CloseConnection() {
@@ -143,6 +144,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 			try {
 				this.serverConnection = this.GetNewConnection(this.Endpoint);
 
+				DateTime latencyStart = DateTimeEx.CurrentTime;
 				if(!await SendMessage(serverConnection, handshakeTrigger).ConfigureAwait(false)) {
 					NLog.Default.Verbose($"Connection with peer  {this.serverConnection.ScopedAdjustedIp} was terminated");
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.NoAnswer);
@@ -160,7 +162,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ConnectionDropped);
 				}
 				
-
+				this.serverConnection.connection.AddLatency(latencyStart);
+				
 				switch (serverHandshake.Message.Status)
 				{ 
 					case ServerHandshake<R>.HandshakeStatuses.Ok:
@@ -222,7 +225,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 				if(clientConfirm == null) {
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmFailed);
 				}
-
+				
+				latencyStart = DateTimeEx.CurrentTime;
 				if(!await SendMessage(serverConnection, clientConfirm).ConfigureAwait(false)) {
 					NLog.Default.Verbose($"Connection with peer  {this.serverConnection.ScopedAdjustedIp} was terminated");
 					throw new ClientHandshakeException(ClientHandshakeException.ExceptionDetails.ClientHandshakeConfirmDropped);
@@ -230,6 +234,8 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Handshake {
 
 				TargettedMessageSet<ServerHandshakeConfirm<R>, R> serverResponse = await WaitSingleNetworkMessage<ServerHandshakeConfirm<R>, TargettedMessageSet<ServerHandshakeConfirm<R>, R>, R>().ConfigureAwait(false);
 
+				this.serverConnection.connection.AddLatency(latencyStart);
+				
 				if(this.ProcessServerHandshakeConfirm(handshakeTrigger, serverHandshake.Message, serverResponse.Message, this.serverConnection)) {
 					// it is a confirmed connection, we are now friends
 					

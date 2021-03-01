@@ -187,7 +187,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Managers {
 		}
 
 		/// <summary>
-		/// perform an operation without doing the THS
+		/// perform an operations without doing the THS
 		/// </summary>
 		/// <param name="action"></param>
 		/// <typeparam name="T"></typeparam>

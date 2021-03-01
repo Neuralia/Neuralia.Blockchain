@@ -113,7 +113,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 					this.UpdateNetworkEndPoint();
 				} else {
-					throw new InvalidOperationException();
+					throw new InvalidOperationException($"Invalid IP value '{value}'. Failed to parse");
 				}
 			}
 		}

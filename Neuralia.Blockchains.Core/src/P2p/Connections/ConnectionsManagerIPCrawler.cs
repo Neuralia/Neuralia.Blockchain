@@ -1,12 +1,13 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Threading.Tasks;
-using MoreLinq.Extensions;
 using Neuralia.Blockchains.Core.Configuration;
 using Neuralia.Blockchains.Core.Exceptions;
+using Neuralia.Blockchains.Core.Extensions;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Core.Network;
 using Neuralia.Blockchains.Core.P2p.Messages.Components;
@@ -18,6 +19,7 @@ using Neuralia.Blockchains.Core.Tools;
 using Neuralia.Blockchains.Core.Types;
 using Neuralia.Blockchains.Core.Workflows.Tasks;
 using Neuralia.Blockchains.Core.Workflows.Tasks.Receivers;
+using Neuralia.Blockchains.Core.Workflows.Tasks.Routing;
 using Neuralia.Blockchains.Tools;
 using Neuralia.Blockchains.Tools.Data;
 using Neuralia.Blockchains.Tools.Data.Arrays;
@@ -28,10 +30,18 @@ using Neuralia.Blockchains.Tools.Threading;
 
 namespace Neuralia.Blockchains.Core.P2p.Connections {
 
+	public interface IConnectionsManagerIPCrawler : IConnectionsProvider, ISimpleRoutedTaskHandler, IColoredRoutedTaskHandler, ILoopThread {
+		IIPCrawler Crawler { get; }
+		
+	}
+	public interface IConnectionsManagerIPCrawler<R> : ILoopThread<ConnectionsManagerIPCrawler<R>>, IConnectionsManagerIPCrawler
+		where R : IRehydrationFactory {
+	}
+	
 	/// <summary>
 	///     A special coordinator thread that is responsible for managing various aspects of the networking stack
 	/// </summary>
-	public class ConnectionsManagerIPCrawler<R> : LoopThread<ConnectionsManager<R>>, IConnectionsManager<R>, IConnectionsProvider
+	public class ConnectionsManagerIPCrawler<R> : LoopThread<ConnectionsManagerIPCrawler<R>>, IConnectionsManagerIPCrawler<R>
 		where R : IRehydrationFactory {
 
 		private readonly IClientWorkflowFactory<R> clientWorkflowFactory;
@@ -63,7 +73,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		/// </summary>
 		private readonly SimpleRoutedTaskReceiver RoutedTaskReceiver;
 
-		private List<(string, Task)> ipCrawlerRequests = new List<(string, Task)>();
+		private ConcurrentDictionary<Task, string> ipCrawlerRequests = new ();
 
 		private DateTime? nextAction;
 		private DateTime? nextSyncProxiesAction;
@@ -107,8 +117,8 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		public bool IsPublicAndConnectable()
 		{
-			if (this.connectionStore.PublicIpMode != IPMode.Unknown)
-				throw new Exception($"nameof(IsPublicAndConnectable)");
+			if (this.connectionStore.PublicIpMode == IPMode.Unknown)
+				throw new Exception($"{nameof(IsPublicAndConnectable)} IPMode unknown!");
 			
 			return this.connectionStore.IsConnectable;
 		}
@@ -128,11 +138,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				, GlobalSettings.ApplicationSettings.LocalNodesDiscoveryTimeout
 				, Convert.ToInt32(GlobalSettings.ApplicationSettings.LocalNodesDiscoveryMode)
 				, GlobalSettings.ApplicationSettings.MaxPeerLatency
-				, GlobalSettings.ApplicationSettings.IPCrawlerPrintNConnections);
+				, GlobalSettings.ApplicationSettings.IPCrawlerPrintNConnections
+				, GlobalSettings.ApplicationSettings.MaxPendingConnectionRequests);
 		}
 
 		private void HandleNewConnection(PeerConnection connection) {
-			this.Crawler.HandleLogin(connection.NodeAddressInfo, connection.ConnectionTime, connection.connection.Latency);
+			this.Crawler.HandleLogin(connection.NodeAddressInfo, connection.ConnectionTime, connection.connection.ConnectionLatency, connection.connection.ConnectionLatencyStd);
 
 			connection.Disposed += disposed => {
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} connection disposed detected: {disposed.NodeAddressInfo}!");
@@ -171,7 +182,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public void RequestHubIPs() {
 			NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.RequestHubIPs)}.");
 
-			this.ipCrawlerRequests.Add((nameof(this.RequestHubIPs), this.ContactHubs()));
+			this.ipCrawlerRequests.TryAdd(this.ContactHubs(), nameof(this.RequestHubIPs));
 		}
 
 		public void RequestPeerIPs(NodeAddressInfo node) {
@@ -197,19 +208,19 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							ImmutableList<NodeAddressInfo> nodes = peer.PeerNodes.Nodes;
 
 							this.ReceiveTask(new SimpleTask(s => {
-								NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.RequestPeerIPs)}: succes={success}, {nodes.Count} ips returned.");
+								NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.RequestPeerIPs)}: success={success}, {nodes.Count} ips returned.");
 
 								if(success) {
 									this.Crawler.HandlePeerIPs(node, nodes.Where(n => !this.connectionStore.IsOurAddress(n)).ToList(), DateTimeEx.CurrentTime);
 								} else {
-									this.Crawler.HandleTimeout(node, DateTimeEx.CurrentTime);
+									this.Crawler.HandlePeerListRequestError(node, DateTimeEx.CurrentTime);
 								}
 							}));
-							peer.connection.Latency = peerListRequest.Latency.TotalSeconds;
+
 							return Task.CompletedTask;
 						};
 
-						this.ipCrawlerRequests.Add(($"{nameof(this.RequestPeerIPs)}_{peer.NodeAddressInfo}", this.networkingService.WorkflowCoordinator.AddWorkflow(peerListRequest)));
+						this.ipCrawlerRequests.TryAdd(this.networkingService.WorkflowCoordinator.AddWorkflow(peerListRequest), $"{nameof(this.RequestPeerIPs)}_{peer.NodeAddressInfo}");
 					} else {
 						List<NodeAddressInfo> nodes = new List<NodeAddressInfo>();
 						this.Crawler.HandlePeerIPs(node, nodes, DateTimeEx.CurrentTime);
@@ -227,7 +238,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			ImmutableList<PeerConnection> shouldBeEmpty = this.connectionStore.AllConnectionsList.Where(peerConnection => peerConnection.NodeAddressInfo.Equals(node)).ToImmutableList();
 
 			if(shouldBeEmpty.IsEmpty) {
-				this.ipCrawlerRequests.Add(($"{nameof(this.RequestConnect)}_{node}", this.CreateConnectionAttempt(node)));
+				this.ipCrawlerRequests.TryAdd(this.CreateConnectionAttempt(node), $"{nameof(this.RequestConnect)}_{node}");
 			} else {
 				NLog.IPCrawler.Warning($"[Crawler] {nameof(this.RequestConnect)}: {node} already connected, calling HandleLogin(), this hints at a bug.");
 				this.HandleNewConnection(shouldBeEmpty.Single());
@@ -240,7 +251,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			// lets get a list of connected IPs
 			List<PeerConnection> connectedNodes = this.connectionStore.AllConnectionsList.Where(c => c.NodeAddressInfo.Equals(node)).ToList();
 
-			this.ipCrawlerRequests.Add(($"{nameof(this.RequestDisconnect)}_{node}", this.DisconnectPeers(connectedNodes)));
+			this.ipCrawlerRequests.TryAdd(this.DisconnectPeers(connectedNodes), $"{nameof(this.RequestDisconnect)}_{node}");
 
 		}
 
@@ -348,7 +359,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 										this.ReceiveTask(new SimpleTask(s2 => {
 
 //											NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(Crawler.HandleInput)}--{nBytes} bytes from node {node}");
-											this.Crawler.HandleInput(node, DateTimeEx.CurrentTime, nBytes, peer.connection.Latency);
+											this.Crawler.HandleInput(node, DateTimeEx.CurrentTime, nBytes, peer.connection.ConnectionLatency, peer.connection.ConnectionLatencyStd);
 										}));
 										
 										return Task.CompletedTask;
@@ -361,7 +372,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 										this.ReceiveTask(new SimpleTask(s2 => {
 //											NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(Crawler.HandleOutput)}--{nBytes} bytes from node {node}");
-											this.Crawler.HandleOutput(node, DateTimeEx.CurrentTime, nBytes, peer.connection.Latency);
+											this.Crawler.HandleOutput(node, DateTimeEx.CurrentTime, nBytes, peer.connection.ConnectionLatency, peer.connection.ConnectionLatencyStd);
 										}));
 									};
 								} else {
@@ -404,13 +415,11 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.ProcessLoop)}, acting next at {this.nextAction}.");
 
-
 				
 				this.CheckShouldCancel();
-
 				// first thing, lets check if we have any tasks received to process
 				await this.CheckTasks().ConfigureAwait(false);
-
+				
 				this.CheckShouldCancel();
 
 				if(this.ShouldAct(ref this.nextSyncProxiesAction)) {
@@ -419,10 +428,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				}
 				
 
-				
 				if(!this.ShouldAct(ref this.nextAction))
 					return;
-
+				
 				if(this.networkingService.NetworkingStatus == NetworkingService.NetworkingStatuses.Paused) {
 					NLog.IPCrawler.Verbose($"{IPCrawler.TAG} networking status is paused.");
 					// its paused, we dont do anything, just return
@@ -431,7 +439,6 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					return;
 				}
 
-				
 				//JD asked me to call this every loop for the need of child classes
 				this.connectionStore.LoadStaticStartNodes();
 
@@ -454,20 +461,21 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} pending tasks: ");
 
-				foreach((string name, Task task) in this.ipCrawlerRequests.ToImmutableList())
+				foreach((Task task, string name) in this.ipCrawlerRequests)
 				{
 					switch (task.Status)
 					{
 						case TaskStatus.Canceled:
-							this.ipCrawlerRequests.Remove((name, task));
+							NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Task {name} Canceled.");
+							this.ipCrawlerRequests.TryRemove(task, out _);
 							break;
 						case TaskStatus.Faulted:
 							NLog.IPCrawler.Error($"{IPCrawler.TAG} Task {name} Faulted.");
-							this.ipCrawlerRequests.Remove((name, task));
+							this.ipCrawlerRequests.TryRemove(task, out _);
 							break;
 						case TaskStatus.RanToCompletion:
 							NLog.IPCrawler.Verbose($"{IPCrawler.TAG} Task {name} Completed.");
-							this.ipCrawlerRequests.Remove((name, task));
+							this.ipCrawlerRequests.TryRemove(task, out _);
 							break;
 						case TaskStatus.Created:
 							break;
@@ -490,12 +498,12 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				// lets act again in X seconds
 				this.nextAction = DateTimeEx.CurrentTime.AddSeconds(GlobalSettings.ApplicationSettings.IPCrawlerCrawlPeriod);
+				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} scheduling next action at {this.nextAction}, now awaiting {this.ipCrawlerRequests.Count} remaining tasks.");
 
-				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {this.ipCrawlerRequests.Count} remaining tasks.");
 
-				foreach ((string name, Task task) in this.ipCrawlerRequests){
+				foreach ((Task task, string name) in this.ipCrawlerRequests){
 					NLog.IPCrawler.Verbose($"Incomplete Task {name} has status {task.Status}, awaiting...");
-					await task.ConfigureAwait(false);
+					await task.TimeoutAfter(TimeSpan.FromSeconds(0.5 * GlobalSettings.ApplicationSettings.IPCrawlerCrawlPeriod)).ConfigureAwait(false);
 					NLog.IPCrawler.Verbose($"Task {name} now has status {task.Status}.");
 				}
 
@@ -582,7 +590,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				var infoList = new NodeAddressInfoList();
 				Guid ip = rehydrator.ReadGuid();
-				var ipAddress = IPUtils.GuidToIP(ip);
+				var ipAddress = IPUtils.GuidToIP(ip); 
 				
 				this.connectionStore.AddPeerReportedPublicIp(ipAddress, ConnectionStore.PublicIpSource.Hub);
 				
@@ -594,7 +602,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			(bool sent, NodeAddressInfoList infoListResult) = await restUtility.PerformSecurePost(GlobalSettings.ApplicationSettings.HubsWebAddress, "hub/query", restParameterSet).ConfigureAwait(false);
 
 			if(sent) {
-				NLog.IPCrawler.Verbose($"{IPCrawler.TAG} {nameof(this.Crawler.HandleHubIPs)} (Web): {infoListResult.Nodes.Count} ips returned");
+				NLog.IPCrawler.Debug($"{IPCrawler.TAG} {nameof(this.Crawler.HandleHubIPs)} (Web): {infoListResult.Nodes.Count} ips returned");
 				this.Crawler.HandleHubIPs(infoListResult.Nodes.Where(n => !this.connectionStore.IsOurAddress(n)).ToList(), DateTimeEx.CurrentTime);
 
 				this.connectionStore.AddAvailablePeerNodes(infoListResult, true);
@@ -696,6 +704,9 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 			// lets make sure we remove the ones we are already connected to.
 			return Task.FromResult(currentAvailableNodes.Where(an => !connectedIps.Contains(an.ScopedIp)).ToList());
 		}
+		
+
 	}
 
+	
 }

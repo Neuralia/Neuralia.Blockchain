@@ -84,6 +84,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			Sha3
 		}
 
+		public enum WalletProviderOperatingStates {
+			Unloaded, CreatingWallet, LoadingWallet, WalletLoaded
+		}
+
 		public const int DEFAULT_KEY_HASH_BITS = 256;
 		public const int DEFAULT_KEY_BACKUP_HASH_BITS = 256;
 
@@ -139,7 +143,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	}
 
 	public interface IUtilityWalletProvider : IDisposableExtended, IChainProvider {
-		public bool IsWalletLoaded { get; }
+		bool IsWalletLoaded { get; }
+		bool IsWalletLoading { get; }
+		bool IsWalletCreating { get; }
+		
 		public string GetChainDirectoryPath();
 		public string GetChainStorageFilesPath();
 		public string GetSystemFilesDirectoryPath();
@@ -150,12 +157,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		Task<bool> ResetWalletIndex(LockContext lockContext);
 
-		public Task RemovePIDLock();
+		public Task RemovePIDLock(LockContext lockContext);
 		
 		string GetWalletKeysCachePath();
 	}
 
 	public interface IReadonlyWalletProvider {
+		
+		WalletProvider.WalletProviderOperatingStates OperatingState { get; }
 		Task<bool> IsWalletEncrypted(LockContext lockContext);
 		Task<bool> IsWalletAccountLoaded(LockContext lockContext);
 		Task<bool> WalletFileExists(LockContext lockContext);
@@ -204,7 +213,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<IWalletAccountSnapshot> GetWalletFileInfoAccountSnapshot(string accountCode, LockContext lockContext);
 
 		Task<IWalletAccountSnapshot> GetAccountSnapshot(AccountId accountId, LockContext lockContext);
-		Task<DistilledAppointmentContext> GetDistilledAppointmentContextFile();
+		Task<DistilledAppointmentContext> GetDistilledAppointmentContextFile(LockContext lockContext);
 		
 		Task<IWalletStandardAccountSnapshot> CreateNewWalletStandardAccountSnapshotEntry(LockContext lockContext);
 		Task<IWalletJointAccountSnapshot> CreateNewWalletJointAccountSnapshotEntry(LockContext lockContext);
@@ -212,8 +221,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	public interface IWalletProviderWrite : IChainProvider{
 
-		Task WriteDistilledAppointmentContextFile(DistilledAppointmentContext distilledAppointmentContext);
-		void ClearDistilledAppointmentContextFile();
+		Task WriteDistilledAppointmentContextFile(DistilledAppointmentContext distilledAppointmentContext, LockContext lockContext);
+		void ClearDistilledAppointmentContextFile(LockContext lockContext);
 		Task UpdateMiningStatistics(AccountId accountId, Enums.MiningTiers miningTiers, Action<WalletElectionsMiningSessionStatistics> sessionCallback, Action<WalletElectionsMiningAggregateStatistics> totalCallback, LockContext lockContext, bool resetSession = false);
 		Task StopSessionMiningStatistics(AccountId accountId, LockContext lockContext);
 		
@@ -347,7 +356,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		Task<IWalletStandardAccountSnapshot> GetStandardAccountSnapshot(AccountId accountId, LockContext lockContext);
 		Task<IWalletJointAccountSnapshot> GetJointAccountSnapshot(AccountId accountId, LockContext lockContext);
 		Task<(string path, string passphrase, string salt, string nonce, int iterations)> BackupWallet(WalletProvider.BackupTypes backupType, LockContext lockContext);
-		Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext);
+		Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext, bool legacyBase32);
 		Task<bool> AttemptWalletRescue(LockContext lockContext);
 		Task UpdateWalletChainStateSyncStatus(string accountCode, long BlockId, WalletAccountChainState.BlockSyncStatuses blockSyncStatus, LockContext lockContext);
 
@@ -448,7 +457,19 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected readonly string chainPath;
 
-		protected readonly FileSystemWrapper fileSystem;
+		public WalletProvider.WalletProviderOperatingStates OperatingState { get; private set; } = WalletProvider.WalletProviderOperatingStates.Unloaded;
+
+		/// <summary>
+		/// returns either the transactional 
+		/// </summary>
+		protected FileSystemWrapper FileSystem(LockContext lockContext) {
+
+			if(this.SerialisationFal != null && this.TransactionInProgress(lockContext) && this.SerialisationFal.TransactionalFileSystem != null && this.SerialisationFal.TransactionalFileSystem.IsInTransaction) {
+				return this.SerialisationFal.TransactionalFileSystem.FileSystem;
+			}
+
+			return this.CentralCoordinator.FileSystem;
+		}
 
 		protected readonly IGlobalsService globalsService;
 
@@ -475,9 +496,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.centralCoordinator = centralCoordinator;
 
 			this.globalsService = centralCoordinator.BlockchainServiceSet.GlobalsService;
-
-			this.fileSystem = centralCoordinator.FileSystem;
-
+			
 			this.serviceSet = centralCoordinator.BlockchainServiceSet;
 			centralCoordinator.ShutdownRequested += this.CentralCoordinatorOnShutdownRequested;
 		}
@@ -495,7 +514,9 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		public IUserWalletFileInfo WalletFileInfo { get; private set; }
 
-		public bool IsWalletLoaded => this.WalletFileInfo?.IsLoaded ?? false;
+		public bool IsWalletLoading => this.OperatingState == WalletProvider.WalletProviderOperatingStates.LoadingWallet;
+		public bool IsWalletCreating => this.OperatingState == WalletProvider.WalletProviderOperatingStates.CreatingWallet;
+		public bool IsWalletLoaded => this.OperatingState == WalletProvider.WalletProviderOperatingStates.WalletLoaded && (this.WalletFileInfo?.IsLoaded ?? false);
 
 		public Task<bool> IsWalletEncrypted(LockContext lockContext) {
 			return Task.FromResult(this.WalletFileInfo.WalletSecurityDetails.EncryptWallet);
@@ -686,7 +707,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		public override async Task Initialize(LockContext lockContext) {
 			await base.Initialize(lockContext).ConfigureAwait(false);
 
-			this.SerialisationFal = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainDalCreationFactoryBase.CreateWalletSerialisationFal(this.centralCoordinator, this.GetChainDirectoryPath(), this.fileSystem);
+			this.SerialisationFal = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.ChainDalCreationFactoryBase.CreateWalletSerialisationFal(this.centralCoordinator, this.GetChainDirectoryPath(), this.CentralCoordinator.FileSystem);
 			
 			this.WalletFileInfo = this.SerialisationFal.CreateWalletFileInfo();
 
@@ -725,7 +746,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 		
 		protected string GetDistilledAppointmentContextPath() {
-			return Path.Combine(GetWalletFolderPath(), DISTILLED_APPOINTMENT_CONTEXT_FILENAME);
+			return Path.Combine(GetWalletCachePath(), DISTILLED_APPOINTMENT_CONTEXT_FILENAME);
 		}
 		
 		protected string GetWalletCachePath() {
@@ -1104,7 +1125,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="encrypt"></param>
 		/// <exception cref="ApplicationException"></exception>
 		public async Task CreateNewEmptyWallet(CorrelationContext correlationContext, bool encryptWallet, string passphrase, SystemEventGenerator.WalletCreationStepSet walletCreationStepSet, LockContext lockContext) {
-			if(this.IsWalletLoaded) {
+			if(this.IsWalletLoaded || this.IsWalletLoading || this.IsWalletCreating) {
 				throw new ApplicationException("Wallet is already created");
 			}
 
@@ -1117,36 +1138,40 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 			}
 
-			await this.SerialisationFal.InstallWalletCreatingTag(lockContext).ConfigureAwait(false);
-			
-			this.WalletFileInfo.WalletSecurityDetails.EncryptWallet = encryptWallet;
+			try {
+				this.OperatingState = WalletProvider.WalletProviderOperatingStates.CreatingWallet;
+				await this.SerialisationFal.InstallWalletCreatingTag(lockContext).ConfigureAwait(false);
 
-			if(encryptWallet) {
-				if(string.IsNullOrWhiteSpace(passphrase) || passphrase.Length < MINIMUM_KEY_PASSPHRASE_LENGTH) {
-					throw new InvalidOperationException($"Passphrase must be {MINIMUM_KEY_PASSPHRASE_LENGTH} characters long");
+				this.WalletFileInfo.WalletSecurityDetails.EncryptWallet = encryptWallet;
+
+				if(encryptWallet) {
+					if(string.IsNullOrWhiteSpace(passphrase) || passphrase.Length < MINIMUM_KEY_PASSPHRASE_LENGTH) {
+						throw new InvalidOperationException($"Passphrase must be {MINIMUM_KEY_PASSPHRASE_LENGTH} characters long");
+					}
+
+					this.SetWalletPassphrase(passphrase, lockContext);
 				}
 
-				this.SetWalletPassphrase(passphrase, lockContext);
+				IUserWallet wallet = this.CreateNewWalletEntry(lockContext);
+
+				// set the wallet version
+
+				wallet.Major = GlobalSettings.BlockchainCompatibilityVersion.Major;
+				wallet.Minor = GlobalSettings.BlockchainCompatibilityVersion.Minor;
+				wallet.Revision = GlobalSettings.BlockchainCompatibilityVersion.Revision;
+
+				wallet.NetworkId = GlobalSettings.Instance.NetworkId;
+				wallet.ChainId = this.centralCoordinator.ChainId.Value;
+
+				await this.WalletFileInfo.CreateEmptyFileBase(wallet, lockContext).ConfigureAwait(false);
+
+				await this.SerialisationFal.RemoveWalletCreatingTag(lockContext).ConfigureAwait(false);
+
+				this.OperatingState = WalletProvider.WalletProviderOperatingStates.WalletLoaded;
+			} catch {
+				this.OperatingState = WalletProvider.WalletProviderOperatingStates.Unloaded;
+				throw;
 			}
-
-			IUserWallet wallet = this.CreateNewWalletEntry(lockContext);
-
-			// set the wallet version
-
-			wallet.Major = GlobalSettings.BlockchainCompatibilityVersion.Major;
-			wallet.Minor = GlobalSettings.BlockchainCompatibilityVersion.Minor;
-			wallet.Revision = GlobalSettings.BlockchainCompatibilityVersion.Revision;
-
-			wallet.NetworkId = GlobalSettings.Instance.NetworkId;
-			wallet.ChainId = this.centralCoordinator.ChainId.Value;
-
-			await this.WalletFileInfo.CreateEmptyFileBase(wallet, lockContext).ConfigureAwait(false);
-			
-			await this.SerialisationFal.RemoveWalletCreatingTag(lockContext).ConfigureAwait(false);
-			
-			
-			// lets update the appointment operating mode now that we can
-			await this.UpdateAppointmentOperatingMode(lockContext).ConfigureAwait(false);
 		}
 
 		protected IWalletBackupProcessor CreateWalletBackupProcessor() {
@@ -1177,11 +1202,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <param name="nonce"></param>
 		/// <param name="iterations"></param>
 		/// <param name="lockContext"></param>
+		/// <param name="legacyBase32"></param>
 		/// <returns></returns>
-		public Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext) {
+		public Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext, bool legacyBase32) {
 			
 			var walletBackupProcessor = this.CreateWalletBackupProcessor();
-			return walletBackupProcessor.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lockContext);
+			return walletBackupProcessor.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lockContext, legacyBase32);
 		}
 
 		/// <summary>
@@ -1197,7 +1223,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		///     Load the wallet
 		/// </summary>
 		public async Task<bool> LoadWallet(CorrelationContext correlationContext, LockContext lockContext, string passphrase = null) {
-			if(this.IsWalletLoaded) {
+			if(this.IsWalletLoaded || this.IsWalletLoading || this.IsWalletCreating) {
 				this.CentralCoordinator.Log.Warning("Wallet already loaded");
 
 				return false;
@@ -1205,7 +1231,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			this.CentralCoordinator.Log.Warning("Ensuring PID protection");
 
-			await this.EnsurePIDLock().ConfigureAwait(false);
+			await this.EnsurePIDLock(lockContext).ConfigureAwait(false);
 
 			this.CentralCoordinator.Log.Information("Loading wallet");
 			
@@ -1217,7 +1243,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				}
 				
 				await this.EnsureWalletPassphrase(lockContext, passphrase).ConfigureAwait(false);
-				
+
+				this.OperatingState = WalletProvider.WalletProviderOperatingStates.LoadingWallet;
 				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingStartedEvent(), correlationContext).ConfigureAwait(false);
 
 				await this.WalletFileInfo.LoadFileSecurityDetails(lockContext).ConfigureAwait(false);
@@ -1251,7 +1278,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					await WalletFileInfo.Accounts[account.AccountCode].Load(lockContext).ConfigureAwait(false);
 
 					// apply any fixes missing if applicable
-					//await this.ApplyAccountFixes(account, lockContext).ConfigureAwait(false);
+					await this.ApplyAccountFixes(account, lockContext).ConfigureAwait(false);
 					
 					// now verify the key indicies
 					await this.WalletProviderKeysComponent.CompareAccountKeyIndiciesCaches(account.AccountCode, lockContext).ConfigureAwait(false);
@@ -1259,6 +1286,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				
 				this.CentralCoordinator.Log.Warning("Wallet successfully loaded");
 
+				this.OperatingState = WalletProvider.WalletProviderOperatingStates.WalletLoaded;
+				
 				//TODO: oit is unclear if this event should happen before, or after WalletIsLoaded event. to check
 				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingEndedEvent(), correlationContext).ConfigureAwait(false);
 
@@ -1266,36 +1295,27 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					await this.WalletIsLoaded().ConfigureAwait(false);
 				}
 				
-			} catch(FileNotFoundException e) {
-
+			}  catch(Exception e) {
+				
 				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext).ConfigureAwait(false);
 
 				await this.WalletFileInfo.Reset(lockContext).ConfigureAwait(false);
 				this.WalletFileInfo = this.SerialisationFal.CreateWalletFileInfo();
 
-				this.CentralCoordinator.Log.Warning("Failed to load wallet, no wallet file exists");
-
-				// for a missing file, we simply return false, so we can create it
-				return false;
-			} catch(Exception e) {
-
-				await this.centralCoordinator.PostSystemEventImmediate(SystemEventGenerator.WalletLoadingErrorEvent(), correlationContext).ConfigureAwait(false);
-
-				await this.WalletFileInfo.Reset(lockContext).ConfigureAwait(false);
-				this.WalletFileInfo = this.SerialisationFal.CreateWalletFileInfo();
-
-				this.CentralCoordinator.Log.Error(e, "Failed to load wallet");
-
-				throw;
+				if(e is FileNotFoundException) {
+					this.CentralCoordinator.Log.Warning("Failed to load wallet, no wallet file exists");
+					
+					// for a missing file, we simply return false, so we can create it
+					return false;
+				} else {
+					this.CentralCoordinator.Log.Error(e, "Failed to load wallet");
+					throw;
+				}
 			}
-
-			await this.centralCoordinator.RequestWalletSync().ConfigureAwait(false);
 			
-			// lets update the appointment operationg mode now that we can
-			await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.CheckOperatingMode(lockContext).ConfigureAwait(false);
-
-			// lets update the appointment operating mode now that we can
-			await this.UpdateAppointmentOperatingMode(lockContext).ConfigureAwait(false);
+			await this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.UpdateOperatingMode(lockContext).ConfigureAwait(false);
+			
+			await this.centralCoordinator.RequestWalletSync().ConfigureAwait(false);
 			
 			return true;
 		}
@@ -1308,11 +1328,30 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		/// <returns></returns>
 		protected virtual Task ApplyAccountFixes(IWalletAccount account, LockContext lockContext) {
 
-			// int FIX1 = 1;
-			// if((account.AppliedFixes & (1 << FIX1)) == 0) {
-			// 	
-			// 	account.AppliedFixes |= (ushort)(1 << FIX1);
-			// }
+			// the presentation transaction Id might be in the old bad format, so we update it. the PresentationId is in the right format so we use it
+			int FIX_PRESENTATION_ACCOUNT_ID = 1;
+			if((account.AppliedFixes & (1 << FIX_PRESENTATION_ACCOUNT_ID)) == 0) {
+
+				if(GlobalSettings.ApplicationSettings.MobileMode) {
+					
+					
+				} else {
+
+					if(account.ConfirmationBlockId > 1) {
+						var oldTransactionId = account.PresentationTransactionId;
+
+						var block = this.CentralCoordinator.ChainComponentProvider.ChainDataLoadProviderBase.LoadBlock(account.ConfirmationBlockId);
+
+						var entry = block.GetAllIndexedTransactions().SingleOrDefault(t => t.TransactionId.Account == account.PresentationId);
+
+						if(entry != default) {
+							// update to the fixed version
+							account.PresentationTransactionId = entry.TransactionId;
+							account.AppliedFixes |= (1L << FIX_PRESENTATION_ACCOUNT_ID);
+						}
+					}
+				}
+			}
 			
 			return Task.CompletedTask;
 		}
@@ -1340,13 +1379,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.CheckOperatingMode(lockContext);
 
 		}
-		public Task RemovePIDLock() {
+		public Task RemovePIDLock(LockContext lockContext) {
 			try {
 				string pidfile = this.GetPIDFilePath();
 
-				if(this.fileSystem.FileExists(pidfile)) {
+				if(this.FileSystem(lockContext).FileExists(pidfile)) {
 
-					this.fileSystem.DeleteFile(pidfile);
+					this.FileSystem(lockContext).DeleteFile(pidfile);
 				}
 			} catch {
 				// do nothing
@@ -1899,7 +1938,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return Path.Combine(this.GetChainDirectoryPath(), PID_LOCK_FILE);
 		}
 
-		protected virtual async Task EnsurePIDLock() {
+		protected virtual async Task EnsurePIDLock(LockContext lockContext) {
 
 			if((this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.SerializationType == AppSettingsBase.SerializationTypes.Secondary) || GlobalSettings.ApplicationSettings.MobileMode) {
 				// feeders and mobiles dont need to worry about this
@@ -1908,15 +1947,15 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			string directory = this.GetChainDirectoryPath();
 
-			FileExtensions.EnsureDirectoryStructure(directory, this.fileSystem);
+			FileExtensions.EnsureDirectoryStructure(directory, this.FileSystem(lockContext));
 
 			string pidfile = this.GetPIDFilePath();
 
 			int currentPid = Process.GetCurrentProcess().Id;
 
-			if(this.fileSystem.FileExists(pidfile)) {
+			if(this.FileSystem(lockContext).FileExists(pidfile)) {
 				try {
-					SafeArrayHandle pidBytes = FileExtensions.ReadAllBytes(pidfile, this.fileSystem);
+					SafeArrayHandle pidBytes = FileExtensions.ReadAllBytes(pidfile, this.FileSystem(lockContext));
 
 					int lockPid = 0;
 
@@ -1946,13 +1985,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 					throw new ApplicationException("Failed to read pid lock file. invalid contents. shutting down.", ex);
 				}
 
-				this.fileSystem.DeleteFile(pidfile);
+				this.FileSystem(lockContext).DeleteFile(pidfile);
 			}
 
 			byte[] bytes = new byte[sizeof(int)];
 			TypeSerializer.Serialize(currentPid, in bytes);
 
-			FileExtensions.WriteAllBytes(pidfile, SafeArrayHandle.WrapAndOwn(bytes), this.fileSystem);
+			FileExtensions.WriteAllBytes(pidfile, SafeArrayHandle.WrapAndOwn(bytes), this.FileSystem(lockContext));
 		}
 
 		protected virtual async Task PrepareAccountInfos(IAccountFileInfo accountFileInfo, LockContext lockContext) {
@@ -2186,6 +2225,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		protected virtual async Task<IAccountFileInfo> CreateNewAccountFileInfo(IWalletAccount account, LockContext lockContext) {
+
 			this.EnsureWalletIsLoaded();
 
 			IAccountFileInfo accountFileInfo = this.CreateNewAccountFileInfo(new AccountPassphraseDetails(account.KeysEncrypted, account.KeysEncryptedIndividually, this.centralCoordinator.ChainComponentProvider.ChainConfigurationProviderBase.ChainConfiguration.DefaultKeyPassphraseTimeout));
@@ -2312,7 +2352,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 	#region Physical key management
 
 		public void EnsureWalletIsLoaded() {
-			if(!this.IsWalletLoaded) {
+			if(!this.IsWalletLoaded && !this.IsWalletLoading && !this.IsWalletCreating) {
 				throw new WalletNotLoadedException();
 			}
 		}
@@ -3769,18 +3809,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			foreach(IWalletAccount account in accounts) {
 				//now we take care of presentation transactions
-#if MAINNET_LAUNCH_CODE
-				if(DateTimeEx.CurrentTime > GlobalsService.MainnetLauchTime.AddDays(2)) {
-					if((account.Status == Enums.PublicationStatus.Dispatched) && account.PresentationTransactionTimeout.HasValue && (account.PresentationTransactionTimeout.Value < lastBlockTimestamp)) {
-						// ok, this is a timeout, we reset it
-						account.PresentationTransactionTimeout = null;
-						account.PresentationTransactionId = null;
-						account.Status = Enums.PublicationStatus.New;
-						changed = true;
-					}
-				}
-#else
-clean above
+
 				if((account.Status == Enums.PublicationStatus.Dispatched) && account.PresentationTransactionTimeout.HasValue && (account.PresentationTransactionTimeout.Value < lastBlockTimestamp)) {
 					// ok, this is a timeout, we reset it
 					account.PresentationTransactionTimeout = null;
@@ -3788,7 +3817,7 @@ clean above
 					account.Status = Enums.PublicationStatus.New;
 					changed = true;
 				}
-#endif
+
 
 			}
 
@@ -3822,32 +3851,32 @@ clean above
 			return changed;
 		}
 
-		public void ClearDistilledAppointmentContextFile() {
+		public void ClearDistilledAppointmentContextFile(LockContext lockContext) {
 			string path = this.GetDistilledAppointmentContextPath();
 
-			if(this.fileSystem.FileExists(path)) {
-				this.fileSystem.DeleteFile(path);
+			if(this.FileSystem(lockContext).FileExists(path)) {
+				this.FileSystem(lockContext).DeleteFile(path);
 			}
 		}
 
-		public Task WriteDistilledAppointmentContextFile(DistilledAppointmentContext distilledAppointmentContext) {
+		public Task WriteDistilledAppointmentContextFile(DistilledAppointmentContext distilledAppointmentContext, LockContext lockContext) {
 			
 			string path = this.GetDistilledAppointmentContextPath();
 			
-			FileExtensions.WriteAllText(path, JsonSerializer.Serialize(distilledAppointmentContext), this.fileSystem);
+			FileExtensions.WriteAllText(path, JsonSerializer.Serialize(distilledAppointmentContext), this.FileSystem(lockContext));
 
 			return Task.CompletedTask;
 		}
 		
-		public Task<DistilledAppointmentContext> GetDistilledAppointmentContextFile() {
+		public Task<DistilledAppointmentContext> GetDistilledAppointmentContextFile(LockContext lockContext) {
 
 			DistilledAppointmentContext distilledAppointmentContext = null;
 
 			string path = this.GetDistilledAppointmentContextPath();
 
-			if(this.fileSystem.FileExists(path)) {
+			if(this.FileSystem(lockContext).FileExists(path)) {
 				
-				distilledAppointmentContext = JsonSerializer.Deserialize<DistilledAppointmentContext>(FileExtensions.ReadAllText(path, this.fileSystem));
+				distilledAppointmentContext = JsonSerializer.Deserialize<DistilledAppointmentContext>(FileExtensions.ReadAllText(path, this.FileSystem(lockContext)));
 			}
 
 			return Task.FromResult(distilledAppointmentContext);
@@ -4278,7 +4307,7 @@ clean above
 
 			if(account.AccountAppointment != null) {
 
-				if(force || account.AccountAppointment.AppointmentTime < DateTimeEx.CurrentTime) {
+				if(force || !account.AccountAppointment.AppointmentTime.HasValue || account.AccountAppointment.AppointmentTime.Value < DateTimeEx.CurrentTime) {
 
 					AppointmentUtils.ResetAppointment(account);
 					this.CentralCoordinator.ChainComponentProvider.AppointmentsProviderBase.OperatingMode = Enums.OperationStatus.None;

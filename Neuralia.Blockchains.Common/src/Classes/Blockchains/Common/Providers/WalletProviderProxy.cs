@@ -103,6 +103,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			this.RecursiveResourceAccessScheduler = new RecursiveResourceAccessScheduler<IWalletProviderInternal>(this.walletProvider);
 		}
 
+
 		public string GetChainDirectoryPath() {
 			return this.walletProvider.GetChainDirectoryPath();
 		}
@@ -124,6 +125,10 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		}
 
 		public bool IsWalletLoaded => this.walletProvider.IsWalletLoaded;
+		public bool IsWalletLoading => this.walletProvider.IsWalletLoading;
+		public bool IsWalletCreating => this.walletProvider.IsWalletCreating;
+		
+		public WalletProvider.WalletProviderOperatingStates OperatingState => this.walletProvider.OperatingState;
 
 		public Task<bool> IsWalletEncrypted(LockContext lockContext) {
 			return this.ScheduleRead((p, lc) => p.IsWalletEncrypted(lc), lockContext);
@@ -149,8 +154,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleTransaction((p, ct, lc) => p.ResetWalletIndex(lc), lockContext);
 		}
 
-		public Task RemovePIDLock() {
-			return this.walletProvider.RemovePIDLock();
+		public Task RemovePIDLock(LockContext lockContext) {
+			return this.walletProvider.RemovePIDLock(lockContext);
 		}
 
 		public string GetWalletKeysCachePath() {
@@ -241,12 +246,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleKeyedRead((p, lc) => p.GetWalletAccount(accountId, lc), lockContext);
 		}
 
-		public Task WriteDistilledAppointmentContextFile(DistilledAppointmentContext distilledAppointmentContext) {
-			return this.walletProvider.WriteDistilledAppointmentContextFile(distilledAppointmentContext);
+		public Task WriteDistilledAppointmentContextFile(DistilledAppointmentContext distilledAppointmentContext, LockContext lockContext) {
+			return this.walletProvider.WriteDistilledAppointmentContextFile(distilledAppointmentContext, lockContext);
 		}
 
-		public void ClearDistilledAppointmentContextFile() {
-			this.walletProvider.ClearDistilledAppointmentContextFile();
+		public void ClearDistilledAppointmentContextFile(LockContext lockContext) {
+			this.walletProvider.ClearDistilledAppointmentContextFile(lockContext);
 		}
 
 		public Task UpdateMiningStatistics(AccountId accountId, Enums.MiningTiers miningTiers, Action<WalletElectionsMiningSessionStatistics> sessionCallback, Action<WalletElectionsMiningAggregateStatistics> totalCallback, LockContext lockContext, bool resetSession = false) {
@@ -418,8 +423,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return this.ScheduleKeyedRead((p, lc) => p.GetAccountSnapshot(accountId, lc), lockContext);
 		}
 
-		public Task<DistilledAppointmentContext> GetDistilledAppointmentContextFile() {
-			return this.walletProvider.GetDistilledAppointmentContextFile();
+		public Task<DistilledAppointmentContext> GetDistilledAppointmentContextFile(LockContext lockContext) {
+			return this.walletProvider.GetDistilledAppointmentContextFile(lockContext);
 		}
 
 		public Task Initialize(LockContext lockContext) {
@@ -1101,8 +1106,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			});
 		}
 
-		public Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext) {
-			return this.ScheduleWrite((t, lc) => this.walletProvider.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lockContext), lockContext, 60 * 5);
+		public Task<bool> RestoreWalletFromBackup(string backupsPath, string passphrase, string salt, string nonce, int iterations, LockContext lockContext, bool legacyBase32) {
+			return this.ScheduleWrite((t, lc) => this.walletProvider.RestoreWalletFromBackup(backupsPath, passphrase, salt, nonce, iterations, lockContext, legacyBase32), lockContext, 60 * 5);
 		}
 		
 		public Task<bool> AttemptWalletRescue(LockContext lockContext) {
@@ -1402,7 +1407,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 						throw walletEventException;
 					}
 
-					throw new ApplicationException("Failed keyed operation");
+					throw new ApplicationException("Failed keyed operations");
 				}
 
 				if(walletEventException != null) {
@@ -1455,21 +1460,13 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					return await action(lockContext).ConfigureAwait(false);
 
-				} catch(WalletFileMissingException ex) {
-					SetException(ex);
-				} catch(WalletPassphraseMissingException ex) {
-
-					SetException(ex);
-				} catch(WalletDecryptionException ex) {
-					SetException(ex);
-				} catch(KeyFileMissingException ex) {
-
-					SetException(ex);
-				} catch(KeyPassphraseMissingException ex) {
-
-					SetException(ex);
-				} catch(KeyDecryptionException ex) {
-					SetException(ex);
+				} 
+				catch(Exception ex) {
+					if(CryptoKeysExceptionUtils.IsCryptoKeyException(ex) && ex is BlockchainEventException bex) {
+						SetException(bex);
+					} else {
+						throw;
+					}
 				}
 
 			} while(true);

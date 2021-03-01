@@ -32,9 +32,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 			return transform(value, a => a.ToBase30());
 		}
 		
-		public static string ToBase32(long value) {
+		public static string ToBase32(long value, bool trimTrailingZeros = false) {
 			
-			return transform(value, a => a.ToBase32());
+			return transform(value, a => a.ToBase32(trimTrailingZeros));
 		}
 		
 		public static string ToBase58(long value) {
@@ -110,9 +110,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase30());
 			}
 		
-			public static string ToBase32(ulong value) {
+			public static string ToBase32(ulong value, bool trimTrailingZeros = false) {
 			
-				return transform(value, a => a.ToBase32());
+				return transform(value, a => a.ToBase32(trimTrailingZeros));
 			}
 		
 			public static string ToBase58(ulong value) {
@@ -187,9 +187,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase30());
 			}
 		
-			public static string ToBase32(int value) {
+			public static string ToBase32(int value, bool trimTrailingZeros = false) {
 			
-				return transform(value, a => a.ToBase32());
+				return transform(value, a => a.ToBase32(trimTrailingZeros));
 			}
 		
 			public static string ToBase58(int value) {
@@ -264,9 +264,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase30());
 			}
 		
-			public static string ToBase32(uint value) {
+			public static string ToBase32(uint value, bool trimTrailingZeros = false) {
 			
-				return transform(value, a => a.ToBase32());
+				return transform(value, a => a.ToBase32(trimTrailingZeros));
 			}
 		
 			public static string ToBase58(uint value) {
@@ -341,9 +341,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase30());
 			}
 		
-			public static string ToBase32(short value) {
+			public static string ToBase32(short value, bool trimTrailingZeros = false) {
 			
-				return transform(value, a => a.ToBase32());
+				return transform(value, a => a.ToBase32(trimTrailingZeros));
 			}
 		
 			public static string ToBase58(short value) {
@@ -418,9 +418,9 @@ namespace Neuralia.Blockchains.Core.Tools {
 				return transform(value, a => a.ToBase30());
 			}
 		
-			public static string ToBase32(ushort value) {
+			public static string ToBase32(ushort value, bool trimTrailingZeros = false) {
 			
-				return transform(value, a => a.ToBase32());
+				return transform(value, a => a.ToBase32(trimTrailingZeros));
 			}
 		
 			public static string ToBase58(ushort value) {

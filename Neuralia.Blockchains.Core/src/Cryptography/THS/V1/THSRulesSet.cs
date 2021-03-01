@@ -247,12 +247,12 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 		public int CryptoIterations { get; set; } = 3;
 
 		/// <summary>
-		///     perform a crypto operation one in X times.
+		///     perform a crypto operations one in X times.
 		/// </summary>
 		public int CryptoSuccessRate { get; set; } = 2;
 		
 		/// <summary>
-		/// advanced mode will ensure a more complex operation, at the cost of more time
+		/// advanced mode will ensure a more complex operations, at the cost of more time
 		/// </summary>
 		public THSFeatures Features { get; set; }
 
@@ -262,7 +262,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.THS.V1 {
 		public int HashIterations { get; set; } = 1;
 
 		/// <summary>
-		///     perform a hashing operation one in X times.
+		///     perform a hashing operations one in X times.
 		/// </summary>
 		public int HashingSuccessRate { get; set; } = 2;
 		

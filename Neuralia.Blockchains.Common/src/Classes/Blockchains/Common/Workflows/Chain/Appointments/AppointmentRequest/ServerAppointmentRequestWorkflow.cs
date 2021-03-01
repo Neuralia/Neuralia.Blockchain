@@ -31,7 +31,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 		where SERVER_TRIGGER_REPLY : AppointmentRequestServerReply{
 
 
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			this.CheckShouldCancel();
 			
 			IAppointmentRequestMessageFactory appointmentRequestMessageFactory = this.centralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.MessageFactoryBase.GetAppointmentRequestMessageFactory();
@@ -57,12 +57,14 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.AppointmentRequest {
 			else if(this.triggerMessage.Message.Mode == Enums.AppointmentRequestModes.Trigger && appointment.HasValue) {
 				serverHandshake.Message.Message = await centralCoordinator.ChainComponentProvider.AppointmentsProviderBase.GetAppointmentTriggerGossipMessage(appointment.Value, lockContext).ConfigureAwait(false);
 			} else {
-				return;
+				return false;
 			}
 
 			if(!await Send(serverHandshake).ConfigureAwait(false)) {
 				this.CentralCoordinator.Log.Verbose($"Connection with peer  {this.PeerConnection.ScopedAdjustedIp} was terminated");
 			}
+
+			return true;
 		}
 
 		protected ServerAppointmentRequestWorkflow(BlockchainTriggerMessageSet<CHAIN_SYNC_TRIGGER> triggerMessage, PeerConnection peerConnectionn, CENTRAL_COORDINATOR centralCoordinator) : base(centralCoordinator, triggerMessage, peerConnectionn) {

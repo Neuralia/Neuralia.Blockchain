@@ -1,6 +1,15 @@
 using System;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools.Exceptions {
+
+	public static class CryptoKeysExceptionUtils {
+
+		public static bool IsCryptoKeyException(Exception ex) {
+
+			return ex is WalletFileMissingException || ex is WalletPassphraseMissingException || ex is WalletDecryptionException || ex is KeyFileMissingException || ex is KeyPassphraseMissingException || ex is KeyDecryptionException;
+		}
+	}
+
 	public class BlockchainEventException : ApplicationException {
 		public BlockchainEventException() {
 

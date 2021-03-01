@@ -86,7 +86,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 		#endregion
 		}
 
-		public static SafeArrayHandle Encrypt(SafeArrayHandle plain, FileEncryptorContextHandler handler, IEncryptorParameters parameters) {
+		public static SafeArrayHandle Encrypt(SafeArrayHandle plain, FileEncryptorContextHandler handler, IEncryptorParameters parameters, int prefix = 0) {
 			if(parameters.Cipher == EncryptorParameters.SymetricCiphers.AES_256) {
 				return AESFileEncryptor.Encrypt(plain, handler, (AesEncryptorParameters) parameters);
 			}
@@ -100,7 +100,7 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			   parameters.Cipher == EncryptorParameters.SymetricCiphers.XCHACHA_40_POLY_1305) {
 				using ChaCha20Poly1305FileEncryptor xchacha = new ChaCha20Poly1305FileEncryptor((ChaCha20Poly1305EncryptorParameters) parameters);
 
-				return xchacha.Encrypt(plain, handler);
+				return xchacha.Encrypt(plain, handler, prefix);
 			}
 
 			throw new ApplicationException("Invalid cipher");
@@ -114,12 +114,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.Encryption.Symetrical {
 			return Encrypt(plain, handler, parameters);
 		}
 
-		public static SafeArrayHandle Encrypt(SafeArrayHandle plain, SafeArrayHandle password, IEncryptorParameters parameters) {
+		public static SafeArrayHandle Encrypt(SafeArrayHandle plain, SafeArrayHandle password, IEncryptorParameters parameters, int prefix = 0) {
 			using FileEncryptorContextHandler handler = new FileEncryptorContextHandler();
 			handler.PasswordBytes = password;
-			return Encrypt(plain, handler, parameters);
-			
-			
+			return Encrypt(plain, handler, parameters, prefix);
 		}
 		
 

@@ -82,6 +82,14 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 	}
 
+	public interface IAppointmentsProviderInternal<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
+
+		Task CheckAppointmentContextUpdate(DateTime appointment, LockContext lockContext, bool force = false);
+	}
+	
+
 	public static class AppointmentsProvider {
 		public class ValidatorState {
 
@@ -141,7 +149,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 	}
 
-	public abstract class AppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainProvider, IAppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
+	public abstract class AppointmentsProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> : ChainProvider, IAppointmentsProviderInternal<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CENTRAL_COORDINATOR : ICentralCoordinator<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>
 		where CHAIN_COMPONENT_PROVIDER : IChainComponentProvider<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> {
 
@@ -155,7 +163,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 		protected DateTime? checkAppointmentExpired;
 		protected DateTime? checkAppointments;
-		protected DateTime? checkAppointmentsContext;
 		protected DateTime? checkAppointmentsDispatches;
 		private ConcurrentDictionary<DateTime, ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>> sendVerificationResultsWorkflows = new ConcurrentDictionary<DateTime, ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER>>();
 		public ConcurrentDictionary<DateTime, AppointmentsProvider.AppointmentPuzzleStrikesSet> AppointmentPuzzleStrikes { get; } = new ConcurrentDictionary<DateTime, AppointmentsProvider.AppointmentPuzzleStrikesSet>();
@@ -300,7 +307,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					bool retry = true;
 
-					if(success && result != null && result.Index != 0) {
+					if(success && result != null && result?.Index != 0) {
 						retry = false;
 
 						await this.ProcessAppointmentRequest(new DateTime(result.Appointment, DateTimeKind.Utc), result.Index, result.Preparation, result.Finalization, SafeArrayHandle.Wrap(result.SecretAppointmentId), lockContext, a => {
@@ -427,7 +434,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
 
 			if(!account.AccountAppointment.LastAppointmentOperationTimeout.HasValue || account.AccountAppointment.LastAppointmentOperationTimeout.Value < DateTimeEx.CurrentTime) {
-				(bool success, CheckAppointmentVerificationConfirmedResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentCompletedUpdateCheck(account.AccountAppointment.RequesterId.Value, account.AccountAppointment.AppointmentId.Value, lockContext).ConfigureAwait(false);
+				(bool success, CheckAppointmentVerificationConfirmedResult2 result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentCompletedUpdateCheck(account.AccountAppointment.RequesterId.Value, account.AccountAppointment.AppointmentId.Value, lockContext).ConfigureAwait(false);
 
 				bool retry = true;
 
@@ -435,7 +442,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
 
-					if(appointmentTime.HasValue && result.Appointment == appointmentTime.Value) {
+					if(appointmentTime.HasValue && result.Appointment == appointmentTime.Value.Ticks) {
 						retry = false;
 
 						await this.ProcessAppointmentVerificationConfirmation(SafeArrayHandle.Wrap(result.ConfirmationCorrelationCode), TimeSpan.FromDays(result.VerificationSpan), lockContext, a => {
@@ -449,8 +456,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 				if(retry) {
 					await walletProvider.ScheduleTransaction((provider, token, lc) => {
+#if TESTING
+							account.AccountAppointment.LastAppointmentOperationTimeout = DateTimeEx.CurrentTime.AddSeconds(15);
+#else
 						account.AccountAppointment.LastAppointmentOperationTimeout = DateTimeEx.CurrentTime + LastAppointmentOperationTimeoutSpan;
-
+#endif
 						return Task.FromResult(true);
 					}, lockContext).ConfigureAwait(false);
 				}
@@ -920,36 +930,42 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return false;
 		}
 
-		protected virtual async Task CheckAppointmentContextUpdate(DateTime appointment, LockContext lockContext) {
+		public virtual async Task CheckAppointmentContextUpdate(DateTime appointment, LockContext lockContext, bool force = false) {
 
 			IWalletProviderProxy walletProvider = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase;
 
 			IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
 
-			(bool success, CheckAppointmentContextResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentContextUpdateCheck(account.AccountAppointment.RequesterId.Value, account.AccountAppointment.AppointmentIndex.Value, appointment, lockContext).ConfigureAwait(false);
+			if(force || !account.AccountAppointment.LastAppointmentOperationTimeout.HasValue || account.AccountAppointment.LastAppointmentOperationTimeout.Value < DateTimeEx.CurrentTime) {
 
-			bool retry = true;
+				(bool success, CheckAppointmentContextResult result) = await this.CentralCoordinator.ChainComponentProvider.ChainNetworkingProviderBase.PerformAppointmentContextUpdateCheck(account.AccountAppointment.RequesterId.Value, account.AccountAppointment.AppointmentIndex.Value, appointment, lockContext).ConfigureAwait(false);
 
-			if(success) {
+				bool retry = true;
 
-				DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
+				if(success) {
 
-				if(result != null && result.PuzzleBytes != null && result.PuzzleBytes.Length > 0 && result.SecretPackageBytes != null && result.SecretPackageBytes.Length > 0 && appointmentTime.HasValue && result.Appointment == appointmentTime.Value) {
-					retry = false;
+					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
 
-					await this.ProcessAppointmentContext(result.Window, result.EngineVersion, Convert.FromBase64String(result.POwRuleSet), Convert.FromBase64String(result.PuzzleBytes), Convert.FromBase64String(result.SecretPackageBytes), lockContext, a => {
+					if(result != null && result.PuzzleBytes != null && result.PuzzleBytes.Length > 0 && result.SecretPackageBytes != null && result.SecretPackageBytes.Length > 0 && appointmentTime.HasValue && result.Appointment == appointmentTime.Value.Ticks) {
+						retry = false;
 
-						a.AccountAppointment.LastAppointmentOperationTimeout = null;
-					}).ConfigureAwait(false);
+						await this.ProcessAppointmentContext(result.Window, result.EngineVersion, Convert.FromBase64String(result.POwRuleSet), Convert.FromBase64String(result.PuzzleBytes), Convert.FromBase64String(result.SecretPackageBytes), lockContext, a => {
+
+							a.AccountAppointment.LastAppointmentOperationTimeout = null;
+						}).ConfigureAwait(false);
+					}
 				}
-			}
 
-			if(retry) {
-				await walletProvider.ScheduleTransaction((provider, token, lc) => {
-					account.AccountAppointment.LastAppointmentOperationTimeout = DateTimeEx.CurrentTime + LastAppointmentOperationTimeoutSpan;
-
-					return Task.FromResult(true);
-				}, lockContext).ConfigureAwait(false);
+				if(retry) {
+					await walletProvider.ScheduleTransaction((provider, token, lc) => {
+#if TESTING
+							account.AccountAppointment.LastAppointmentOperationTimeout = DateTimeEx.CurrentTime.AddSeconds(15);
+#else
+						account.AccountAppointment.LastAppointmentOperationTimeout = DateTimeEx.CurrentTime + LastAppointmentOperationTimeoutSpan;
+#endif
+						return Task.FromResult(true);
+					}, lockContext).ConfigureAwait(false);
+				}
 			}
 		}
 
@@ -974,11 +990,11 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 
 			distilledAppointmentContext.PuzzleBytes = secretPuzzles;
 			distilledAppointmentContext.PackageBytes = secretPackageBytes;
-
-			await walletProvider.WriteDistilledAppointmentContextFile(distilledAppointmentContext).ConfigureAwait(false);
-
+			
 			await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
 
+				await walletProvider.WriteDistilledAppointmentContextFile(distilledAppointmentContext, lockContext).ConfigureAwait(false);
+				
 				account.AccountAppointment.AppointmentWindow = window;
 				account.AccountAppointment.AppointmentContextDetailsCached = true;
 				account.AccountAppointment.AppointmentStatus = Enums.AppointmentStatus.AppointmentContextCached;
@@ -1119,10 +1135,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return false;
 			}
 
-			bool cleared = await walletProvider.ScheduleTransaction((provider, token, lc) => {
+			bool cleared = await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
 
 				// we are done
-				return this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ClearAppointment(account.AccountCode, lc, force);
+				walletProvider.ClearDistilledAppointmentContextFile(lockContext);
+				
+				return await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.ClearAppointment(account.AccountCode, lc, force).ConfigureAwait(false);
 			}, lockContext).ConfigureAwait(false);
 			
 			if(cleared) {
@@ -1137,227 +1155,241 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			return cleared;
 		}
 
+		/// <summary>
+		/// Check if we are in the window for the context to be received, and if it is time to check for it
+		/// </summary>
+		/// <param name="account"></param>
+		/// <returns></returns>
+		protected bool IsContextCheckReady(IWalletAccount account) {
+			DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
+			DateTime? appointmentPreparationWindowStart = account.AccountAppointment.AppointmentPreparationWindowStart;
+
+			//TODO: the below is only temporary until everyone has new version to create appointments. it can be deleted after.
+			if(!appointmentPreparationWindowStart.HasValue) {
+				appointmentPreparationWindowStart = account.AccountAppointment.AppointmentContextTime;
+			}
+
+			return appointmentTime.HasValue && appointmentPreparationWindowStart.HasValue && appointmentPreparationWindowStart.Value <= DateTimeEx.CurrentTime;
+		}
+
+		private readonly RecursiveAsyncLock checkOperatingModelock = new RecursiveAsyncLock();
 		public virtual async Task CheckOperatingMode(LockContext lockContext) {
 
-			if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded || !await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.HasAccount(lockContext).ConfigureAwait(false)) {
-				return;
-			}
+			using(var handle = await checkOperatingModelock.LockAsync(lockContext).ConfigureAwait(false)) {
+				if(!this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.IsWalletLoaded || !await this.CentralCoordinator.ChainComponentProvider.WalletProviderBase.HasAccount(handle).ConfigureAwait(false)) {
+					return;
+				}
 
-			if(this.OperatingMode == Enums.OperationStatus.Unknown) {
-				// ok, first step is to update our operating mode
-				await this.UpdateOperatingMode(lockContext).ConfigureAwait(false);
-			}
+				if(this.OperatingMode == Enums.OperationStatus.Unknown) {
+					// ok, first step is to update our operating mode
+					await this.UpdateOperatingMode(handle).ConfigureAwait(false);
+				}
 
-			if(this.IsValidator) {
+				if(this.IsValidator) {
 
-				DateTime? appointment = null;
-				
-				if(this.ShouldAct(ref this.checkAppointments)) {
+					DateTime? appointment = null;
 
-					await this.QueryWebAppointments(lockContext).ConfigureAwait(false);
+					if(this.ShouldAct(ref this.checkAppointments)) {
+
+						await this.QueryWebAppointments(handle).ConfigureAwait(false);
 #if TESTING
-					this.checkAppointmentsContexts = DateTimeEx.CurrentTime.AddSeconds(15);
+					this.checkAppointments = DateTimeEx.CurrentTime.AddSeconds(15);
 #else
-					this.checkAppointments = DateTimeEx.CurrentTime.AddHours(6);
+						this.checkAppointments = DateTimeEx.CurrentTime.AddHours(6);
 #endif
 
-					appointment = await this.AppointmentRegistryDal.GetInRangeAppointments().ConfigureAwait(false);
-				}
-				
+						appointment = await this.AppointmentRegistryDal.GetInRangeAppointments().ConfigureAwait(false);
+					}
 
-				if(appointment.HasValue) {
-					await this.EnsureAppointmentDetails(appointment.Value).ConfigureAwait(false);
-				}
 
-				// let's update our dispatches
-				await this.UpdateAppointmentDispatches().ConfigureAwait(false);
+					if(appointment.HasValue) {
+						await this.EnsureAppointmentDetails(appointment.Value).ConfigureAwait(false);
+					}
+
+					// let's update our dispatches
+					await this.UpdateAppointmentDispatches().ConfigureAwait(false);
 
 #if TESTING
 				if(this.appointmentDispatches.Values.Any()) {
 #else
-				if(this.appointmentDispatches.Values.Any(a => a < DateTimeEx.CurrentTime)) {
+					if(this.appointmentDispatches.Values.Any(a => a < DateTimeEx.CurrentTime)) {
 #endif
 
-					List<DateTime> sessions = await this.appointmentRegistryDal.GetReadyAppointmentSessions().ConfigureAwait(false);
+						List<DateTime> sessions = await this.appointmentRegistryDal.GetReadyAppointmentSessions().ConfigureAwait(false);
 
-					if(!sessions.Any()) {
-						return;
-					}
-
-					foreach(var sessionAppointment in sessions) {
-
-						if(DateTimeEx.CurrentTime >= sessionAppointment-AppointmentsValidatorProvider.AppointmentWindowHead && DateTimeEx.CurrentTime <= sessionAppointment-AppointmentsValidatorProvider.AppointmentWindowTail) {
-							// we are IN the appointment, dont do anything
-							continue;
-						}
-						bool ready = false;
-
-						lock(this.sendVerificationResultsWorkflowLocker) {
-							ready = !this.sendVerificationResultsWorkflows.ContainsKey(sessionAppointment) || this.sendVerificationResultsWorkflows[sessionAppointment].IsCompleted;
+						if(!sessions.Any()) {
+							return;
 						}
 
-						if(ready) {
+						foreach(var sessionAppointment in sessions) {
 
-							int total = await appointmentRegistryDal.GetReadyAppointmentRequesterResultCount(sessionAppointment).ConfigureAwait(false);
-
-							if(total == 0) {
+							if(DateTimeEx.CurrentTime >= sessionAppointment - AppointmentsValidatorProvider.AppointmentWindowHead && DateTimeEx.CurrentTime <= sessionAppointment - AppointmentsValidatorProvider.AppointmentWindowTail) {
+								// we are IN the appointment, dont do anything
 								continue;
 							}
 
-							ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> sendVerificationResultsWorkflow = null;
+							bool ready = false;
 
 							lock(this.sendVerificationResultsWorkflowLocker) {
-								sendVerificationResultsWorkflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateSendAppointmentVerificationResultsMessageWorkflow(sessionAppointment, new CorrelationContext());
-								this.sendVerificationResultsWorkflows.TryAdd(sessionAppointment, sendVerificationResultsWorkflow);
+								ready = !this.sendVerificationResultsWorkflows.ContainsKey(sessionAppointment) || this.sendVerificationResultsWorkflows[sessionAppointment].IsCompleted;
 							}
 
-							sendVerificationResultsWorkflow.Completed2 += (b, workflow) => {
+							if(ready) {
 
-								try {
+								int total = await appointmentRegistryDal.GetReadyAppointmentRequesterResultCount(sessionAppointment).ConfigureAwait(false);
 
-								} finally {
-
-									lock(this.sendVerificationResultsWorkflowLocker) {
-										this.sendVerificationResultsWorkflows.TryRemove(sessionAppointment, out var _);
-									}
+								if(total == 0) {
+									continue;
 								}
 
-								return Task.CompletedTask;
-							};
+								this.CentralCoordinator.Log.Information($"Preparing to publish {total} requester results");
 
-							this.CentralCoordinator.PostWorkflow(sendVerificationResultsWorkflow);
-						}
+								ISendAppointmentVerificationResultsMessageWorkflow<CENTRAL_COORDINATOR, CHAIN_COMPONENT_PROVIDER> sendVerificationResultsWorkflow = null;
 
-						try {
-							await this.CleanAppointmentsRegistry().ConfigureAwait(false);
+								lock(this.sendVerificationResultsWorkflowLocker) {
+									sendVerificationResultsWorkflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateSendAppointmentVerificationResultsMessageWorkflow(sessionAppointment, new CorrelationContext());
+									this.sendVerificationResultsWorkflows.TryAdd(sessionAppointment, sendVerificationResultsWorkflow);
+								}
 
-						} catch(Exception ex) {
-							this.CentralCoordinator.Log.Error("Failed to clear obsolete appointments.");
-						}
+								sendVerificationResultsWorkflow.Completed2 += (b, workflow) => {
 
-						// clear obsoletes
-						foreach(KeyValuePair<DateTime, DateTime> entry in this.appointmentDispatches.Where(k => k.Key.AddMinutes(5) < DateTimeEx.CurrentTime)) {
-							this.appointmentDispatches.Remove(entry.Key, out var _);
+									try {
+
+									} finally {
+
+										lock(this.sendVerificationResultsWorkflowLocker) {
+											this.sendVerificationResultsWorkflows.TryRemove(sessionAppointment, out var _);
+										}
+									}
+
+									return Task.CompletedTask;
+								};
+
+								this.CentralCoordinator.PostWorkflow(sendVerificationResultsWorkflow);
+							}
+
+							try {
+								await this.CleanAppointmentsRegistry().ConfigureAwait(false);
+
+							} catch(Exception ex) {
+								this.CentralCoordinator.Log.Error(ex, "Failed to clear obsolete appointments.");
+							}
+
+							// clear obsoletes
+							foreach(KeyValuePair<DateTime, DateTime> entry in this.appointmentDispatches.Where(k => k.Key.AddMinutes(5) < DateTimeEx.CurrentTime)) {
+								this.appointmentDispatches.Remove(entry.Key, out var _);
+							}
 						}
 					}
+
 				}
 
-			}
+				if(this.IsInAppointmentOperation) {
 
-			if(this.IsInAppointmentOperation) {
+					IWalletProviderProxy walletProvider = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase;
+					IWalletAccount account = await walletProvider.GetActiveAccount(handle).ConfigureAwait(false);
 
-				IWalletProviderProxy walletProvider = this.CentralCoordinator.ChainComponentProvider.WalletProviderBase;
-				IWalletAccount account = await walletProvider.GetActiveAccount(lockContext).ConfigureAwait(false);
+					this.UpdateOperatingMode(account, handle);
 
-				this.UpdateOperatingMode(account, lockContext);
-
-				if(!this.IsInAppointmentOperation) {
-					return;
-				}
-
-				if(this.ShouldAct(ref this.checkAppointmentExpired)) {
-					if(AppointmentUtils.AppointmentWorkflowExpired(account)) {
-						// ok, we are way behind. we need to get our confirmation
-
-						await this.ClearAppointment(lockContext).ConfigureAwait(false);
-
+					if(!this.IsInAppointmentOperation) {
 						return;
 					}
-					
-					this.checkAppointmentExpired = DateTimeEx.CurrentTime.AddMinutes(5);
-				}
-				// first, check if an appointment has expired under various scenarios
-			
 
-				// ok, we are in an appointment. lets do some followup
-				// ok, we are in an appointment
-				if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentRequested) {
-					// ok, we are way behind. we need to get our confirmation
+					if(this.ShouldAct(ref this.checkAppointmentExpired)) {
+						if(AppointmentUtils.AppointmentWorkflowExpired(account)) {
+							// ok, we are way behind. we need to get our confirmation
 
-					await this.CheckAppointmentRequestUpdate(lockContext).ConfigureAwait(false);
-				}
+							await this.ClearAppointment(handle,force: true).ConfigureAwait(false);
 
-				if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentSet) {
-					// ok, we are way behind. we need to get our confirmation
-
-					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
-					DateTime? appointmentPreparationWindowStart = account.AccountAppointment.AppointmentPreparationWindowStart;
-
-					//TODO: the below is only temporary until everyone has new version to create appointments. it can be deleted after.
-					if(!appointmentPreparationWindowStart.HasValue) {
-						appointmentPreparationWindowStart = account.AccountAppointment.AppointmentContextTime;
-					}
-					if(appointmentTime.HasValue && appointmentPreparationWindowStart.HasValue && appointmentPreparationWindowStart.Value <= DateTimeEx.CurrentTime) {
-						// ok, we can try to get the contexts info we need
-						if(this.ShouldAct(ref this.checkAppointmentsContext)) {
-							await this.CheckAppointmentContextUpdate(appointmentTime.Value, lockContext).ConfigureAwait(false);
-							this.checkAppointmentsContext = DateTimeEx.CurrentTime.AddMinutes(5);
-						}
-					}
-				}
-
-				if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentContextCached) {
-					// ok, we are ready to go. lets make sure we dont miss the appointment!
-
-					DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
-					DateTime? appointmentExpirationTime = account.AccountAppointment.AppointmentExpirationTime;
-
-					if(appointmentTime.HasValue && appointmentTime.Value + AppointmentsValidatorProvider.AppointmentWindowHead < DateTimeEx.CurrentTime && appointmentTime.Value.AddMinutes(30) > DateTimeEx.CurrentTime && (!appointmentExpirationTime.HasValue || appointmentExpirationTime.Value >= DateTimeEx.CurrentTime)) {
-						// this is our appointment!!  it begins! lets begin the workflow
-
-						bool ready = false;
-
-						lock(this.appointmentWorkflowLocker) {
-							ready = this.appointmentWorkflow == null || this.appointmentWorkflow.IsCompleted;
+							return;
 						}
 
-						if(ready) {
+						this.checkAppointmentExpired = DateTimeEx.CurrentTime.AddMinutes(5);
+					}
+
+					// first, check if an appointment has expired under various scenarios
+
+
+					// ok, we are in an appointment. lets do some followup
+					// ok, we are in an appointment
+					if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentRequested) {
+						// ok, we are way behind. we need to get our confirmation
+
+						await this.CheckAppointmentRequestUpdate(handle).ConfigureAwait(false);
+					}
+
+					if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentSet) {
+						// ok, we are way behind. we need to get our confirmation
+
+						if(IsContextCheckReady(account)) {
+							// ok, we can try to get the contexts info we need
+							await this.CheckAppointmentContextUpdate(account.AccountAppointment.AppointmentTime.Value, handle).ConfigureAwait(false);
+						}
+					}
+
+					if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentContextCached) {
+						// ok, we are ready to go. lets make sure we dont miss the appointment!
+
+						DateTime? appointmentTime = account.AccountAppointment.AppointmentTime;
+						DateTime? appointmentExpirationTime = account.AccountAppointment.AppointmentExpirationTime;
+
+						if(appointmentTime.HasValue && appointmentTime.Value + AppointmentsValidatorProvider.AppointmentWindowHead < DateTimeEx.CurrentTime && appointmentTime.Value.AddMinutes(30) > DateTimeEx.CurrentTime && (!appointmentExpirationTime.HasValue || appointmentExpirationTime.Value >= DateTimeEx.CurrentTime)) {
+							// this is our appointment!!  it begins! lets begin the workflow
+
+							bool ready = false;
+
 							lock(this.appointmentWorkflowLocker) {
-								this.appointmentWorkflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateAppointmentPuzzleExecutionWorkflow(new CorrelationContext());
+								ready = this.appointmentWorkflow == null || this.appointmentWorkflow.IsCompleted;
 							}
 
-							this.appointmentWorkflow.PuzzleBeginEvent += this.PuzzleBeginEvent;
-
-							this.appointmentWorkflow.Completed2 += async (b, workflow) => {
-
-								try {
-
-									this.AppointmentMode = account.AccountAppointment.AppointmentStatus;
-									this.TriggerAppointmentPuzzleCompleted();
-								} finally {
-									this.appointmentWorkflow.PuzzleBeginEvent -= this.PuzzleBeginEvent;
-
-									lock(this.appointmentWorkflowLocker) {
-										this.appointmentWorkflow = null;
-									}
+							if(ready) {
+								lock(this.appointmentWorkflowLocker) {
+									this.appointmentWorkflow = this.CentralCoordinator.ChainComponentProvider.ChainFactoryProviderBase.WorkflowFactoryBase.CreateAppointmentPuzzleExecutionWorkflow(new CorrelationContext());
 								}
-							};
 
-							this.CentralCoordinator.PostWorkflow(this.appointmentWorkflow);
+								this.appointmentWorkflow.PuzzleBeginEvent += this.PuzzleBeginEvent;
+
+								this.appointmentWorkflow.Completed2 += async (b, workflow) => {
+
+									try {
+
+										this.AppointmentMode = account.AccountAppointment.AppointmentStatus;
+										this.TriggerAppointmentPuzzleCompleted();
+									} finally {
+										this.appointmentWorkflow.PuzzleBeginEvent -= this.PuzzleBeginEvent;
+
+										lock(this.appointmentWorkflowLocker) {
+											this.appointmentWorkflow = null;
+										}
+									}
+								};
+
+								this.CentralCoordinator.PostWorkflow(this.appointmentWorkflow);
+							}
 						}
 					}
-				}
 
-				if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentPuzzleCompleted) {
-					// ok, we are done, we check for our results
+					if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentPuzzleCompleted) {
+						// ok, we are done, we check for our results
 
-					await this.CheckAppointmentCompletedUpdate(lockContext).ConfigureAwait(false);
-				}
-
-				if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentCompleted) {
-					// nothing to do here really?
-
-					if(account.AccountAppointment.AppointmentConfirmationCodeExpiration < DateTimeEx.CurrentTime) {
-						await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
-
-							// we are done
-							AppointmentUtils.ResetAppointment(account);
-							this.AppointmentMode = Enums.AppointmentStatus.None;
-
-							return true;
-						}, lockContext).ConfigureAwait(false);
+						await this.CheckAppointmentCompletedUpdate(handle).ConfigureAwait(false);
 					}
 
+					if(this.AppointmentMode == Enums.AppointmentStatus.AppointmentCompleted) {
+						// nothing to do here really?
+
+						if(account.AccountAppointment.AppointmentConfirmationCodeExpiration < DateTimeEx.CurrentTime) {
+							await walletProvider.ScheduleTransaction(async (provider, token, lc) => {
+
+								// we are done
+								AppointmentUtils.ResetAppointment(account);
+								this.AppointmentMode = Enums.AppointmentStatus.None;
+
+								return true;
+							}, handle).ConfigureAwait(false);
+						}
+
+					}
 				}
 			}
 		}
@@ -1377,7 +1409,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 				return new Dictionary<int, bool>();
 			}
 
-			this.CentralCoordinator.Log.Verbose($"Publishing puzzle {entries.Count()} results for appointment {appointmentTime}");
+			this.CentralCoordinator.Log.Verbose($"Preparing {entries.Count()} puzzle results for appointment {appointmentTime}");
 
 			SafeArrayHandle appointmentKey = this.AppointmentDetails[appointmentTime].TriggerKey;
 
@@ -1516,7 +1548,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Providers {
 			if(success && result != null && result.Appointments != null && result.Appointments.Any()) {
 
 				List<DateTime> registryAppointments = (await this.AppointmentRegistryDal.GetAppointments().ConfigureAwait(false)).Select(a => a.appointment.ToUniversalTime()).Where(a => a > DateTimeEx.CurrentTime).ToList();
-				List<DateTime> remoteAppointmentsList = result.Appointments.Select(a => a.ToUniversalTime()).Where(a => a > DateTimeEx.CurrentTime).ToList();
+				List<DateTime> remoteAppointmentsList = result.Appointments.Select(a => new DateTime(a, DateTimeKind.Utc)).Where(a => a > DateTimeEx.CurrentTime).ToList();
 
 				// determine which ones we are missing
 				List<DateTime> containedAppointments = remoteAppointmentsList.Where(a => registryAppointments.Contains(a)).ToList();

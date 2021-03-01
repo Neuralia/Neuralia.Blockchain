@@ -47,7 +47,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		
 		DateTime? VerificationExpirationDate { get; set; }
 		
-		//ushort AppliedFixes { get; set; }
+		long AppliedFixes { get; set; }
 		
 		string FriendlyName { get; set; }
 
@@ -182,7 +182,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 		// /// <summary>
 		// /// any fixes that have been applied or not yet
 		// /// </summary>
-		// public ushort AppliedFixes { get; set; }
+		public long AppliedFixes { get; set; }
 
 		public Enums.AccountTypes WalletAccountType { get; set; } = Enums.AccountTypes.User;
 		
@@ -631,7 +631,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Wallet.Account 
 			public bool AppointmentContextDetailsCached { get; set; }  = false;
 
 			/// <summary>
-			/// the grace delay before we declare the last operation as timed out
+			/// the grace delay before we declare the last operations as timed out
 			/// </summary>
 			public DateTime? LastAppointmentOperationTimeout {
 				get => this.lastAppointmentOperationTimeout?.ToUniversalTime();

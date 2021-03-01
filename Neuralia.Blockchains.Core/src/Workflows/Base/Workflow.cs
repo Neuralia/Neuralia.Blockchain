@@ -79,7 +79,7 @@ namespace Neuralia.Blockchains.Core.Workflows.Base {
 
 			this.Id = new WorkflowId(this.WorkflowId);
 
-			// how long do we wait for an operation until we declare this workflow as dead?
+			// how long do we wait for an operations until we declare this workflow as dead?
 			// this can happen if the peers on the other side stop responding and go mute.
 			this.hibernateTimeoutSpan = DEFAULT_HIBERNATE_TIMEOUT;
 		}

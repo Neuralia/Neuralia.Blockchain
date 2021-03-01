@@ -42,16 +42,6 @@ namespace Neuralia.Blockchains.Core.Services {
 		/// </summary>
 		public const int MINIMUM_COMPRESS_SIZE = 300;
 		
-#if MAINNET_LAUNCH_CODE
-
-        /// <summary>
-		/// the hardcoded mainnet launch date, used for launch
-		/// </summary>
-		public static DateTime MainnetLauchTime = new DateTime(2021, 1, 30, 16, 0,0, DateTimeKind.Utc);
-#else
-we have to remove this code!!
-#endif
-		
 #if COLORADO_EXCLUSION
 		public const long TESTING_APPOINTMENT_CODE = 260379949425144945L;
 #endif

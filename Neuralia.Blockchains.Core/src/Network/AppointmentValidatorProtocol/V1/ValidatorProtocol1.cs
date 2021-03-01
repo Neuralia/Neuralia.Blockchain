@@ -374,7 +374,7 @@ namespace Neuralia.Blockchains.Core.Network.AppointmentValidatorProtocol.V1 {
 				using IDataRehydrator rehydrator = DataSerializationFactory.CreateRehydrator(bytes);
 
 				if(skipSize) {
-					// the bytes of the operation size, since we dont need them
+					// the bytes of the operations size, since we dont need them
 					rehydrator.Skip(sizeof(ushort));
 				}
 

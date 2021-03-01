@@ -322,7 +322,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			lock(this.locker) {
 				foreach(ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> entry in connections) {
 
-					if(this.connections.Keys.All(p => p.PeerConnection.ClientUuid != entry.PeerConnection.ClientUuid)) {
+					if(this.connections.Keys.All(p => p.PeerConnection.ClientUuid != entry.PeerConnection.ClientUuid && p.PeerConnection.IsFullyConfirmed)) {
 						this.connections.AddSafe(entry, 1);
 					}
 				}
@@ -338,7 +338,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			lock(this.locker) {
 				foreach(ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> entry in connections.Keys) {
 
-					if(this.connections.Keys.All(p => p.PeerConnection.ClientUuid != entry.PeerConnection.ClientUuid)) {
+					if(this.connections.Keys.All(p => p.PeerConnection.ClientUuid != entry.PeerConnection.ClientUuid && p.PeerConnection.IsFullyConfirmed)) {
 						this.connections.AddSafe(entry, 1);
 					}
 				}
@@ -350,7 +350,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 			ActiveConnection<CHAIN_SYNC_TRIGGER, SERVER_TRIGGER_REPLY> entry = null;
 
 			lock(this.locker) {
-				entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
+				entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid && c.PeerConnection.IsFullyConfirmed);
 
 				if(this.banned.ContainsKey(peerConnectionn.ClientUuid)) {
 					return;
@@ -389,7 +389,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public void AddConnectionStrike(Guid clientUuid, ConnectionSet.ConnectionStrikeset.RejectionReason rejectionReason) {
 			lock(this.locker) {
 				try {
-					var entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == clientUuid);
+					var entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == clientUuid && c.PeerConnection.IsFullyConfirmed);
 					
 					if(entry != null) {
 						this.AddConnectionStrike(entry.PeerConnection, rejectionReason);
@@ -412,7 +412,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 		public void AddBannedConnection(Guid clientUuid, ConnectionSet.BlockedConnection.BanReason reason) {
 			lock(this.locker) {
 				try {
-					var entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == clientUuid);
+					var entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == clientUuid && c.PeerConnection.IsFullyConfirmed);
 					
 					if(entry != null) {
 						this.AddBannedConnection(entry.PeerConnection, reason);
@@ -438,7 +438,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Workflows.Chain
 
 				if(!this.banned.ContainsKey(peerConnectionn.ClientUuid)) {
 					try {
-						entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid);
+						entry = this.connections.Keys.SingleOrDefault(c => c.PeerConnection.ClientUuid == peerConnectionn.ClientUuid && c.PeerConnection.IsFullyConfirmed);
 
 						if(entry != null) {
 							entry.Syncing = false;

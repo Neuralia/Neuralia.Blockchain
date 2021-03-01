@@ -305,7 +305,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							List<KeyValuePair<Guid, PeerConnection>> connections = null;
 
 							lock(this.locker) {
-								connections = this.AllConnections.ToList();
+								connections = this.Connections.ToList();
 							}
 
 							foreach(KeyValuePair<Guid, PeerConnection> connection in connections) {
@@ -424,7 +424,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public List<PeerConnection> AllConnectionsList => this.Connections.Values.ToList();
 		public Dictionary<Guid, PeerConnection> AllConnections => this.Connections.ToDictionary();
 		public int AllConnectionsCount => this.Connections.Count;
-		public int ActiveConnectionsCount => this.Connections.Count;
+		public int ActiveConnectionsCount => this.ActiveConnections.Count();
 
 		public int ActiveMobileConnectionsCount =>
 			this.Connections.Count(c => c.Value.NodeAddressInfo.PeerInfo.PeerType == Enums.PeerTypes.Mobile);
@@ -445,52 +445,55 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 		
 		public virtual int SimpleConnectionsCount(BlockchainType blockchainType) {
-			return this.Connections.Count(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false);
+			return this.ActiveConnections.Count(c => c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false);
 		}
 
 		public virtual List<PeerConnection> SimpleConnectionsList(BlockchainType blockchainType) {
-			return this.Connections.Values.Where(c => c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false).ToList();
+			return this.ActiveConnections.Where(c => c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false).ToList();
 		}
 
 		public virtual Dictionary<Guid, PeerConnection> SimpleConnections(BlockchainType blockchainType) {
-			return this.Connections.Where(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false).ToDictionary();
+			return this.ActiveConnectionsSet.Where(c => c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false).ToDictionary();
 		}
 
 		public virtual int SyncingConnectionsCount(BlockchainType blockchainType) {
-			return this.Connections.Count(c => {
+			return this.ActiveConnections.Count(c => {
 
-				return c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c.Value));
+				return (c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c));
 			});
 
 		}
 
 		public virtual List<PeerConnection> SyncingConnectionsList(BlockchainType blockchainType) {
-			return this.Connections.Values.Where(c => {
+			return this.ActiveConnections.Where(c => {
 
-				return c.IsFullyConfirmed && (c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c));
+				return (c.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c));
 			}).ToList();
 
 		}
 
 		public virtual Dictionary<Guid, PeerConnection> SyncingConnections(BlockchainType blockchainType) {
-			return this.Connections.Where(c => {
+			return this.ActiveConnectionsSet.Where(c => {
 
-				return c.Value.IsFullyConfirmed && (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c.Value));
+				return (c.Value.NodeInfo.GetNodeShareType(blockchainType)?.ShareType.Shares ?? false) && (this.FilterSyncingIp == null ? true : this.FilterSyncingIp(c.Value));
 			}).ToDictionary(c => c.Key, c => c.Value);
 
 		}
 
-		public virtual int BasicGossipConnectionsCount => this.Connections.Count(c => c.Value.NodeInfo.GossipAccepted);
+		public IEnumerable<PeerConnection> ActiveConnections => this.Connections.Values.Where(c => !c.IsDisposed && c.IsFullyConfirmed && !c.NoSupportedChains);
+		public IEnumerable<KeyValuePair<Guid, PeerConnection>> ActiveConnectionsSet => this.Connections.Where(c => !c.Value.IsDisposed && c.Value.IsFullyConfirmed && !c.Value.NoSupportedChains);
+		
+		public virtual int BasicGossipConnectionsCount => this.ActiveConnections.Count(c => c.NodeInfo.GossipAccepted);
 
-		public virtual List<PeerConnection> BasicGossipConnectionsList => this.Connections.Values.Where(c => c.NodeInfo.GossipAccepted).ToList();
+		public virtual List<PeerConnection> BasicGossipConnectionsList => this.ActiveConnections.Where(c => c.NodeInfo.GossipAccepted).ToList();
 
-		public virtual Dictionary<Guid, PeerConnection> BasicGossipConnections => this.Connections.Where(c => c.Value.NodeInfo.GossipAccepted).ToDictionary();
+		public virtual Dictionary<Guid, PeerConnection> BasicGossipConnections => this.ActiveConnectionsSet.Where(c => c.Value.NodeInfo.GossipAccepted).ToDictionary();
 
-		public virtual int FullGossipConnectionsCount => this.Connections.Count(c => c.Value.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full);
+		public virtual int FullGossipConnectionsCount => this.ActiveConnections.Count(c => c.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full);
 
-		public virtual List<PeerConnection> FullGossipConnectionsList => this.Connections.Values.Where(c => c.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToList();
+		public virtual List<PeerConnection> FullGossipConnectionsList => this.ActiveConnections.Where(c => c.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToList();
 
-		public virtual Dictionary<Guid, PeerConnection> FullGossipConnections => this.Connections.Where(c => c.Value.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToDictionary(c => c.Key, c => c.Value);
+		public virtual Dictionary<Guid, PeerConnection> FullGossipConnections => this.ActiveConnectionsSet.Where(c => c.Value.NodeInfo.GossipSupportType == Enums.GossipSupportTypes.Full).ToDictionary(c => c.Key, c => c.Value);
 
 		public IPAddress PublicIpv4 { get; private set; }
 		public IPAddress PublicIpv6 { get; private set; }
@@ -613,7 +616,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				if(!this.availablePeerNodes.ContainsKey(node.ScopedIp) && !this.ignorePeerNodes.ContainsKey(node.ScopedIp) && (force || !(isLocal.HasValue && isLocal.Value))) {
 					this.availablePeerNodes.AddSafe(node.ScopedIp, new NodeActivityInfo(node, true));
 					added = true;
-					NLog.Connections.Verbose($"accepting potential future peer ip: {node.ScopedAdjustedIp}.");
+					NLog.Connections.Debug($"accepting potential future peer ip: {node.ScopedAdjustedIp}.");
 
 					this.CleanAvailablePeerNodes();
 				}
@@ -844,7 +847,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				if(connection.ClientUuid == Guid.Empty) {
 					NLog.Connections.Verbose("Removing connection for as of yet unidentified client");
 				} else {
-					NLog.Connections.Verbose($"Closing connection for client {connection.ClientUuid} ({connection.NodeAddressInfo})");
+					NLog.Connections.Verbose($"Closing connection for client {connection.NodeAddressInfo.ScopedIp} ({connection.NodeAddressInfo})");
 				}
 
 				try {
@@ -854,7 +857,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 						if(localConnection.connection.InternalUuid == connection.connection.InternalUuid) {
 							// remove it only if it is the same connection. otherwise it amy be another to the same peer. we dont want to remove the original
 							if(!this.Connections.TryRemove(connection.ClientUuid, out PeerConnection outPeerInfo)) {
-								NLog.Connections.Verbose($"Removing connection for client {connection.ClientUuid}({connection.connection.InternalUuid}) ({connection.NodeAddressInfo}) from {nameof(this.Connections)}");
+								NLog.Connections.Verbose($"Removing connection for client {connection.NodeAddressInfo.ScopedIp}({connection.connection.InternalUuid}) ({connection.NodeAddressInfo}) from {nameof(this.Connections)}");
 								this.Connections.RemoveSafe(connection.ClientUuid);
 							}
 
@@ -873,7 +876,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					// alert the world we lost a peer
 					this.TriggerPeerConnectionsCountUpdated().WaitAndUnwrapException();
 					if(this.removingConnections.Contains(connection.ClientUuid)) {
-						NLog.Connections.Verbose($"Removing connection for client {connection.ClientUuid} ({connection.NodeAddressInfo}) from {nameof(this.removingConnections)}");
+						NLog.Connections.Verbose($"Removing connection for client {connection.NodeAddressInfo.ScopedIp} ({connection.NodeAddressInfo}) from {nameof(this.removingConnections)}");
 						this.removingConnections.Remove(connection.ClientUuid);
 					}
 				}
@@ -901,7 +904,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		public Task ConfirmConnection(PeerConnection connection) {
 			lock(this.locker) {
 				
-				NLog.Connections.Verbose($"ConfirmConnection {connection.ClientUuid} ({connection.NodeAddressInfo})");
+				NLog.Connections.Verbose($"ConfirmConnection {connection.NodeAddressInfo.ScopedIp} ({connection.NodeAddressInfo})");
 				
 				if(connection.ClientUuid == Guid.Empty) {
 					throw new ApplicationException("Peer uuid cannot be empty");
@@ -919,7 +922,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 
 				if(this.Connections.ContainsKey(connection.ClientUuid)) {
 					// clear the old connection
-					NLog.Connections.Verbose($"({nameof(ConfirmConnection)}: {connection.ClientUuid} already in ({this.Connections}) (now {connection.NodeAddressInfo}, was {this.Connections[connection.ClientUuid].NodeAddressInfo}), removing...");
+					NLog.Connections.Verbose($"({nameof(ConfirmConnection)}: {connection.NodeAddressInfo.ScopedIp} already in ({this.Connections}) (now {connection.NodeAddressInfo}, was {this.Connections[connection.ClientUuid].NodeAddressInfo}), removing...");
 					this.RemoveConnection(this.Connections[connection.ClientUuid]);
 				}
 
@@ -940,7 +943,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 					}
 				}
 
-				NLog.Connections.Verbose($"{nameof(ConfirmConnection)} adding {connection.ClientUuid} ({connection.NodeAddressInfo})");
+				NLog.Connections.Verbose($"{nameof(ConfirmConnection)} adding {connection.NodeAddressInfo.ScopedIp} ({connection.NodeAddressInfo})");
 				
 				this.Connections.AddSafe(connection.ClientUuid, connection);
 
@@ -949,7 +952,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 				// time we accepted this connection
 				connection.ConnectionTime = this.timeService.CurrentRealTime;
 
-				NLog.Connections.Information($"accepting connection from peer {connection.ClientUuid} with scoped ip {connection.NodeAddressInfo.ScopedAdjustedIp}");
+				NLog.Connections.Information($"accepting connection from peer {connection.NodeAddressInfo.ScopedIp} with scoped ip {connection.NodeAddressInfo.ScopedAdjustedIp}");
 
 				NodeAddressInfo nodeInfo = GetEndpointInfoNode(connection);
 
@@ -1289,7 +1292,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 		{
 			this.PeerConnectionsDetails.Clear();
 			
-			foreach (var (guid, peerConnection) in this.AllConnections)
+			foreach (var (guid, peerConnection) in this.ActiveConnectionsSet.ToArray())
 			{
 				var node = peerConnection.NodeAddressInfo;
 				var stats = this.networkingService.IPCrawler.QueryStats(node, false);

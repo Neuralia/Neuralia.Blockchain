@@ -205,7 +205,7 @@ namespace Neuralia.Blockchains.Core.P2p.Connections {
 							operation |= TcpTestParameter.RequestCallback;
 						}
 
-						parameters.Add("operation", (int)operation);
+						parameters.Add("operations", (int)operation);
 						
 						restUtility.Timeout = timeout;
 						IRestResponse result = await restUtility.Post(GetUrl(endpoint.Address, port), "appointments-test/test", parameters).ConfigureAwait(false);

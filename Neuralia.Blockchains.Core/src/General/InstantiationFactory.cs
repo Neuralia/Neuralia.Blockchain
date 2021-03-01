@@ -7,12 +7,12 @@ namespace Neuralia.Blockchains.Core.General {
 	public interface IInstantiationFactory<R>
 		where R : IRehydrationFactory {
 		Func<ServiceSet<R>, IMessagingManager<R>> CreateMessagingManager { get; }
-		Func<ServiceSet<R>, IConnectionsManager<R>> CreateConnectionsManager { get; }
+		Func<ServiceSet<R>, IConnectionsManagerIPCrawler<R>> CreateConnectionsManager { get; }
 	}
 
 	public class InstantiationFactory<R> : IInstantiationFactory<R>
 		where R : IRehydrationFactory {
 		public virtual Func<ServiceSet<R>, IMessagingManager<R>> CreateMessagingManager => serviceSet => new MessagingManager<R>(serviceSet);
-		public virtual Func<ServiceSet<R>, IConnectionsManager<R>> CreateConnectionsManager => serviceSet => new ConnectionsManagerIPCrawler<R>(serviceSet);
+		public virtual Func<ServiceSet<R>, IConnectionsManagerIPCrawler<R>> CreateConnectionsManager => serviceSet => new ConnectionsManagerIPCrawler<R>(serviceSet);
 	}
 }

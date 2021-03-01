@@ -54,14 +54,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// <returns></returns>
 		/// <exception cref="ApplicationException"></exception>
 		bool IsFileWalletEncrypted();
-
-		/// <summary>
-		///     Add the encrypted marker to the encrypted bytes
-		/// </summary>
-		/// <param name="buffer"></param>
-		/// <returns></returns>
-		SafeArrayHandle WrapEncryptedBytes(SafeArrayHandle buffer);
-
+		
 		Task<SafeArrayHandle> RunDbOperation(string creatorKey, Func<IWalletDBDAL, LockContext, Task> operation, SafeArrayHandle databaseBytes, LockContext lockContext);
 		Task<(SafeArrayHandle newBytes, T result)> RunDbOperation<T>(string creatorKey, Func<IWalletDBDAL, LockContext, Task<T>> operation, SafeArrayHandle databaseBytes, LockContext lockContext);
 		Task<bool> WalletFullyCreated(LockContext lockContext);
@@ -321,17 +314,17 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 		/// </summary>
 		/// <param name="buffer"></param>
 		/// <returns></returns>
-		public SafeArrayHandle WrapEncryptedBytes(SafeArrayHandle buffer) {
-			//TODO: might be faster to avoid the copy and simply write the bytes directly
-			SafeArrayHandle completeEncryptedFile = SafeArrayHandle.Create(buffer.Length + sizeof(long));
+		public void WrapEncryptedBytes(SafeArrayHandle buffer) {
+			
+			buffer.Entry.ResetOffsetIncrement();
 
-			byte[] tagBytes = new byte[sizeof(long)];
-			TypeSerializer.Serialize(ENCRYPTED_WALLET_TAG, in tagBytes);
+			if(this.encryptionFlagBytes == null) {
+				this.encryptionFlagBytes = SafeArrayHandle.Create(sizeof(long));
 
-			Buffer.BlockCopy(tagBytes, 0, completeEncryptedFile.Bytes, completeEncryptedFile.Offset, sizeof(long));
-			Buffer.BlockCopy(buffer.Bytes, buffer.Offset, completeEncryptedFile.Bytes, sizeof(long), buffer.Length);
+				TypeSerializer.Serialize(ENCRYPTED_WALLET_TAG, this.encryptionFlagBytes.Span);
+			}
 
-			return completeEncryptedFile;
+			this.encryptionFlagBytes.CopyTo(buffer);
 		}
 
 		public async Task<SafeArrayHandle> RunDbOperation(string creatorKey, Func<IWalletDBDAL, LockContext, Task> operation, SafeArrayHandle databaseBytes, LockContext lockContext) {
@@ -423,7 +416,12 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 							activeBytes = databaseBytes;
 						}
 						
-						encryptedBytes = FileEncryptor.Encrypt(activeBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters);
+						encryptedBytes = FileEncryptor.Encrypt(activeBytes, encryptionInfo.Secret(), encryptionInfo.EncryptionParameters, sizeof(long));
+						
+						if(wrapEncryptedBytes) {
+							// wrap the encrypted byes with the flag marker
+							 this.WrapEncryptedBytes(encryptedBytes);
+						}
 						
 						activeBytes = encryptedBytes;
 					} else {
@@ -438,21 +436,8 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet {
 					if(activeBytes.Length == 0) {
 						throw new ApplicationException("Write size can not be 0!");
 					}
-
-					SafeArrayHandle[] bytes = null;
-					if(encryptionInfo.Encrypt && wrapEncryptedBytes) {
-						
-						if(this.encryptionFlagBytes == null) {
-							this.encryptionFlagBytes = SafeArrayHandle.Create(sizeof(long));
-
-							TypeSerializer.Serialize(ENCRYPTED_WALLET_TAG, this.encryptionFlagBytes.Span);
-						}
-						bytes = new[] {this.encryptionFlagBytes, activeBytes};
-					} else {
-						bytes = new[] {activeBytes};
-					}
-
-					await this.TransactionalFileSystem.OpenWriteAsync(filename, bytes).ConfigureAwait(false);
+					
+					await this.TransactionalFileSystem.OpenWriteAsync(filename, activeBytes).ConfigureAwait(false);
 				} finally {
 					if(compressedBytes != null) {
 						compressedBytes.Entry.Clear();

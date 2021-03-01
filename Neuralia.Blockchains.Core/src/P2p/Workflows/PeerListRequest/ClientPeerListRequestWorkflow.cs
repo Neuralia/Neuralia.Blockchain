@@ -21,7 +21,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 	public class ClientPeerListRequestWorkflow<R> : ClientWorkflow<PeerListRequestMessageFactory<R>, R>, IClientPeerListRequestWorkflow<R>
 		where R : IRehydrationFactory {
 		public readonly PeerConnection peerConnection;
-		public TimeSpan Latency { get; private set; } = TimeSpan.MaxValue;
+		public TimeSpan Latency { get; private set; } = TimeSpan.MinValue;
 
 		public ClientPeerListRequestWorkflow(PeerConnection peerConnection, ServiceSet<R> serviceSet) : base(serviceSet) {
 			this.peerConnection = peerConnection;
@@ -32,7 +32,7 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			this.PeerUnique = true;
 		}
 
-		protected override async Task PerformWork(LockContext lockContext) {
+		protected override async Task<bool> PerformWork(LockContext lockContext) {
 			this.CheckShouldCancel();
 
 			TriggerMessageSet<PeerListRequestTrigger<R>, R> peerListRequestTrigger = this.MessageFactory.CreatePeerListRequestWorkflowTriggerSet(this.CorrelationId);
@@ -44,16 +44,19 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.PeerListRequest {
 			if(!await SendMessage(peerConnection, peerListRequestTrigger).ConfigureAwait(false)) {
 				NLog.Default.Verbose($"Connection with peer  {this.peerConnection.ScopedAdjustedIp} was terminated");
 
-				return;
+				return false;
 			}
 
 			TargettedMessageSet<PeerListRequestServerReply<R>, R> serverPeerListRequest = await WaitSingleNetworkMessage<PeerListRequestServerReply<R>, TargettedMessageSet<PeerListRequestServerReply<R>, R>, R>().ConfigureAwait(false);
 
-			this.Latency = DateTimeEx.CurrentTime - startTime;
+			this.peerConnection.connection.AddLatency(startTime);
+
 			// take the peer nodes and update our system
 			this.networkingService.ConnectionStore.UpdatePeerNodes(this.peerConnection, serverPeerListRequest.Message.nodes);
 
 			NLog.Default.Verbose($"Received {serverPeerListRequest.Message.nodes.Nodes.Count} peers from peer {this.peerConnection.ScopedAdjustedIp}");
+
+			return true;
 		}
 
 		protected override PeerListRequestMessageFactory<R> CreateMessageFactory() {

@@ -25,10 +25,10 @@ namespace Neuralia.Blockchains.Core.P2p.Workflows.Base {
 		public NullWorkflow(ServiceSet<R> serviceSet) : base(serviceSet) {
 		}
 
-		protected override Task PerformWork(LockContext lockContext) {
+		protected override Task<bool> PerformWork(LockContext lockContext) {
 
 			// this workflow does absolutely nothing
-			return Task.CompletedTask;
+			return Task.FromResult(true);
 		}
 
 		protected override NullMessageFactory<R> CreateMessageFactory() {

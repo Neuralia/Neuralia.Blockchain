@@ -314,7 +314,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 						db.AppointmentValidatorSessions.RemoveRange(db.AppointmentValidatorSessions.Where(s => s.Appointment.AddDays(1) < timeLimit));
 						db.AppointmentRequesterResults.RemoveRange(db.AppointmentRequesterResults.Where(s => s.Appointment.AddDays(1) < timeLimit));
 					} catch(Exception ex) {
-						this.CentralCoordinator.Log.Error($"Failed to clear obsolete appointments");
+						this.CentralCoordinator.Log.Error(ex, $"Failed to clear obsolete appointments");
 					}
 					
 
@@ -329,7 +329,7 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Sqlite.Appo
 								db.AppointmentRequesterResults.RemoveRange(db.AppointmentRequesterResults.Where(s => s.Appointment == appointment));
 							}
 						} catch(Exception ex) {
-							this.CentralCoordinator.Log.Error($"Failed to clear remaining appointment {appointment}");
+							this.CentralCoordinator.Log.Error(ex, $"Failed to clear remaining appointment {appointment}");
 						}
 					}
 					await db.SaveChangesAsync().ConfigureAwait(false);

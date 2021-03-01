@@ -2,7 +2,7 @@ using System;
 
 namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.DataStructures.Appointments {
 	public class CheckAppointmentContextResult {
-		public DateTime Appointment { get; set; }
+		public long Appointment { get; set; }
 		public int Window { get; set; }
 		public int EngineVersion { get; set; }
 		public string POwRuleSet { get; set; }

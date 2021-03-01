@@ -25,10 +25,10 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha {
 			this.poly1305.ComputeMac(ciphertext, key, len);
 		}
 
-		public SafeArrayHandle Encrypt(SafeArrayHandle plaintext, SafeArrayHandle nonce, SafeArrayHandle key, int? length = null) {
+		public SafeArrayHandle Encrypt(SafeArrayHandle plaintext, SafeArrayHandle nonce, SafeArrayHandle key, int? length = null, int prefix = 0) {
 			
 			int len = length.HasValue ? length.Value : plaintext.Length;
-			SafeArrayHandle ciphertext = this.CreateEncryptedBuffer(len);
+			SafeArrayHandle ciphertext = this.CreateEncryptedBuffer(len, prefix);
 			this.Encrypt(plaintext, ciphertext, nonce, key, len);
 
 			return ciphertext;
@@ -51,8 +51,13 @@ namespace Neuralia.Blockchains.Core.Cryptography.PostQuantum.Chacha {
 			return plaintext;
 		}
 
-		public SafeArrayHandle CreateEncryptedBuffer(int plainLength) {
-			return SafeArrayHandle.Create(plainLength + Poly1305.MAC_SIZE);
+		public SafeArrayHandle CreateEncryptedBuffer(int plainLength, int prefix = 0) {
+			var buffer = SafeArrayHandle.Create(plainLength + Poly1305.MAC_SIZE + prefix);
+
+			if(prefix != 0) {
+				buffer.Entry.IncreaseOffset(prefix);
+			}
+			return buffer;
 		}
 
 		public SafeArrayHandle CreateDecryptedBuffer(int cypherLength) {

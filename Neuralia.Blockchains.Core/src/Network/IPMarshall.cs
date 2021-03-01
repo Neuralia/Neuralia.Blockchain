@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading;
 using Neuralia.Blockchains.Core.Collections;
 using Neuralia.Blockchains.Core.Configuration;
+using Neuralia.Blockchains.Core.General;
 using Neuralia.Blockchains.Core.General.Types;
 using Neuralia.Blockchains.Core.Logging;
 using Neuralia.Blockchains.Tools;
@@ -16,7 +17,7 @@ namespace Neuralia.Blockchains.Core.Network {
 	/// <summary>
 	///     a very simple and light weight but effective rate limiting controller
 	/// </summary>
-	public sealed class IPMarshall
+	public sealed class IPMarshall : WithLockHelpers
 	{
 
 		public enum QuarantineReason
@@ -49,7 +50,6 @@ namespace Neuralia.Blockchains.Core.Network {
 		private readonly ConcurrentDictionary<IPAddress, QuarantinedInfo> blacklist = new();
 		private readonly int blacklistStrikes = 5;
 		private readonly TimeSpan cleanupPeriod = TimeSpan.FromSeconds(20);
-		private readonly TimeSpan mutexTimeout = TimeSpan.FromSeconds(30);
 		private readonly int connectionRefusalStrikes = 100;
 
 		private readonly
@@ -64,87 +64,8 @@ namespace Neuralia.Blockchains.Core.Network {
 
 		private DateTime NextCleanCheck = DateTimeEx.CurrentTime;
 
-		private static readonly ConcurrentDictionary<object, ReaderWriterLock> mutexes =
-			new ConcurrentDictionary<object, ReaderWriterLock>();
 
-		public static ReaderWriterLock GocMutex(object obj)
-		{
-			if (obj == null)
-			{
-				string message = $"{TAG} lock object null, this is unexpected...";
-				NLog.LoggingBatcher.Error(message);
-				NLog.LoggingBatcher.Verbose($"{TAG} here is the stack trace {Environment.StackTrace}");
-				throw new ArgumentNullException(message);
-			}
-			
-			if (mutexes.TryGetValue(obj, out var mutex))
-			{
-				return mutex;
-			}
-
-			return mutexes[obj] = new ReaderWriterLock();
-		}
-
-		public T LockRead<T>(object lockObject, Func<ReaderWriterLock, T> f)
-		{
-			return LockRead(lockObject, f, this.mutexTimeout);
-		}
-
-		public static T LockRead<T>(object lockObject, Func<ReaderWriterLock, T> f, TimeSpan timeout)
-		{
-			var mutex = GocMutex(lockObject);
-
-			try
-			{
-				mutex.AcquireReaderLock(timeout);
-				return f(mutex);
-			}
-			catch (ApplicationException e)
-			{
-				NLog.LoggingBatcher.Error(e, "Failed acquiring mutex lock (read/wrte)");
-				throw;
-			}
-			catch (Exception e)
-			{
-				NLog.LoggingBatcher.Error(e, "Failed during function execution");
-				throw;
-			}
-			finally
-			{
-				mutex.ReleaseLock();
-			}
-		}
-
-		public T LockWrite<T>(object lockObject, Func<ReaderWriterLock, T> f)
-		{
-
-			return LockWrite(lockObject, f, this.mutexTimeout);
-		}
-
-		public static T LockWrite<T>(object lockObject, Func<ReaderWriterLock, T> f, TimeSpan timeout)
-		{
-			var mutex = GocMutex(lockObject);
-			try
-			{
-				mutex.AcquireWriterLock(timeout);
-				return f(mutex);
-			}
-			catch (ApplicationException e)
-			{
-				NLog.LoggingBatcher.Error(e, "Failed acquiring mutex lock (read)");
-				throw;
-			}
-			catch (Exception e)
-			{
-				NLog.LoggingBatcher.Error(e, "Failed during function execution");
-				throw;
-			}
-			finally
-			{
-				mutex.ReleaseLock();
-			}
-		}
-
+		
 		/// <summary>
 		///     Check an entry and ensure that it is within the rate limiting limit. return true if it can connect, otherwise false
 		///     to reject the connection
@@ -319,6 +240,15 @@ namespace Neuralia.Blockchains.Core.Network {
 			return result;
 
 
+		}
+
+		public void MoveToWhiteList(IPAddress ip,
+			AppSettingsBase.WhitelistedNode.AcceptanceTypes acceptanceType =
+				AppSettingsBase.WhitelistedNode.AcceptanceTypes.Always)
+		{
+			this.blacklist.TryRemove(ip, out QuarantinedInfo _);
+			this.greylist.TryRemove(ip, out QuarantinedInfo _);
+			this.isWhiteList.TryAdd(ip, (true, acceptanceType));
 		}
 
 		private void PeriodicWatchListsUpdate<ID_TYPE> (ConcurrentDictionary<ID_TYPE, QuarantinedInfo> watchlist, ConcurrentDictionary<ID_TYPE, QuarantinedInfo> blacklist, DateTime now, bool force = false)
@@ -507,7 +437,7 @@ namespace Neuralia.Blockchains.Core.Network {
 			NLog.LoggingBatcher.Verbose($"{TAG} Placing {ip} in quarantine ({reason}), {info.blacklistStrikes} strikes, expires at {info.Expiry}.");
 		}
 
-		private class QuarantinedInfo {
+		private class QuarantinedInfo : IHasReaderWriterLock{
 
 			public readonly ConcurrentDictionary<QuarantineReason, Events> WarningEvents = new();
 			public int blacklistStrikes;
@@ -518,14 +448,16 @@ namespace Neuralia.Blockchains.Core.Network {
 			public QuarantineReason Reason = QuarantineReason.Cleared;
 			public int refusalCount;
 
-			public class Events
+			public class Events : WithLockHelpers
 			{
 				private readonly ReaderWriterLock mutex = new ReaderWriterLock();
-				private FixedQueue<DateTime> events { get; } = new(100);
+				private FixedConcurrentQueue<DateTime> events { get; } = new(100);
 
+				public Events() : base (TimeSpan.FromSeconds(30)) {}
+				
 				public void AddEvent(DateTime time)
 				{
-					LockWrite(this.events, _ => this.events.Enqueue(time, out var overflow), TimeSpan.FromSeconds(30));
+					LockWrite(this.events, _ => this.events.Enqueue(time, out var overflow));
 				}
 
 				public double CountEventsWithinObservationPeriod(DateTime referenceTime, TimeSpan observationPeriod,
@@ -550,9 +482,11 @@ namespace Neuralia.Blockchains.Core.Network {
 						}
 
 						return value;
-					}, TimeSpan.FromSeconds(30));
+					});
 				}
 			}
+
+			public ReaderWriterLock Mutex { get; } = new ReaderWriterLock();
 		}
 
 	#region Singleton
@@ -560,7 +494,13 @@ namespace Neuralia.Blockchains.Core.Network {
 		static IPMarshall() {
 		}
 
-		public IPMarshall(int rateLimitStrikes = 5, int rateLimitGraceStrikes = 0, int blacklistStrikes = 5, int connectionRefusalStrikes = 100, double minPeriodBetweenConnections = 10, double ratLimitTimePenalty = 5 * 60, double cleanupPeriod = 20) {
+		public IPMarshall(int rateLimitStrikes = 5
+			, int rateLimitGraceStrikes = 0
+			, int blacklistStrikes = 5
+			, int connectionRefusalStrikes = 100
+			, double minPeriodBetweenConnections = 10
+			, double ratLimitTimePenalty = 5 * 60
+			, double cleanupPeriod = 20) : base(TimeSpan.FromSeconds(30)) {
 			this.rateLimitStrikes = rateLimitStrikes;
 			this.rateLimitGraceStrikes = rateLimitGraceStrikes;
 			this.blacklistStrikes = blacklistStrikes;

@@ -1067,8 +1067,20 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Dal.Wallet.Tran
 			}
 		}
 
-		public Task OpenWriteAsync(string filename, SafeArrayHandle bytes) {
-			return OpenWriteAsync(filename, new []{bytes});
+		public async Task OpenWriteAsync(string filename, SafeArrayHandle bytes) {
+			// complete the path if it is relative
+			string path = this.CompletePath(filename);
+
+			this.CompleteFile(path);
+
+			await FileExtensions.OpenWriteAsync(path, bytes, this.activeFileSystem).ConfigureAwait(false);
+
+			// mark it as modified
+			if(this.fileStatuses.ContainsKey(path)) {
+				this.fileStatuses[path] = FileStatuses.Modified;
+			} else {
+				this.fileStatuses.Add(path, FileStatuses.Modified);
+			}
 		}
 
 		public async Task OpenWriteAsync(string filename, SafeArrayHandle[] bytes) {

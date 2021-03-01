@@ -375,17 +375,6 @@ namespace Neuralia.Blockchains.Common.Classes.Blockchains.Common.Tools {
 
 			if(operation == null || operation.Index == 0 || operation.THSResults == null || operation.THSResults.IsZero || operation.Appointment == DateTime.MinValue) {
 				
-#if MAINNET_LAUNCH_CODE
-
-				// to accomodate mobiles that are not up to date yet
-				if(operation.THSResults == null) {
-					var resultOperation2 = this.THSCompletedResponsePool.GetObject();
-					resultOperation2.Result = true;
-					return (new ValidatorProtocol1.THSCompletedResponseOperation(){Result = true}, true);
-				}
-#else
-we have to remove this code!!
-#endif
 				return default;
 			}
 
